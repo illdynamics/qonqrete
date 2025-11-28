@@ -23,15 +23,17 @@ CONTAINER_WORKSPACE="/qonq"
 B=$'\033[1;34m'
 W=$'\033[1;37m'
 R=$'\033[0m'
-
-# Target width 11. "Qrane" (5 chars) -> 6 spaces padding.
 PADDING="      "
-PREFIX="${B}〘QQ〙『${W}Qrane${B}』${PADDING}⸎ ${R}"
+PREFIX_TPL="${B}〘{PREFIX}〙『${W}Qrane${B}』${PADDING}⸎ ${R}"
 
 # --- HELPERS ---
-
 log_qrane() {
-    echo -e "${PREFIX} $1"
+    # Determine prefix at log-time based on PY_ARGS
+    local prefix="QQ"
+    if [[ "$PY_ARGS" == *"--auto"* ]]; then
+        prefix="aQQ"
+    fi
+    echo -e "${PREFIX_TPL/\{PREFIX\}/$prefix} $1"
 }
 
 exec_qrane() {

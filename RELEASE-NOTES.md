@@ -1,32 +1,43 @@
 # QonQrete Release Notes
 
-## v0.2.4-alpha (Current)
+## v0.2.5-alpha (Current)
 
-This is a documentation-focused release that consolidates the findings of the deep code inspection into the main project documentation for a cleaner and more centralized knowledge base.
+This release addresses a critical agent failure and further refines the console user experience.
+
+### Fixes & Improvements
+-   **Critical Agent Fix**: Corrected a `NameError` in `qrane.py` that caused agent processes to fail immediately. The dynamic pipeline loading now correctly resolves function scope.
+-   **Improved Error Visibility**: Enhanced headless mode (`run_agent`) to print the `stderr` of any agent that exits with a non-zero status code, making debugging significantly easier.
+-   **Cosmetic & Formatting Fixes**:
+    -   Corrected the console prefix in `qonqrete.sh` to properly display `aQQ` when running in `--auto` mode.
+    -   Adjusted spacing and padding in `qrane.py` log prefixes for better alignment.
+
+## v0.2.4-alpha
+
+This was a documentation-focused release that consolidated the findings of the deep code inspection into the main project documentation.
 
 ### Documentation Updates
--   **Roadmap Consolidation**: The `COMING_SOON.md` file has been significantly enhanced. It now includes the detailed recommendations for Modularity, Performance, Security, and Provider enhancements that were previously in separate analysis files.
--   **Wild Ideas Integration**: The experimental "Wild Ideas" (e.g., Evolvinator Agent, Dynamic Qrew Composition) have been moved from a separate file into a new "Researching Features" section in `COMING_SOON.md`.
--   **Architecture Diagram**: The Mermaid architecture diagram has been moved from `ARCHITECTURE.md` directly into the `DOCUMENTATION.md` file for easier access.
--   **Cleanup**: All standalone analysis files (`MODULARITY.md`, `PERFORMANCE.md`, `IDEAS.md`, etc.) have been removed to de-clutter the project root.
+-   **Roadmap Consolidation**: The `COMING_SOON.md` file was enhanced to include recommendations for Modularity, Performance, Security, and Provider enhancements.
+-   **Wild Ideas Integration**: Experimental ideas were moved into a new "Researching Features" section in `COMING_SOON.md`.
+-   **Architecture Diagram**: The Mermaid diagram was moved directly into `DOCUMENTATION.md`.
+-   **Cleanup**: All standalone analysis files were removed to de-clutter the project root.
 
 ## v0.2.3-alpha
 
-This was a bug fix and user experience release that addressed a critical crash and improved the readability of the console output.
+This was a bug fix and user experience release.
 
 ### Fixes & Improvements
--   **Critical Bug Fix**: Fixed a `NameError` crash in `qrane.py` that occurred during TUI mode execution.
--   **Output Formatting**: Standardized all console log messages for consistency and readability.
+-   **Critical Bug Fix**: Fixed a `NameError` crash in `qrane.py` during TUI mode.
+-   **Output Formatting**: Standardized all console log messages.
 
 ## v0.2.2-alpha
 
-This was a major refactoring release focused on improving the internal architecture for better efficiency, modularity, and robustness.
+This was a major refactoring release focused on internal architecture.
 
 ### New Features & Improvements
--   **Dynamic Pipeline Loading**: The `Qrane` orchestrator now dynamically reads `pipeline_config.yaml` to construct the agent execution loop.
--   **Centralized Path Management**: All path logic was centralized into `qrane/paths.py`.
--   **Pre-flight Checks**: The orchestrator now verifies external CLI dependencies at startup.
--   **TUI State Persistence**: The TUI now correctly restores its log history after being suspended.
+-   **Dynamic Pipeline Loading**: `Qrane` now dynamically reads `pipeline_config.yaml`.
+-   **Centralized Path Management**: Path logic was centralized into `qrane/paths.py`.
+-   **Pre-flight Checks**: Added verification of external CLI dependencies.
+-   **TUI State Persistence**: The TUI now correctly restores its log history.
 
 ## v0.2.1-alpha
 -   **Dynamic Versioning**: Centralized versioning in the `VERSION` file.

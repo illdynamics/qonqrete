@@ -132,8 +132,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     padding = " " * (target_width - len(agent_display_name))
     qrane_padding = " " * (target_width - 5)
 
-    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding} ⸎ {Colors.R}"
-    agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding} ⸎ {Colors.R}"
+        qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding} ⸎ {Colors.R}"
+
+        agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding} ⸎ {Colors.R}"
 
     # --- TUI MODE ---
     if ui:
@@ -206,6 +207,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             spinner.stop()
             if proc.returncode != 0:
                 print(f"{agent_prefix} {Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
+                if stderr:
+                    for line in stderr.strip().split('\n'):
+                        print(f"{agent_prefix} {Colors.RED}  -> {line}{Colors.R}")
                 return False
             return True
 
@@ -413,6 +417,14 @@ def run_orchestration(args, prefix, ui):
                 if ui: ui.log_main(msg)
                 else: print(msg)
                 break
+            
+            # Path resolution using PathManager and str.format
+            def get_path(path_template):
+                if path_template == "tasq.d": return str(path_manager.get_tasq_dir())
+                if path_template == "briq.d": return str(path_manager.get_briq_dir())
+                if path_template == "exeq.d/summary.md": return str(path_manager.get_summary_path(cycle))
+                if path_template == "reqap.d/reqap.md": return str(path_manager.get_reqap_path(cycle))
+                return path_template # Should not happen with valid config
 
             agents_to_run = []
             for agent_data in pipeline_config.get('agents', []):
@@ -428,14 +440,6 @@ def run_orchestration(args, prefix, ui):
                     else: print(msg)
                     session_failed = True
                     break
-
-                # Path resolution using PathManager and str.format
-                def get_path(path_template):
-                    if path_template == "tasq.d": return str(path_manager.get_tasq_dir())
-                    if path_template == "briq.d": return str(path_manager.get_briq_dir())
-                    if path_template == "exeq.d/summary.md": return str(path_manager.get_summary_path(cycle))
-                    if path_template == "reqap.d/reqap.md": return str(path_manager.get_reqap_path(cycle))
-                    return path_template # Should not happen with valid config
 
                 input_path = get_path(input_path_str)
                 output_path = get_path(output_path_str)
