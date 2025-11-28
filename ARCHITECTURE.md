@@ -51,11 +51,11 @@ graph TD
     CheQpoint -- 18. Approves/Rejects --> Qrane;
     Qrane -- 19. Loops or Exits --> Pipeline;
 
-    classDef host fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef container fill:#ccf,stroke:#333,stroke-width:2px;
-    classDef qonqrete fill:#cfc,stroke:#333,stroke-width:2px;
-    classDef volume fill:#fcf,stroke:#333,stroke-width:2px;
-    classDef abstraction fill:#ffc,stroke:#333,stroke-width:2px;
+    classDef host fill:#511,stroke:#ccc,color:#fff;
+    classDef container fill:#115,stroke:#ccc,color:#fff;
+    classDef qonqrete fill:#131,stroke:#ccc,color:#fff;
+    classDef volume fill:#515,stroke:#ccc,color:#fff;
+    classDef abstraction fill:#551,stroke:#ccc,color:#fff;
 
     class User,Shell,Args host;
     class Container,Worqspace container;
