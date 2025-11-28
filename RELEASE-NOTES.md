@@ -1,43 +1,32 @@
 # QonQrete Release Notes
 
-## v0.2.5-alpha (Current)
+## v0.2.6-alpha (Current)
 
-This release addresses a critical agent failure and further refines the console user experience.
+This is a user experience release focused on improving the robustness of the Text-based User Interface (TUI).
 
 ### Fixes & Improvements
--   **Critical Agent Fix**: Corrected a `NameError` in `qrane.py` that caused agent processes to fail immediately. The dynamic pipeline loading now correctly resolves function scope.
--   **Improved Error Visibility**: Enhanced headless mode (`run_agent`) to print the `stderr` of any agent that exits with a non-zero status code, making debugging significantly easier.
--   **Cosmetic & Formatting Fixes**:
-    -   Corrected the console prefix in `qonqrete.sh` to properly display `aQQ` when running in `--auto` mode.
-    -   Adjusted spacing and padding in `qrane.py` log prefixes for better alignment.
+-   **TUI Stability**: Fixed the "flash and gone" issue where the TUI would appear and immediately disappear if a pre-run error occurred. The TUI will now remain open and wait for user input upon any critical crash or pre-flight check failure, ensuring that error messages are always visible and readable.
+
+## v0.2.5-alpha
+
+This release addressed a critical agent failure and further refines the console user experience.
+
+### Fixes & Improvements
+-   **Critical Agent Fix**: Corrected a `NameError` in `qrane.py` that caused agent processes to fail immediately.
+-   **Improved Error Visibility**: Enhanced headless mode to print the `stderr` of any failing agent.
+-   **Cosmetic & Formatting Fixes**: Corrected console prefixes and spacing for better alignment.
 
 ## v0.2.4-alpha
 
 This was a documentation-focused release that consolidated the findings of the deep code inspection into the main project documentation.
 
-### Documentation Updates
--   **Roadmap Consolidation**: The `COMING_SOON.md` file was enhanced to include recommendations for Modularity, Performance, Security, and Provider enhancements.
--   **Wild Ideas Integration**: Experimental ideas were moved into a new "Researching Features" section in `COMING_SOON.md`.
--   **Architecture Diagram**: The Mermaid diagram was moved directly into `DOCUMENTATION.md`.
--   **Cleanup**: All standalone analysis files were removed to de-clutter the project root.
-
 ## v0.2.3-alpha
 
-This was a bug fix and user experience release.
-
-### Fixes & Improvements
--   **Critical Bug Fix**: Fixed a `NameError` crash in `qrane.py` during TUI mode.
--   **Output Formatting**: Standardized all console log messages.
+This was a bug fix and user experience release that addressed a critical `NameError` crash in TUI mode and improved console output.
 
 ## v0.2.2-alpha
 
-This was a major refactoring release focused on internal architecture.
-
-### New Features & Improvements
--   **Dynamic Pipeline Loading**: `Qrane` now dynamically reads `pipeline_config.yaml`.
--   **Centralized Path Management**: Path logic was centralized into `qrane/paths.py`.
--   **Pre-flight Checks**: Added verification of external CLI dependencies.
--   **TUI State Persistence**: The TUI now correctly restores its log history.
+This was a major refactoring release focused on improving internal architecture, with dynamic pipeline loading, centralized path management, pre-flight checks, and TUI state persistence.
 
 ## v0.2.1-alpha
 -   **Dynamic Versioning**: Centralized versioning in the `VERSION` file.

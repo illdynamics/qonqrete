@@ -339,13 +339,17 @@ def main():
     if args.tui and tui:
         try:
             with tui.QonqreteTUI() as ui:
+                if not run_pre_flight_checks(path_manager, ui):
+                    ui.get_input_blocking(f"{Colors.RED}Pre-flight checks failed. Press Enter to exit.{Colors.R}")
+                    return
                 run_orchestration(args, prefix, ui)
         except KillSignal:
             print(f"\n{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
             print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception:
+            # Keep terminal open to show crash log
             traceback.print_exc()
-            print("TUI Crashed.")
+            input("TUI Crashed. Press Enter to exit...")
     else:
         import tty, termios
         fd = sys.stdin.fileno()
