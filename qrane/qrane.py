@@ -30,6 +30,23 @@ AGENT_MODULE_DIR = PROJECT_ROOT / "worqer"
 
 class KillSignal(Exception): pass
 
+# [CHANGE] Added hardcoded -alpha suffix
+def get_version():
+    suffix = "-alpha"
+    # 1. Try Env Var (Set by Dockerfile/Shell)
+    v = os.environ.get("QONQ_VERSION")
+    if v: return f"QonQrete v{v}{suffix}"
+
+    # 2. Try File (Fallback for local dev)
+    try:
+        v_file = PROJECT_ROOT / "VERSION"
+        if v_file.exists():
+            with open(v_file, "r") as f:
+                return f"QonQrete v{f.read().strip()}{suffix}"
+    except: pass
+
+    return f"QonQrete v?.?.?{suffix}"
+
 def get_worqspace() -> Path:
     env_path = os.environ.get("QONQ_WORKSPACE")
     return Path(env_path) if env_path else PROJECT_ROOT / "worqspace"
@@ -39,9 +56,9 @@ def check_tui_keys(ui, proc=None):
     key = ui.get_key_nonblocking()
     if key == -1: return
 
-    if key == 32: ui.toggle_qonsole() # Space
+    if key == 32: ui.toggle_qonsole()
     elif key == ord('w') or key == ord('W'): ui.toggle_wonqrete()
-    elif key == 27: # Esc
+    elif key == 27:
         if proc: proc.terminate()
         raise KeyboardInterrupt
     elif key == ord('k') or key == ord('K'):
@@ -56,11 +73,11 @@ def check_headless_keys(proc=None):
             if key.lower() == 'k':
                 if proc: proc.kill()
                 raise KillSignal
-            elif key == '\x1b': # Esc
+            elif key == '\x1b':
                 if proc: proc.terminate()
                 raise KeyboardInterrupt
             elif key == ' ':
-                print(f"\n{Colors.YELLOW}[PAUSED] Press Space to resume...{Colors.R}")
+                print(f"\n{Colors.YELLOW}[PAUSED] Press Space to resume...{Colors.R}\r")
                 while True:
                     if select.select([sys.stdin], [], [], 0.1)[0]:
                         if sys.stdin.read(1) == ' ': break
@@ -250,10 +267,8 @@ def promote_reqap(cycle: int, prefix: str, ui=None):
 
         if ui:
             ui.log_main(f"{qrane_prefix} {msg}")
-            # [FIX] Do NOT announce next cycle start here. Main loop does it.
         else:
             print(f"{qrane_prefix} {msg}")
-            # [FIX] Do NOT announce next cycle start here. Main loop does it.
 
 def getch():
     try:
@@ -268,7 +283,8 @@ def main():
     parser.add_argument("-a", "--auto", action="store_true", help="Autonomous Mode")
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
-    parser.add_argument("-V", "--version", action="version", version="QonQrete v0.1.0")
+    # [CHANGE] Dynamic Version from Helper
+    parser.add_argument("-V", "--version", action="version", version=get_version())
     args = parser.parse_args()
 
     prefix = "aQQ" if args.auto else "QQ"
@@ -285,12 +301,11 @@ def main():
             traceback.print_exc()
             print("TUI Crashed.")
     else:
-        # Headless mode with hotkeys setup
         import tty, termios
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
-            tty.setcbreak(fd) # Enable hotkeys without enter
+            tty.setcbreak(fd)
             run_orchestration(args, prefix, ui=None)
         except KillSignal:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -298,9 +313,7 @@ def main():
             print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception as e:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            # Normal exits handled in run_orchestration
         finally:
-            # Always restore terminal
             try: termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             except: pass
 
@@ -319,8 +332,7 @@ def run_orchestration(args, prefix, ui):
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if not ui:
-        # Use \r for clean lines in cbreak mode
-        print(f"[INFO] Seeding worqspace in sandbox at: {worqspace}\r")
+        print(f"[INFO] Seeding worQspace in Qage at: {worqspace}\r")
         print(f"{qrane_prefix} Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
         print(f"{qrane_prefix} Initiating Qrew...\r")
@@ -334,9 +346,7 @@ def run_orchestration(args, prefix, ui):
 
     try:
         while True:
-            # Check Limits at START of loop
             if args.auto and max_cycles > 0 and cycle > max_cycles:
-                # [FIX] Cyan color for number
                 limit_str = f"{Colors.C}{max_cycles}{Colors.R}"
                 msg = f"Max cyQle limit hit ({limit_str}) - Edit config.yaml to change this."
                 if ui: ui.log_main(f"{qrane_prefix} {msg}")
@@ -354,11 +364,12 @@ def run_orchestration(args, prefix, ui):
 
             AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA}
 
-            # Start Message
-            start_msg = f"Starting {Colors.C}cyQle {cycle}{Colors.R}..."
-            if ui: ui.log_main(f"{qrane_prefix} {start_msg}")
+            if ui:
+                ui.log_main(f"--- Starting Cycle {cycle} ---")
             else:
+                start_msg = f"Starting {Colors.C}cyQle {cycle}{Colors.R}..."
                 print(f"{qrane_prefix} {start_msg}\r")
+
                 if args.auto:
                      inst_padding = " " * 1
                      print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R} Ingesting cyqle{cycle}_tasq.md...\r")
@@ -377,7 +388,10 @@ def run_orchestration(args, prefix, ui):
             cycle += 1
 
     except KeyboardInterrupt:
-        if not ui: print(f"\n{Colors.RED}User Interrupt (BreaQ){Colors.R}\r")
+        if not ui:
+            gk_padding = " " * (11 - 10)
+            gk_prefix = f"{Colors.B}〘{prefix}〙『{Colors.YELLOW}gateQeeper{Colors.B}』{gk_padding}⸎ {Colors.R}"
+            print(f"\n{gk_prefix} {Colors.WHITE}User Interrupt ({Colors.YELLOW}BreaQ{Colors.WHITE}){Colors.R}\r")
         session_failed = True
         user_aborted = True
 

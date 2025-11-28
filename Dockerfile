@@ -35,3 +35,7 @@ WORKDIR /qonqrete
 
 # 5. Copy the entire project into the container
 COPY . .
+
+# 6. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
+ARG QONQ_VERSION
+ENV QONQ_VERSION=${QONQ_VERSION}

@@ -9,6 +9,10 @@ RUN mkdir -p /qonq
 # Set working directory to the project root inside the container
 WORKDIR /qonqrete
 
+# Dynamic Versioning (Inherits from Base or Overrides via Build Arg)
+ARG QONQ_VERSION
+ENV QONQ_VERSION=${QONQ_VERSION}
+
 # Default environment variables (can be overridden at runtime)
 ENV PYTHONUNBUFFERED=1
 ENV QONQ_WORKSPACE=/qonq
