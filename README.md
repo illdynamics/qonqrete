@@ -66,7 +66,12 @@ pip3 install pyyaml
 
 For a full guide on setting up the environment and running your first `cyQle`, please see **[QUICKSTART.md](./QUICKSTART.md)**.
 
-The primary command to run the system is:
+First, initialize the system and build the secure `Qage` environment. You only need to do this once:
+```bash
+./qonqrete.sh init
+```
+
+Then, the primary command to run the system is:
 ```bash
 ./qonqrete.sh run
 ```
