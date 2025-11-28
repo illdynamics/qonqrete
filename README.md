@@ -162,19 +162,55 @@ To run the system in standard mode:
 
 To run the system with the Text-based User Interface (TUI):
 
+
+
 ```bash
 
+
+
 ./qonqrete.sh run --tui
+
+
 
 ```
 
 
 
-You can override the configured runtime using flags:
+
+
+
+
+To run the system in autonomous mode, skipping the manual checkpoints:
+
+
 
 ```bash
 
+
+
+./qonqrete.sh run --auto
+
+
+
+```
+
+
+
+
+
+
+
+You can override the configured runtime using flags:
+
+
+
+```bash
+
+
+
 # Force run with Microsandbox
+
+
 
 ./qonqrete.sh run --msb
 
