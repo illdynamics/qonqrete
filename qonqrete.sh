@@ -34,6 +34,15 @@ log_qrane() {
     echo -e "${PREFIX} $1"
 }
 
+exec_qrane() {
+    # Pipes non-empty output line-by-line to prepend prefix
+    "$@" 2>&1 | while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            log_qrane "$line"
+        fi
+    done
+}
+
 show_splash() {
     SPLASH_IMG="${SCRIPT_DIR}/qrane/splash.png"
     if [ -f "$SPLASH_IMG" ] && command -v chafa >/dev/null 2>&1; then
@@ -156,17 +165,16 @@ case "$COMMAND" in
         if [ "$RUNTIME_MODE" == "msb" ]; then
             log_qrane "Building Qage with Microsandbox..."
             if command -v msb >/dev/null 2>&1; then
-                msb build . -t "$IMAGE_NAME" $BUILD_ARGS
+                exec_qrane msb build . -t "$IMAGE_NAME" $BUILD_ARGS
             elif command -v mbx >/dev/null 2>&1; then
-                mbx build . -t "$IMAGE_NAME" $BUILD_ARGS
+                exec_qrane mbx build . -t "$IMAGE_NAME" $BUILD_ARGS
             else
                 log_qrane "[ERROR] --msb specified but binaries not found."; exit 1;
             fi
         else
             log_qrane "Building Qage with Docker..."
-            docker build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
+            exec_qrane docker build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
         fi
-        log_qrane "Qage successfully built!"
         ;;
 
     clean)
