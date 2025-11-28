@@ -40,7 +40,8 @@ class Spinner:
         i = 0
         while self.running:
             frame = self.frames[i % len(self.frames)]
-            output = f"{Colors.B}{self.prefix} {frame}   ⸎  {Colors.C}{self.message}{Colors.R}"
+            # [CHANGE] Reduced spaces before ⸎ from 3 to 2
+            output = f"{Colors.B}{self.prefix} {frame}  ⸎  {Colors.C}{self.message}{Colors.R}"
             sys.stdout.write(f"\r{output}")
             sys.stdout.flush()
             time.sleep(self.delay)

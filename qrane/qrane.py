@@ -68,23 +68,23 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
 
     # --- HEADLESS MODE (Streaming + Spinner) ---
     else:
-        # [CHANGE] Target width 11.
+        # Target width 11 (based on 'construQtor')
         target_width = 11
         padding = " " * (target_width - len(agent_display_name))
 
-        # Qrane announcement
+        # Announce initiation using Qrane style
         qrane_padding = " " * (target_width - 5)
-        # [CHANGE] Removed space before ⸎
+        # Tight alignment: No space before ⸎
         qrane_prefix = f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R}"
         print(f"{qrane_prefix} Initiating {agent_display_name}...")
 
-        # [CHANGE] Removed space before ⸎
         output_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
-
         spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
+
         spinner.start()
 
         try:
+            # Use Popen to stream output line-by-line
             proc = subprocess.Popen(
                 command,
                 cwd=str(get_worqspace()),
@@ -96,6 +96,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                 universal_newlines=True
             )
 
+            # Read stdout line by line
             while True:
                 line = proc.stdout.readline()
                 if not line and proc.poll() is not None:
@@ -104,21 +105,25 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                 if line:
                     clean_line = line.strip()
                     if any(x in line for x in ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Generating", "Ingesting"]):
-                        spinner.stop()
+                        spinner.stop() # Clear spinner line
                         print(f"{output_prefix} {clean_line}")
-                        spinner.start()
+                        spinner.start() # Resume spinner on new line
 
+                    # Always log to file
                     with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
+            # Capture remaining stderr if any
             stderr = proc.stderr.read()
             if stderr:
                 with open(log_file, 'a', encoding='utf-8') as f: f.write(stderr)
 
             spinner.stop()
 
+            # Handle Failures
             if proc.returncode != 0:
                 error_prefix = f"{Colors.RED}〘{prefix}〙『{agent_display_name}』{padding}⸎ {Colors.R}"
                 print(f"{error_prefix} {Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
+
                 if stderr:
                     print(f"{error_prefix} {Colors.RED}--- STDERR DUMP ---{Colors.R}")
                     for line in stderr.strip().split('\n'):
@@ -140,6 +145,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             return False
 
 def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -> str:
+    # Read Assessment
     assessment = "Unknown"
     try:
         with open(reqap_path, 'r', encoding='utf-8') as f:
@@ -147,6 +153,7 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -
                 assessment = "Available"
     except: pass
 
+    # --- TUI MODE ---
     if ui:
         ui.log_main(f"=== Cheqpoint {cycle} ===")
         if args.auto:
@@ -160,6 +167,7 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -
             return 'QONTINUE'
         return 'QUIT'
 
+    # --- HEADLESS MODE ---
     else:
         # Checkpoint Header
         target_width = 11
@@ -187,7 +195,6 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -
 
         gatekeeper_name = "gateQeeper"
         p_padding = " " * (target_width - len(gatekeeper_name))
-        # [CHANGE] Removed space before ⸎
         prompt_prefix = f"{Colors.YELLOW}〘{prefix}〙『{gatekeeper_name}』{p_padding}⸎  {Colors.R}"
 
         print(f"{prompt_prefix}{Colors.WHITE}Result: {assessment}{Colors.R}")
@@ -219,11 +226,18 @@ def promote_reqap(cycle: int, prefix: str, ui=None):
         with open(dst, 'w') as f: f.write(f"# Cycle {cycle+1}\n\n{content}")
 
         msg = f"Successfully created {dst.name}."
-        if ui: ui.log_main(msg)
+        start_msg = f"Starting cyQle {cycle+1}..."
+
+        if ui:
+            ui.log_main(msg)
+            ui.log_main(start_msg)
         else:
             target_width = 11
             qrane_padding = " " * (target_width - 5)
+            # Existing message
             print(f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R} {msg}")
+            # [ADDED] The start cycle message
+            print(f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R} {start_msg}")
 
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")
@@ -294,7 +308,8 @@ def run_orchestration(args, prefix, ui):
             if ui: ui.log_main(f"--- Starting Cycle {cycle} ---")
             else:
                 if args.auto:
-                     # [CHANGE] instruQtor (10 chars), Target 11. Padding = 1 space.
+                     # 'instruQtor' is 10 chars. Target 11. Padding = 1 space.
+                     # Format: 『instruQtor』 ⸎
                      inst_padding = " " * 1
                      print(f"{Colors.B}〘{prefix}〙『{Colors.B}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R} Ingesting cyqle{cycle}_tasq.md...")
 
