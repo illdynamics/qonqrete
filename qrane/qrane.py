@@ -132,9 +132,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     padding = " " * (target_width - len(agent_display_name))
     qrane_padding = " " * (target_width - 5)
 
-        qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding} ⸎ {Colors.R}"
-
-        agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding} ⸎ {Colors.R}"
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding} ⸎ {Colors.R}"
+    agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding} ⸎ {Colors.R}"
 
     # --- TUI MODE ---
     if ui:
