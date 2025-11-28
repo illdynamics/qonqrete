@@ -13,9 +13,6 @@ agents:
     provider: openai
     model: gpt-4o-mini
 
-token_management:
-  chunk_token_budget: 4096
-
 options:
   # Max number of cycles to run in auto-mode.
   auto_cycle_limit: 3

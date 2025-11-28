@@ -17,6 +17,10 @@ class QonqreteTUI:
         self.show_qonsole = True
         self.wonqrete_mode = False
 
+        self.top_win_buffer = []
+        self.bottom_win_buffer = []
+
+
         # Colors
         self.COLOR_DEFAULT = 1
         self.COLOR_GREEN = 2
@@ -76,14 +80,22 @@ class QonqreteTUI:
             self.bottom_win.scrollok(True)
             self.bottom_win.idlok(True)
 
+        # Redraw from buffers
+        for text, attr in self.top_win_buffer:
+            self._append_to_win(self.top_win, text, attr, buffer_only=False)
+        for text, attr in self.bottom_win_buffer:
+            self._append_to_win(self.bottom_win, text, attr, buffer_only=False)
+
+
         self.refresh_borders()
         self.draw_helper_bar()
 
     def toggle_qonsole(self):
         self.show_qonsole = not self.show_qonsole
+        # Clear buffers for a clean redraw on toggle, as window sizes change
+        self.top_win_buffer.clear()
+        self.bottom_win_buffer.clear()
         self.setup_windows()
-        # Redraw logs logic would be complex, we start fresh for now or buffer could be implemented
-        # For this iteration, toggling clears previous view buffer visually but next logs appear
 
     def toggle_wonqrete(self):
         self.wonqrete_mode = not self.wonqrete_mode
@@ -123,9 +135,13 @@ class QonqreteTUI:
 
         self.top_win.refresh()
 
-    def _append_to_win(self, window, text: str, color_attr):
+    def _append_to_win(self, window, text: str, color_attr, buffer_only=False):
         if not window: return
         with self.log_lock:
+            if buffer_only:
+                if window == self.top_win: self.top_win_buffer.append((text, color_attr))
+                else: self.bottom_win_buffer.append((text, color_attr))
+
             h, w = window.getmaxyx()
             clean_text = self._strip_ansi(text)
 
@@ -133,11 +149,14 @@ class QonqreteTUI:
             for line in lines:
                 if len(line) > w - 4: line = line[:w-4]
                 try:
-                    window.addstr(h-2, 2, line + "\n", color_attr)
+                    # Use insertln to scroll content up
+                    window.move(h-2, 2)
+                    window.insertln()
+                    window.addstr(2, 2, line, color_attr)
                 except: pass
 
                 window.box()
-                # Hacky redraw title
+                # Redraw title
                 if window == self.top_win:
                     t = " WoNQrete (Flow) " if self.wonqrete_mode else " Qommander (Flow) "
                     c = self.COLOR_CYAN
@@ -154,13 +173,15 @@ class QonqreteTUI:
         elif "construQtor" in text: attr = curses.color_pair(self.COLOR_CYAN)
         elif "inspeQtor" in text: attr = curses.color_pair(self.COLOR_MAGENTA)
         elif "Qrane" in text: attr = curses.color_pair(self.COLOR_WHITE)
-        self._append_to_win(self.top_win, text, attr)
+        self.top_win_buffer.append((text, attr))
+        self._append_to_win(self.top_win, text, attr, buffer_only=False)
 
     def log_agent(self, text: str):
         if not self.show_qonsole: return
         attr = curses.color_pair(self.COLOR_DEFAULT)
         if "error" in text.lower(): attr = curses.color_pair(self.COLOR_RED)
-        self._append_to_win(self.bottom_win, text, attr)
+        self.bottom_win_buffer.append((text, attr))
+        self._append_to_win(self.bottom_win, text, attr, buffer_only=False)
 
     def get_key_nonblocking(self):
         try:
@@ -174,13 +195,21 @@ class QonqreteTUI:
         curses.echo()
         curses.curs_set(1)
         h, w = self.top_win.getmaxyx()
-        self.top_win.addstr(h-2, 2, "> ", curses.color_pair(self.COLOR_YELLOW))
-        self.top_win.refresh()
-        inp = self.top_win.getstr(h-2, 4, 20)
+        input_win = curses.newwin(3, w - 4, h - 4, 2)
+        input_win.box()
+        input_win.addstr(1, 2, "> ")
+        input_win.refresh()
+        
+        inp_str = input_win.getstr(1, 4, 20).decode('utf-8').strip()
+
         curses.noecho()
         curses.curs_set(0)
         self.stdscr.nodelay(True)
-        return inp.decode('utf-8').strip()
+        # Clear the input window area
+        self.top_win.touchwin()
+        self.top_win.refresh()
+        
+        return inp_str
 
     def suspend_and_run(self, cmd_list):
         curses.def_prog_mode()

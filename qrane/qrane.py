@@ -17,8 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from loader import Spinner, Colors
+    from paths import PathManager
 except ImportError:
-    Spinner = None; Colors = None
+    Spinner = None; Colors = None; PathManager = None
 
 try:
     import tui
@@ -27,6 +28,46 @@ except ImportError:
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 AGENT_MODULE_DIR = PROJECT_ROOT / "worqer"
+
+import shutil
+import re
+
+def run_pre_flight_checks(path_manager: PathManager, ui=None) -> bool:
+    """Checks for required CLI tools before starting the main loop."""
+    try:
+        with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
+            pipeline_config = yaml.safe_load(f) or {}
+        with open(path_manager.root / 'config.yaml', 'r') as f:
+            agent_config = yaml.safe_load(f) or {}
+    except FileNotFoundError as e:
+        if ui: ui.log_main(f"CRITICAL: Configuration file not found: {e.fileName}")
+        else: print(f"CRITICAL: Configuration file not found: {e.fileName}")
+        return False
+
+    required_providers = set()
+    for agent_pipeline_config in pipeline_config.get('agents', []):
+        agent_name = agent_pipeline_config.get('name')
+        if agent_name:
+            provider = agent_config.get('agents', {}).get(agent_name, {}).get('provider')
+            if provider:
+                required_providers.add(provider)
+
+    provider_map = {
+        'openai': 'sgpt',
+        'gemini': 'gemini'
+    }
+
+    all_found = True
+    for provider in required_providers:
+        tool = provider_map.get(provider)
+        if not tool or not shutil.which(tool):
+            msg = f"CRITICAL: CLI tool for provider '{provider}' ('{tool}') not found in PATH."
+            if ui: ui.log_main(msg)
+            else: print(msg)
+            all_found = False
+
+    return all_found
+
 
 class KillSignal(Exception): pass
 
@@ -91,8 +132,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     padding = " " * (target_width - len(agent_display_name))
     qrane_padding = " " * (target_width - 5)
 
-    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
-    agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding} ⸎ {Colors.R}"
+    agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding} ⸎ {Colors.R}"
 
     # --- TUI MODE ---
     if ui:
@@ -175,14 +216,16 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             spinner.stop()
             try: proc.kill()
             except: pass
-            print(f"\n{Colors.RED}User Interrupt (BreaQ) inside Agent.{Colors.R}")
+            gk_padding = " " * (11 - 10)
+            gk_prefix = f"{Colors.B}〘{prefix}〙『{Colors.YELLOW}gateQeeper{Colors.B}』{gk_padding} ⸎ {Colors.R}"
+            print(f"{gk_prefix}{Colors.YELLOW}User Interrupt{Colors.R} (BreaQ) inside Agent.")
             raise
         except Exception as e:
             spinner.stop()
             print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
             return False
 
-def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -> str:
+def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manager: PathManager, ui=None) -> str:
     target_width = 11
     gatekeeper_name = "gateQeeper"
     p_padding = " " * (target_width - len(gatekeeper_name))
@@ -204,7 +247,7 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -
             print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
             print(content)
             print(f"{gate_prefix} {msg}")
-        promote_reqap(cycle, prefix, ui=ui)
+        promote_reqap(cycle, prefix, path_manager, ui=ui)
         return 'QONTINUE'
 
     while True:
@@ -229,7 +272,7 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -
             msg = "gateQeeper's reQap imported..."
             if ui: ui.log_main(f"{gate_prefix} {msg}")
             else: print(f"{gate_prefix} {msg}")
-            promote_reqap(cycle, prefix, ui=ui)
+            promote_reqap(cycle, prefix, path_manager, ui=ui)
             return 'QONTINUE'
         elif choice == 'x': return 'QUIT'
         elif choice == 't':
@@ -241,10 +284,9 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -
             except: pass
             continue
 
-def promote_reqap(cycle: int, prefix: str, ui=None):
-    ws = get_worqspace()
-    src = ws / "reqap.d" / f"cyqle{cycle}_reqap.md"
-    dst = ws / "tasq.d" / f"cyqle{cycle+1}_tasq.md"
+def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
+    src = path_manager.get_reqap_path(cycle)
+    dst = path_manager.get_tasq_path(cycle + 1)
 
     target_width = 11
     qrane_padding = " " * (target_width - 5)
@@ -319,8 +361,14 @@ def main():
 
 def run_orchestration(args, prefix, ui):
     worqspace = get_worqspace()
+    path_manager = PathManager(worqspace)
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
+
+    if not run_pre_flight_checks(path_manager, ui):
+        if not ui: print("Pre-flight checks failed. Exiting.")
+        return
+
 
     try:
         with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
@@ -332,7 +380,7 @@ def run_orchestration(args, prefix, ui):
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if not ui:
-        print(f"[INFO] Seeding worQspace in Qage at: {worqspace}\r")
+        print(f"{qrane_prefix} Seeding worQspace in Qage at: {worqspace}\r")
         print(f"{qrane_prefix} Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
         print(f"{qrane_prefix} Initiating Qrew...\r")
@@ -356,11 +404,47 @@ def run_orchestration(args, prefix, ui):
             env = os.environ.copy()
             env["CYCLE_NUM"] = str(cycle)
 
-            agents = [
-                ("instruqtor", ["python3", str(AGENT_MODULE_DIR / "instruqtor.py"), str(worqspace/"tasq.d"), str(worqspace/"briq.d")]),
-                ("construqtor", ["python3", str(AGENT_MODULE_DIR / "construqtor.py"), str(worqspace/"briq.d"), str(worqspace/"exeq.d"/f"cyqle{cycle}_summary.md")]),
-                ("inspeqtor", ["python3", str(AGENT_MODULE_DIR / "inspeqtor.py"), str(worqspace/"exeq.d"/f"cyqle{cycle}_summary.md"), str(worqspace/"reqap.d"/f"cyqle{cycle}_reqap.md")])
-            ]
+            # --- Dynamic Pipeline Loading ---
+            try:
+                with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
+                    pipeline_config = yaml.safe_load(f)
+            except FileNotFoundError:
+                msg = "CRITICAL: pipeline_config.yaml not found."
+                if ui: ui.log_main(msg)
+                else: print(msg)
+                break
+
+            agents_to_run = []
+            for agent_data in pipeline_config.get('agents', []):
+                name = agent_data.get('name')
+                script = agent_data.get('script')
+                input_path_str = agent_data.get('input')
+                output_path_str = agent_data.get('output')
+
+                # Basic validation
+                if not all([name, script, input_path_str, output_path_str]):
+                    msg = f"CRITICAL: Invalid agent definition in pipeline_config.yaml for '{name}'"
+                    if ui: ui.log_main(msg)
+                    else: print(msg)
+                    session_failed = True
+                    break
+
+                # Path resolution using PathManager and str.format
+                def get_path(path_template):
+                    if path_template == "tasq.d": return str(path_manager.get_tasq_dir())
+                    if path_template == "briq.d": return str(path_manager.get_briq_dir())
+                    if path_template == "exeq.d/summary.md": return str(path_manager.get_summary_path(cycle))
+                    if path_template == "reqap.d/reqap.md": return str(path_manager.get_reqap_path(cycle))
+                    return path_template # Should not happen with valid config
+
+                input_path = get_path(input_path_str)
+                output_path = get_path(output_path_str)
+                
+                cmd = ["python3", str(AGENT_MODULE_DIR / script), input_path, output_path]
+                agents_to_run.append((name, cmd))
+
+            if session_failed: break
+            # --- End Dynamic Loading ---
 
             AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA}
 
@@ -370,19 +454,15 @@ def run_orchestration(args, prefix, ui):
                 start_msg = f"Starting {Colors.C}cyQle {cycle}{Colors.R}..."
                 print(f"{qrane_prefix} {start_msg}\r")
 
-                if args.auto:
-                     inst_padding = " " * 1
-                     print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R} Ingesting cyqle{cycle}_tasq.md...\r")
-
-            for name, cmd in agents:
-                log_file = worqspace / "struqture" / f"cyqle{cycle}_{name}.log"
-                if not run_agent(name, cmd, prefix, AGENT_COLORS[name], logger, log_file, env, ui):
+            for name, cmd in agents_to_run:
+                log_file = path_manager.get_agent_log_path(cycle, name)
+                if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, log_file, env, ui):
                     session_failed = True
                     break
 
             if session_failed: break
 
-            res = handle_cheqpoint(cycle, args, worqspace/"reqap.d"/f"cyqle{cycle}_reqap.md", prefix, ui)
+            res = handle_cheqpoint(cycle, args, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)
             if res == 'QUIT': break
 
             cycle += 1

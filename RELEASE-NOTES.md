@@ -1,53 +1,52 @@
 # QonQrete Release Notes
 
-## v0.2.1-alpha (Current)
+## v0.2.3-alpha (Current)
 
-This release focuses on internal refinements, making the project versioning more dynamic and improving the user experience during the build phase.
+This is a bug fix and user experience release that addresses a critical crash and improves the readability of the console output.
+
+### Fixes & Improvements
+-   **Critical Bug Fix**: Fixed a `NameError: name 'logger' is not defined` crash in `qrane.py` that occurred during TUI mode execution.
+-   **Output Formatting**:
+    -   Standardized all `Qrane` and `gateQeeper` log messages to have consistent formatting and spacing.
+    -   The "User Interrupt" message is now properly formatted and colored yellow for better visibility.
+    -   Replaced a generic `[INFO]` seeding message with a properly attributed `Qrane` log line.
+
+## v0.2.2-alpha
+
+This was a major refactoring release focused on improving the internal architecture for better efficiency, modularity, and robustness.
 
 ### New Features & Improvements
--   **Dynamic Versioning**: The project version is now sourced from a single `VERSION` file. This version is passed as an environment variable (`QONQ_VERSION`) into the container and used by `qonqrete.sh` to ensure all components display a consistent version number.
--   **Integrated Docker Output**: The `init` command now streams Docker build output directly into the TUI, providing a seamless and unified user experience without leaving the interface.
+-   **Dynamic Pipeline Loading**: The `Qrane` orchestrator now dynamically reads the `pipeline_config.yaml` to construct the agent execution loop at runtime.
+-   **Centralized Path Management**: All file and directory path logic has been centralized into the new `qrane/paths.py` module.
+-   **Pre-flight Checks**: The orchestrator now performs a "pre-flight check" at startup to verify external CLI dependencies.
+-   **TUI State Persistence**: The TUI now buffers its logs to correctly restore the screen state after using an external editor.
+
+## v0.2.1-alpha
+
+This release focused on internal refinements, making the project versioning more dynamic and improving the user experience during the build phase.
+
+### New Features & Improvements
+-   **Dynamic Versioning**: The project version is now sourced from a single `VERSION` file.
+-   **Integrated Docker Output**: The `init` command now streams Docker build output directly into the TUI.
 
 ## v0.2.0-alpha
 
-This release focused on significant user interface enhancements, performance improvements through faster default models, and the integration of an alternative sandboxing environment.
+This release focused on significant user interface enhancements, performance improvements, and the integration of an alternative sandboxing environment.
 
 ### New Features & Improvements
--   **TUI Enhancements**:
-    -   **Qonsole View**: The bottom panel in TUI mode now displays raw, unfiltered logs from the agents, providing deeper insight into their execution.
-    -   **Fullscreen Qommander**: You can now press the `[Spacebar]` to toggle the visibility of the Qonsole, allowing the Qommander (main flow view) to use the full terminal screen.
-    -   **New Key Shortcuts**: A helper bar is now present with shortcuts: `[Space]` to toggle the Qonsole, `[W]` for a fun mode, `[Esc]` to quit, and `[K]` to kill running agents.
-    -   **Color Improvements**: The TUI now uses a more diverse and vibrant color palette to better distinguish between different agents and log levels.
--   **Faster Default Models**: The default models in `config.yaml` have been updated to prioritize speed and reduce costs:
-    -   `instruQtor`: `gpt-4o-mini`
-    -   `inspeQtor`: `gpt-4o-mini`
-    -   `construQtor`: `gemini-2.5-flash`
--   **Microsandbox (MSB) Integration**:
-    -   QonQrete can now be run using `msb` as an alternative to Docker for a more lightweight sandboxing experience.
-    -   You can force the runtime environment using the `--msb` or `--docker` flags.
-    -   The default runtime can be set in `worqspace/pipeline_config.yaml` by setting `microsandbox: true`.
--   **Documentation**: Added the `--auto` flag to the `README.md` `Getting Started` section.
+-   **TUI Enhancements**: Included a raw log view, fullscreen mode, new key shortcuts, and improved colors.
+-   **Faster Default Models**: Default models updated to `gpt-4o-mini` and `gemini-2.5-flash`.
+-   **Microsandbox (MSB) Integration**: Added support for `msb` as a Docker alternative.
+-   **Documentation**: Added the `--auto` flag to the `README.md`.
 
 ## v0.1.1-alpha
 
-This was an early alpha release focusing on improving the user interface and overall project structure.
+This was an early alpha release focused on improving the user interface and overall project structure.
 
 ### New Features & Improvements
 -   **TUI Mode**: Introduced a new Text-based User Interface (`--tui` flag).
 -   **Workspace Cleaning**: Added a `./qonqrete.sh clean` command.
--   **Documentation Updates**: Updated all docs for the new version and features.
--   **Code Refinements**: Minor internal improvements to logging output.
 
 ## v0.1.0
 
 The initial public alpha release of QonQrete.
-
-### Core Features
--   **Agentic Workflow**: Established the core Plan-Execute-Review `cyQle`.
--   **Secure Sandbox**: All agent execution takes place inside a Docker container.
--   **File-Based Communication**: Agents communicate via markdown files.
--   **Human-in-the-Loop**: Mandatory `CheQpoint` for human review.
--   **Autonomous Mode**: An `--auto` flag to run the system continuously.
--   **Configuration**: Agent models and cycle limits are configurable.
--   **Comprehensive Documentation**: Created `README.md`, `QUICKSTART.md`, etc.
--   **Initial Project Setup**: All core scripts and project files were created.
