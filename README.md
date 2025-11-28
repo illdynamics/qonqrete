@@ -1,6 +1,6 @@
 # QonQrete - Secure AI Construction Loop System
 
-![Splash](qrane/splash.png)
+![Splash](qrane/logo.png)
 
 QonQrete is a Secure AI Construction Loop System, using a Multi-Agent Pipeline Orchestrator in a Sandbox environment with YAML Configuration. In short: it spawns 3 AI agents in a sandbox/container and makes them work together on tasks. It can run with a hard requirement for user approval between steps, or in a fully autonomous mode where it keeps running until the user decides to stop it.
 
@@ -10,7 +10,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.2.7-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.3.0-alpha` (See `VERSION` file for the canonical version).
 
 
 

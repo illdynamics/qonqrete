@@ -33,23 +33,21 @@ def clean_filename_slug(text: str) -> str:
 
 def main() -> None:
     if len(sys.argv) != 3:
-        sys.stderr.write("Usage: python instruqtor.py <input_tasq_directory> <output_briq_directory>\n")
+        sys.stderr.write("Usage: python instruqtor.py <input_file> <output_dir>\n")
         sys.exit(1)
 
-    input_dir = Path(sys.argv[1])
-    output_dir = sys.argv[2]
+    input_file = Path(sys.argv[1])
+    output_dir = Path(sys.argv[2])
+
+    # Context info
     cycle_num = os.environ.get('CYCLE_NUM', '1')
     tasq_num = os.environ.get('TASQ_NUM', '1')
 
-    try:
-        input_file = next(input_dir.glob(f"cyqle{cycle_num}*_tasq.md"))
-    except StopIteration:
-        input_file = input_dir / f"cyqle{cycle_num}_tasq.md"
-        if not input_file.exists():
-            sys.stderr.write(f"CRITICAL: No tasq file found for cycle {cycle_num}\n")
-            sys.exit(1)
+    if not input_file.exists():
+        sys.stderr.write(f"CRITICAL: Task file not found: {input_file}\n")
+        sys.exit(1)
 
-    print(f"--- Instruqtor reading: {input_file.name} ---")
+    print(f"--- Instruqtor reading: {input_file.name} ---", flush=True)
     with open(input_file, 'r', encoding='utf-8') as f:
         task_content = clean_input_content(f.read())
 
@@ -91,18 +89,18 @@ Explain how to configure...
 
     briqs = parse_xml_briqs(master_plan)
     if not briqs:
-        print("[WARN] No <briq> tags found. Saving raw output.")
+        print("[WARN] No <briq> tags found. Saving raw output.", flush=True)
         briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
 
-    print(f"--- Generating {len(briqs)} Briqs for Cycle {cycle_num} using {ai_provider}/{ai_model} ---")
+    print(f"--- Generating {len(briqs)} Briqs for Cycle {cycle_num} using {ai_provider}/{ai_model} ---", flush=True)
 
     for i, item in enumerate(briqs):
         step_slug = clean_filename_slug(item['title'])
         filename = f"cyqle{cycle_num}_tasq{tasq_num}_briq{i:03d}_{step_slug}.md"
-        file_path = os.path.join(output_dir, filename)
+        file_path = output_dir / filename
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(f"# {item['title']}\n\n{item['content']}")
-        print(f"  - Wrote Briq: {filename}")
+        print(f"  - Wrote Briq: {filename}", flush=True)
 
 if __name__ == '__main__':
     main()

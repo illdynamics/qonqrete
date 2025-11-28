@@ -23,25 +23,36 @@ CONTAINER_WORKSPACE="/qonq"
 B=$'\033[1;34m'
 W=$'\033[1;37m'
 R=$'\033[0m'
+
+# Prefix Construction
+# Target width 11. "Qrane" (5 chars) -> 6 spaces padding.
 PADDING="      "
-PREFIX_TPL="${B}〘{PREFIX}〙『${W}Qrane${B}』${PADDING}⸎ ${R}"
+# [CHANGE] Template uses 3-char placeholder
+PREFIX_TPL="${B}〘{PREFIX}〙『${W}Qrane${B}』${PADDING}⸎${R}"
 
 # --- HELPERS ---
+
 log_qrane() {
-    # Determine prefix at log-time based on PY_ARGS
-    local prefix="QQ"
+    # Determine prefix logic
+    # Default: _QQ (System/Build)
+    local prefix="_QQ"
+
+    # If running, distinguish auto vs user (though shell wrapper is mostly system)
     if [[ "$PY_ARGS" == *"--auto"* ]]; then
         prefix="aQQ"
+    elif [[ "$COMMAND" == "run" ]]; then
+        # If running manually, we could use uQQ, but _QQ is requested for build process
+        # We'll stick to _QQ for the wrapper messages unless it's clearly auto
+        prefix="_QQ"
     fi
+
     echo -e "${PREFIX_TPL/\{PREFIX\}/$prefix} $1"
 }
 
 exec_qrane() {
-    # Pipes non-empty output line-by-line to prepend prefix
+    # Pipes output line-by-line to prepend prefix
     "$@" 2>&1 | while IFS= read -r line; do
-        if [ -n "$line" ]; then
-            log_qrane "$line"
-        fi
+        echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
     done
 }
 
@@ -50,7 +61,7 @@ show_splash() {
     if [ -f "$SPLASH_IMG" ] && command -v chafa >/dev/null 2>&1; then
         clear
         chafa "$SPLASH_IMG" --size=128x36 --stretch
-        sleep 2
+        sleep 1
         clear
     fi
 }
@@ -210,7 +221,6 @@ case "$COMMAND" in
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
 
-        # [CHANGE] Seeding Message
         if [ "$RUNTIME_MODE" == "msb" ]; then
              log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"
         else

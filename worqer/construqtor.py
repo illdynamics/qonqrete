@@ -20,7 +20,11 @@ def main():
 
     briq_dir = Path(sys.argv[1])
     summary_file = Path(sys.argv[2])
-    worqspace_root = briq_dir.parent
+
+    # Assume qodeyard is parallel to config.yaml which is usually CWD or
+    # we can deduce from input path parent
+    # For simplicity, we use CWD/qodeyard as execution root
+    worqspace_root = Path(os.getcwd())
     qodeyard_path = worqspace_root / "qodeyard"
     qodeyard_path.mkdir(parents=True, exist_ok=True)
 
@@ -37,18 +41,18 @@ def main():
     briq_files = sorted(briq_dir.glob(pattern))
 
     if not briq_files:
-        print(f"CRITICAL: No briq files found matching {pattern}")
+        print(f"CRITICAL: No briq files found matching {pattern} in {briq_dir}", flush=True)
         sys.exit(1)
 
     all_briqs_summary = []
     final_status = "success"
 
-    print(f"--- Construqtor filtering for: {pattern} using {ai_provider}/{ai_model} ---")
+    print(f"--- Construqtor filtering for: {pattern} using {ai_provider}/{ai_model} ---", flush=True)
 
     context_dirs = [str(qodeyard_path.resolve())]
 
     for briq_file in briq_files:
-        print(f"-- Processing Briq: {briq_file.name} --")
+        print(f"-- Processing Briq: {briq_file.name} --", flush=True)
 
         with open(briq_file, 'r', encoding='utf-8') as f:
             briq_content = f.read()
@@ -71,12 +75,12 @@ def main():
             else:
                 success = False
         except Exception as e:
-            print(f"     [ERROR] Execution failed: {e}")
+            print(f"     [ERROR] Execution failed: {e}", flush=True)
             success = False
 
         status = "success" if success else "failure"
         all_briqs_summary.append({ 'briq_file': briq_file.name, 'status': status })
-        print(f"-- Executed Briq: {briq_file.name} --")
+        print(f"-- Executed Briq: {briq_file.name} --", flush=True)
 
         if not success:
             final_status = "failure"
@@ -86,6 +90,7 @@ def main():
     for item in all_briqs_summary:
         summary_content += f"- **Briq:** `{item['briq_file']}` - **Status:** {item['status']}\n"
 
+    os.makedirs(summary_file.parent, exist_ok=True)
     with open(summary_file, 'w', encoding='utf-8') as f:
         f.write(summary_content)
 

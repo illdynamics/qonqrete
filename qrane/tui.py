@@ -199,7 +199,7 @@ class QonqreteTUI:
         input_win.box()
         input_win.addstr(1, 2, "> ")
         input_win.refresh()
-        
+
         inp_str = input_win.getstr(1, 4, 20).decode('utf-8').strip()
 
         curses.noecho()
@@ -208,7 +208,7 @@ class QonqreteTUI:
         # Clear the input window area
         self.top_win.touchwin()
         self.top_win.refresh()
-        
+
         return inp_str
 
     def suspend_and_run(self, cmd_list):

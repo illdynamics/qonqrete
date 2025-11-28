@@ -18,24 +18,24 @@ def main() -> None:
         print("Usage: inspeqtor.py <input_summary_file> <output_reqap_file>")
         sys.exit(1)
 
-    summary_path = sys.argv[1]
-    reqap_path = sys.argv[2]
+    summary_path = Path(sys.argv[1])
+    reqap_path = Path(sys.argv[2])
     cycle_num = os.environ.get('CYCLE_NUM', '1')
 
-    summary_dir = os.path.dirname(summary_path)
-    worqspace_dir = os.path.dirname(summary_dir)
-    qodeyard_path = os.path.join(worqspace_dir, 'qodeyard')
+    # Assume CWD is workspace root
+    worqspace_dir = Path(os.getcwd())
+    qodeyard_path = worqspace_dir / 'qodeyard'
 
-    print(f"Checking {os.path.relpath(summary_path, worqspace_dir)} (current cyqle summary)")
-    print(f"Checking cyQle {cycle_num} codebase")
+    print(f"Checking {summary_path.name} (current cyqle summary)", flush=True)
+    print(f"Checking cyQle {cycle_num} codebase", flush=True)
 
     try:
         with open(summary_path, 'r', encoding='utf-8') as f: summary_content = f.read()
     except FileNotFoundError:
-        print(f"CRITICAL: Summary file not found at {summary_path}"); sys.exit(1)
+        print(f"CRITICAL: Summary file not found at {summary_path}", flush=True); sys.exit(1)
 
     try:
-        with open(os.path.join(worqspace_dir, 'config.yaml')) as f: config = yaml.safe_load(f) or {}
+        with open('config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     agent_cfg = config.get('agents', {}).get('inspeqtor', {})
@@ -43,7 +43,7 @@ def main() -> None:
     ai_model = agent_cfg.get('model', 'gpt-4o')
 
     context_str = f"## ConstruQtor's Report\n{summary_content}\n\n## Generated Artifacts\n"
-    if os.path.isdir(qodeyard_path):
+    if qodeyard_path.is_dir():
         for root, _, files in os.walk(qodeyard_path):
             for name in files:
                 fpath = os.path.join(root, name)
@@ -70,14 +70,14 @@ You are the 'inspeQtor', a senior code reviewer.
         content = lib_ai.run_ai_completion(ai_provider, ai_model, reviewer_prompt)
         content = content.replace("```markdown", "").replace("```", "").strip()
 
-        os.makedirs(os.path.dirname(reqap_path), exist_ok=True)
+        os.makedirs(reqap_path.parent, exist_ok=True)
         with open(reqap_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-        print(f"reQap written to {reqap_path}")
+        print(f"reQap written to {reqap_path}", flush=True)
 
     except Exception as e:
-        print(f"Inspeqtor Failure: {e}")
+        print(f"Inspeqtor Failure: {e}", flush=True)
         sys.exit(1)
 
 if __name__ == '__main__':
