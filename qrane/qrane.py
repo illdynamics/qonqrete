@@ -63,10 +63,18 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             if proc.stderr: f.write(proc.stderr + "\n")
             f.write(f"--- EXECUTION END: {agent_name} (Return Code: {proc.returncode}) ---\n\n")
 
+        # [CRITICAL FIX] Dump output to screen if agent fails
         if proc.returncode != 0:
             error_prefix = f"{Colors.RED}〘{prefix}〙『{agent_display_name}』{padding} ⸎ {Colors.R}"
             print(f"{error_prefix} {Colors.RED}ERROR: Agent exited with non-zero status code: {proc.returncode}{Colors.R}")
+
+            if proc.stdout:
+                print(f"{error_prefix} {Colors.YELLOW}--- STDOUT DUMP ---{Colors.R}")
+                for line in proc.stdout.strip().split('\n'):
+                    print(f"{error_prefix} {Colors.YELLOW}{line}{Colors.R}")
+
             if proc.stderr:
+                print(f"{error_prefix} {Colors.RED}--- STDERR DUMP ---{Colors.R}")
                 for line in proc.stderr.strip().split('\n'):
                     print(f"{error_prefix} {Colors.RED}{line}{Colors.R}")
             return False
@@ -201,6 +209,9 @@ def main(argv: list[str] | None = None) -> None:
         time.sleep(0.3)
 
         cycle = 1
+        # [NEW] Track session status
+        session_failed = False
+
         while True:
             if args.auto and max_cycles != 0 and cycle > max_cycles:
                 print(f"{qrane_prefix} Max cyQle limit hit ({max_cycles}) - Edit config.yaml to change this.")
@@ -229,20 +240,36 @@ def main(argv: list[str] | None = None) -> None:
             cmd_cons = [sys.executable, str(AGENT_MODULE_DIR / "construqtor.py"), str(worqspace / "briq.d"), str(worqspace / "exeq.d" / f"cyqle{cycle}_summary.md")]
             cmd_insp = [sys.executable, str(AGENT_MODULE_DIR / "inspeqtor.py"), str(worqspace / "exeq.d" / f"cyqle{cycle}_summary.md"), str(worqspace / "reqap.d" / f"cyqle{cycle}_reqap.md")]
 
-            if not run_agent("instruqtor", cmd_inst, prefix, AGENT_COLORS["instruqtor"], logger, logs["instruqtor"], env): break
-            if not run_agent("construqtor", cmd_cons, prefix, AGENT_COLORS["construqtor"], logger, logs["construqtor"], env): break
-            if not run_agent("inspeqtor", cmd_insp, prefix, AGENT_COLORS["inspeqtor"], logger, logs["inspeqtor"], env): break
+            # [CHANGE] Set flag on failure
+            if not run_agent("instruqtor", cmd_inst, prefix, AGENT_COLORS["instruqtor"], logger, logs["instruqtor"], env):
+                session_failed = True
+                break
 
-            if handle_cheqpoint(cycle, args, logger, worqspace / "reqap.d" / f"cyqle{cycle}_reqap.md", prefix) == 'QUIT': break
+            if not run_agent("construqtor", cmd_cons, prefix, AGENT_COLORS["construqtor"], logger, logs["construqtor"], env):
+                session_failed = True
+                break
+
+            if not run_agent("inspeqtor", cmd_insp, prefix, AGENT_COLORS["inspeqtor"], logger, logs["inspeqtor"], env):
+                session_failed = True
+                break
+
+            if handle_cheqpoint(cycle, args, logger, worqspace / "reqap.d" / f"cyqle{cycle}_reqap.md", prefix) == 'QUIT':
+                break
+
             cycle += 1
 
     except KeyboardInterrupt:
         print(f"\n{Colors.RED}User Interrupt (BreaQ){Colors.R}")
+        session_failed = True # Interrupt counts as an error exit usually
     finally:
         try:
-            print(f"\n{qrane_prefix} QonQrete session finished. Enjoy :)")
+            # [CHANGE] Conditional Exit Message
+            if 'session_failed' in locals() and session_failed:
+                print(f"\n{qrane_prefix} {Colors.RED}QonQrete session ended with errors.{Colors.R}")
+            else:
+                print(f"\n{qrane_prefix} QonQrete session finished. Enjoy :)")
         except NameError:
-             print(f"\n{Colors.BOLD}QonQrete session finished. Enjoy :){Colors.R}")
+             print(f"\n{Colors.BOLD}QonQrete session finished.{Colors.R}")
 
 if __name__ == "__main__":
     main()

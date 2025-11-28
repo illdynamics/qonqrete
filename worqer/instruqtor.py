@@ -10,8 +10,8 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import lib_ai
-except ImportError:
-    print("CRITICAL: lib_ai.py not found in worqer/ directory.")
+except ImportError as e:
+    sys.stderr.write(f"CRITICAL: Could not import lib_ai.py: {e}\n")
     sys.exit(1)
 
 def clean_input_content(text: str) -> str:
@@ -33,7 +33,7 @@ def clean_filename_slug(text: str) -> str:
 
 def main() -> None:
     if len(sys.argv) != 3:
-        print("Usage: python instruqtor.py <input_tasq_directory> <output_briq_directory>")
+        sys.stderr.write("Usage: python instruqtor.py <input_tasq_directory> <output_briq_directory>\n")
         sys.exit(1)
 
     input_dir = Path(sys.argv[1])
@@ -46,7 +46,7 @@ def main() -> None:
     except StopIteration:
         input_file = input_dir / f"cyqle{cycle_num}_tasq.md"
         if not input_file.exists():
-            print(f"CRITICAL: No tasq file found for cycle {cycle_num}")
+            sys.stderr.write(f"CRITICAL: No tasq file found for cycle {cycle_num}\n")
             sys.exit(1)
 
     print(f"--- Instruqtor reading: {input_file.name} ---")
@@ -86,7 +86,7 @@ Explain how to configure...
     try:
         master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
     except Exception as e:
-        print(f"Instruqtor Failure: {e}")
+        sys.stderr.write(f"Instruqtor Failure: {e}\n")
         sys.exit(1)
 
     briqs = parse_xml_briqs(master_plan)
