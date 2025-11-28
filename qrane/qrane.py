@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import traceback
+import select
 from pathlib import Path
 import yaml
 import re
@@ -27,217 +28,240 @@ except ImportError:
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 AGENT_MODULE_DIR = PROJECT_ROOT / "worqer"
 
+class KillSignal(Exception): pass
+
 def get_worqspace() -> Path:
     env_path = os.environ.get("QONQ_WORKSPACE")
     return Path(env_path) if env_path else PROJECT_ROOT / "worqspace"
 
+def check_tui_keys(ui, proc=None):
+    """Checks keys in TUI mode."""
+    key = ui.get_key_nonblocking()
+    if key == -1: return
+
+    if key == 32: ui.toggle_qonsole() # Space
+    elif key == ord('w') or key == ord('W'): ui.toggle_wonqrete()
+    elif key == 27: # Esc
+        if proc: proc.terminate()
+        raise KeyboardInterrupt
+    elif key == ord('k') or key == ord('K'):
+        if proc: proc.kill()
+        raise KillSignal
+
+def check_headless_keys(proc=None):
+    """Checks keys in Headless mode using select on stdin."""
+    if select.select([sys.stdin], [], [], 0)[0]:
+        try:
+            key = sys.stdin.read(1)
+            if key.lower() == 'k':
+                if proc: proc.kill()
+                raise KillSignal
+            elif key == '\x1b': # Esc
+                if proc: proc.terminate()
+                raise KeyboardInterrupt
+            elif key == ' ':
+                print(f"\n{Colors.YELLOW}[PAUSED] Press Space to resume...{Colors.R}")
+                while True:
+                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                        if sys.stdin.read(1) == ' ': break
+        except (IOError, EOFError):
+            pass
+
 def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logger: logging.Logger, log_file: Path, env: dict, ui=None) -> bool:
     agent_display_name = agent_name.replace('q', 'Q')
 
-    # --- TUI MODE (Split Screen) ---
-    if ui:
-        ui.log_main(f"[{agent_display_name}] Executing task...")
-        try:
-            with subprocess.Popen(
-                command,
-                cwd=str(get_worqspace()),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                env=env,
-                universal_newlines=True
-            ) as proc:
-                for line in proc.stdout:
-                    ui.log_agent(f"[{agent_display_name}] {line.strip()}")
-                    with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
+    target_width = 11
+    padding = " " * (target_width - len(agent_display_name))
+    qrane_padding = " " * (target_width - 5)
 
-                stdout, stderr = proc.communicate()
-                if stderr:
-                    ui.log_agent(f"[{agent_display_name} STDERR] {stderr.strip()}")
-                    with open(log_file, 'a', encoding='utf-8') as f: f.write(stderr)
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
+    agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
+
+    # --- TUI MODE ---
+    if ui:
+        ui.log_main(f"{qrane_prefix} Initiating {agent_display_name}...")
+        try:
+            with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
+                reads = [proc.stdout, proc.stderr]
+                while True:
+                    check_tui_keys(ui, proc)
+                    readable, _, _ = select.select(reads, [], [], 0.05)
+                    for r in readable:
+                        line = r.readline()
+                        if not line:
+                            reads.remove(r); continue
+                        clean = line.strip()
+                        if r == proc.stdout:
+                            if any(x in clean for x in ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Ingesting"]):
+                                ui.log_main(f"{agent_prefix} {clean}")
+                            ui.log_agent(f"[{agent_display_name}] {clean}")
+                            with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
+                        elif r == proc.stderr:
+                            ui.log_agent(f"[{agent_display_name} RAW] {clean}")
+                            with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
+                    if proc.poll() is not None and not reads: break
 
                 if proc.returncode != 0:
-                    ui.log_main(f"[{agent_display_name}] FAILED (Code {proc.returncode})")
+                    ui.log_main(f"{agent_prefix} FAILED (Code {proc.returncode})")
                     return False
-                ui.log_main(f"[{agent_display_name}] Completed Successfully.")
                 return True
+        except KillSignal: raise
         except Exception as e:
             ui.log_main(f"CRITICAL EXCEPTION: {e}")
             return False
 
-    # --- HEADLESS MODE (Streaming + Spinner) ---
+    # --- HEADLESS MODE ---
     else:
-        # Target width 11 (based on 'construQtor')
-        target_width = 11
-        padding = " " * (target_width - len(agent_display_name))
-
-        # Announce initiation using Qrane style
-        qrane_padding = " " * (target_width - 5)
-        # Tight alignment: No space before ⸎
-        qrane_prefix = f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R}"
         print(f"{qrane_prefix} Initiating {agent_display_name}...")
-
-        output_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
         spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
-
         spinner.start()
 
         try:
-            # Use Popen to stream output line-by-line
-            proc = subprocess.Popen(
-                command,
-                cwd=str(get_worqspace()),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env=env,
-                bufsize=1,
-                universal_newlines=True
-            )
+            proc = subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True)
 
-            # Read stdout line by line
+            reads = [proc.stdout, proc.stderr]
             while True:
-                line = proc.stdout.readline()
-                if not line and proc.poll() is not None:
+                check_headless_keys(proc)
+                readable, _, _ = select.select(reads, [], [], 0.05)
+
+                if not readable and proc.poll() is not None:
                     break
 
-                if line:
-                    clean_line = line.strip()
-                    if any(x in line for x in ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Generating", "Ingesting"]):
-                        spinner.stop() # Clear spinner line
-                        print(f"{output_prefix} {clean_line}")
-                        spinner.start() # Resume spinner on new line
+                for r in readable:
+                    line = r.readline()
+                    if not line:
+                        reads.remove(r); continue
 
-                    # Always log to file
+                    clean = line.strip()
+                    if r == proc.stdout:
+                        if any(x in clean for x in ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Generating", "Ingesting"]):
+                            spinner.stop()
+                            print(f"{agent_prefix} {clean}")
+                            spinner.start()
                     with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
-            # Capture remaining stderr if any
+            # Check leftover stderr
             stderr = proc.stderr.read()
             if stderr:
                 with open(log_file, 'a', encoding='utf-8') as f: f.write(stderr)
 
             spinner.stop()
-
-            # Handle Failures
             if proc.returncode != 0:
-                error_prefix = f"{Colors.RED}〘{prefix}〙『{agent_display_name}』{padding}⸎ {Colors.R}"
-                print(f"{error_prefix} {Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
-
-                if stderr:
-                    print(f"{error_prefix} {Colors.RED}--- STDERR DUMP ---{Colors.R}")
-                    for line in stderr.strip().split('\n'):
-                        print(f"{error_prefix} {Colors.RED}{line}{Colors.R}")
+                print(f"{agent_prefix} {Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
                 return False
-
             return True
 
+        except KillSignal:
+            spinner.stop()
+            raise
         except KeyboardInterrupt:
             spinner.stop()
             try: proc.kill()
             except: pass
             print(f"\n{Colors.RED}User Interrupt (BreaQ) inside Agent.{Colors.R}")
             raise
-
         except Exception as e:
             spinner.stop()
             print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
             return False
 
 def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, ui=None) -> str:
-    # Read Assessment
+    target_width = 11
+    gatekeeper_name = "gateQeeper"
+    p_padding = " " * (target_width - len(gatekeeper_name))
+    gate_prefix = f"{Colors.B}〘{prefix}〙『{Colors.YELLOW}{gatekeeper_name}{Colors.B}』{p_padding}⸎ {Colors.R}"
+
     assessment = "Unknown"
+    content = ""
     try:
         with open(reqap_path, 'r', encoding='utf-8') as f:
-            if "Assessment:" in f.read().split('\n', 1)[0]:
-                assessment = "Available"
+            content = f.read()
+            if "Assessment:" in content.split('\n', 1)[0]:
+                assessment = content.split('\n', 1)[0].split(":", 1)[1].strip()
     except: pass
 
-    # --- TUI MODE ---
-    if ui:
-        ui.log_main(f"=== Cheqpoint {cycle} ===")
-        if args.auto:
-            ui.log_main("Autonomous Mode: Qontinuing...")
-            promote_reqap(cycle, prefix, ui=ui)
-            return 'QONTINUE'
+    if args.auto:
+        msg = "Autonomous Mode: Qontinuing..."
+        if ui: ui.log_main(f"{gate_prefix} {msg}")
+        else:
+            print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
+            print(content)
+            print(f"{gate_prefix} {msg}")
+        promote_reqap(cycle, prefix, ui=ui)
+        return 'QONTINUE'
 
-        choice = ui.get_input("[Q]ontinue or [X]Quit")
-        if choice.lower() == 'q':
-            promote_reqap(cycle, prefix, ui=ui)
-            return 'QONTINUE'
-        return 'QUIT'
-
-    # --- HEADLESS MODE ---
-    else:
-        # Checkpoint Header
-        target_width = 11
-        qrane_padding = " " * (target_width - 5)
-        qrane_prefix = f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R}"
-
-        header_text = f" cheQpoint {cycle:03d} "
-        header_len = 78
-        padding = (header_len - len(header_text)) // 2
-        header = f"{Colors.YELLOW}{Colors.BOLD}{'='*padding}{Colors.WHITE}{Colors.BOLD}{header_text}{Colors.YELLOW}{Colors.BOLD}{'='*padding}{Colors.R}"
-
-        print("\n" + header)
-
-        try:
-            with open(reqap_path, 'r', encoding='utf-8') as f:
-                print(f.read())
-        except: print("[Error reading reQap]")
-
-        print(Colors.YELLOW + Colors.BOLD + "="*header_len + "\n" + Colors.R)
-
-        if args.auto:
-            print(f"{qrane_prefix} Autonomous mode... No gateQeeper approval required, we will Qontinue..")
-            promote_reqap(cycle, prefix, ui=None)
-            return 'QONTINUE'
-
-        gatekeeper_name = "gateQeeper"
-        p_padding = " " * (target_width - len(gatekeeper_name))
-        prompt_prefix = f"{Colors.YELLOW}〘{prefix}〙『{gatekeeper_name}』{p_padding}⸎  {Colors.R}"
-
-        print(f"{prompt_prefix}{Colors.WHITE}Result: {assessment}{Colors.R}")
-        print(f"{prompt_prefix}[Q]ontinue, [T]weaQ (Edit), [X]Quit")
-
-        while True:
-            sys.stdout.write(f"{prompt_prefix}{Colors.WHITE}Selection: {Colors.R}")
+    while True:
+        if ui:
+            ui.log_main(f"--- reQap Cycle {cycle} ---")
+            ui.log_main(f"{gate_prefix} Result: {assessment}")
+            prompt = f"{gate_prefix} [Q]ontinue, [T]weaQ (Edit), [X]Quit"
+            choice = ui.get_input_blocking(prompt).lower()
+        else:
+            print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
+            print(content)
+            print(f"{Colors.YELLOW}==========================={Colors.R}")
+            print(f"{gate_prefix} Result: {Colors.WHITE}{assessment}{Colors.R}")
+            print(f"{gate_prefix} [Q]ontinue, [T]weaQ (Edit), [X]Quit")
+            sys.stdout.write(f"{gate_prefix} Selection: {Colors.R}")
             sys.stdout.flush()
             choice = getch().lower()
-            if choice == 'q':
-                print(f"{qrane_prefix} gateQeeper's reQap imported...")
-                promote_reqap(cycle, prefix, ui=None)
-                return 'QONTINUE'
-            elif choice == 'x': return 'QUIT'
-            elif choice == 't':
-                editor = os.environ.get('EDITOR', 'vim')
-                subprocess.run([editor, str(reqap_path)])
-                continue
-            elif ord(choice) == 3: return 'QUIT'
+            if choice in ['\r', '\n']: continue
+            print(choice)
+
+        if choice == 'q':
+            msg = "gateQeeper's reQap imported..."
+            if ui: ui.log_main(f"{gate_prefix} {msg}")
+            else: print(f"{gate_prefix} {msg}")
+            promote_reqap(cycle, prefix, ui=ui)
+            return 'QONTINUE'
+        elif choice == 'x': return 'QUIT'
+        elif choice == 't':
+            editor = os.environ.get('EDITOR', 'vim')
+            if ui: ui.suspend_and_run([editor, str(reqap_path)])
+            else: subprocess.call([editor, str(reqap_path)])
+            try:
+                with open(reqap_path, 'r', encoding='utf-8') as f: content = f.read()
+            except: pass
+            continue
 
 def promote_reqap(cycle: int, prefix: str, ui=None):
     ws = get_worqspace()
     src = ws / "reqap.d" / f"cyqle{cycle}_reqap.md"
     dst = ws / "tasq.d" / f"cyqle{cycle+1}_tasq.md"
 
+    target_width = 11
+    qrane_padding = " " * (target_width - 5)
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
+
     if src.exists():
         os.makedirs(dst.parent, exist_ok=True)
         with open(src, 'r') as f: content = f.read()
-        with open(dst, 'w') as f: f.write(f"# Cycle {cycle+1}\n\n{content}")
+
+        assessment_status = "Unknown"
+        for line in content.split('\n'):
+            if "Assessment:" in line:
+                assessment_status = line.split(":", 1)[1].strip()
+                break
+
+        header = f"# Cycle {cycle+1} Directive\n\n**PREVIOUS CYCLE STATUS:** {assessment_status}\n\n**CRITICAL INSTRUCTION:**\n1. Analyze Assessment.\n2. Fix failures if Partial/Failure.\n3. Implement suggestions if Success.\n\n---\n\n"
+        with open(dst, 'w') as f: f.write(header + content)
 
         msg = f"Successfully created {dst.name}."
-        start_msg = f"Starting cyQle {cycle+1}..."
 
         if ui:
-            ui.log_main(msg)
-            ui.log_main(start_msg)
+            ui.log_main(f"{qrane_prefix} {msg}")
+            # [FIX] Do NOT announce next cycle start here. Main loop does it.
         else:
-            target_width = 11
-            qrane_padding = " " * (target_width - 5)
-            # Existing message
-            print(f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R} {msg}")
-            # [ADDED] The start cycle message
-            print(f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R} {start_msg}")
+            print(f"{qrane_prefix} {msg}")
+            # [FIX] Do NOT announce next cycle start here. Main loop does it.
+
+def getch():
+    try:
+        import tty, termios
+        fd = sys.stdin.fileno(); old = termios.tcgetattr(fd)
+        try: tty.setraw(fd); return sys.stdin.read(1)
+        finally: termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except: return sys.stdin.read(1)
 
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")
@@ -254,11 +278,31 @@ def main():
         try:
             with tui.QonqreteTUI() as ui:
                 run_orchestration(args, prefix, ui)
+        except KillSignal:
+            print(f"\n{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
+            print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception:
             traceback.print_exc()
             print("TUI Crashed.")
     else:
-        run_orchestration(args, prefix, ui=None)
+        # Headless mode with hotkeys setup
+        import tty, termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setcbreak(fd) # Enable hotkeys without enter
+            run_orchestration(args, prefix, ui=None)
+        except KillSignal:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            print(f"\n{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
+            print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
+        except Exception as e:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            # Normal exits handled in run_orchestration
+        finally:
+            # Always restore terminal
+            try: termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            except: pass
 
 def run_orchestration(args, prefix, ui):
     worqspace = get_worqspace()
@@ -272,15 +316,17 @@ def run_orchestration(args, prefix, ui):
 
     target_width = 11
     qrane_padding = " " * (target_width - 5)
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if not ui:
-        print(f"[INFO] Seeding worqspace in sandbox at: {worqspace}")
-
-        qrane_prefix = f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R}"
-        print(f"{qrane_prefix} Importing gateQeeper's tasq.md...")
+        # Use \r for clean lines in cbreak mode
+        print(f"[INFO] Seeding worqspace in sandbox at: {worqspace}\r")
+        print(f"{qrane_prefix} Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
-        print(f"{qrane_prefix} Initiating Qrew...")
+        print(f"{qrane_prefix} Initiating Qrew...\r")
         time.sleep(0.3)
+    else:
+        ui.log_main(f"{qrane_prefix} Initiating Qrew...")
 
     cycle = 1
     session_failed = False
@@ -288,10 +334,13 @@ def run_orchestration(args, prefix, ui):
 
     try:
         while True:
+            # Check Limits at START of loop
             if args.auto and max_cycles > 0 and cycle > max_cycles:
-                msg = f"Max cyQle limit hit ({max_cycles}) - Edit config.yaml to change this."
-                if ui: ui.log_main(msg)
-                else: print(f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R} {msg}")
+                # [FIX] Cyan color for number
+                limit_str = f"{Colors.C}{max_cycles}{Colors.R}"
+                msg = f"Max cyQle limit hit ({limit_str}) - Edit config.yaml to change this."
+                if ui: ui.log_main(f"{qrane_prefix} {msg}")
+                else: print(f"{qrane_prefix} {msg}\r")
                 break
 
             env = os.environ.copy()
@@ -303,15 +352,16 @@ def run_orchestration(args, prefix, ui):
                 ("inspeqtor", ["python3", str(AGENT_MODULE_DIR / "inspeqtor.py"), str(worqspace/"exeq.d"/f"cyqle{cycle}_summary.md"), str(worqspace/"reqap.d"/f"cyqle{cycle}_reqap.md")])
             ]
 
-            AGENT_COLORS = {"instruqtor": Colors.B, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA}
+            AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA}
 
-            if ui: ui.log_main(f"--- Starting Cycle {cycle} ---")
+            # Start Message
+            start_msg = f"Starting {Colors.C}cyQle {cycle}{Colors.R}..."
+            if ui: ui.log_main(f"{qrane_prefix} {start_msg}")
             else:
+                print(f"{qrane_prefix} {start_msg}\r")
                 if args.auto:
-                     # 'instruQtor' is 10 chars. Target 11. Padding = 1 space.
-                     # Format: 『instruQtor』 ⸎
                      inst_padding = " " * 1
-                     print(f"{Colors.B}〘{prefix}〙『{Colors.B}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R} Ingesting cyqle{cycle}_tasq.md...")
+                     print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R} Ingesting cyqle{cycle}_tasq.md...\r")
 
             for name, cmd in agents:
                 log_file = worqspace / "struqture" / f"cyqle{cycle}_{name}.log"
@@ -327,20 +377,17 @@ def run_orchestration(args, prefix, ui):
             cycle += 1
 
     except KeyboardInterrupt:
-        if ui: pass
-        else: print(f"\n{Colors.RED}User Interrupt (BreaQ){Colors.R}")
+        if not ui: print(f"\n{Colors.RED}User Interrupt (BreaQ){Colors.R}\r")
         session_failed = True
         user_aborted = True
 
     if not ui:
-        qrane_prefix = f"{Colors.B}〘{prefix}〙『Qrane』{qrane_padding}⸎ {Colors.R}"
-
         if user_aborted:
-             print(f"\n{qrane_prefix} {Colors.WHITE}QonQrete session ended by {Colors.YELLOW}user{Colors.R}{Colors.WHITE}.{Colors.R}")
+             print(f"\n{qrane_prefix} {Colors.WHITE}QonQrete session ended by {Colors.YELLOW}user{Colors.R}{Colors.WHITE}.{Colors.R}\r")
         elif session_failed:
-             print(f"\n{qrane_prefix} {Colors.WHITE}QonQrete session ended with {Colors.RED}errors{Colors.R}{Colors.WHITE}.{Colors.R}")
+             print(f"\n{qrane_prefix} {Colors.WHITE}QonQrete session ended with {Colors.RED}errors{Colors.R}{Colors.WHITE}.{Colors.R}\r")
         else:
-             print(f"\n{qrane_prefix} QonQrete session finished. Enjoy :)")
+             print(f"\n{qrane_prefix} QonQrete session finished. Enjoy :)\r")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,17 @@
+# Sandboxfile for QonQrete
+# Runtime: Microsandbox (msb)
+
+FROM docker.io/wickednet/qonqrete-qage
+
+# Ensure workspace directory exists
+RUN mkdir -p /qonq
+
+# Set working directory to the project root inside the container
+WORKDIR /qonqrete
+
+# Default environment variables (can be overridden at runtime)
+ENV PYTHONUNBUFFERED=1
+ENV QONQ_WORKSPACE=/qonq
+
+# Entrypoint configuration
+ENTRYPOINT ["/bin/bash", "-c"]

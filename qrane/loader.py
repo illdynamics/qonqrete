@@ -8,15 +8,23 @@ class Colors:
     B = "\033[1;34m"; C = "\033[1;36m"; D = "\033[0;34m"; R = "\033[0m"
     YELLOW = "\033[1;33m"; MAGENTA = "\033[1;35m"; RED = "\033[1;31m"
     BOLD = "\033[1m"; GREEN = "\033[1;32m"; WHITE = "\033[1;37m"
+    LIME = "\033[38;5;118m"
 
 class Spinner:
     """A threaded spinner replicating the style of wonqpipe.zsh."""
     def __init__(self, prefix: str = "", message: str = "", delay: float = 0.1):
-        self.frames = [
-            "﴾✇---------﴿", "﴾-✇--------﴿", "﴾--✇-------﴿", "﴾---✇------﴿",
-            "﴾----✇-----﴿", "﴾-----✇----﴿", "﴾------✇---﴿", "﴾-------✇--﴿",
-            "﴾--------✇-﴿", "﴾---------✇﴿"
+        inners = [
+            "✇---------", "-✇--------", "--✇-------", "---✇------",
+            "----✇-----", "-----✇----", "------✇---", "-------✇--",
+            "--------✇-", "---------✇"
         ]
+
+        # Inner dashes Cyan (C), Symbol Yellow, Brackets Blue (B)
+        self.frames = [
+            f"﴾{Colors.C}{inner.replace('✇', f'{Colors.YELLOW}✇{Colors.C}')}{Colors.B}﴿"
+            for inner in inners
+        ]
+
         self.delay = delay
         self.running = False
         self.spinner_thread = None
@@ -40,7 +48,7 @@ class Spinner:
         i = 0
         while self.running:
             frame = self.frames[i % len(self.frames)]
-            # [CHANGE] Reduced spaces before ⸎ from 3 to 2
+            # Reduced spaces before ⸎ from 3 to 2
             output = f"{Colors.B}{self.prefix} {frame}  ⸎  {Colors.C}{self.message}{Colors.R}"
             sys.stdout.write(f"\r{output}")
             sys.stdout.flush()

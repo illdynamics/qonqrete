@@ -1,8 +1,27 @@
 # QonQrete Release Notes
 
-## v0.1.1-alpha (Current)
+## v0.2.0-alpha (Current)
 
-This is an early alpha release focusing on improving the user interface and overall project structure.
+This release focuses on significant user interface enhancements, performance improvements through faster default models, and the integration of an alternative sandboxing environment.
+
+### New Features & Improvements
+-   **TUI Enhancements**:
+    -   **Qonsole View**: The bottom panel in TUI mode now displays raw, unfiltered logs from the agents, providing deeper insight into their execution.
+    -   **Fullscreen Qommander**: You can now press the `[Spacebar]` to toggle the visibility of the Qonsole, allowing the Qommander (main flow view) to use the full terminal screen.
+    -   **New Key Shortcuts**: A helper bar is now present with shortcuts: `[Space]` to toggle the Qonsole, `[W]` for a fun mode, `[Esc]` to quit, and `[K]` to kill running agents.
+    -   **Color Improvements**: The TUI now uses a more diverse and vibrant color palette to better distinguish between different agents and log levels.
+-   **Faster Default Models**: The default models in `config.yaml` have been updated to prioritize speed and reduce costs:
+    -   `instruQtor`: `gpt-4o-mini`
+    -   `inspeQtor`: `gpt-4o-mini`
+    -   `construQtor`: `gemini-2.5-flash`
+-   **Microsandbox (MSB) Integration**:
+    -   QonQrete can now be run using `msb` as an alternative to Docker for a more lightweight sandboxing experience.
+    -   You can force the runtime environment using the `--msb` or `--docker` flags.
+    -   The default runtime can be set in `worqspace/pipeline_config.yaml` by setting `microsandbox: true`.
+
+## v0.1.1-alpha
+
+This was an early alpha release focusing on improving the user interface and overall project structure.
 
 ### New Features & Improvements
 -   **TUI Mode**: Introduced a new Text-based User Interface (`--tui` flag) for a more immersive and organized view of the agentic workflow. The TUI provides a split-screen view with a `Qommander` for input and a `Qonsole` for real-time log output.

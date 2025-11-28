@@ -6,6 +6,7 @@ VERSION="QonQrete v0.1.0"
 IMAGE_NAME="qonqrete-qage"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORKSPACE_DIR="${SCRIPT_DIR}/worqspace"
+CONFIG_FILE="${WORKSPACE_DIR}/pipeline_config.yaml"
 CONTAINER_WORKSPACE="/qonq"
 
 # --- HELPERS ---
@@ -40,22 +41,43 @@ Global Options:
 Run Options:
   -a, --auto      Enable Autonomous Mode (skip checkpoints).
   -t, --tui       Enable TUI Mode (Split-screen interface).
-  --msb           Use Microsandbox (msb/mbx) runtime.
+  --msb           Force usage of Microsandbox (msb/mbx).
+  --docker        Force usage of Docker.
   -w, --wonqrete  Enable experimental mode.
 
+Configuration:
+  Defaults are read from worqspace/pipeline_config.yaml.
+  Flags (--msb, --docker) override configuration files.
+
 Examples:
-  ./qonqrete.sh init
+  ./qonqrete.sh init --msb
   ./qonqrete.sh run -a -t
   ./qonqrete.sh clean
 EOF
 }
 
+# --- CONFIGURATION PARSER ---
+detect_runtime() {
+    # 1. Default to Docker
+    local runtime="docker"
+
+    # 2. Check pipeline_config.yaml
+    if [ -f "$CONFIG_FILE" ]; then
+        # Grep for 'microsandbox: true' (case insensitive, ignoring whitespace)
+        if grep -iq "^[[:space:]]*microsandbox:[[:space:]]*true" "$CONFIG_FILE"; then
+            runtime="msb"
+        fi
+    fi
+
+    # 3. Flags override everything (handled in main loop)
+    echo "$runtime"
+}
+
 # --- MAIN ARGUMENT PARSING ---
 COMMAND=""
 PY_ARGS=""
-USE_MSB=false
+RUNTIME_MODE=$(detect_runtime) # Set initial mode from config
 
-# Handle global flags without command
 if [[ $# -eq 0 ]]; then show_help; exit 0; fi
 
 while [[ $# -gt 0 ]]; do
@@ -85,7 +107,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --msb)
-            USE_MSB=true
+            RUNTIME_MODE="msb"
+            shift
+            ;;
+        --docker)
+            RUNTIME_MODE="docker"
             shift
             ;;
         *)
@@ -107,11 +133,15 @@ cd "$SCRIPT_DIR"
 case "$COMMAND" in
     init)
         echo "[INFO] Initializing QonQrete..."
-        if [ "$USE_MSB" = true ]; then
-            echo "[INFO] Building Qage with Microsandbox..."
-            if command -v msb >/dev/null 2>&1; then msb build "$IMAGE_NAME"
-            elif command -v mbx >/dev/null 2>&1; then mbx build "$IMAGE_NAME"
-            else echo "[ERROR] --msb specified but binaries not found."; exit 1; fi
+        if [ "$RUNTIME_MODE" == "msb" ]; then
+            echo "[INFO] Building Qage with Microsandbox using Sandboxfile..."
+            if command -v msb >/dev/null 2>&1; then
+                msb build . -t "$IMAGE_NAME"
+            elif command -v mbx >/dev/null 2>&1; then
+                mbx build . -t "$IMAGE_NAME"
+            else
+                echo "[ERROR] --msb specified (or configured) but binaries not found."; exit 1;
+            fi
         else
             echo "[INFO] Building Qage with Docker..."
             docker build -t "$IMAGE_NAME" -f Dockerfile .
@@ -120,19 +150,18 @@ case "$COMMAND" in
 
     clean)
         echo "[INFO] Cleaning QonQrete workspaces..."
-        # Check if directories exist to avoid errors
         if ls "${WORKSPACE_DIR}"/qage_* 1> /dev/null 2>&1; then
             echo "Found previous run directories in: ${WORKSPACE_DIR}"
             read -p "Are you sure you want to delete all 'qage_*' directories? [y/N] " -n 1 -r
-            echo # Move to a new line
+            echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 rm -rf "${WORKSPACE_DIR}"/qage_*
-                echo "[INFO] Workspace cleaned. All 'qage_*' directories removed."
+                echo "[INFO] Workspace cleaned."
             else
                 echo "[INFO] Clean aborted."
             fi
         else
-            echo "[INFO] No 'qage_*' directories found. Nothing to clean."
+            echo "[INFO] No 'qage_*' directories found."
         fi
         ;;
 
@@ -143,7 +172,6 @@ case "$COMMAND" in
             exit 1
         fi
 
-        # [FEATURE] Show Splash only if not in TUI mode (avoids artifacting)
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
             show_splash
         fi
@@ -152,7 +180,12 @@ case "$COMMAND" in
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
 
-        echo "[INFO] Seeding worqspace at: $RUN_HOST_PATH"
+        if [ "$RUNTIME_MODE" == "msb" ]; then
+             echo "[INFO] Seeding worqspace in microsandbox at: $RUN_HOST_PATH"
+        else
+             echo "[INFO] Seeding worqspace in docker at: $RUN_HOST_PATH"
+        fi
+
         mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture}
 
         # Config Copy
@@ -164,21 +197,39 @@ case "$COMMAND" in
             echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
         fi
 
-        # [DEV MODE] Mount local source code
+        # [DEV MODE] Mounts
+        # Note: Paths must be absolute for Docker/MSB
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
+        RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
-        if [ "$USE_MSB" = true ]; then
-            # MSB logic
-            SECURE_CMD="export OPENAI_API_KEY='${OPENAI_API_KEY}'; export GOOGLE_API_KEY='${GOOGLE_API_KEY}'; export GEMINI_API_KEY='${GOOGLE_API_KEY}'; export QONQ_WORKSPACE='/qonq/${RUN_DIR_NAME}'; cd /qonqrete && python3 qrane/qrane.py $PY_ARGS"
-            CMD="msb run"
-            if command -v mbx >/dev/null 2>&1; then CMD="mbx run"; fi
-            $CMD "$IMAGE_NAME" -- /bin/sh -c "$SECURE_CMD"
+        RUN_CMD="python3 qrane/qrane.py $PY_ARGS"
+
+        if [ "$RUNTIME_MODE" == "msb" ]; then
+            # MSB Logic
+            # We assume msb run supports -v flags similar to docker, or we pass them if the CLI differs.
+            # Standard MSB usage often mirrors docker run.
+
+            CMD_BIN="msb"
+            if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
+
+            # Construct command string for MSB to execute inside
+            # We pass ENV vars via command line or -e flags if MSB supports them.
+            # Assuming standard container runtime CLI compatibility:
+
+            $CMD_BIN run --rm -it \
+                $RUN_MOUNTS \
+                $DEV_MOUNTS \
+                -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+                -e GOOGLE_API_KEY="$GOOGLE_API_KEY" \
+                -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
+                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" \
+                "$IMAGE_NAME" \
+                $RUN_CMD
+
         else
             # Docker Logic
-            RUN_CMD="python3 qrane/qrane.py $PY_ARGS"
-
             docker run --rm -it \
-                -v "$RUN_HOST_PATH:$CONTAINER_WORKSPACE" \
+                $RUN_MOUNTS \
                 $DEV_MOUNTS \
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" \
                 -e GOOGLE_API_KEY="$GOOGLE_API_KEY" \
