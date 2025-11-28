@@ -48,7 +48,7 @@ show_splash() {
     if [ -f "$SPLASH_IMG" ] && command -v chafa >/dev/null 2>&1; then
         clear
         chafa "$SPLASH_IMG" --size=128x36 --stretch
-        sleep 1
+        sleep 3
         clear
     fi
 }
