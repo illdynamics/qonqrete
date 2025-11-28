@@ -1,0 +1,18 @@
+# Agent Configuration
+agents:
+  instruqtor:
+    model: gpt-4o-mini
+  construqtor:
+    model: gemini-2.5-flash
+  inspeqtor:
+    model: gpt-4o
+
+# Token and Cycle Management
+token_management:
+  chunk_token_budget: 4096
+
+options:
+  # Max number of cycles to run in auto-mode.
+  # Set to 0 for infinite execution (manual stop required).
+  # Set to 1-999 to limit the number of autonomous loops.
+  auto_cycle_limit: 3

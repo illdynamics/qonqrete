@@ -1,0 +1,18 @@
+# Secrets
+.env
+
+# Ignore generated agent files
+**bloq.d/*
+**tasq.d/*
+**exeq.d/*
+**reqap.d/*
+**qodeyard/*
+
+# Logs
+**struqture/*
+
+# Qages
+worqspace/qage**
+
+# PyCache
+**__pycache**

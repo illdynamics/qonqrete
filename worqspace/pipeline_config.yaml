@@ -1,0 +1,23 @@
+# QonQrete Pipeline Configuration
+agents:
+  - name: instruqtor
+    script: instruqtor.py
+    input: "tasq.d/cyqle{N}_tasq.md"
+    output: briq.d/
+    description: "Reads the cycle-specific tasq and generates a comprehensive markdown briq."
+
+  - name: construqtor
+    script: construqtor.py
+    input: briq.d/
+    output: exeq.d/summary.md
+    description: "Parses the markdown briq and executes the steps, outputting a markdown summary."
+
+  - name: inspeqtor
+    script: inspeqtor.py
+    input: exeq.d/summary.md
+    output: reqap.d/reqap.md
+    description: "Reviews the markdown summary and qodeyard artifacts, producing a markdown reqap."
+
+options:
+  microsandbox: false
+  auto_mode_default: false
