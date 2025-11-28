@@ -2,35 +2,34 @@
 # worqer/instruqtor.py
 import os
 import sys
-import subprocess
 import yaml
-import shutil
 import re
 from pathlib import Path
 
-def split_markdown_into_briqs(markdown_content: str) -> list[str]:
-    # Splitting logic based on the strict header format
-    parts = re.split(r"(### Step \d+:.*)", markdown_content)
-    intro = parts[0].strip()
-    briqs = []
-    for i in range(1, len(parts), 2):
-        header = parts[i]
-        content = parts[i+1].strip() if (i+1) < len(parts) else ""
-        briq_content = f"{intro}\n\n{header}\n\n{content}"
-        briqs.append(briq_content)
-    if not briqs:
-        return [markdown_content]
-    return briqs
+# Add local directory to path to import lib_ai
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import lib_ai
+except ImportError:
+    print("CRITICAL: lib_ai.py not found in worqer/ directory.")
+    sys.exit(1)
+
+def clean_input_content(text: str) -> str:
+    text = text.replace('\u200b', '').replace('\ufeff', '')
+    text = text.replace('\xa0', ' ')
+    text = re.sub(r'^\s*[●•]\s*', '- ', text, flags=re.MULTILINE)
+    text = "".join(ch for ch in text if ch.isprintable() or ch in ['\n', '\t', '\r'])
+    return text
+
+def parse_xml_briqs(content: str) -> list[dict]:
+    pattern = re.compile(r'<briq\s+title=["\'](.*?)["\']\s*>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
+    matches = pattern.findall(content)
+    return [{'title': m[0].strip(), 'content': m[1].strip()} for m in matches]
 
 def clean_filename_slug(text: str) -> str:
-    """Creates a safe, 3-word max snake_case slug from a step title."""
-    # Remove special chars, keep spaces and alphanumerics
     clean = re.sub(r'[^a-zA-Z0-9 ]', '', text)
-    # Split by whitespace
-    words = clean.split()
-    # Take max 3 words, join with underscore, lowercase
-    slug = "_".join(words[:3]).lower()
-    return slug if slug else "step"
+    slug = "_".join(clean.split()[:6]).lower()
+    return slug if slug else "task"
 
 def main() -> None:
     if len(sys.argv) != 3:
@@ -39,103 +38,70 @@ def main() -> None:
 
     input_dir = Path(sys.argv[1])
     output_dir = sys.argv[2]
-
     cycle_num = os.environ.get('CYCLE_NUM', '1')
     tasq_num = os.environ.get('TASQ_NUM', '1')
 
-    target_filename = f"cyqle{cycle_num}_tasq.md"
-    input_file = input_dir / target_filename
-
-    if not input_file.exists():
-        print(f"[WARN] Targeted file {target_filename} not found. Attempting fallback search...")
-        try:
-            input_file = next(input_dir.glob(f"cyqle{cycle_num}*_tasq.md"))
-        except StopIteration:
-            print(f"CRITICAL: No tasq file found for cycle {cycle_num} in {input_dir}")
+    try:
+        input_file = next(input_dir.glob(f"cyqle{cycle_num}*_tasq.md"))
+    except StopIteration:
+        input_file = input_dir / f"cyqle{cycle_num}_tasq.md"
+        if not input_file.exists():
+            print(f"CRITICAL: No tasq file found for cycle {cycle_num}")
             sys.exit(1)
 
     print(f"--- Instruqtor reading: {input_file.name} ---")
-
     with open(input_file, 'r', encoding='utf-8') as f:
-        task_content = f.read()
+        task_content = clean_input_content(f.read())
 
     os.makedirs(output_dir, exist_ok=True)
 
     try:
-        with open('config.yaml', 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        config = {}
+        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
+    except FileNotFoundError: config = {}
+
+    agent_cfg = config.get('agents', {}).get('instruqtor', {})
+    ai_provider = agent_cfg.get('provider', 'openai')
+    ai_model = agent_cfg.get('model', 'gpt-4o-mini')
 
     direqtor_prompt = os.environ.get('DIREQTOR_PROMPT', '')
-
-    # Enhanced Prompt for Semantic Naming and Bullet Handling
     planner_prompt = f"""
 {direqtor_prompt}
+You are the 'instruQtor', a senior technical planner.
+Your goal is to break down the Input Task into logical, atomic "Briqs" (Units of Work).
 
-You are the 'instruQtor', a senior engineer. Your role is to create a detailed, step-by-step plan for the 'construQtor'.
+**OUTPUT FORMAT RULES:**
+You must wrap EVERY unit of work in `<briq>` XML tags.
 
-Your output must be a single, comprehensive markdown document.
-
-**CRITICAL INSTRUCTIONS:**
-1.  **Analyze the Input:** * If the input is a list of bullet points (e.g., from a code review), convert **EACH** bullet point into a separate Step.
-    * If the input is a single request, break it down into logical atomic steps.
-2.  **Header Format:** * Each step **MUST** start with a header in this exact format: `### Step N: <Action Verb> <Object> <Modifier>`
-    * **Crucial:** The title after the colon should be short (2-4 words) and descriptive.
-    * *Good Examples:* `### Step 1: Create Web Server`, `### Step 2: Implement Logging`, `### Step 3: Refactor Database Connector`.
-    * *Bad Examples:* `### Step 1: Do it`, `### Step 1: Step 1`.
-3.  **Content:**
-    * For `'code'` steps, provide the **relative file path** (e.g., `qodeyard/server.py`) and clear natural language instructions.
-    * For `'shell'` steps, provide the exact command.
-4.  **Constraints:**
-    * **DO NOT** generate steps to run/start the server (no infinite blocking processes). Build only.
+Example Output:
+<briq title="Setup Network">
+Explain how to configure...
+</briq>
 
 **Input Task:**
 {task_content}
 
-**Begin Plan:**
+**Begin XML Output:**
 """
-    sgpt_binary = shutil.which('sgpt')
-    if not sgpt_binary:
-        print("CRITICAL: sgpt not found.")
-        sys.exit(1)
-
-    model_name = config.get('agents', {}).get('instruqtor', {}).get('model', 'gpt-4o')
 
     try:
-        proc = subprocess.run(
-            [sgpt_binary, '--no-interaction', '--model', model_name, planner_prompt],
-            capture_output=True, text=True, check=True
-        )
-        if proc.stderr:
-            print(f"[SGPT STDERR] {proc.stderr.strip()}")
-        master_plan = proc.stdout.strip()
-
-    except subprocess.CalledProcessError as e:
-        print(f"Instruqtor Failure (Subprocess): {e}")
-        print(f"--- STDERR START ---\n{e.stderr}\n--- STDERR END ---")
-        sys.exit(1)
+        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
     except Exception as e:
         print(f"Instruqtor Failure: {e}")
         sys.exit(1)
 
-    briqs = split_markdown_into_briqs(master_plan)
+    briqs = parse_xml_briqs(master_plan)
+    if not briqs:
+        print("[WARN] No <briq> tags found. Saving raw output.")
+        briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
 
-    print(f"--- Generating {len(briqs)} Briqs for Cycle {cycle_num} ---")
-    for i, briq_content in enumerate(briqs):
-        # Extracting the semantic name from the header
-        match = re.search(r"### Step \d+:\s*([^\n]+)", briq_content)
+    print(f"--- Generating {len(briqs)} Briqs for Cycle {cycle_num} using {ai_provider}/{ai_model} ---")
 
-        if match:
-            # Generate the 3-word slug (e.g., "create_web_server")
-            step_slug = clean_filename_slug(match.group(1))
-        else:
-            step_slug = f"step{i}"
-
+    for i, item in enumerate(briqs):
+        step_slug = clean_filename_slug(item['title'])
         filename = f"cyqle{cycle_num}_tasq{tasq_num}_briq{i:03d}_{step_slug}.md"
         file_path = os.path.join(output_dir, filename)
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(briq_content)
+            f.write(f"# {item['title']}\n\n{item['content']}")
         print(f"  - Wrote Briq: {filename}")
 
 if __name__ == '__main__':

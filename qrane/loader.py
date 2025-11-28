@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qrane/lib.py - Visual utilities for the Qrane orchestrator
+# qrane/loader.py - Visual utilities for the Qrane orchestrator
 import sys
 import time
 import threading
@@ -12,7 +12,6 @@ class Colors:
 class Spinner:
     """A threaded spinner replicating the style of wonqpipe.zsh."""
     def __init__(self, prefix: str = "", message: str = "", delay: float = 0.1):
-        # VERIFIED: Each frame is a single, valid string literal.
         self.frames = [
             "﴾✇---------﴿", "﴾-✇--------﴿", "﴾--✇-------﴿", "﴾---✇------﴿",
             "﴾----✇-----﴿", "﴾-----✇----﴿", "﴾------✇---﴿", "﴾-------✇--﴿",
@@ -41,7 +40,6 @@ class Spinner:
         i = 0
         while self.running:
             frame = self.frames[i % len(self.frames)]
-            # [REFACTOR] Final alignment fix
             output = f"{Colors.B}{self.prefix} {frame}   ⸎  {Colors.C}{self.message}{Colors.R}"
             sys.stdout.write(f"\r{output}")
             sys.stdout.flush()
