@@ -13,8 +13,8 @@ This document outlines the planned features and improvements for future releases
     -   These modes will automatically select the most appropriate AI model for the task, balancing speed against the complexity of code generation.
 
 -   **Expanded LLM Provider Support**:
-    -   Support for Anthropic's **Claude** models (Opus/Sonnet) will be integrated.
-    -   We are actively researching and evaluating other potential LLM providers to further expand the available options.
+    -   Integration with **Anthropic Claude 3.5 Sonnet** via the official `@anthropic-ai/claude-code` CLI.
+    -   Integration with **DeepSeek Coder** models via the official `deepseek-cli`.
 
 -   **General Enhancements**:
     -   Ongoing bug fixes and performance tweaks.
