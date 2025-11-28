@@ -26,19 +26,12 @@ R=$'\033[0m'
 
 # Target width 11. "Qrane" (5 chars) -> 6 spaces padding.
 PADDING="      "
-PREFIX="${B}〘QQ〙『${W}Qrane${B}』${PADDING}⸎${R}"
+PREFIX="${B}〘QQ〙『${W}Qrane${B}』${PADDING}⸎ ${R}"
 
 # --- HELPERS ---
 
 log_qrane() {
     echo -e "${PREFIX} $1"
-}
-
-exec_qrane() {
-    # Pipes output line-by-line to prepend prefix
-    "$@" 2>&1 | while IFS= read -r line; do
-        echo -e "${PREFIX} $line"
-    done
 }
 
 show_splash() {
@@ -158,23 +151,22 @@ cd "$SCRIPT_DIR"
 case "$COMMAND" in
     init)
         log_qrane "Initializing QonQrete..."
-        # Pass Version as build arg
         BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V}"
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             log_qrane "Building Qage with Microsandbox..."
-            # Note: Assuming msb accepts standard build args. If not, remove $BUILD_ARGS
             if command -v msb >/dev/null 2>&1; then
-                exec_qrane msb build . -t "$IMAGE_NAME" $BUILD_ARGS
+                msb build . -t "$IMAGE_NAME" $BUILD_ARGS
             elif command -v mbx >/dev/null 2>&1; then
-                exec_qrane mbx build . -t "$IMAGE_NAME" $BUILD_ARGS
+                mbx build . -t "$IMAGE_NAME" $BUILD_ARGS
             else
                 log_qrane "[ERROR] --msb specified but binaries not found."; exit 1;
             fi
         else
             log_qrane "Building Qage with Docker..."
-            exec_qrane docker build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
+            docker build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
         fi
+        log_qrane "Qage successfully built!"
         ;;
 
     clean)
