@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.1.0` (See `VERSION` file for the canonical version).
+**Version:** `v0.1.1-alpha` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -36,14 +36,26 @@ Result: Success. [Q]ontinue, [T]weaQ, [X]Quit
 - **Press `t`:** Pauses the cycle and opens the `reQap.md` file in your default editor (`$EDITOR`, e.g., `vim`). You can add new instructions, correct the AI's plan, or give feedback. After you save and close the editor, you will be returned to this prompt.
 - **Press `x`:** Gracefully ends the session.
 
-## 4. Run in Autonomous Mode
+## 4. Run in TUI Mode
+For a more detailed view, run the system with the `--tui` flag. This will launch a split-screen interface showing the live log output.
+```bash
+./qonqrete.sh run --tui
+```
+
+## 5. Run in Autonomous Mode
 To run the system without manual confirmation at each CheQpoint, use the `--auto` flag. The system will loop, feeding the `reQap` from one cycle to the `instruqtor` of the next, until it reaches a `Success` state or the cycle limit.
 ```bash
 ./qonqrete.sh run --auto
 ```
 You can stop the loop at any time with `Ctrl+C`.
 
-## 5. Configuration
+## 6. Configuration
 Advanced options can be set in `worqspace/config.yaml`.
 - **`auto_cycle_limit`**: Set the maximum number of cycles for auto-mode. `0` means infinite.
 - **Agent Models**: You can change the specific AI models used by the `instruqtor`, `construqtor`, and `inspeqtor`.
+
+## 7. Cleaning the Workspace
+The `run` command creates a new `qage_<timestamp>` directory in `worqspace/` for each execution. To remove all of these temporary directories, use the `clean` command.
+```bash
+./qonqrete.sh clean
+```

@@ -10,7 +10,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.1.0` (See `VERSION` file for the canonical version).
+**Version:** `v0.1.1-alpha` (See `VERSION` file for the canonical version).
 
 ## Core Principles
 
@@ -73,7 +73,17 @@ First, initialize the system and build the secure `Qage` environment. You only n
 ./qonqrete.sh init
 ```
 
-Then, the primary command to run the system is:
+To run the system in standard mode:
 ```bash
 ./qonqrete.sh run
+```
+
+To run the system with the new Text-based User Interface (TUI):
+```bash
+./qonqrete.sh run --tui
+```
+
+To clean up the workspace and remove all previous run data:
+```bash
+./qonqrete.sh clean
 ```

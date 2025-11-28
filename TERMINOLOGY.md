@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v0.1.0` (See `VERSION` file for the canonical version).
+**Version:** `v0.1.1-alpha` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -31,3 +31,5 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **tweaQ**: The CLI command (`t`) to pause the `cyQle` and open the `reQap` in your default editor (`$EDITOR`).
 - **Quit**: The CLI command (`x`) to gracefully end the QonQrete session.
 - **breaQ**: A `Ctrl+C` interrupt to forcibly terminate the session.
+- **Qommander**: In TUI mode, the top panel where the user provides input.
+- **Qonsole**: In TUI mode, the bottom panel that displays real-time log output from the agents.
