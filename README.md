@@ -26,7 +26,11 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
-
+> **Note on TUI Mode and Agent Testing:**
+>
+> The Text-based User Interface (TUI) mode is currently under active development and may still have bugs. While the agent setup is dynamic, extensive testing is still required.
+>
+> We welcome community contributions! If you encounter any issues or have suggestions, please report them. Your feedback is invaluable in helping us improve the system.
 
 
 
