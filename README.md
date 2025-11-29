@@ -1,6 +1,6 @@
 # QonQrete - Secure AI Construction Loop System
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-![Visitors](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&color=blue)
+![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
 
 ![Splash](qrane/logo.png)
 
