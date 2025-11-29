@@ -35,12 +35,15 @@ class KillSignal(Exception): pass
 def get_version():
     suffix = "-alpha"
     v = os.environ.get("QONQ_VERSION")
-    if v: return f"QonQrete v{v}{suffix}"
+    if v:
+        clean_v = v.replace("v", "")
+        return f"QonQrete v{clean_v}{suffix}"
     try:
         v_file = PROJECT_ROOT / "VERSION"
         if v_file.exists():
             with open(v_file, "r") as f:
-                return f"QonQrete v{f.read().strip()}{suffix}"
+                clean_v = f.read().strip().replace("v", "")
+                return f"QonQrete v{clean_v}{suffix}"
     except: pass
     return f"QonQrete v?.?.?{suffix}"
 
@@ -174,7 +177,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                     with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
             stderr = proc.stderr.read()
-            # [FIX] Properly indented with block
+            # [FIXED] Corrected syntax error
             if stderr:
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(stderr)
@@ -212,10 +215,14 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
     assessment = "Unknown"
     content = ""
     try:
-        with open(reqap_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            if "Assessment:" in content.split('\n', 1)[0]:
-                assessment = content.split('\n', 1)[0].split(":", 1)[1].strip()
+        # [FIX] Properly indented try block
+        if reqap_path.exists():
+            with open(reqap_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if "Assessment:" in content.split('\n', 1)[0]:
+                    assessment = content.split('\n', 1)[0].split(":", 1)[1].strip()
+        else:
+            content = f"[ERROR] reQap not found at {reqap_path}"
     except: pass
 
     if args.auto:
@@ -301,10 +308,13 @@ def main():
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
     parser.add_argument("-V", "--version", action="version", version=get_version())
+    # [NEW] Flags for overrides
+    parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
+    parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
     args = parser.parse_args()
 
     prefix = "aQQ" if args.auto else "uQQ"
-    if args.wonqrete and args.auto: prefix = "aWQ"
+    if args.wonqrete: prefix = "aWQ" if args.auto else "uWQ"
 
     if args.tui and tui:
         try:
@@ -312,11 +322,9 @@ def main():
                 run_orchestration(args, prefix, ui)
         except KillSignal:
             print(f"\n{Colors.RED}︻デ┳═ー{Colors.WHITE} - - - {Colors.RED}Qilled{Colors.WHITE} all agents in the Qage...{Colors.R}")
-            print()
-            print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
+            print(); print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception:
-            traceback.print_exc()
-            print("TUI Crashed.")
+            traceback.print_exc(); print("TUI Crashed.")
     else:
         import tty, termios
         fd = sys.stdin.fileno()
@@ -327,11 +335,9 @@ def main():
         except KillSignal:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             print(f"\033[A\r{Colors.RED}︻デ┳═ー{Colors.WHITE} - - - {Colors.RED}Qilled{Colors.WHITE} all agents in the Qage...{Colors.R}")
-            print()
-            print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
+            print(); print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception as e:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            traceback.print_exc()
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings); traceback.print_exc()
         finally:
             try: termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             except: pass
@@ -349,8 +355,17 @@ def run_orchestration(args, prefix, ui):
     try:
         with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
-    max_cycles = config.get('options', {}).get('auto_cycle_limit', 0)
 
+    # [LOGIC] Resolve Mode & Sensitivity
+    # CLI overrides Config
+    final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
+    final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 5)
+
+    # [LOGIC] Inject into Environment
+    os.environ['QONQ_MODE'] = final_mode
+    os.environ['QONQ_SENSITIVITY'] = str(final_sens)
+
+    max_cycles = config.get('options', {}).get('auto_cycle_limit', 0)
     target_width = 11
     qrane_padding = " " * (target_width - 5)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
@@ -359,10 +374,10 @@ def run_orchestration(args, prefix, ui):
         print(f"{qrane_prefix} Seeding worQspace in Qage at: {worqspace}\r")
         print(f"{qrane_prefix} Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
-        print(f"{qrane_prefix} Initiating Qrew...\r")
+        print(f"{qrane_prefix} Initiating Qrew... (Mode: {final_mode}, Sens: {final_sens})\r")
         time.sleep(0.3)
     else:
-        ui.log_main(f"{qrane_prefix} Initiating Qrew...")
+        ui.log_main(f"{qrane_prefix} Initiating Qrew... (Mode: {final_mode})")
 
     cycle = 1
     session_failed = False
@@ -441,7 +456,6 @@ def run_orchestration(args, prefix, ui):
 
     if not ui:
         print()
-
         if user_aborted:
              print(f"{qrane_prefix} {Colors.WHITE}QonQrete session ended by {Colors.YELLOW}user{Colors.R}{Colors.WHITE}.{Colors.R}\r")
         elif session_failed:
