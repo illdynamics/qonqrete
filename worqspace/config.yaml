@@ -21,8 +21,8 @@ options:
   # 0 = Atomic (Every bullet is a file)
   # 5 = Balanced
   # 9 = Monolithic (Whole task is one file)
-  briq_sensitivity: 0
+  briq_sensitivity: 9
 
   # Operational Mode
   # Options: program, enterprise, performance, security, innovative, balanced
-  mode: enterprise
+  mode: program

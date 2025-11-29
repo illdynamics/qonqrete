@@ -4,17 +4,19 @@ import subprocess
 import sys
 import os
 import threading
+import time
 
 def run_ai_completion(provider: str, model: str, prompt: str, context_files: list[str] = None) -> str:
     if context_files is None: context_files = []
 
+    # Build the prompt
     full_prompt = _build_prompt(prompt, context_files)
 
     if provider.lower() == 'openai':
-        # --no-cache prevents loops on identical inputs
-        return _run_streaming_process(['sgpt', '--no-cache', '--no-interaction', '--model', model, full_prompt])
+        # Pass input via stdin to avoid Argument list too long
+        cmd = ['sgpt', '--no-cache', '--no-interaction', '--model', model]
+        return _run_streaming_process(cmd, input_text=full_prompt)
     elif provider.lower() == 'gemini':
-        # --approval-mode yolo is required for automation
         cmd = ['gemini', 'prompt', '--model', model, '--approval-mode', 'yolo']
         return _run_streaming_process(cmd, input_text=full_prompt)
     else:
@@ -34,59 +36,60 @@ def _build_prompt(base_prompt, context_files):
 
 def _run_streaming_process(cmd, input_text=None) -> str:
     """
-    Advanced execution: Uses a thread to write to stdin to prevent deadlocks,
-    while the main thread reads stdout to stream tokens to the user.
+    Robust execution: Streams stdout to stderr (visual), collects it for return.
+    Avoids communicate() to prevent 'I/O operation on closed file' race conditions.
     """
     try:
-        # Open process with pipes
         proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE if input_text else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1, # Line buffered
+            bufsize=1,
             universal_newlines=True
         )
 
-        # Helper function to write stdin in background
+        # 1. Handle Stdin in a thread to prevent deadlocks
         def writer():
             try:
                 if input_text:
                     proc.stdin.write(input_text)
                     proc.stdin.flush()
-                proc.stdin.close()
-            except (BrokenPipeError, OSError):
-                # Process exited early/crashed
+            except (BrokenPipeError, OSError, ValueError):
+                # Process closed pipe early. This is expected behavior for some errors.
                 pass
+            finally:
+                try: proc.stdin.close()
+                except: pass
 
-        # Start writer thread
         if input_text:
             t = threading.Thread(target=writer)
             t.start()
 
         captured_stdout = []
 
-        # STREAMING LOOP
+        # 2. Manual Streaming Loop (Reads Stdout)
         while True:
-            # Read char-by-char for smooth effect
             char = proc.stdout.read(1)
             if not char and proc.poll() is not None:
                 break
             if char:
                 captured_stdout.append(char)
-                # Write to stderr so it shows up in logs/console immediately
+                # Mirror to stderr so Qrane logs show progress
                 sys.stderr.write(char)
                 sys.stderr.flush()
 
-        # Clean up
-        if input_text:
-            t.join(timeout=5)
+        # 3. Cleanup - Do NOT use communicate()
+        # Read any remaining stderr (usually errors)
+        stderr_output = proc.stderr.read()
 
-        # Check for errors in stderr *after* stdout is done
-        _, stderr_output = proc.communicate()
+        proc.wait() # Wait for exit code
+
+        if input_text:
+            t.join(timeout=2) # Ensure writer thread finishes
+
         if proc.returncode != 0:
-            # If it failed, print the error
             if stderr_output:
                 sys.stderr.write(f"\n[AI ERROR]: {stderr_output}\n")
             raise RuntimeError(f"AI Provider failed with code {proc.returncode}")

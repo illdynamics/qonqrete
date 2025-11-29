@@ -6,7 +6,6 @@ import yaml
 import re
 from pathlib import Path
 
-# Add local directory to path to import lib_ai
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try: import lib_ai
 except ImportError as e:
@@ -50,22 +49,17 @@ def get_sensitivity_prompt(level: int) -> str:
 4. **SCALE:** For a large report, I expect 30-60 Briqs. Do not summarize.
 """
     elif level <= 5:
-        return "Create one Briq per logical component (e.g., Client, Server, Database)."
+        return "Create one Briq per logical component."
     else:
         return "Group related tasks into major phases."
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        sys.stderr.write("Usage: python instruqtor.py <input_file> <output_dir>\n"); sys.exit(1)
+    if len(sys.argv) != 3: sys.exit(1)
 
     input_file = Path(sys.argv[1])
     output_dir = Path(sys.argv[2])
     cycle_num = os.environ.get('CYCLE_NUM', '1')
 
-    if not input_file.exists():
-        sys.stderr.write(f"CRITICAL: Task file not found: {input_file}\n"); sys.exit(1)
-
-    # Log readable by Qrane
     print(f"--- Architect analyzing: {input_file.name} ---", flush=True)
     with open(input_file, 'r', encoding='utf-8') as f: task_content = clean_input_content(f.read())
 
@@ -73,7 +67,7 @@ def main() -> None:
 
     try:
         with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
-    except FileNotFoundError: config = {}
+    except: config = {}
 
     agent_cfg = config.get('agents', {}).get('instruqtor', {})
     ai_provider = agent_cfg.get('provider', 'openai')
@@ -85,7 +79,6 @@ def main() -> None:
 
     sens_prompt = get_sensitivity_prompt(sensitivity)
 
-    # THE MICRO-MANAGER PROMPT
     planner_prompt = f"""
 You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MODE**.
 **OPERATIONAL MODE:** {mode.upper()}
@@ -102,23 +95,10 @@ You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MOD
 4.  **IMPLEMENTATION:** Create separate files for every feature mentioned.
 
 **OUTPUT FORMAT (STRICT XML):**
-Format:
 <briq title="000_Project_Root_Setup">
 - Create `requirements.txt`
-- Create `.gitignore`
-- Create `README.md`
 </briq>
-
-<briq title="001_Shared_Logger">
-- Create `src/shared/logger.py`
-- Implement class `QLogger` with rotation.
-</briq>
-
-<briq title="002_Custom_Exceptions">
-- Create `src/shared/exceptions.py`
-</briq>
-
-... [Continue for 30+ items] ...
+...
 
 **INPUT DOCUMENT:**
 {task_content}
@@ -126,15 +106,26 @@ Format:
 **BEGIN ATOMIC BREAKDOWN:**
 """
 
+    master_plan = ""
     try:
         master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
     except Exception as e:
-        sys.stderr.write(f"Instruqtor Architecture Failure: {e}\n"); sys.exit(1)
+        # [FIX] If the AI failed but we captured output (partial stream), check if it's usable.
+        print(f"[WARN] AI Stream Signal: {e}", flush=True)
+        # If the failure was just the pipe closing at the end, lib_ai might have printed it
+        # but raised an error. In a real streaming scenario, we rely on what was captured.
+        # Since lib_ai returns the string, if it crashes it usually returns nothing via return.
+        # But if the crash happens inside lib_ai it raises.
+        # We can't easily recover the string unless lib_ai returns it partially.
+        # Given the new lib_ai fix, this catch block is just a safety net.
+        sys.stderr.write(f"Instruqtor Failure: {e}\n")
+        # Proceed only if we have a way to recover logic (omitted for simplicity, relying on lib_ai fix)
+        sys.exit(1)
 
     briqs = parse_xml_briqs(master_plan)
 
     if not briqs:
-        print("[WARN] Architect failed to produce valid XML. Generating raw output as single task.", flush=True)
+        print("[WARN] Architect failed to produce valid XML. Generating raw output.", flush=True)
         briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
 
     print(f"--- Architect Generating {len(briqs)} Build Phases (Sens:{sensitivity}) ---", flush=True)
@@ -147,7 +138,6 @@ Format:
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}")
 
-        # Log readable by Qrane
         print(f"  - Wrote [Plan] {filename}", flush=True)
 
 if __name__ == '__main__':
