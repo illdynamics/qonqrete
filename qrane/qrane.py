@@ -107,9 +107,15 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     padding = " " * (target_width - len(agent_display_name))
     qrane_padding = " " * (target_width - 5)
 
-    # [FIX] qrane_prefix ends with a space, so we remove the space in the print calls later
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
     agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
+
+    # [FIX] Expanded keyword list ensures logs from InstruQtor and ConstruQtor are visible
+    VISIBLE_KEYWORDS = [
+        "Handing off", "Processing", "Executed", "Wrote", "reQap",
+        "Checking", "Generating", "Ingesting", "Architect", "Plan",
+        "Found", "Summary"
+    ]
 
     if ui:
         ui.log_main(f"{qrane_prefix}Initiating {agent_display_name}...")
@@ -124,7 +130,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                         if not line: reads.remove(r); continue
                         clean = line.strip()
                         if r == proc.stdout:
-                            if any(x in clean for x in ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Ingesting"]):
+                            # [FIX] Use visibility list
+                            if any(x in clean for x in VISIBLE_KEYWORDS):
                                 ui.log_main(f"{agent_prefix} {clean}")
                             ui.log_agent(f"[{agent_display_name}] {clean}")
                             with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
@@ -142,12 +149,10 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             ui.log_main(f"CRITICAL EXCEPTION: {e}")
             return False
     else:
-        # [FIX] Removed space before Initiating to fix double spacing (qrane_prefix has trailing space)
         print(f"{qrane_prefix}Initiating {agent_display_name}...")
         spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
         spinner.start()
         try:
-            # [FIX] Removed stdin logic / headless key checks to prevent blocking
             proc = subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True)
             reads = [proc.stdout, proc.stderr]
             while True:
@@ -158,7 +163,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                     if not line: reads.remove(r); continue
                     clean = line.strip()
                     if r == proc.stdout:
-                        if any(x in clean for x in ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Generating", "Ingesting"]):
+                        # [FIX] Use visibility list
+                        if any(x in clean for x in VISIBLE_KEYWORDS):
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
@@ -183,7 +189,6 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             spinner.stop()
             try: proc.kill()
             except: pass
-            # Reraise to be caught by main loop for clean exit message
             raise
         except Exception as e:
             spinner.stop()
@@ -291,7 +296,6 @@ def main():
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
     parser.add_argument("-V", "--version", action="version", version=get_version())
-    # Flags for overrides
     parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
     args = parser.parse_args()
@@ -301,7 +305,6 @@ def main():
 
     target_width = 11
     qrane_padding = " " * (target_width - 5)
-    # [FIX] qrane_prefix ends with "⸎ " (space included)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if args.tui and tui:
@@ -309,21 +312,17 @@ def main():
             with tui.QonqreteTUI() as ui:
                 run_orchestration(args, prefix, ui)
         except KillSignal:
-            # TUI Kill message
             print(f"\n{Colors.RED}︻デ┳═ー{Colors.WHITE} - - - {Colors.RED}Qilled{Colors.WHITE} all agents in the Qage...{Colors.R}")
             print(); print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception:
             traceback.print_exc(); print("TUI Crashed.")
     else:
-        # [FIX] Removed termios/tty setup for headless mode to prevent stdin blocking issues
         try:
             run_orchestration(args, prefix, ui=None)
         except KillSignal:
-            # [FIX] Kill message spacing and prefix
             print(f"\r{qrane_prefix}{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
             print(); print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except KeyboardInterrupt:
-            # [FIX] Keyboard Interrupt message spacing and prefix
             print(f"\r{qrane_prefix}{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
             print(); print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception as e:
@@ -335,7 +334,7 @@ def run_orchestration(args, prefix, ui):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
 
-    # [FIX] Bypass pre-flight checks as requested
+    # [OPTIONAL] Pre-flight checks (uncomment if strictness required)
     # if not run_pre_flight_checks(path_manager, ui):
     #     if not ui: print("Pre-flight checks failed.")
     #     return
@@ -344,7 +343,6 @@ def run_orchestration(args, prefix, ui):
         with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
-    # Logic: Resolve Mode & Sensitivity
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
     final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 5)
 
@@ -354,11 +352,9 @@ def run_orchestration(args, prefix, ui):
     max_cycles = config.get('options', {}).get('auto_cycle_limit', 0)
     target_width = 11
     qrane_padding = " " * (target_width - 5)
-    # [FIX] Consistent prefix definition
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if not ui:
-        # [FIX] Removed space in f-string to ensure "⸎ Seeding" (1 space total)
         print(f"{qrane_prefix}Seeding worQspace in Qage at: {worqspace}\r")
         print(f"{qrane_prefix}Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
@@ -427,7 +423,6 @@ def run_orchestration(args, prefix, ui):
 
     except KeyboardInterrupt:
         if not ui:
-            # Raise to main loop to handle clean exit message
             raise
         session_failed = True
         user_aborted = True

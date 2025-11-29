@@ -15,7 +15,7 @@ agents:
 
 options:
   # Max number of cycles to run in auto-mode.
-  auto_cycle_limit: 16
+  auto_cycle_limit: 4
 
   # Briq Granularity Control (0-9)
   # 0 = Atomic (Every bullet is a file)

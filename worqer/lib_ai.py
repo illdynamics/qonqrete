@@ -11,10 +11,10 @@ def run_ai_completion(provider: str, model: str, prompt: str, context_files: lis
     full_prompt = _build_prompt(prompt, context_files)
 
     if provider.lower() == 'openai':
+        # --no-cache prevents loops on identical inputs
         return _run_streaming_process(['sgpt', '--no-cache', '--no-interaction', '--model', model, full_prompt])
     elif provider.lower() == 'gemini':
-        # Using 1.5-pro or 2.0-flash-exp is critical here.
-        # Ensure your config uses a valid model ID.
+        # --approval-mode yolo is required for automation
         cmd = ['gemini', 'prompt', '--model', model, '--approval-mode', 'yolo']
         return _run_streaming_process(cmd, input_text=full_prompt)
     else:

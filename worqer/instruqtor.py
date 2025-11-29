@@ -26,22 +26,33 @@ def parse_xml_briqs(content: str) -> list[dict]:
     results = [{'title': m[0].strip(), 'content': m[1].strip()} for m in matches]
 
     if not results:
-        # Fallback: Try to find briqs without attributes
         pattern_loose = re.compile(r'<briq>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
         loose_matches = pattern_loose.findall(content)
         for i, m in enumerate(loose_matches):
-            # Extract first line as title if possible
             lines = m.strip().split('\n')
             title = lines[0].strip() if lines else f"Task_{i+1}"
             content_body = "\n".join(lines[1:]) if len(lines) > 1 else m.strip()
             results.append({'title': title, 'content': content_body})
-
     return results
 
 def clean_filename_slug(text: str) -> str:
     clean = re.sub(r'[^a-zA-Z0-9 ]', '', text)
-    slug = "_".join(clean.split()[:8]).lower() # Increased slug length for better filenames
+    slug = "_".join(clean.split()[:8]).lower()
     return slug if slug else "task"
+
+def get_sensitivity_prompt(level: int) -> str:
+    if level == 0:
+        return """
+**CRITICAL GRANULARITY RULE (LEVEL 0 - ATOMIC):**
+1. **ONE FILE PER BRIQ:** You are FORBIDDEN from creating multiple files in a single Briq.
+2. **EXPLODE MODULES:** If the report mentions "Network Module", you must create separate Briqs for: `network_core.py`, `network_utils.py`, `network_listener.py`, `network_config.py`.
+3. **MANDATORY BOILERPLATE:** You MUST include Briqs for `logger.py`, `exceptions.py`, `constants.py`, and `config_loader.py`.
+4. **SCALE:** For a large report, I expect 30-60 Briqs. Do not summarize.
+"""
+    elif level <= 5:
+        return "Create one Briq per logical component (e.g., Client, Server, Database)."
+    else:
+        return "Group related tasks into major phases."
 
 def main() -> None:
     if len(sys.argv) != 3:
@@ -54,7 +65,8 @@ def main() -> None:
     if not input_file.exists():
         sys.stderr.write(f"CRITICAL: Task file not found: {input_file}\n"); sys.exit(1)
 
-    print(f"--- InstruQtor (Architect Mode) analyzing: {input_file.name} ---", flush=True)
+    # Log readable by Qrane
+    print(f"--- Architect analyzing: {input_file.name} ---", flush=True)
     with open(input_file, 'r', encoding='utf-8') as f: task_content = clean_input_content(f.read())
 
     os.makedirs(output_dir, exist_ok=True)
@@ -65,52 +77,56 @@ def main() -> None:
 
     agent_cfg = config.get('agents', {}).get('instruqtor', {})
     ai_provider = agent_cfg.get('provider', 'openai')
-    ai_model = agent_cfg.get('model', 'gpt-4o') # Recommend a smart model for architecture
+    ai_model = agent_cfg.get('model', 'gpt-4o')
 
-    mode = os.environ.get('QONQ_MODE', 'program')
+    mode = os.environ.get('QONQ_MODE', 'enterprise')
+    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))
+    except: sensitivity = 5
 
-    # --- THE ARCHITECT PROMPT ---
-    # This prompt is engineered to force the AI to behave like a Lead Developer/Architect
-    # It focuses on deriving concrete code tasks from abstract descriptions.
+    sens_prompt = get_sensitivity_prompt(sensitivity)
 
+    # THE MICRO-MANAGER PROMPT
     planner_prompt = f"""
-You are the **Principal Software Architect** of a high-performance engineering team.
+You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MODE**.
 **OPERATIONAL MODE:** {mode.upper()}
 
-**INPUT:** A Technical Specification or Whitepaper.
-**YOUR GOAL:** Deconstruct this document into a **CONCRETE, FILE-BY-FILE BUILD PLAN**.
+**INPUT:** A Technical Specification.
+**YOUR GOAL:** Explode this document into a massive list of tiny, single-file development tasks.
+
+{sens_prompt}
 
 **ARCHITECTURAL DIRECTIVES:**
-1.  **INFER THE STRUCTURE:** If the input is a report (e.g., "Analysis of X"), you must deduce the code required to *build* X.
-2.  **FILE-CENTRIC PLANNING:** Do not give vague instructions like "Implement networking." You must specify: "Create `network_manager.py` with class `ConnectionHandler`."
-3.  **DEPENDENCY FIRST:** Ensure early Briqs handle setup (`requirements.txt`, `setup.sh`, config files) before logic.
-4.  **COMPLETENESS:** If the report mentions a feature (e.g., "Jittered Beaconing"), you MUST create a Briq to implement the logic for it.
+1.  **INFER THE STRUCTURE:** Deduce every necessary class, utility, and config file.
+2.  **IGNORE FLUFF:** Ignore "Executive Summaries". Focus purely on technical implementation.
+3.  **SETUP FIRST:** Briq 00-05 should be Project Structure, Gitignore, Requirements, Configs, Loggers.
+4.  **IMPLEMENTATION:** Create separate files for every feature mentioned.
 
 **OUTPUT FORMAT (STRICT XML):**
-You must output a series of `<briq>` tags. Each tag represents a **Unit of Work** for a developer.
-
 Format:
-<briq title="00_Setup_Environment">
-- Create `requirements.txt` with dependencies: [list derived from report]
-- Create `config.yaml` with fields: [list derived from report]
+<briq title="000_Project_Root_Setup">
+- Create `requirements.txt`
+- Create `.gitignore`
+- Create `README.md`
 </briq>
 
-<briq title="01_Core_Logic_Module">
-- Create file `src/core.py`.
-- Implement class `Engine`.
-- Add methods corresponding to [specific section of report].
+<briq title="001_Shared_Logger">
+- Create `src/shared/logger.py`
+- Implement class `QLogger` with rotation.
 </briq>
 
-... continue for ALL components ...
+<briq title="002_Custom_Exceptions">
+- Create `src/shared/exceptions.py`
+</briq>
+
+... [Continue for 30+ items] ...
 
 **INPUT DOCUMENT:**
 {task_content}
 
-**BEGIN ARCHITECTURAL BREAKDOWN:**
+**BEGIN ATOMIC BREAKDOWN:**
 """
 
     try:
-        # Pass empty list for context_files as we are analyzing the input spec primarily
         master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
     except Exception as e:
         sys.stderr.write(f"Instruqtor Architecture Failure: {e}\n"); sys.exit(1)
@@ -118,22 +134,21 @@ Format:
     briqs = parse_xml_briqs(master_plan)
 
     if not briqs:
-        print("[WARN] Architect failed to produce valid XML. Dumping raw output as single task.", flush=True)
+        print("[WARN] Architect failed to produce valid XML. Generating raw output as single task.", flush=True)
         briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
 
-    print(f"--- Architect generated {len(briqs)} Build Phases ---", flush=True)
+    print(f"--- Architect Generating {len(briqs)} Build Phases (Sens:{sensitivity}) ---", flush=True)
 
     for i, item in enumerate(briqs):
-        # Use simple numbering to ensure Construqtor runs them in order
         step_slug = clean_filename_slug(item['title'])
         filename = f"cyqle{cycle_num}_tasq1_briq{i:03d}_{step_slug}.md"
         file_path = output_dir / filename
 
         with open(file_path, 'w', encoding='utf-8') as f:
-            # Wrap content in a robust prompt for the Construqtor
             f.write(f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}")
 
-        print(f"  - [Plan] {filename}", flush=True)
+        # Log readable by Qrane
+        print(f"  - Wrote [Plan] {filename}", flush=True)
 
 if __name__ == '__main__':
     main()
