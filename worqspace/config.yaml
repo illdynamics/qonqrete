@@ -16,3 +16,13 @@ agents:
 options:
   # Max number of cycles to run in auto-mode.
   auto_cycle_limit: 3
+
+  # Briq Granularity Control (0-9)
+  # 0 = Atomic (Every bullet is a file)
+  # 5 = Balanced
+  # 9 = Monolithic (Whole task is one file)
+  briq_sensitivity: 9
+
+  # Operational Mode
+  # Options: program, enterprise, performance, security, innovative, balanced
+  mode: program

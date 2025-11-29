@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.3.0-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.0-alpha` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -21,46 +21,29 @@ Edit `worqspace/tasq.md` to define your initial objective. For example:
 Create a simple Python web server that listens on port 8080 and returns "Hello, QonQrete!" for all requests. The script should be executable.
 ```
 
-## 3. Run a Manual CyQle (Interactive Mode)
-This is the default mode. The system will run one full Plan-Execute-Review cycle and then pause for your input.
+## 3. Run a CyQle
+This is the default manual mode. You can combine flags for different behaviors.
 ```bash
-./qonqrete.sh run
-```
-After the agents have run, the `inspeQtor`'s review will be displayed, and you will be presented with the `gateQeeper` prompt:
+# Run with the TUI and security-focused agent personas
+./qonqrete.sh run --tui --mode security
 
+# Run in auto mode with highly granular task breakdown
+./qonqrete.sh run --auto --briq-sensitivity 1
 ```
-Result: Success. [Q]ontinue, [T]weaQ, [X]Quit
-```
+At the `CheQpoint`, you will be prompted to `[Q]ontinue`, `[T]weaQ`, or `[X]Quit`.
 
-- **Press `q`:** Approves the `reQap` and starts the next cycle.
-- **Press `t`:** Pauses and opens the `reQap.md` file in your default editor (`$EDITOR`).
-- **Press `x`:** Gracefully ends the session.
-
-## 4. Run in TUI Mode
-For a more detailed view, run the system with the `--tui` flag. This launches a split-screen interface.
-```bash
-./qonqrete.sh run --tui
-```
--   **Qommander (Top View):** Shows the main execution flow.
--   **Qonsole (Bottom View):** Shows raw agent logs.
--   **Key Shortcuts:**
-    -   `[Spacebar]`: Toggle the Qonsole on/off for a fullscreen Qommander view.
-    -   `[Esc]`: Quit the application.
-
-## 5. Run in Autonomous Mode
-To run the system without manual confirmation at each CheQpoint, use the `--auto` flag.
-```bash
-./qonqrete.sh run --auto
-```
-You can stop the loop at any time with `Ctrl+C`.
-
-## 6. Configuration
+## 4. Configuration
 Advanced options can be set in `worqspace/`.
--   **`config.yaml`**: Set `auto_cycle_limit` and change the AI models for each agent.
--   **`pipeline_config.yaml`**: Set the default runtime environment by adding `microsandbox: true`.
+-   **`config.yaml`**:
+    -   `auto_cycle_limit`: Set the maximum number of cycles for auto-mode.
+    -   `agents`: Change the AI models for each agent.
+    -   `mode`: Set the default operational mode for agent personas (e.g., `program`, `enterprise`, `security`, `performance`, `innovative`).
+    -   `briq_sensitivity`: Set the default task breakdown granularity (0=atomic, 9=monolithic).
+-   **`pipeline_config.yaml`**:
+    -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime.
 
-## 7. Cleaning the Workspace
-The `run` command creates a `qage_<timestamp>` directory for each execution. To remove all of them, use the `clean` command.
+## 5. Cleaning the Workspace
+To remove all `qage_<timestamp>` run directories, use the `clean` command.
 ```bash
 ./qonqrete.sh clean
 ```
