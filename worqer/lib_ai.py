@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 # worqer/lib_ai.py
 import subprocess
-import shutil
 import sys
 import os
 
 def run_ai_completion(provider: str, model: str, prompt: str, context_files: list[str] = None) -> str:
     if context_files is None: context_files = []
 
+    full_prompt = _build_prompt(prompt, context_files)
+
     if provider.lower() == 'openai':
-        return _run_streaming_cmd(['sgpt', '--no-interaction', '--model', model, _build_prompt(prompt, context_files)])
+        # --no-cache helps prevent looping on repetitive tasks
+        return _run_process(['sgpt', '--no-cache', '--no-interaction', '--model', model, full_prompt])
     elif provider.lower() == 'gemini':
+        # Gemini often takes the prompt via stdin better for large contexts
         cmd = ['gemini', 'prompt', '--model', model, '--approval-mode', 'yolo']
-        for c in context_files: cmd.extend(['--include-directories', c])
-        return _run_streaming_cmd(cmd, input_text=prompt)
+        return _run_process(cmd, input_text=full_prompt)
     else:
         raise ValueError(f"Unknown AI Provider: {provider}")
 
 def _build_prompt(base_prompt, context_files):
     full = base_prompt
     if context_files:
-        full += "\n\n--- Context ---\n"
+        full += "\n\n--- EXISTING CODEBASE CONTEXT ---\n"
         for fpath in context_files:
             if os.path.exists(fpath) and not os.path.isdir(fpath):
                 try:
@@ -29,51 +31,30 @@ def _build_prompt(base_prompt, context_files):
                 except: pass
     return full
 
-def _run_streaming_cmd(cmd, input_text=None) -> str:
-    # [FIX] Use PIPE for input only if needed
-    stdin_val = subprocess.PIPE if input_text else None
+def _run_process(cmd, input_text=None) -> str:
+    # ROBUSTNESS FIX: Use communicate() to handle large I/O buffers safely
+    stdin_mode = subprocess.PIPE if input_text else None
 
     try:
         proc = subprocess.Popen(
             cmd,
-            stdin=stdin_val,
+            stdin=stdin_mode,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1,
             universal_newlines=True
         )
 
-        # [FIX] Write to stdin and flush, then allow read loop to start.
-        # Closing stdin immediately can sometimes cause issues if the process hasn't consumed it yet.
-        if input_text:
-            try:
-                proc.stdin.write(input_text)
-                proc.stdin.flush()
-                proc.stdin.close()
-            except BrokenPipeError:
-                # Process exited early
-                pass
-
-        captured_stdout = []
-
-        while True:
-            char = proc.stdout.read(1)
-            if not char and proc.poll() is not None:
-                break
-            if char:
-                captured_stdout.append(char)
-                sys.stderr.write(char)
-                sys.stderr.flush()
-
-        _, err = proc.communicate()
-        if err:
-            sys.stderr.write(err)
+        stdout, stderr = proc.communicate(input=input_text)
 
         if proc.returncode != 0:
+            # Print stderr to help debug API limits or token errors
+            sys.stderr.write(f"[AI ERROR] {stderr}\n")
             raise RuntimeError(f"AI Provider failed with code {proc.returncode}")
 
-        return "".join(captured_stdout).strip()
+        return stdout.strip()
 
     except FileNotFoundError:
-        raise RuntimeError("AI binary (sgpt/gemini) not found.")
+        raise RuntimeError(f"Missing binary for command: {cmd[0]}")
+    except Exception as e:
+        raise RuntimeError(f"Subprocess execution failed: {e}")

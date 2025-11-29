@@ -16,53 +16,32 @@ except ImportError as e:
 def clean_input_content(text: str) -> str:
     text = text.replace('\u200b', '').replace('\ufeff', '')
     text = text.replace('\xa0', ' ')
-    text = re.sub(r'^\s*[●•]\s*', '- ', text, flags=re.MULTILINE)
     text = "".join(ch for ch in text if ch.isprintable() or ch in ['\n', '\t', '\r'])
     return text
 
 def parse_xml_briqs(content: str) -> list[dict]:
-    # 1. Try Strict Match (attributes)
+    # Robust parsing that handles potential AI formatting glitches
     pattern_strict = re.compile(r'<briq\s+title=["\'](.*?)["\']\s*>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
     matches = pattern_strict.findall(content)
-
     results = [{'title': m[0].strip(), 'content': m[1].strip()} for m in matches]
 
-    # 2. If Strict failed or returned nothing, try Loose Match (no attributes)
     if not results:
+        # Fallback: Try to find briqs without attributes
         pattern_loose = re.compile(r'<briq>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
         loose_matches = pattern_loose.findall(content)
         for i, m in enumerate(loose_matches):
-            # Generate a title if missing
-            results.append({'title': f'Step_{i+1}_Instruction', 'content': m.strip()})
+            # Extract first line as title if possible
+            lines = m.strip().split('\n')
+            title = lines[0].strip() if lines else f"Task_{i+1}"
+            content_body = "\n".join(lines[1:]) if len(lines) > 1 else m.strip()
+            results.append({'title': title, 'content': content_body})
 
     return results
 
 def clean_filename_slug(text: str) -> str:
     clean = re.sub(r'[^a-zA-Z0-9 ]', '', text)
-    slug = "_".join(clean.split()[:6]).lower()
+    slug = "_".join(clean.split()[:8]).lower() # Increased slug length for better filenames
     return slug if slug else "task"
-
-# 0-9 Sensitivity Map
-def get_sensitivity_rules(level: int) -> str:
-    if level >= 9:
-        return "SENSITIVITY 9 (MONOLITHIC): Create EXACTLY ONE <briq>. Do NOT split the task. Keep it all together."
-    elif level >= 7:
-        return "SENSITIVITY 7-8 (COARSE): Split only by MAJOR phases (e.g., Setup, Core Logic, Visualization)."
-    elif level >= 5:
-        return "SENSITIVITY 5-6 (BALANCED): Create one briq per logical component."
-    elif level >= 3:
-        return "SENSITIVITY 3-4 (DETAILED): Create a briq for every distinct function or sub-task."
-    else:
-        return "SENSITIVITY 0-2 (ATOMIC): Maximum granularity. Every requirement gets its own briq."
-
-# Mode Persona Map
-def get_mode_persona(mode: str) -> str:
-    m = mode.lower()
-    if m == 'enterprise': return "Focus: Enterprise-grade reliability, logging, metrics, documentation."
-    if m == 'performance': return "Focus: Speed, efficiency, low resource usage, optimization."
-    if m == 'security': return "Focus: Input validation, secure defaults, no secrets in code."
-    if m == 'innovative': return "Focus: Creative features, modern patterns, 'wow' factor."
-    return "Focus: Functional correctness. Make it work."
 
 def main() -> None:
     if len(sys.argv) != 3:
@@ -71,12 +50,11 @@ def main() -> None:
     input_file = Path(sys.argv[1])
     output_dir = Path(sys.argv[2])
     cycle_num = os.environ.get('CYCLE_NUM', '1')
-    tasq_num = os.environ.get('TASQ_NUM', '1')
 
     if not input_file.exists():
         sys.stderr.write(f"CRITICAL: Task file not found: {input_file}\n"); sys.exit(1)
 
-    print(f"--- Instruqtor reading: {input_file.name} ---", flush=True)
+    print(f"--- InstruQtor (Architect Mode) analyzing: {input_file.name} ---", flush=True)
     with open(input_file, 'r', encoding='utf-8') as f: task_content = clean_input_content(f.read())
 
     os.makedirs(output_dir, exist_ok=True)
@@ -87,64 +65,75 @@ def main() -> None:
 
     agent_cfg = config.get('agents', {}).get('instruqtor', {})
     ai_provider = agent_cfg.get('provider', 'openai')
-    ai_model = agent_cfg.get('model', 'gpt-4o-mini')
+    ai_model = agent_cfg.get('model', 'gpt-4o') # Recommend a smart model for architecture
 
-    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))
-    except: sensitivity = 5
     mode = os.environ.get('QONQ_MODE', 'program')
 
-    sens_prompt = get_sensitivity_rules(sensitivity)
-    mode_prompt = get_mode_persona(mode)
+    # --- THE ARCHITECT PROMPT ---
+    # This prompt is engineered to force the AI to behave like a Lead Developer/Architect
+    # It focuses on deriving concrete code tasks from abstract descriptions.
 
-    direqtor_prompt = os.environ.get('DIREQTOR_PROMPT', '')
     planner_prompt = f"""
-{direqtor_prompt}
-You are the 'instruQtor', a senior technical planner.
+You are the **Principal Software Architect** of a high-performance engineering team.
 **OPERATIONAL MODE:** {mode.upper()}
-{mode_prompt}
 
-Your goal is to break down the Input Task into logical, atomic "Briqs" (Units of Work).
+**INPUT:** A Technical Specification or Whitepaper.
+**YOUR GOAL:** Deconstruct this document into a **CONCRETE, FILE-BY-FILE BUILD PLAN**.
 
-**OUTPUT FORMAT RULES:**
-1. Use the format: `<briq title="Short Descriptive Title"> ... detailed instructions ... </briq>`
-2. **DO NOT SUMMARIZE.** You must carry over ALL technical details, regex patterns, constraints, and logic mappings from the Input Task into the relevant Briq.
-3. If the input contains code snippets or specific data structures, they MUST appear in the Briq that implements them.
-4. Each Briq should be self-contained enough for a developer to execute without seeing the full original file if possible.
+**ARCHITECTURAL DIRECTIVES:**
+1.  **INFER THE STRUCTURE:** If the input is a report (e.g., "Analysis of X"), you must deduce the code required to *build* X.
+2.  **FILE-CENTRIC PLANNING:** Do not give vague instructions like "Implement networking." You must specify: "Create `network_manager.py` with class `ConnectionHandler`."
+3.  **DEPENDENCY FIRST:** Ensure early Briqs handle setup (`requirements.txt`, `setup.sh`, config files) before logic.
+4.  **COMPLETENESS:** If the report mentions a feature (e.g., "Jittered Beaconing"), you MUST create a Briq to implement the logic for it.
 
-**GRANULARITY RULES:**
-{sens_prompt}
+**OUTPUT FORMAT (STRICT XML):**
+You must output a series of `<briq>` tags. Each tag represents a **Unit of Work** for a developer.
 
-**Input Task:**
+Format:
+<briq title="00_Setup_Environment">
+- Create `requirements.txt` with dependencies: [list derived from report]
+- Create `config.yaml` with fields: [list derived from report]
+</briq>
+
+<briq title="01_Core_Logic_Module">
+- Create file `src/core.py`.
+- Implement class `Engine`.
+- Add methods corresponding to [specific section of report].
+</briq>
+
+... continue for ALL components ...
+
+**INPUT DOCUMENT:**
 {task_content}
 
-**Begin XML Output:**
+**BEGIN ARCHITECTURAL BREAKDOWN:**
 """
 
     try:
+        # Pass empty list for context_files as we are analyzing the input spec primarily
         master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
     except Exception as e:
-        sys.stderr.write(f"Instruqtor Failure: {e}\n"); sys.exit(1)
+        sys.stderr.write(f"Instruqtor Architecture Failure: {e}\n"); sys.exit(1)
 
     briqs = parse_xml_briqs(master_plan)
 
-    # Fallback only if regex totally fails
     if not briqs:
-        if sensitivity >= 8:
-             print("[INFO] High Sensitivity or Parsing Fail: Wrapping content as one Briq.", flush=True)
-             briqs = [{'title': 'Execute_Full_Task', 'content': task_content}]
-        else:
-             print("[WARN] No <briq> tags found. Saving raw output.", flush=True)
-             briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
+        print("[WARN] Architect failed to produce valid XML. Dumping raw output as single task.", flush=True)
+        briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
 
-    print(f"--- Generating {len(briqs)} Briqs (Sens:{sensitivity}, Mode:{mode}) ---", flush=True)
+    print(f"--- Architect generated {len(briqs)} Build Phases ---", flush=True)
 
     for i, item in enumerate(briqs):
+        # Use simple numbering to ensure Construqtor runs them in order
         step_slug = clean_filename_slug(item['title'])
-        filename = f"cyqle{cycle_num}_tasq{tasq_num}_briq{i:03d}_{step_slug}.md"
+        filename = f"cyqle{cycle_num}_tasq1_briq{i:03d}_{step_slug}.md"
         file_path = output_dir / filename
+
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(f"# {item['title']}\n\n{item['content']}")
-        print(f"  - Wrote Briq: {filename}", flush=True)
+            # Wrap content in a robust prompt for the Construqtor
+            f.write(f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}")
+
+        print(f"  - [Plan] {filename}", flush=True)
 
 if __name__ == '__main__':
     main()

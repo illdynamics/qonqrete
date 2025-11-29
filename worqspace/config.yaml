@@ -3,19 +3,19 @@
 agents:
   instruqtor:
     provider: openai
-    model: gpt-4o-mini
+    model: gpt-4o
 
   construqtor:
     provider: gemini
-    model: gemini-2.5-flash-lite
+    model: gemini-2.5-pro
 
   inspeqtor:
     provider: openai
-    model: gpt-4o-mini
+    model: gpt-4o
 
 options:
   # Max number of cycles to run in auto-mode.
-  auto_cycle_limit: 3
+  auto_cycle_limit: 16
 
   # Briq Granularity Control (0-9)
   # 0 = Atomic (Every bullet is a file)
@@ -25,4 +25,4 @@ options:
 
   # Operational Mode
   # Options: program, enterprise, performance, security, innovative, balanced
-  mode: innovative
+  mode: enterprise
