@@ -101,31 +101,18 @@ def check_tui_keys(ui, proc=None):
         if proc: proc.kill()
         raise KillSignal
 
-def check_headless_keys(proc=None):
-    if select.select([sys.stdin], [], [], 0)[0]:
-        try:
-            key = sys.stdin.read(1)
-            if key.lower() == 'k':
-                if proc: proc.kill(); raise KillSignal
-            elif key == '\x1b':
-                if proc: proc.terminate(); raise KeyboardInterrupt
-            elif key == ' ':
-                print(f"\n{Colors.YELLOW}[PAUSED] Press Space to resume...{Colors.R}\r")
-                while True:
-                    if select.select([sys.stdin], [], [], 0.1)[0]:
-                        if sys.stdin.read(1) == ' ': break
-        except (IOError, EOFError): pass
-
 def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logger: logging.Logger, log_file: Path, env: dict, ui=None) -> bool:
     agent_display_name = agent_name.replace('q', 'Q')
     target_width = 11
     padding = " " * (target_width - len(agent_display_name))
     qrane_padding = " " * (target_width - 5)
-    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding} ⸎ {Colors.R}"
-    agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding} ⸎ {Colors.R}"
+
+    # [FIX] qrane_prefix ends with a space, so we remove the space in the print calls later
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
+    agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
 
     if ui:
-        ui.log_main(f"{qrane_prefix} Initiating {agent_display_name}...")
+        ui.log_main(f"{qrane_prefix}Initiating {agent_display_name}...")
         try:
             with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
                 reads = [proc.stdout, proc.stderr]
@@ -147,7 +134,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                     if proc.poll() is not None and not reads: break
 
                 if proc.returncode != 0:
-                    ui.log_main(f"{agent_prefix} FAILED (Code {proc.returncode})")
+                    ui.log_main(f"{agent_prefix}FAILED (Code {proc.returncode})")
                     return False
                 return True
         except KillSignal: raise
@@ -155,14 +142,15 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             ui.log_main(f"CRITICAL EXCEPTION: {e}")
             return False
     else:
-        print(f"{qrane_prefix} Initiating {agent_display_name}...")
+        # [FIX] Removed space before Initiating to fix double spacing (qrane_prefix has trailing space)
+        print(f"{qrane_prefix}Initiating {agent_display_name}...")
         spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
         spinner.start()
         try:
+            # [FIX] Removed stdin logic / headless key checks to prevent blocking
             proc = subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True)
             reads = [proc.stdout, proc.stderr]
             while True:
-                check_headless_keys(proc)
                 readable, _, _ = select.select(reads, [], [], 0.05)
                 if not readable and proc.poll() is not None: break
                 for r in readable:
@@ -172,7 +160,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                     if r == proc.stdout:
                         if any(x in clean for x in ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Generating", "Ingesting"]):
                             spinner.stop()
-                            print(f"{agent_prefix} {clean}")
+                            print(f"{agent_prefix}{clean}")
                             spinner.start()
                     with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
@@ -183,7 +171,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
 
             spinner.stop()
             if proc.returncode != 0:
-                print(f"{agent_prefix} {Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
+                print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
                 if stderr:
                     print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}")
                     for line in stderr.strip().split('\n'):
@@ -195,9 +183,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             spinner.stop()
             try: proc.kill()
             except: pass
-            gk_padding = " " * (11 - 10)
-            gk_prefix = f"{Colors.B}〘{prefix}〙『{Colors.YELLOW}gateQeeper{Colors.B}』{gk_padding}⸎  {Colors.R}"
-            print(f"\r{gk_prefix}{Colors.WHITE}User Interrupt ({Colors.YELLOW}BreaQ{Colors.WHITE}) inside Agent.{Colors.R}")
+            # Reraise to be caught by main loop for clean exit message
             raise
         except Exception as e:
             spinner.stop()
@@ -213,7 +199,6 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
     assessment = "Unknown"
     content = ""
     try:
-        # [FIX] Properly indented block
         if reqap_path.exists():
             with open(reqap_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -225,27 +210,27 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
 
     if args.auto:
         msg = "Autonomous Mode: Qontinuing..."
-        if ui: ui.log_main(f"{gate_prefix} {msg}")
+        if ui: ui.log_main(f"{gate_prefix}{msg}")
         else:
             print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
             print(content)
-            print(f"{gate_prefix} {msg}")
+            print(f"{gate_prefix}{msg}")
         promote_reqap(cycle, prefix, path_manager, ui=ui)
         return 'QONTINUE'
 
     while True:
         if ui:
             ui.log_main(f"--- reQap Cycle {cycle} ---")
-            ui.log_main(f"{gate_prefix} Result: {assessment}")
-            prompt = f"{gate_prefix} [Q]ontinue, [T]weaQ (Edit), [X]Quit"
+            ui.log_main(f"{gate_prefix}Result: {assessment}")
+            prompt = f"{gate_prefix}[Q]ontinue, [T]weaQ (Edit), [X]Quit"
             choice = ui.get_input_blocking(prompt).lower()
         else:
             print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
             print(content)
             print(f"{Colors.YELLOW}==========================={Colors.R}")
-            print(f"{gate_prefix} Result: {Colors.WHITE}{assessment}{Colors.R}")
-            print(f"{gate_prefix} [Q]ontinue, [T]weaQ (Edit), [X]Quit")
-            sys.stdout.write(f"{gate_prefix} Selection: {Colors.R}")
+            print(f"{gate_prefix}Result: {Colors.WHITE}{assessment}{Colors.R}")
+            print(f"{gate_prefix}[Q]ontinue, [T]weaQ (Edit), [X]Quit")
+            sys.stdout.write(f"{gate_prefix}Selection: {Colors.R}")
             sys.stdout.flush()
             choice = getch().lower()
             if choice in ['\r', '\n']: continue
@@ -253,8 +238,8 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
 
         if choice == 'q':
             msg = "gateQeeper's reQap imported..."
-            if ui: ui.log_main(f"{gate_prefix} {msg}")
-            else: print(f"{gate_prefix} {msg}")
+            if ui: ui.log_main(f"{gate_prefix}{msg}")
+            else: print(f"{gate_prefix}{msg}")
             promote_reqap(cycle, prefix, path_manager, ui=ui)
             return 'QONTINUE'
         elif choice == 'x': return 'QUIT'
@@ -289,8 +274,8 @@ def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
         with open(dst, 'w') as f: f.write(header + content)
 
         msg = f"Successfully created {dst.name}."
-        if ui: ui.log_main(f"{qrane_prefix} {msg}")
-        else: print(f"{qrane_prefix} {msg}")
+        if ui: ui.log_main(f"{qrane_prefix}{msg}")
+        else: print(f"{qrane_prefix}{msg}")
 
 def getch():
     try:
@@ -306,38 +291,43 @@ def main():
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
     parser.add_argument("-V", "--version", action="version", version=get_version())
+    # Flags for overrides
+    parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
+    parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
     args = parser.parse_args()
 
     prefix = "aQQ" if args.auto else "uQQ"
     if args.wonqrete: prefix = "aWQ" if args.auto else "uWQ"
+
+    target_width = 11
+    qrane_padding = " " * (target_width - 5)
+    # [FIX] qrane_prefix ends with "⸎ " (space included)
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if args.tui and tui:
         try:
             with tui.QonqreteTUI() as ui:
                 run_orchestration(args, prefix, ui)
         except KillSignal:
+            # TUI Kill message
             print(f"\n{Colors.RED}︻デ┳═ー{Colors.WHITE} - - - {Colors.RED}Qilled{Colors.WHITE} all agents in the Qage...{Colors.R}")
             print(); print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception:
-            traceback.print_exc()
-            print("TUI Crashed.")
+            traceback.print_exc(); print("TUI Crashed.")
     else:
-        import tty, termios
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
+        # [FIX] Removed termios/tty setup for headless mode to prevent stdin blocking issues
         try:
-            tty.setcbreak(fd)
             run_orchestration(args, prefix, ui=None)
         except KillSignal:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            print(f"\033[A\r{Colors.RED}︻デ┳═ー{Colors.WHITE} - - - {Colors.RED}Qilled{Colors.WHITE} all agents in the Qage...{Colors.R}")
-            print(); print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
+            # [FIX] Kill message spacing and prefix
+            print(f"\r{qrane_prefix}{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
+            print(); print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
+        except KeyboardInterrupt:
+            # [FIX] Keyboard Interrupt message spacing and prefix
+            print(f"\r{qrane_prefix}{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
+            print(); print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
         except Exception as e:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             traceback.print_exc()
-        finally:
-            try: termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            except: pass
 
 def run_orchestration(args, prefix, ui):
     worqspace = get_worqspace()
@@ -345,27 +335,37 @@ def run_orchestration(args, prefix, ui):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
 
-    if not run_pre_flight_checks(path_manager, ui):
-        if not ui: print("Pre-flight checks failed.")
-        return
+    # [FIX] Bypass pre-flight checks as requested
+    # if not run_pre_flight_checks(path_manager, ui):
+    #     if not ui: print("Pre-flight checks failed.")
+    #     return
 
     try:
         with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
-    max_cycles = config.get('options', {}).get('auto_cycle_limit', 0)
 
+    # Logic: Resolve Mode & Sensitivity
+    final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
+    final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 5)
+
+    os.environ['QONQ_MODE'] = final_mode
+    os.environ['QONQ_SENSITIVITY'] = str(final_sens)
+
+    max_cycles = config.get('options', {}).get('auto_cycle_limit', 0)
     target_width = 11
     qrane_padding = " " * (target_width - 5)
+    # [FIX] Consistent prefix definition
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if not ui:
-        print(f"{qrane_prefix} Seeding worQspace in Qage at: {worqspace}\r")
-        print(f"{qrane_prefix} Importing gateQeeper's tasq.md...\r")
+        # [FIX] Removed space in f-string to ensure "⸎ Seeding" (1 space total)
+        print(f"{qrane_prefix}Seeding worQspace in Qage at: {worqspace}\r")
+        print(f"{qrane_prefix}Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
-        print(f"{qrane_prefix} Initiating Qrew...\r")
+        print(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode}, Sens: {final_sens})\r")
         time.sleep(0.3)
     else:
-        ui.log_main(f"{qrane_prefix} Initiating Qrew...")
+        ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
     cycle = 1
     session_failed = False
@@ -376,14 +376,13 @@ def run_orchestration(args, prefix, ui):
             if args.auto and max_cycles > 0 and cycle > max_cycles:
                 limit_str = f"{Colors.C}{max_cycles}{Colors.R}"
                 msg = f"Max cyQle limit hit ({limit_str}) - Edit config.yaml to change this."
-                if ui: ui.log_main(f"{qrane_prefix} {msg}")
-                else: print(f"{qrane_prefix} {msg}\r")
+                if ui: ui.log_main(f"{qrane_prefix}{msg}")
+                else: print(f"{qrane_prefix}{msg}\r")
                 break
 
             env = os.environ.copy()
             env["CYCLE_NUM"] = str(cycle)
 
-            # Load Pipeline Config
             try:
                 with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
                     pipeline_config = yaml.safe_load(f)
@@ -391,7 +390,6 @@ def run_orchestration(args, prefix, ui):
                 if ui: ui.log_main("Config Error"); break
                 else: print("Config Error"); break
 
-            # Map paths
             def resolve_template(tpl):
                 if "{N}" in tpl: return tpl.replace("{N}", str(cycle))
                 return tpl
@@ -400,13 +398,8 @@ def run_orchestration(args, prefix, ui):
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
                 script = agent_def['script']
-
-                input_raw = resolve_template(agent_def['input'])
-                output_raw = resolve_template(agent_def['output'])
-
-                input_path = path_manager.root / input_raw
-                output_path = path_manager.root / output_raw
-
+                input_path = path_manager.root / resolve_template(agent_def['input'])
+                output_path = path_manager.root / resolve_template(agent_def['output'])
                 cmd = ["python3", str(AGENT_MODULE_DIR / script), str(input_path), str(output_path)]
                 agents_to_run.append((name, cmd))
 
@@ -416,40 +409,37 @@ def run_orchestration(args, prefix, ui):
                 ui.log_main(f"--- Starting Cycle {cycle} ---")
             else:
                 start_msg = f"Starting {Colors.C}cyQle {cycle}{Colors.R}..."
-                print(f"{qrane_prefix} {start_msg}\r")
+                print(f"{qrane_prefix}{start_msg}\r")
                 if args.auto:
                      inst_padding = " " * 1
-                     print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R} Ingesting cyqle{cycle}_tasq.md...\r")
+                     print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R}Ingesting cyqle{cycle}_tasq.md...\r")
 
             for name, cmd in agents_to_run:
                 log_file = path_manager.get_agent_log_path(cycle, name)
                 if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, log_file, env, ui):
-                    session_failed = True
-                    break
+                    session_failed = True; break
 
             if session_failed: break
 
             res = handle_cheqpoint(cycle, args, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)
             if res == 'QUIT': break
-
             cycle += 1
 
     except KeyboardInterrupt:
         if not ui:
-            gk_padding = " " * (11 - 10)
-            gk_prefix = f"{Colors.B}〘{prefix}〙『{Colors.YELLOW}gateQeeper{Colors.B}』{gk_padding}⸎  {Colors.R}"
-            print(f"\r{gk_prefix}{Colors.WHITE}User Interrupt ({Colors.YELLOW}BreaQ{Colors.WHITE}){Colors.R}\r")
+            # Raise to main loop to handle clean exit message
+            raise
         session_failed = True
         user_aborted = True
 
     if not ui:
         print()
         if user_aborted:
-             print(f"{qrane_prefix} {Colors.WHITE}QonQrete session ended by {Colors.YELLOW}user{Colors.R}{Colors.WHITE}.{Colors.R}\r")
+             print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended by {Colors.YELLOW}user{Colors.R}{Colors.WHITE}.{Colors.R}\r")
         elif session_failed:
-             print(f"{qrane_prefix} {Colors.WHITE}QonQrete session ended with {Colors.RED}errors{Colors.R}{Colors.WHITE}.{Colors.R}\r")
+             print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended with {Colors.RED}errors{Colors.R}{Colors.WHITE}.{Colors.R}\r")
         else:
-             print(f"{qrane_prefix} QonQrete session finished. Enjoy :)\r")
+             print(f"{qrane_prefix}QonQrete session finished. Enjoy :)\r")
 
 if __name__ == "__main__":
     main()

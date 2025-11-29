@@ -30,6 +30,7 @@ def _build_prompt(base_prompt, context_files):
     return full
 
 def _run_streaming_cmd(cmd, input_text=None) -> str:
+    # [FIX] Use PIPE for input only if needed
     stdin_val = subprocess.PIPE if input_text else None
 
     try:
@@ -43,9 +44,16 @@ def _run_streaming_cmd(cmd, input_text=None) -> str:
             universal_newlines=True
         )
 
+        # [FIX] Write to stdin and flush, then allow read loop to start.
+        # Closing stdin immediately can sometimes cause issues if the process hasn't consumed it yet.
         if input_text:
-            proc.stdin.write(input_text)
-            proc.stdin.close()
+            try:
+                proc.stdin.write(input_text)
+                proc.stdin.flush()
+                proc.stdin.close()
+            except BrokenPipeError:
+                # Process exited early
+                pass
 
         captured_stdout = []
 

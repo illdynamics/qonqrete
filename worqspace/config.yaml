@@ -11,7 +11,7 @@ agents:
 
   inspeqtor:
     provider: openai
-    model: gpt-4o-mini
+    model: gpt-4o
 
 options:
   # Max number of cycles to run in auto-mode.
