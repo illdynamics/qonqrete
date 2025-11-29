@@ -52,11 +52,14 @@ def main() -> None:
 You are the 'inspeQtor'.
 **TASK:** Review the generated code.
 **OUTPUT:** Strict Markdown reQap.
+1. Assessment: Success/Partial/Failure
+2. Summary
+3. Suggestions
 
 **Context:**
 {context_str[:MAX_CHARS]}
 
-**Assessment:**
+**Begin Review:**
 """
 
     try:

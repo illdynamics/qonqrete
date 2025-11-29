@@ -13,7 +13,7 @@ except ImportError: print("CRITICAL: lib_ai.py not found."); sys.exit(1)
 def get_mode_persona(mode: str) -> str:
     m = mode.lower()
     if m == 'enterprise': return "Code Style: Enterprise. Add logging, error handling, docstrings, and modular structure."
-    if m == 'security': return "Code Style: Security. Validate inputs, sanitize data."
+    if m == 'security': return "Code Style: Security. Validate all inputs, use secure defaults."
     return "Code Style: Functional."
 
 def main():
@@ -78,8 +78,8 @@ def main():
             else:
                 success = False
 
-        # [FIX] Robust check: Did we actually get code?
-        if "```" in result:
+        # [FIX] Double check: Did we actually get code?
+        if result and "```" in result:
              success = True
 
         status = "success" if success else "failure"

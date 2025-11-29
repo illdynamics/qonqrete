@@ -112,14 +112,11 @@ You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MOD
     except Exception as e:
         # [FIX] If the AI failed but we captured output (partial stream), check if it's usable.
         print(f"[WARN] AI Stream Signal: {e}", flush=True)
-        # If the failure was just the pipe closing at the end, lib_ai might have printed it
-        # but raised an error. In a real streaming scenario, we rely on what was captured.
-        # Since lib_ai returns the string, if it crashes it usually returns nothing via return.
-        # But if the crash happens inside lib_ai it raises.
-        # We can't easily recover the string unless lib_ai returns it partially.
-        # Given the new lib_ai fix, this catch block is just a safety net.
+        # In a real streaming scenario, we rely on what was captured if possible.
+        # But if lib_ai raised, we might rely on what it printed to stderr/logs.
+        # For Instruqtor, we can't easily recover the string if exception raised unless lib_ai returns partial.
+        # However, with the new lib_ai, this exception shouldn't happen for just a closed pipe.
         sys.stderr.write(f"Instruqtor Failure: {e}\n")
-        # Proceed only if we have a way to recover logic (omitted for simplicity, relying on lib_ai fix)
         sys.exit(1)
 
     briqs = parse_xml_briqs(master_plan)

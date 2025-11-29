@@ -173,9 +173,6 @@ case "$COMMAND" in
             log_qrane "[ERROR] API Keys missing."; exit 1
         fi
 
-        # [REMOVED] Host-side splash check
-        # if [[ "$PY_ARGS" != *"--tui"* ]]; then show_splash; fi
-
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
@@ -197,24 +194,24 @@ case "$COMMAND" in
         RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
         # [NEW] Container-side Splash Logic
-        # We check if not TUI mode, then run chafa on the mounted image
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
              SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
         fi
 
-        # Wrap in bash -c to execute splash before python
-        RUN_CMD="bash -c \"$SPLASH_CMD exec python3 qrane/qrane.py $PY_ARGS\""
+        # [FIX] Construct the internal command string safely
+        CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
             $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" $RUN_CMD
+                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
+            # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
             docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" $RUN_CMD
+                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
         ;;
 esac
