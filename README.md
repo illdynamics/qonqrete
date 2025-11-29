@@ -1,7 +1,10 @@
 # QonQrete - Secure AI Construction Loop System
 
+
 ![Splash](qrane/logo.png)
 
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 
 QonQrete is a Secure AI Construction Loop System, using a Multi-Agent Pipeline Orchestrator in a Sandbox environment with YAML Configuration. In short: it spawns 3 AI agents in a sandbox/container and makes them work together on tasks. It can run with a hard requirement for user approval between steps, or in a fully autonomous mode where it keeps running until the user decides to stop it.
@@ -319,3 +322,12 @@ To clean up the workspace and remove all previous run data:
 ./qonqrete.sh clean
 
 ```
+
+## License
+
+QonQrete is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+This ensures that any modifications or derivative works deployed as a service
+must also be released as open source under the same license.
+
+See the LICENSE file for full text.
+
