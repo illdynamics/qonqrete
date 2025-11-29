@@ -1,5 +1,6 @@
 # QonQrete - Secure AI Construction Loop System
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+![Visitors](https://visitor-badge.laobi.io/badge?page_id=illdynamics.qonqrete)
 
 
 ![Splash](qrane/logo.png)
@@ -334,3 +335,4 @@ must also be released as open source under the same license.
 
 See the LICENSE file for full text.
 
+![Scarf](https://static.scarf.sh/a.png?x-px-id=242de794-2b10-4e34-a6cd-eab9e46cc793)
