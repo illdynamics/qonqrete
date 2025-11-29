@@ -20,7 +20,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
-**Version:** `v0.4.0-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.1-alpha` (See `VERSION` file for the canonical version).
 
 
 

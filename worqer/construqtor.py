@@ -55,7 +55,11 @@ def main():
         print(f"-- Processing Briq: {briq_file.name} --", flush=True)
         with open(briq_file, 'r', encoding='utf-8') as f: briq_content = f.read()
 
-        prompt = f"""You are the 'construQtor'. Execute this plan.
+        # [FIX] Explicitly tell AI to GENERATE, not EXECUTE.
+        prompt = f"""You are the 'construQtor'.
+**OBJECTIVE:** Write the code to implement the following plan.
+**RESTRICTION:** GENERATE CODE ONLY. DO NOT SIMULATE EXECUTION. DO NOT RUN.
+
 **OPERATIONAL MODE:** {mode.upper()}
 {mode_prompt}
 
@@ -63,6 +67,7 @@ def main():
 1. You are in Project Root.
 2. WRITE ALL CODE to `qodeyard/`.
 3. Do NOT write to `./`.
+4. If the plan implies running a command, WRITE THE SCRIPT to run it, do not actually run it.
 
 **Plan:**
 {briq_content}
@@ -72,7 +77,7 @@ def main():
             result = lib_ai.run_ai_completion(ai_provider, ai_model, prompt, context_files=context_dirs)
             success = True if result else False
         except Exception as e:
-            print(f"     [ERROR] Execution failed: {e}", flush=True); success = False
+            print(f"     [ERROR] Generation failed: {e}", flush=True); success = False
 
         status = "success" if success else "failure"
         all_briqs_summary.append({ 'briq_file': briq_file.name, 'status': status })

@@ -21,29 +21,41 @@ def clean_input_content(text: str) -> str:
     return text
 
 def parse_xml_briqs(content: str) -> list[dict]:
-    pattern = re.compile(r'<briq\s+title=["\'](.*?)["\']\s*>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
-    matches = pattern.findall(content)
-    return [{'title': m[0].strip(), 'content': m[1].strip()} for m in matches]
+    # 1. Try Strict Match (attributes)
+    pattern_strict = re.compile(r'<briq\s+title=["\'](.*?)["\']\s*>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
+    matches = pattern_strict.findall(content)
+
+    results = [{'title': m[0].strip(), 'content': m[1].strip()} for m in matches]
+
+    # 2. If Strict failed or returned nothing, try Loose Match (no attributes)
+    if not results:
+        pattern_loose = re.compile(r'<briq>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
+        loose_matches = pattern_loose.findall(content)
+        for i, m in enumerate(loose_matches):
+            # Generate a title if missing
+            results.append({'title': f'Step_{i+1}_Instruction', 'content': m.strip()})
+
+    return results
 
 def clean_filename_slug(text: str) -> str:
     clean = re.sub(r'[^a-zA-Z0-9 ]', '', text)
     slug = "_".join(clean.split()[:6]).lower()
     return slug if slug else "task"
 
-# [NEW] 0-9 Sensitivity Map
+# 0-9 Sensitivity Map
 def get_sensitivity_rules(level: int) -> str:
     if level >= 9:
-        return "SENSITIVITY 9 (MONOLITHIC): Create EXACTLY ONE briq. Do NOT split."
+        return "SENSITIVITY 9 (MONOLITHIC): Create EXACTLY ONE <briq>. Do NOT split the task. Keep it all together."
     elif level >= 7:
-        return "SENSITIVITY 7-8 (COARSE): Split only by MAJOR phases (Setup, Core Logic, Testing)."
+        return "SENSITIVITY 7-8 (COARSE): Split only by MAJOR phases (e.g., Setup, Core Logic, Visualization)."
     elif level >= 5:
         return "SENSITIVITY 5-6 (BALANCED): Create one briq per logical component."
     elif level >= 3:
-        return "SENSITIVITY 3-4 (DETAILED): Create a briq for every distinct sub-task."
+        return "SENSITIVITY 3-4 (DETAILED): Create a briq for every distinct function or sub-task."
     else:
-        return "SENSITIVITY 0-2 (ATOMIC): Maximum granularity. Every requirement gets a briq."
+        return "SENSITIVITY 0-2 (ATOMIC): Maximum granularity. Every requirement gets its own briq."
 
-# [NEW] Mode Persona Map
+# Mode Persona Map
 def get_mode_persona(mode: str) -> str:
     m = mode.lower()
     if m == 'enterprise': return "Focus: Enterprise-grade reliability, logging, metrics, documentation."
@@ -77,7 +89,6 @@ def main() -> None:
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4o-mini')
 
-    # [NEW] Read Env Vars
     try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))
     except: sensitivity = 5
     mode = os.environ.get('QONQ_MODE', 'program')
@@ -95,7 +106,10 @@ You are the 'instruQtor', a senior technical planner.
 Your goal is to break down the Input Task into logical, atomic "Briqs" (Units of Work).
 
 **OUTPUT FORMAT RULES:**
-You must wrap EVERY unit of work in `<briq>` XML tags.
+1. Use the format: `<briq title="Short Descriptive Title"> ... detailed instructions ... </briq>`
+2. **DO NOT SUMMARIZE.** You must carry over ALL technical details, regex patterns, constraints, and logic mappings from the Input Task into the relevant Briq.
+3. If the input contains code snippets or specific data structures, they MUST appear in the Briq that implements them.
+4. Each Briq should be self-contained enough for a developer to execute without seeing the full original file if possible.
 
 **GRANULARITY RULES:**
 {sens_prompt}
@@ -113,9 +127,10 @@ You must wrap EVERY unit of work in `<briq>` XML tags.
 
     briqs = parse_xml_briqs(master_plan)
 
+    # Fallback only if regex totally fails
     if not briqs:
         if sensitivity >= 8:
-             print("[INFO] High Sensitivity: Wrapping content as one Briq.", flush=True)
+             print("[INFO] High Sensitivity or Parsing Fail: Wrapping content as one Briq.", flush=True)
              briqs = [{'title': 'Execute_Full_Task', 'content': task_content}]
         else:
              print("[WARN] No <briq> tags found. Saving raw output.", flush=True)

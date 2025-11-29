@@ -161,7 +161,13 @@ case "$COMMAND" in
         log_qrane "Cleaning QonQrete workspaces..."
         if ls "${WORKSPACE_DIR}"/qage_* 1> /dev/null 2>&1; then
             log_qrane "Found previous run directories."
-            read -p "Delete all 'qage_*' directories? [y/N] " -n 1 -r; echo
+
+            # [FIX] Manually construct styled prompt and use echo -ne + read to maintain shebang prefix
+            PROMPT_STR="${PREFIX_TPL/\{PREFIX\}/_QQ} Delete all 'qage_*' directories? [y/N] "
+            echo -ne "$PROMPT_STR"
+            read -n 1 -r
+            echo # Print newline after input
+
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 rm -rf "${WORKSPACE_DIR}"/qage_*
                 log_qrane "Workspace cleaned."

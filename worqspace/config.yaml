@@ -7,11 +7,11 @@ agents:
 
   construqtor:
     provider: gemini
-    model: gemini-2.5-flash
+    model: gemini-2.5-flash-lite
 
   inspeqtor:
     provider: openai
-    model: gpt-4o
+    model: gpt-4o-mini
 
 options:
   # Max number of cycles to run in auto-mode.
@@ -21,8 +21,8 @@ options:
   # 0 = Atomic (Every bullet is a file)
   # 5 = Balanced
   # 9 = Monolithic (Whole task is one file)
-  briq_sensitivity: 9
+  briq_sensitivity: 0
 
   # Operational Mode
   # Options: program, enterprise, performance, security, innovative, balanced
-  mode: program
+  mode: innovative

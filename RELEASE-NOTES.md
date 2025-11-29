@@ -1,30 +1,37 @@
 # QonQrete Release Notes
 
-## v0.4.0-alpha (Current)
+## v0.4.1-alpha (Current)
 
-This is a major feature release that introduces sophisticated controls over agent behavior and task decomposition, alongside significant internal code refinements.
+This release focuses on hardening the agent prompts and parsing logic to ensure more reliable and secure behavior.
+
+### Agent Logic Improvements
+-   **instruQtor (Planner)**:
+    -   **Robust Parsing**: The agent can now correctly parse `<briq>` tags with or without a `title` attribute, making it more resilient to variations in AI output.
+    -   **Anti-Summarization Prompt**: The prompt now explicitly forbids the AI from summarizing the `tasQ`, ensuring that critical technical details (like Regex patterns or mappings) are preserved during the task breakdown.
+-   **construQtor (Executor)**:
+    -   **Hardened Prompt**: The agent's prompt has been significantly hardened to prevent it from executing code. It is now explicitly instructed to *only* generate code and scripts, never to run them.
+
+## v0.4.0-alpha
+
+This was a major feature release that introduced sophisticated controls over agent behavior and task decomposition, alongside significant internal code refinements.
 
 ### New Features & Improvements
--   **Operational Modes**: Agents now operate with specific "personas" passed via the `--mode` flag or `config.yaml`. This allows the user to guide agent output towards different priorities (e.g., `enterprise`, `security`, `performance`).
--   **Briq Sensitivity**: The `instruQtor` agent now accepts a `--briq-sensitivity` flag (0-9) or a `config.yaml` setting. This gives the user fine-grained control over how atomic or monolithic the task breakdown should be.
--   **Path Regression Fix**: Resolved a critical bug in the dynamic pipeline logic that caused incorrect path resolution for agent I/O.
--   **Code Refinements**: The entire Python and shell codebase has been significantly refactored for improved readability, compactness, and adherence to best practices.
+-   **Operational Modes**: Agents now operate with specific "personas" (e.g., `enterprise`, `security`).
+-   **Briq Sensitivity**: The `instruQtor` now accepts a granularity setting (0-9).
+-   **Path Regression Fix**: Resolved a critical bug in the dynamic pipeline logic.
+-   **Code Refinements**: Widespread refactoring for readability and compactness.
 
 ## v0.3.0-alpha
 
 This release introduced a branding update and refined the internal versioning mechanism.
 
-### Features & Improvements
--   **Branding Update**: The `README.md` was updated to display `logo.png`.
--   **Versioning Refinement**: The build process was hardened to ensure a clean `VERSION` file.
-
 ## v0.2.7-alpha
 
-This was a hotfix release that addressed a critical `IndentationError` in `qrane/qrane.py`.
+This was a hotfix release that addressed a critical `IndentationError`.
 
 ## v0.2.6-alpha
 
-This was a user experience release focused on TUI robustness, fixing the "flash and gone" issue.
+This was a user experience release focused on TUI robustness.
 
 ## v0.2.5-alpha
 
