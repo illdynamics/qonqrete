@@ -4,7 +4,7 @@ FROM ubuntu:22.04
 # Avoid interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 1. Install base dependencies and modern Node.js
+# 1. Install base dependencies, modern Node.js, and Chafa (for splash)
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     gnupg \
+    chafa \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup NodeSource repository for Node.js 20.x

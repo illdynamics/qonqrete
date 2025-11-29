@@ -45,16 +45,6 @@ exec_qrane() {
     done
 }
 
-show_splash() {
-    SPLASH_IMG="${SCRIPT_DIR}/qrane/splash.png"
-    if [ -f "$SPLASH_IMG" ] && command -v chafa >/dev/null 2>&1; then
-        clear
-        chafa "$SPLASH_IMG" --size=128x36 --stretch
-        sleep 1
-        clear
-    fi
-}
-
 show_version() {
     echo "$VERSION"
 }
@@ -162,7 +152,6 @@ case "$COMMAND" in
         if ls "${WORKSPACE_DIR}"/qage_* 1> /dev/null 2>&1; then
             log_qrane "Found previous run directories."
 
-            # [FIX] Manually construct styled prompt and use echo -ne + read to maintain shebang prefix
             PROMPT_STR="${PREFIX_TPL/\{PREFIX\}/_QQ} Delete all 'qage_*' directories? [y/N] "
             echo -ne "$PROMPT_STR"
             read -n 1 -r
@@ -184,7 +173,8 @@ case "$COMMAND" in
             log_qrane "[ERROR] API Keys missing."; exit 1
         fi
 
-        if [[ "$PY_ARGS" != *"--tui"* ]]; then show_splash; fi
+        # [REMOVED] Host-side splash check
+        # if [[ "$PY_ARGS" != *"--tui"* ]]; then show_splash; fi
 
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
@@ -205,7 +195,16 @@ case "$COMMAND" in
 
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
         RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
-        RUN_CMD="python3 qrane/qrane.py $PY_ARGS"
+
+        # [NEW] Container-side Splash Logic
+        # We check if not TUI mode, then run chafa on the mounted image
+        SPLASH_CMD=""
+        if [[ "$PY_ARGS" != *"--tui"* ]]; then
+             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
+        fi
+
+        # Wrap in bash -c to execute splash before python
+        RUN_CMD="bash -c \"$SPLASH_CMD exec python3 qrane/qrane.py $PY_ARGS\""
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
