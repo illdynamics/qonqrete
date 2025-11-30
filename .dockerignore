@@ -1,0 +1,37 @@
+# -----------------------------
+# Secrets & Configuration
+# -----------------------------
+.env
+.dockerignore
+
+# -----------------------------
+# Git Metadata
+# -----------------------------
+# Exclude the entire .git history and config (Critical for size & security)
+.git
+.gitignore
+.gitattributes
+.gitmodules
+
+# -----------------------------
+# Generated Agent Files
+# -----------------------------
+**/bloq.d/*
+**/tasq.d/*
+**/exeq.d/*
+**/reqap.d/*
+**/qodeyard/*
+
+# -----------------------------
+# Logs & Runtime Data
+# -----------------------------
+**/struqture/*
+worqspace/qage**
+
+# -----------------------------
+# Python Cache
+# -----------------------------
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
