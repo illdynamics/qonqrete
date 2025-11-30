@@ -1,7 +1,7 @@
 # Sandboxfile for QonQrete
 # Runtime: Microsandbox (msb)
 
-FROM docker.io/wickednet/qonqrete-qage
+FROM docker.io/illdynamics/qonqrete-qage:latest
 
 # Ensure workspace directory exists
 RUN mkdir -p /qonq
