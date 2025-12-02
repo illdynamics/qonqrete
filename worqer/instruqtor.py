@@ -40,18 +40,19 @@ def clean_filename_slug(text: str) -> str:
     return slug if slug else "task"
 
 def get_sensitivity_prompt(level: int) -> str:
-    if level == 0:
-        return """
-**CRITICAL GRANULARITY RULE (LEVEL 0 - ATOMIC):**
-1. **ONE FILE PER BRIQ:** You are FORBIDDEN from creating multiple files in a single Briq.
-2. **EXPLODE MODULES:** If the report mentions "Network Module", you must create separate Briqs for: `network_core.py`, `network_utils.py`, `network_listener.py`, `network_config.py`.
-3. **MANDATORY BOILERPLATE:** You MUST include Briqs for `logger.py`, `exceptions.py`, `constants.py`, and `config_loader.py`.
-4. **SCALE:** For a large report, I expect 30-60 Briqs. Do not summarize.
-"""
-    elif level <= 5:
-        return "Create one Briq per logical component."
-    else:
-        return "Group related tasks into major phases."
+    prompts = {
+        0: "**CRITICAL RULE (LEVEL 0 - ATOMIC):** 1. Create separate Briqs for EVERY SINGLE class, function, and interface. 2. NO grouping allowed. 3. Mandatory separate Briqs for all boilerplate (logs, configs, exceptions). Expect 50+ Briqs.",
+        1: "**LEVEL 1 - EXTREME DETAIL:** One file per Briq. Separate all classes. Group only trivial helpers. Expect 40-50 Briqs.",
+        2: "**LEVEL 2 - HIGH DETAIL:** Standard One-Class-Per-File. Separate configuration and interfaces. Expect 30-40 Briqs.",
+        3: "**LEVEL 3 - STANDARD GRANULARITY:** Major classes in separate files. Utils can be grouped by domain. Expect 20-30 Briqs.",
+        4: "**LEVEL 4 - LOGICAL GROUPING:** Group tightly coupled classes into modules. Expect 15-20 Briqs.",
+        5: "**LEVEL 5 - COMPONENT LEVEL:** One Briq per major component (e.g., AuthSystem, DatabaseLayer). Expect 10-15 Briqs.",
+        6: "**LEVEL 6 - FEATURE LEVEL:** One Briq per full feature implementation. Expect 8-12 Briqs.",
+        7: "**LEVEL 7 - PHASE LEVEL:** Group features into development phases (Setup, Core, UI). Expect 5-8 Briqs.",
+        8: "**LEVEL 8 - MILESTONE LEVEL:** Broad milestones. Very large tasks per Briq. Expect 3-5 Briqs.",
+        9: "**LEVEL 9 - MONOLITHIC:** The entire project in 1 or 2 massive Briqs."
+    }
+    return prompts.get(level, prompts[5])
 
 def main() -> None:
     if len(sys.argv) != 3: sys.exit(1)
@@ -78,6 +79,14 @@ def main() -> None:
     except: sensitivity = 5
 
     sens_prompt = get_sensitivity_prompt(sensitivity)
+
+    # Gather Qodeyard Context
+    qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
+    context_files = []
+    if qodeyard_path.exists():
+        for root, _, files in os.walk(qodeyard_path):
+            for file in files:
+                context_files.append(os.path.join(root, file))
 
     planner_prompt = f"""
 You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MODE**.
@@ -108,7 +117,7 @@ You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MOD
 
     master_plan = ""
     try:
-        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
+        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt, context_files=context_files)
     except Exception as e:
         # [FIX] If the AI failed but we captured output (partial stream), check if it's usable.
         print(f"[WARN] AI Stream Signal: {e}", flush=True)
