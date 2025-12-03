@@ -187,8 +187,10 @@ case "$COMMAND" in
 
         log_qrane "Cheqking sQrapyard for initial qontent..."
         if [ -d "${WORKSPACE_DIR}/sqrapyard" ] && [ "$(ls -A "${WORKSPACE_DIR}/sqrapyard")" ]; then
-            log_qrane "Seeding Qodeyard from Sqrapyard..."
+            log_qrane "sQrapyard qontent found, seeding Qodeyard..."
             cp -r "${WORKSPACE_DIR}/sqrapyard/"* "$RUN_HOST_PATH/qodeyard/"
+        else
+            log_qrane "sQrapyard empty, starting fresh tasq."
         fi
 
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
