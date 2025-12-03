@@ -172,7 +172,6 @@ case "$COMMAND" in
         ;;
 
     run)
-        clear
         if [[ -z "${OPENAI_API_KEY:-}" || -z "${GOOGLE_API_KEY:-}" ]]; then
             log_qrane "[ERROR] API Keys missing."; exit 1
         fi
@@ -180,23 +179,15 @@ case "$COMMAND" in
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
-        HOST_LOG_FILE="${RUN_HOST_PATH}/.host_logs.txt"
-
-        # Capture host logs to a temporary file instead of printing them directly
-        log_qrane() {
-            local prefix="_QQ"
-            if [[ "$PY_ARGS" == *"--auto"* ]]; then prefix="aQQ"; fi
-            echo -e "${PREFIX_TPL/\{PREFIX\}/$prefix} $1" >> "$HOST_LOG_FILE"
-        }
 
         log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"
 
-        mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,sqrapyard}
+        mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture}
 
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi
 
-        # Sqrapyard seeding logic (logging is now captured)
+        # Sqrapyard seeding logic
         SQrapyard_PATH="${WORKSPACE_DIR}/sqrapyard"
         log_qrane "Cheqking for project seed in sqrapyard..."
         if [ -d "$SQrapyard_PATH" ] && [ -n "$(ls -A "$SQrapyard_PATH")" ]; then
@@ -227,12 +218,14 @@ case "$COMMAND" in
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
         RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
-        # Splash, followed by captured logs, followed by the app
-        SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; fi;"
-        LOG_CMD="if [ -f \"${CONTAINER_WORKSPACE}/.host_logs.txt\" ]; then cat \"${CONTAINER_WORKSPACE}/.host_logs.txt\"; rm \"${CONTAINER_WORKSPACE}/.host_logs.txt\"; fi;"
-        APP_CMD="exec python3 qrane/qrane.py ${PY_ARGS}"
+        # [NEW] Container-side Splash Logic
+        SPLASH_CMD=""
+        if [[ "$PY_ARGS" != *"--tui"* ]]; then
+             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
+        fi
 
-        CONTAINER_CMD="${SPLASH_CMD} ${LOG_CMD} ${APP_CMD}"
+        # [FIX] Construct the internal command string safely
+        CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
@@ -240,6 +233,7 @@ case "$COMMAND" in
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
+            # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
             docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
