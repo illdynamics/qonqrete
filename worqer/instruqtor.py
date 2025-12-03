@@ -67,7 +67,7 @@ def main() -> None:
     os.makedirs(output_dir, exist_ok=True)
 
     try:
-        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
+        with open('/qonq_conf/config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     agent_cfg = config.get('agents', {}).get('instruqtor', {})
