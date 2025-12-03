@@ -183,24 +183,31 @@ case "$COMMAND" in
         # Copy configs into the root of the run directory
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi
-        if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then 
-            cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
-        else 
-            echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+
+        # Sqrapyard seeding logic
+        SQrapyard_PATH="${WORKSPACE_DIR}/sqrapyard"
+        if [ -d "$SQrapyard_PATH" ] && [ -n "$(ls -A "$SQrapyard_PATH")" ]; then
+            log_qrane "Found content in sqrapyard, seeding this run..."
+            cp -r "$SQrapyard_PATH"/* "$RUN_HOST_PATH/qodeyard/"
+            if [ -f "$SQrapyard_PATH/tasq.md" ]; then
+                log_qrane "Using tasq.md from sqrapyard for initial cycle."
+                cp "$SQrapyard_PATH/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            elif [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
+                 cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            else
+                echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            fi
+        else
+            # Default tasq.md logic if sqrapyard is empty
+            if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
+                cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            else
+                echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            fi
         fi
 
-        # If sQrapyard has content, copy it to the run-specific qodeyard
-        if [ -d "${WORKSPACE_DIR}/sqrapyard" ] && [ "$(ls -A "${WORKSPACE_DIR}/sqrapyard")" ]; then
-            cp -r "${WORKSPACE_DIR}/sqrapyard/"* "$RUN_HOST_PATH/qodeyard/"
-        fi
-        
-        # --- Define Mounts & Container Command ---
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
-        
-        # New Mount Structure:
-        # - /qonq_conf (read-only) for configs, tasqs, etc.
-        # - /qonq/qodeyard (read-write) for the agent's work
-        RUN_MOUNTS="-v ${RUN_HOST_PATH}:/qonq_conf:ro -v ${RUN_HOST_PATH}/qodeyard:/qonq/qodeyard"
+        RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then

@@ -328,43 +328,11 @@ def main():
         except Exception as e:
             traceback.print_exc()
 
-def initialize_worqspace(worqspace: Path, prefix: str, ui=None):
-    """Checks for content in the persistent sqrapyard and initializes the run-specific qodeyard."""
-    persistent_worqspace = worqspace.parent
-    sqrapyard_path = persistent_worqspace / "sqrapyard"
-    qodeyard_path = worqspace / "qodeyard"
-    tasq_d_path = worqspace / "tasq.d"
-    initial_tasq_path = tasq_d_path / "cyqle1_tasq.md"
-
-    target_width = 11
-    qrane_padding = " " * (target_width - 5)
-    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
-
-    if sqrapyard_path.exists() and any(sqrapyard_path.iterdir()):
-        msg = "Found content in sqrapyard, initializing qodeyard for this run..."
-        if ui: ui.log_main(f"{qrane_prefix}{msg}")
-        else: print(f"{qrane_prefix}{msg}")
-
-        if qodeyard_path.exists():
-            shutil.rmtree(qodeyard_path)
-        
-        shutil.copytree(sqrapyard_path, qodeyard_path)
-
-        sqrapyard_tasq = sqrapyard_path / "tasq.md"
-        if sqrapyard_tasq.exists():
-            tasq_d_path.mkdir(exist_ok=True)
-            shutil.copy2(sqrapyard_tasq, initial_tasq_path)
-            msg = f"Copied sqrapyard/tasq.md to {initial_tasq_path.name}"
-            if ui: ui.log_main(f"{qrane_prefix}{msg}")
-            else: print(f"{qrane_prefix}{msg}")
-
 def run_orchestration(args, prefix, ui):
     worqspace = get_worqspace()
     path_manager = PathManager(worqspace)
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
-
-    initialize_worqspace(worqspace, prefix, ui)
 
     # [OPTIONAL] Pre-flight checks (uncomment if strictness required)
     # if not run_pre_flight_checks(path_manager, ui):
