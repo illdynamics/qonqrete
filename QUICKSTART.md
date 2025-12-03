@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.4.1-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.5-alpha` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -16,10 +16,12 @@ chmod +x qonqrete.sh
 ```
 
 ## 2. Define Your TasQ
-Edit `worqspace/tasq.md` to define your initial objective. For example:
+For a new project, edit `worqspace/tasq.md` to define your initial objective. For example:
 ```markdown
 Create a simple Python web server that listens on port 8080 and returns "Hello, QonQrete!" for all requests. The script should be executable.
 ```
+
+To start with existing code, see the "Seeding a Project with Sqrapyard" section below.
 
 ## 3. Run a CyQle
 This is the default manual mode. You can combine flags for different behaviors.
@@ -32,7 +34,13 @@ This is the default manual mode. You can combine flags for different behaviors.
 ```
 At the `CheQpoint`, you will be prompted to `[Q]ontinue`, `[T]weaQ`, or `[X]Quit`.
 
-## 4. Configuration
+## 4. Seeding a Project with Sqrapyard
+To begin a `cyQle` with a pre-existing codebase:
+1.  Place your code files into the `worqspace/sqrapyard/` directory.
+2.  If you have a specific objective for the first cycle, create a `worqspace/sqrapyard/tasq.md` file.
+3.  Run `./qonqrete.sh run`. The system will automatically copy the contents of `sqrapyard` into the active `qodeyard` and use your `tasq.md` as the first instruction.
+
+## 5. Configuration
 Advanced options can be set in `worqspace/`.
 -   **`config.yaml`**:
     -   `auto_cycle_limit`: Set the maximum number of cycles for auto-mode.
@@ -42,8 +50,8 @@ Advanced options can be set in `worqspace/`.
 -   **`pipeline_config.yaml`**:
     -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime.
 
-## 5. Cleaning the Workspace
-To remove all `qage_<timestamp>` run directories, use the `clean` command.
+## 6. Cleaning the Workspace
+To remove all generated code and logs, use the `clean` command. This will reset the `qodeyard`, `briq.d`, `reqap.d`, `exeq.d` and `log.d` directories.
 ```bash
 ./qonqrete.sh clean
 ```

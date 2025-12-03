@@ -52,16 +52,15 @@ def get_worqspace() -> Path:
     return Path(env_path) if env_path else PROJECT_ROOT / "worqspace"
 
 def run_pre_flight_checks(path_manager: PathManager, ui=None) -> bool:
-    conf_dir = Path("/qonq_conf")
     try:
-        if not (conf_dir / 'pipeline_config.yaml').exists():
-            raise FileNotFoundError(f"pipeline_config.yaml missing at {conf_dir}")
-        if not (conf_dir / 'config.yaml').exists():
-            raise FileNotFoundError(f"config.yaml missing at {conf_dir}")
+        if not (path_manager.root / 'pipeline_config.yaml').exists():
+            raise FileNotFoundError(f"pipeline_config.yaml missing at {path_manager.root}")
+        if not (path_manager.root / 'config.yaml').exists():
+            raise FileNotFoundError(f"config.yaml missing at {path_manager.root}")
 
-        with open(conf_dir / 'pipeline_config.yaml', 'r') as f:
+        with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
             pipeline_config = yaml.safe_load(f) or {}
-        with open(conf_dir / 'config.yaml', 'r') as f:
+        with open(path_manager.root / 'config.yaml', 'r') as f:
             agent_config = yaml.safe_load(f) or {}
     except Exception as e:
         msg = f"CRITICAL: Configuration error: {e}"
@@ -118,12 +117,10 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         "Found", "Summary"
     ]
 
-    agent_cwd = get_worqspace() / "qodeyard"
-
     if ui:
         ui.log_main(f"{qrane_prefix}Initiating {agent_display_name}...")
         try:
-            with subprocess.Popen(command, cwd=str(agent_cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
+            with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
                 reads = [proc.stdout, proc.stderr]
                 while True:
                     check_tui_keys(ui, proc)
@@ -137,11 +134,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             if any(x in clean for x in VISIBLE_KEYWORDS):
                                 ui.log_main(f"{agent_prefix} {clean}")
                             ui.log_agent(f"[{agent_display_name}] {clean}")
-                            os.makedirs(log_file.parent, exist_ok=True)
                             with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
                         elif r == proc.stderr:
                             ui.log_agent(f"[{agent_display_name} RAW] {clean}")
-                            os.makedirs(log_file.parent, exist_ok=True)
                             with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
                     if proc.poll() is not None and not reads: break
 
@@ -158,7 +153,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
         spinner.start()
         try:
-            proc = subprocess.Popen(command, cwd=str(agent_cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True)
+            proc = subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True)
             reads = [proc.stdout, proc.stderr]
             while True:
                 readable, _, _ = select.select(reads, [], [], 0.05)
@@ -173,12 +168,10 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
-                    os.makedirs(log_file.parent, exist_ok=True)
                     with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
             stderr = proc.stderr.read()
             if stderr:
-                os.makedirs(log_file.parent, exist_ok=True)
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(stderr)
 
@@ -335,20 +328,50 @@ def main():
         except Exception as e:
             traceback.print_exc()
 
+def initialize_worqspace(worqspace: Path, prefix: str, ui=None):
+    """Checks for content in sqrapyard and initializes qodeyard."""
+    sqrapyard_path = worqspace / "sqrapyard"
+    qodeyard_path = worqspace / "qodeyard"
+    tasq_d_path = worqspace / "tasq.d"
+    initial_tasq_path = tasq_d_path / "cyqle1_tasq.md"
+
+    target_width = 11
+    qrane_padding = " " * (target_width - 5)
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
+
+    if sqrapyard_path.exists() and any(sqrapyard_path.iterdir()):
+        msg = "Found content in sqrapyard, initializing qodeyard..."
+        if ui: ui.log_main(f"{qrane_prefix}{msg}")
+        else: print(f"{qrane_prefix}{msg}")
+
+        if qodeyard_path.exists():
+            shutil.rmtree(qodeyard_path)
+        
+        shutil.copytree(sqrapyard_path, qodeyard_path)
+
+        sqrapyard_tasq = sqrapyard_path / "tasq.md"
+        if sqrapyard_tasq.exists():
+            tasq_d_path.mkdir(exist_ok=True)
+            shutil.copy2(sqrapyard_tasq, initial_tasq_path)
+            msg = f"Copied sqrapyard/tasq.md to {initial_tasq_path.name}"
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{msg}")
+
 def run_orchestration(args, prefix, ui):
     worqspace = get_worqspace()
     path_manager = PathManager(worqspace)
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
 
+    initialize_worqspace(worqspace, prefix, ui)
+
     # [OPTIONAL] Pre-flight checks (uncomment if strictness required)
     # if not run_pre_flight_checks(path_manager, ui):
     #     if not ui: print("Pre-flight checks failed.")
     #     return
 
-    conf_dir = Path("/qonq_conf")
     try:
-        with open(conf_dir / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
+        with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
@@ -371,14 +394,6 @@ def run_orchestration(args, prefix, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
-    # [FIX] Ensure the initial tasq.md for cycle 1 is in the correct location
-    initial_tasq = path_manager.get_tasq_path(1)
-    if not initial_tasq.exists():
-        main_tasq = path_manager.root / 'tasq.md'
-        if main_tasq.exists():
-            os.makedirs(initial_tasq.parent, exist_ok=True)
-            shutil.copy(main_tasq, initial_tasq)
-
     cycle = 1
     session_failed = False
     user_aborted = False
@@ -396,7 +411,7 @@ def run_orchestration(args, prefix, ui):
             env["CYCLE_NUM"] = str(cycle)
 
             try:
-                with open(conf_dir / 'pipeline_config.yaml', 'r') as f:
+                with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
                     pipeline_config = yaml.safe_load(f)
             except:
                 if ui: ui.log_main("Config Error"); break

@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.3.0-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.5-alpha` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -50,12 +50,15 @@ graph TD
 
     subgraph "Shared Volume (worqspace/)"
         Worqspace;
+        Sqrapyard(sqrapyard/);
         Qrane -- Reads --> PConfig(pipeline_config.yaml);
         Qrane -- Reads --> Config(config.yaml);
         TasQ(tasq.md);
         BriQs(briq.d/);
         Qodeyard(qodeyard/);
         ReQap(reqap.d/);
+        Sqrapyard -- Optional --> Qodeyard;
+        Sqrapyard -- Optional --> TasQ;
     end
 
     subgraph "AI Provider Abstraction"
@@ -80,7 +83,7 @@ graph TD
     class User,Shell,Args,VersionFile,BuildFiles host;
     class Container,Worqspace,Image container;
     class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,CheQpoint,TUI,Loader qonqrete;
-    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig volume;
+    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard volume;
     class LibAI,SGPT,Gemini abstraction;
 ```
 
@@ -107,11 +110,11 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
     *   Parses the `run` command and any additional flags.
     *   Verifies that `OPENAI_API_KEY` and `GOOGLE_API_KEY` are exported in the shell.
     *   Reads the `VERSION` file and exports it as `QONQ_VERSION`.
-    *   Creates a unique timestamped run directory inside `worqspace/`.
-    *   Copies configuration files and the initial `tasq.md` into this new run directory.
     *   Constructs the `docker run` or `msb run` command, mounting volumes and passing API keys.
 3.  **`qrane.py` (Inside the Container)**:
-    *   The orchestrator starts, determines UI mode (TUI/headless), and enters the main `cyQle` loop.
+    *   The orchestrator starts.
+    *   **Sqrapyard Initialization**: It checks the `worqspace/sqrapyard` directory. If it contains files, they are copied to `worqspace/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
+    *   It determines UI mode (TUI/headless) and enters the main `cyQle` loop.
 4.  **The `cyQle` Loop**:
     *   The `Qrane` dynamically loads the agent pipeline from `pipeline_config.yaml`.
     *   It executes each agent in sequence, passing the correct input/output paths.
@@ -127,9 +130,8 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
 
 1.  **User Input**: User executes `./qonqrete.sh clean`.
 2.  **`qonqrete.sh`**:
-    *   Searches for `qage_*` directories in `worqspace/`.
-    *   Prompts the user for confirmation.
-    *   If confirmed, it executes `rm -rf worqspace/qage_*`.
+    *   Prompts the user for confirmation to delete `worqspace/qodeyard`, `worqspace/briq.d`, `worqspace/reqap.d`, `worqspace/exeq.d` and `worqspace/log.d`.
+    *   If confirmed, it deletes the directories.
 3.  **Result**: The `worqspace` is cleared of all previous run data.
 
 ---
@@ -140,7 +142,7 @@ This section details the operational logic for the QonQrete system.
 
 ### Orchestrator Logic (`qrane/qrane.py`)
 
-The `Qrane` is the heart of the system. As of `v0.2.2-alpha`, it functions as a dynamic pipeline runner.
+The `Qrane` is the heart of the system.
 
 -   **Dynamic Pipeline Loading**: On startup, the `Qrane` reads the `worqspace/pipeline_config.yaml` file. It iterates through the `agents` list defined in this file to build the execution pipeline for the cycle.
 -   **Generic Execution**: For each agent in the pipeline, the orchestrator constructs the appropriate command-line arguments based on the `script`, `input`, and `output` fields in the config.
@@ -158,10 +160,12 @@ All agents utilize this central library to interact with AI models by wrapping t
 #### 1. `instruQtor` (The Planner)
 -   **Purpose**: To decompose a high-level task (`tasQ.md`) into a series of small, actionable steps (`briQ.md` files).
 -   **Logic**: It reads the task, constructs a detailed prompt for the AI, invokes the AI via `lib_ai.py`, and then parses the markdown response into individual `briQ.md` files.
+-   **Sensitivity**: The level of detail in the breakdown can be controlled with the `QONQ_SENSITIVITY` environment variable, which corresponds to 10 predefined levels (0-9).
+-   **Context-Aware**: It reads the contents of the `qodeyard` to provide the AI with the current state of the codebase.
 
 #### 2. `construQtor` (The Executor)
 -   **Purpose**: To execute the steps from the `briQ.md` files and generate code.
--   **Logic**: It iterates through the `briQ` files sequentially. For each, it builds a prompt that includes the step's instructions and the current state of the `qodeyard` directory. It then calls the AI to execute the step.
+-   **Logic**: It iterates through the `briQ` files sequentially. For each, it builds a prompt that includes the step's instructions and the current state of the `qodeyard` directory. It then calls the AI to execute the step and writes the generated code to the `qodeyard`.
 
 #### 3. `inspeQtor` (The Reviewer)
 -   **Purpose**: To review the `construQtor`'s work and provide feedback for the next cycle.
