@@ -1,1 +1,1 @@
-Create a full PDF version of a K9s functionality demo session, showing the shortcuts and functions and simplicity of managing Kubernetes clusters with K9s.
+Create a simple Python web server that listens on port 8080 and returns "Hello, QonQrete!" for all requests. The script should be executable.
