@@ -40,3 +40,10 @@ COPY . .
 # 6. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
 ARG QONQ_VERSION
 ENV QONQ_VERSION=${QONQ_VERSION}
+
+# 7. Create a non-root user for security
+ARG UID=1337
+ARG GID=1337
+RUN groupadd -g $GID qonqrete && useradd -u $UID -g $GID -m qonqrete
+USER qonqrete
+

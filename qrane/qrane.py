@@ -110,90 +110,80 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
     agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
 
-    # [FIX] Expanded keyword list ensures logs from InstruQtor and ConstruQtor are visible
-    VISIBLE_KEYWORDS = [
-        "Handing off", "Processing", "Executed", "Wrote", "reQap",
-        "Checking", "Generating", "Ingesting", "Architect", "Plan",
-        "Found", "Summary"
-    ]
+    VISIBLE_KEYWORDS = ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Generating", "Ingesting", "Architect", "Plan", "Found", "Summary"]
 
-    if ui:
-        ui.log_main(f"{qrane_prefix}Initiating {agent_display_name}...")
-        try:
-            with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
-                reads = [proc.stdout, proc.stderr]
-                while True:
-                    check_tui_keys(ui, proc)
-                    readable, _, _ = select.select(reads, [], [], 0.05)
-                    for r in readable:
-                        line = r.readline()
-                        if not line: reads.remove(r); continue
-                        clean = line.strip()
-                        if r == proc.stdout:
-                            # [FIX] Use visibility list
-                            if any(x in clean for x in VISIBLE_KEYWORDS):
-                                ui.log_main(f"{agent_prefix} {clean}")
-                            ui.log_agent(f"[{agent_display_name}] {clean}")
-                            with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
-                        elif r == proc.stderr:
-                            ui.log_agent(f"[{agent_display_name} RAW] {clean}")
-                            with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
-                    if proc.poll() is not None and not reads: break
-
-                if proc.returncode != 0:
-                    ui.log_main(f"{agent_prefix}FAILED (Code {proc.returncode})")
-                    return False
-                return True
-        except KillSignal: raise
-        except Exception as e:
-            ui.log_main(f"CRITICAL EXCEPTION: {e}")
-            return False
-    else:
+    spinner = None
+    if not ui:
         print(f"{qrane_prefix}Initiating {agent_display_name}...")
         spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
         spinner.start()
-        try:
-            proc = subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True)
+    else:
+        ui.log_main(f"{qrane_prefix}Initiating {agent_display_name}...")
+
+    try:
+        with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
             reads = [proc.stdout, proc.stderr]
             while True:
+                if ui: check_tui_keys(ui, proc)
+                
                 readable, _, _ = select.select(reads, [], [], 0.05)
-                if not readable and proc.poll() is not None: break
+                if not readable and proc.poll() is not None:
+                    break
+
                 for r in readable:
                     line = r.readline()
-                    if not line: reads.remove(r); continue
+                    if not line:
+                        reads.remove(r)
+                        continue
+                    
                     clean = line.strip()
-                    if r == proc.stdout:
-                        # [FIX] Use visibility list
-                        if any(x in clean for x in VISIBLE_KEYWORDS):
+                    with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
+
+                    if ui:
+                        if r == proc.stdout:
+                            if any(x in clean for x in VISIBLE_KEYWORDS):
+                                ui.log_main(f"{agent_prefix} {clean}")
+                            ui.log_agent(f"[{agent_display_name}] {clean}")
+                        elif r == proc.stderr:
+                            ui.log_agent(f"[{agent_display_name} RAW] {clean}")
+                    else:
+                        if r == proc.stdout and any(x in clean for x in VISIBLE_KEYWORDS):
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
-                    with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
-            stderr = proc.stderr.read()
-            if stderr:
-                with open(log_file, 'a', encoding='utf-8') as f:
-                    f.write(stderr)
+            if spinner: spinner.stop()
 
-            spinner.stop()
             if proc.returncode != 0:
-                print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
-                if stderr:
-                    print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}")
-                    for line in stderr.strip().split('\n'):
-                        print(f"{Colors.RED}{line}{Colors.R}")
+                stderr_output = proc.stderr.read()
+                if stderr_output:
+                    with open(log_file, 'a', encoding='utf-8') as f: f.write(stderr_output)
+                
+                if ui:
+                    ui.log_main(f"{agent_prefix}FAILED (Code {proc.returncode})")
+                else:
+                    print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
+                    if stderr_output:
+                        print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}")
+                        for line in stderr_output.strip().split('\n'):
+                            print(f"{Colors.RED}{line}{Colors.R}")
                 return False
             return True
-        except KillSignal: spinner.stop(); raise
-        except KeyboardInterrupt:
-            spinner.stop()
-            try: proc.kill()
-            except: pass
-            raise
-        except Exception as e:
-            spinner.stop()
-            print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
-            return False
+
+    except KillSignal:
+        if spinner: spinner.stop()
+        raise
+    except KeyboardInterrupt:
+        if spinner: spinner.stop()
+        try: proc.kill()
+        except NameError: pass # proc might not be defined
+        raise
+    except Exception as e:
+        if spinner: spinner.stop()
+        if ui: ui.log_main(f"CRITICAL EXCEPTION: {e}")
+        else: print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
+        return False
+
 
 def handle_cheqpoint(cycle: int, is_autonomous: bool, cheq_path: Path, prefix: str, path_manager: PathManager, is_final_cheq: bool, ui=None) -> str:
     target_width = 11
@@ -285,12 +275,28 @@ def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, src_path: 
         else: print(f"{qrane_prefix}{msg}")
 
 def getch():
+    """Gets a single character from standard input, cross-platform."""
     try:
-        import tty, termios
-        fd = sys.stdin.fileno(); old = termios.tcgetattr(fd)
-        try: tty.setraw(fd); return sys.stdin.read(1)
-        finally: termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    except: return sys.stdin.read(1)
+        # Unix-like systems
+        import tty
+        import termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
+    except (ImportError, termios.error):
+        # Windows
+        try:
+            import msvcrt
+            return msvcrt.getch().decode('utf-8')
+        except (ImportError, UnicodeDecodeError):
+            # Fallback for other systems or environments
+            return sys.stdin.read(1)
+
 
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")

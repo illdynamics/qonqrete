@@ -209,7 +209,7 @@ case "$COMMAND" in
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
             # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
-            docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
+            docker run --rm -it --user "$(id -u):$(id -g)" $RUN_MOUNTS $DEV_MOUNTS \
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
