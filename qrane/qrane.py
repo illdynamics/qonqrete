@@ -371,6 +371,14 @@ def run_orchestration(args, prefix, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
+    # [FIX] Ensure the initial tasq.md for cycle 1 is in the correct location
+    initial_tasq = path_manager.get_tasq_path(1)
+    if not initial_tasq.exists():
+        main_tasq = path_manager.root / 'tasq.md'
+        if main_tasq.exists():
+            os.makedirs(initial_tasq.parent, exist_ok=True)
+            shutil.copy(main_tasq, initial_tasq)
+
     cycle = 1
     session_failed = False
     user_aborted = False
