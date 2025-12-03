@@ -40,8 +40,11 @@ log_qrane() {
 }
 
 exec_qrane() {
+    # The `tr -d '[:space:]'` part is to ensure that lines containing only whitespace are also treated as empty
     "$@" 2>&1 | while IFS= read -r line; do
-        echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        if [[ -n "$(echo "$line" | tr -d '[:space:]')" ]]; then
+            echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        fi
     done
 }
 
@@ -176,42 +179,58 @@ case "$COMMAND" in
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
-
-        if [ "$RUNTIME_MODE" == "msb" ]; then
-             log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"
-        else
-             log_qrane "Seeding worQspace locally at: $RUN_HOST_PATH"
-        fi
-
+        
+        # Perform setup silently first
         mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture}
+
+        # Determine log messages
+        MSG1="Seeding worQspace in Qage at: $RUN_HOST_PATH"
+        if [ "$RUNTIME_MODE" != "msb" ]; then
+            MSG1="Seeding worQspace locally at: $RUN_HOST_PATH"
+        fi
+        
+        MSG2="Cheqking sQrapyard for initial qontent..."
+        if [ -d "${WORKSPACE_DIR}/sqrapyard" ] && [ "$(ls -A "${WORKSPACE_DIR}/sqrapyard")" ]; then
+            MSG3="sQrapyard qontent found, seeding Qodeyard..."
+            cp -r "${WORKSPACE_DIR}/sqrapyard/"* "$RUN_HOST_PATH/qodeyard/"
+        else
+            MSG3="sQrapyard empty, starting fresh tasq."
+        fi
 
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi
-        if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
-        else echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"; fi
+        if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"; else echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"; fi
 
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
         RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
-        # [NEW] Container-side Splash Logic
+        # --- Build Container Command ---
+        
+        # 1. Splash screen logic
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
              SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
         fi
 
-        # [FIX] Construct the internal command string safely
-        CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
+        # 2. Deferred logger logic
+        local_prefix="_QQ"
+        if [[ "$PY_ARGS" == *"--auto"* ]]; then local_prefix="aQQ"; fi
+        log_prefix=$(echo -e "${PREFIX_TPL/\{PREFIX\}/$local_prefix}")
+        
+        LOG_CMDS="echo -e \"${log_prefix} ${MSG1}\"; echo -e \"${log_prefix} ${MSG2}\"; echo -e \"${log_prefix} ${MSG3}\";"
+
+        # 3. Final command
+        CONTAINER_CMD="${SPLASH_CMD} ${LOG_CMDS} exec python3 qrane/qrane.py ${PY_ARGS}"
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
             $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
+                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "${CONTAINER_CMD}"
         else
-            # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
             docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
                 -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
+                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "${CONTAINER_CMD}"
         fi
         ;;
 esac
