@@ -16,16 +16,76 @@ def get_mode_persona(mode: str) -> str:
     if m == 'security': return "Code Style: Security. Validate all inputs, use secure defaults."
     return "Code Style: Functional."
 
+def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
+    """
+    Parses the AI's markdown output, extracts all code blocks, and writes them
+    to the specified qodeyard directory. It enforces that all paths are safely
+    within the qodeyard.
+    """
+    # Pattern to find markdown code blocks with optional filenames
+    # e.g., ```python:main.py or ```json
+    pattern = re.compile(r"```(?:\w+:)?([\w\./-]+)?\s*\n(.*?)\n```", re.DOTALL)
+    matches = pattern.findall(result)
+    
+    written_files = []
+    
+    if not matches:
+        # If no filenames are specified, write the whole blob to a default file
+        if "```" in result:
+             # Fallback for code blocks without language specifier
+            fallback_pattern = re.compile(r"```\s*\n(.*?)\n```", re.DOTALL)
+            fallback_matches = fallback_pattern.findall(result)
+            if fallback_matches:
+                code_content = "\n".join(fallback_matches).strip()
+                if code_content:
+                    fallback_file = qodeyard / "construqted_code.txt"
+                    fallback_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(fallback_file, 'w', encoding='utf-8') as f:
+                        f.write(code_content)
+                    written_files.append(str(fallback_file))
+        return written_files
+
+    for filename, code_content in matches:
+        if not filename:
+            continue # Skip blocks without a filename if others have them
+
+        # --- SECURITY CRITICAL ---
+        # Sanitize the filename to prevent path traversal attacks (e.g., ../../etc/passwd)
+        # 1. Normalize the path to resolve any '..' components.
+        # 2. Ensure the resolved path is inside the qodeyard.
+        safe_filename = os.path.normpath(filename.strip())
+        if safe_filename.startswith("..") or os.path.isabs(safe_filename):
+            # If path tries to go up or is absolute, strip leading chars and treat as relative
+            safe_filename = re.sub(r'^[./]+', '', safe_filename)
+
+        full_path = qodeyard.joinpath(safe_filename).resolve()
+
+        if qodeyard.resolve() not in full_path.parents:
+            print(f"     [WARN] Skipping unsafe file path: {filename}", flush=True)
+            continue
+        
+        # Create subdirectories if they don't exist
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(code_content.strip())
+        
+        written_files.append(str(full_path))
+        print(f"     - Wrote [Code] {safe_filename}", flush=True)
+
+    return written_files
+
 def main():
     if len(sys.argv) < 3: print("Usage: construqtor.py <input> <output>"); sys.exit(1)
 
     briq_dir = Path(sys.argv[1])
     summary_file = Path(sys.argv[2])
-    qodeyard_path = Path.cwd() # The CWD is now qodeyard
+    worqspace_root = Path(os.getcwd())
+    qodeyard_path = worqspace_root / "qodeyard"
     qodeyard_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        with open('/qonq_conf/config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
+        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     agent_cfg = config.get('agents', {}).get('construqtor', {})
@@ -81,10 +141,22 @@ def main():
         if result and "```" in result:
              success = True
 
+        written_files = []
+        if success:
+            written_files = _write_ai_output_to_qodeyard(result, qodeyard_path)
+            # If the parser found no files, it could be a raw code block.
+            # Re-evaluate success based on whether files were actually written.
+            if not written_files:
+                success = False
+
         status = "success" if success else "failure"
         if not success: failure_count += 1
 
-        all_briqs_summary.append({ 'briq_file': briq_file.name, 'status': status })
+        all_briqs_summary.append({ 
+            'briq_file': briq_file.name, 
+            'status': status,
+            'files_written': written_files 
+        })
         print(f"-- Executed Briq: {briq_file.name} (Status: {status}) --", flush=True)
 
     final_status = "Success" if failure_count == 0 else ("Partial" if failure_count < len(briq_files) else "Failure")
@@ -93,6 +165,9 @@ def main():
     summary_content += f"**Processed:** {len(briq_files)} | **Failures:** {failure_count}\n\n"
     for item in all_briqs_summary:
         summary_content += f"- **{item['briq_file']}**: {item['status']}\n"
+        if item['files_written']:
+            for f in item['files_written']:
+                summary_content += f"  - `{f}`\n"
 
     os.makedirs(summary_file.parent, exist_ok=True)
     with open(summary_file, 'w', encoding='utf-8') as f: f.write(summary_content)
