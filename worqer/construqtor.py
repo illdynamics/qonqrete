@@ -68,18 +68,21 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
             continue
 
         # --- SECURITY CRITICAL ---
-        # Sanitize the filename to prevent path traversal attacks (e.g., ../../etc/passwd)
-        # 1. Normalize the path to resolve any '..' components.
-        # 2. Ensure the resolved path is inside the qodeyard.
-        safe_filename = os.path.normpath(filename.strip())
-        if safe_filename.startswith("..") or os.path.isabs(safe_filename):
-            # If path tries to go up or is absolute, strip leading chars and treat as relative
-            safe_filename = re.sub(r'^[./]+', '', safe_filename)
+        # 1. Forcibly remove any parent directory traversal attempts.
+        # 2. Normalize the path to resolve any '.' or residual '..' components.
+        # 3. Ensure the resolved path is inside the qodeyard.
+        safe_filename = filename.strip().replace("../", "").replace("..\\", "")
+        safe_filename = os.path.normpath(safe_filename)
+
+        if os.path.isabs(safe_filename):
+            # If path is absolute after sanitization, strip leading chars to make it relative
+            safe_filename = re.sub(r'^[./\\]+', '', safe_filename)
 
         full_path = qodeyard.joinpath(safe_filename).resolve()
 
-        if qodeyard.resolve() not in full_path.parents:
-            print(f"     [WARN] Skipping unsafe file path: {filename}", flush=True)
+        # Final check: is the resolved path a child of the qodeyard?
+        if qodeyard.resolve() != full_path and qodeyard.resolve() not in full_path.parents:
+            print(f"     [WARN] Skipping unsafe file path after sanitization: {filename}", flush=True)
             continue
         
         # Create subdirectories if they don't exist
@@ -133,6 +136,7 @@ def main():
 
         prompt = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan.
+**CRITICAL RULE:** You MUST write all code files to the `qodeyard/` directory. You can create subdirectories inside `qodeyard/`, but you are forbidden from writing to any other location. All file paths in your output must start with `qodeyard/`.
 **RESTRICTION:** GENERATE CODE ONLY.
 **OUTPUT:** Return the code files inside markdown blocks.
 
