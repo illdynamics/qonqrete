@@ -17,4 +17,4 @@
 - **Gatekeeper Assessment Parsing**: The `qrane` script now correctly parses the "Assessment" status from `reqap.md` files, preventing the "Result: Unknown" bug.
 - **AI Filename Resilience**: The `construqtor` agent is now more resilient to the AI providing a language name (e.g., "python") as a filename, and will write to a default file in such cases.
 - **Build Log Verbosity**: Empty lines are now filtered from the `docker build` output to provide a cleaner log.
-- **Agent Log Completeness**: All output streams from agents (including the mirrored AI output) are now correctly captured in the log files located in the `struqture` directory.
+- **Agent Log Completeness**: All output streams from all agents (including the mirrored AI output from `instruqtor`, `construqtor`, and `inspeqtor`) are now correctly captured in the log files located in the `struqture` directory.

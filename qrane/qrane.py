@@ -170,9 +170,10 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
                     with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
-
+            
             stderr = proc.stderr.read()
             if stderr:
+                # [FIX] Also write the final stderr dump to the log file
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(stderr)
 
