@@ -51,7 +51,7 @@ Advanced options can be set in `worqspace/`.
     -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime.
 
 ## 6. Cleaning the Workspace
-To remove all generated code and logs, use the `clean` command. This will reset the `qodeyard`, `briq.d`, `reqap.d`, `exeq.d` and `log.d` directories.
+To remove all `qage_<timestamp>` run directories, use the `clean` command.
 ```bash
 ./qonqrete.sh clean
 ```

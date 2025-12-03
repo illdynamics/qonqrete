@@ -136,6 +136,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             ui.log_agent(f"[{agent_display_name}] {clean}")
                             with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
                         elif r == proc.stderr:
+                            # Also write stderr to the main log file to capture AI stream
                             ui.log_agent(f"[{agent_display_name} RAW] {clean}")
                             with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
                     if proc.poll() is not None and not reads: break
