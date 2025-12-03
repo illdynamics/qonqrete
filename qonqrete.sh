@@ -40,8 +40,11 @@ log_qrane() {
 }
 
 exec_qrane() {
+    # The `tr -d '[:space:]'` part is to ensure that lines containing only whitespace are also treated as empty
     "$@" 2>&1 | while IFS= read -r line; do
-        echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        if [[ -n "$(echo "$line" | tr -d '[:space:]')" ]]; then
+            echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        fi
     done
 }
 
