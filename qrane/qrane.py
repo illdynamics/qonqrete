@@ -271,8 +271,9 @@ def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
 
         assessment_status = "Unknown"
         for line in content.split('\n'):
-            if "Assessment:" in line:
-                assessment_status = line.split(":", 1)[1].strip()
+            clean_line = line.strip()
+            if clean_line.startswith("Assessment:"):
+                assessment_status = clean_line.split(":", 1)[1].strip()
                 break
 
         header = f"# Cycle {cycle+1} Directive\n\n**PREVIOUS CYCLE STATUS:** {assessment_status}\n\n**CRITICAL INSTRUCTION:**\n1. Analyze Assessment.\n2. Fix failures if Partial/Failure.\n3. Implement suggestions if Success.\n\n---\n\n"

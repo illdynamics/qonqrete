@@ -29,6 +29,12 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
     
     written_files = []
     
+    # List of common language identifiers that might be mistaken for filenames
+    language_keywords = {
+        'python', 'javascript', 'typescript', 'html', 'css', 'json', 'yaml', 'yml',
+        'sh', 'bash', 'go', 'rust', 'java', 'c', 'cpp', 'csharp', 'sql', 'ruby'
+    }
+
     if not matches:
         # If no filenames are specified, write the whole blob to a default file
         if "```" in result:
@@ -46,8 +52,20 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         return written_files
 
     for filename, code_content in matches:
+        # If the AI provided a language keyword as a filename, treat it as no-filename
+        if filename and filename.lower() in language_keywords:
+            filename = None
+
         if not filename:
-            continue # Skip blocks without a filename if others have them
+            # Use a default filename for code blocks without a specified name
+            fallback_file = qodeyard / "construqted_code.txt"
+            fallback_file.parent.mkdir(parents=True, exist_ok=True)
+            # Append if it exists, as there might be multiple unnamed blocks
+            with open(fallback_file, 'a', encoding='utf-8') as f:
+                f.write(code_content.strip() + "\n\n")
+            if str(fallback_file) not in written_files:
+                written_files.append(str(fallback_file))
+            continue
 
         # --- SECURITY CRITICAL ---
         # Sanitize the filename to prevent path traversal attacks (e.g., ../../etc/passwd)
