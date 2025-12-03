@@ -218,6 +218,9 @@ case "$COMMAND" in
             fi
         fi
 
+        log_qrane "Handing off to Qrane in 2 seconds..."
+        sleep 2
+
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
         RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
