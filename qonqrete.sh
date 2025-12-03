@@ -186,18 +186,22 @@ case "$COMMAND" in
 
         # Sqrapyard seeding logic
         SQrapyard_PATH="${WORKSPACE_DIR}/sqrapyard"
+        log_qrane "Cheqking for project seed in sqrapyard..."
         if [ -d "$SQrapyard_PATH" ] && [ -n "$(ls -A "$SQrapyard_PATH")" ]; then
-            log_qrane "Found content in sqrapyard, seeding this run..."
+            log_qrane "Found qontent in sqrapyard, seeding this run..."
             cp -r "$SQrapyard_PATH"/* "$RUN_HOST_PATH/qodeyard/"
             if [ -f "$SQrapyard_PATH/tasq.md" ]; then
-                log_qrane "Using tasq.md from sqrapyard for initial cycle."
+                log_qrane "Using tasq.md from sqrapyard for initial cyqle."
                 cp "$SQrapyard_PATH/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
             elif [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
+                 log_qrane "No tasq.md in sqrapyard, using default tasq.md."
                  cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
             else
+                log_qrane "No tasq.md found, creating default tasq."
                 echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
             fi
         else
+            log_qrane "No qontent in sqrapyard, starting fresh tasq."
             # Default tasq.md logic if sqrapyard is empty
             if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
                 cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
