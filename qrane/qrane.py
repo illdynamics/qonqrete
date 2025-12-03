@@ -329,8 +329,9 @@ def main():
             traceback.print_exc()
 
 def initialize_worqspace(worqspace: Path, prefix: str, ui=None):
-    """Checks for content in sqrapyard and initializes qodeyard."""
-    sqrapyard_path = worqspace / "sqrapyard"
+    """Checks for content in the persistent sqrapyard and initializes the run-specific qodeyard."""
+    persistent_worqspace = worqspace.parent
+    sqrapyard_path = persistent_worqspace / "sqrapyard"
     qodeyard_path = worqspace / "qodeyard"
     tasq_d_path = worqspace / "tasq.d"
     initial_tasq_path = tasq_d_path / "cyqle1_tasq.md"
@@ -340,7 +341,7 @@ def initialize_worqspace(worqspace: Path, prefix: str, ui=None):
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
     if sqrapyard_path.exists() and any(sqrapyard_path.iterdir()):
-        msg = "Found content in sqrapyard, initializing qodeyard..."
+        msg = "Found content in sqrapyard, initializing qodeyard for this run..."
         if ui: ui.log_main(f"{qrane_prefix}{msg}")
         else: print(f"{qrane_prefix}{msg}")
 
