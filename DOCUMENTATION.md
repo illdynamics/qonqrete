@@ -110,14 +110,15 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
     *   Parses the `run` command and any additional flags.
     *   Verifies that `OPENAI_API_KEY` and `GOOGLE_API_KEY` are exported in the shell.
     *   Reads the `VERSION` file and exports it as `QONQ_VERSION`.
-    *   Constructs the `docker run` or `msb run` command, mounting volumes and passing API keys.
+    *   Creates a unique timestamped run directory (`qage_<timestamp>`) inside `worqspace/`.
+    *   **Sqrapyard Initialization**: It checks the persistent `worqspace/sqrapyard` directory. If it contains files, they are copied into the new `qage_<timestamp>/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
+    *   Copies configuration files into the new run directory.
+    *   Constructs the `docker run` or `msb run` command, mounting the `qage_<timestamp>` directory.
 3.  **`qrane.py` (Inside the Container)**:
-    *   The orchestrator starts.
-    *   **Sqrapyard Initialization**: It checks the `worqspace/sqrapyard` directory. If it contains files, they are copied to `worqspace/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
-    *   It determines UI mode (TUI/headless) and enters the main `cyQle` loop.
+    *   The orchestrator starts, determines UI mode (TUI/headless), and enters the main `cyQle` loop.
 4.  **The `cyQle` Loop**:
     *   The `Qrane` dynamically loads the agent pipeline from `pipeline_config.yaml`.
-    *   It executes each agent in sequence, passing the correct input/output paths.
+    *   It executes each agent in sequence.
 5.  **The `CheQpoint`**:
     *   `qrane.py` reads the final `reQap.md` of the cycle.
     *   It pauses and prompts the user for input (`[Q]ontinue`, `[T]weaQ`, `[X]Quit`), unless in `--auto` mode.
@@ -130,8 +131,9 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
 
 1.  **User Input**: User executes `./qonqrete.sh clean`.
 2.  **`qonqrete.sh`**:
-    *   Prompts the user for confirmation to delete `worqspace/qodeyard`, `worqspace/briq.d`, `worqspace/reqap.d`, `worqspace/exeq.d` and `worqspace/log.d`.
-    *   If confirmed, it deletes the directories.
+    *   Searches for `qage_*` directories in `worqspace/`.
+    *   Prompts the user for confirmation.
+    *   If confirmed, it executes `rm -rf worqspace/qage_*`.
 3.  **Result**: The `worqspace` is cleared of all previous run data.
 
 ---
