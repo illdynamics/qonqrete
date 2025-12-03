@@ -5,6 +5,8 @@ import sys
 import os
 import threading
 import time
+import select
+
 
 def run_ai_completion(provider: str, model: str, prompt: str, context_files: list[str] = None) -> str:
     if context_files is None: context_files = []
