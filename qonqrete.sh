@@ -169,7 +169,6 @@ case "$COMMAND" in
         ;;
 
     run)
-        clear
         if [[ -z "${OPENAI_API_KEY:-}" || -z "${GOOGLE_API_KEY:-}" ]]; then
             log_qrane "[ERROR] API Keys missing."; exit 1
         fi
