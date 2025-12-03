@@ -185,6 +185,7 @@ case "$COMMAND" in
 
         mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture}
 
+        log_qrane "Cheqking sQrapyard for initial qontent..."
         if [ -d "${WORKSPACE_DIR}/sqrapyard" ] && [ "$(ls -A "${WORKSPACE_DIR}/sqrapyard")" ]; then
             log_qrane "Seeding Qodeyard from Sqrapyard..."
             cp -r "${WORKSPACE_DIR}/sqrapyard/"* "$RUN_HOST_PATH/qodeyard/"
