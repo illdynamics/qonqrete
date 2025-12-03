@@ -41,7 +41,10 @@ log_qrane() {
 
 exec_qrane() {
     "$@" 2>&1 | while IFS= read -r line; do
-        echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        # Filter out empty or whitespace-only lines
+        if [[ -n "${line//[[:space:]]/}" ]]; then
+            echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        fi
     done
 }
 
