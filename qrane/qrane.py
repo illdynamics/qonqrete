@@ -195,7 +195,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
             return False
 
-def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manager: PathManager, ui=None) -> str:
+def handle_cheqpoint(cycle: int, is_autonomous: bool, cheq_path: Path, prefix: str, path_manager: PathManager, is_final_cheq: bool, ui=None) -> str:
     target_width = 11
     gatekeeper_name = "gateQeeper"
     p_padding = " " * (target_width - len(gatekeeper_name))
@@ -204,28 +204,30 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
     assessment = "Unknown"
     content = ""
     try:
-        if reqap_path.exists():
-            with open(reqap_path, 'r', encoding='utf-8') as f:
+        if cheq_path.exists():
+            with open(cheq_path, 'r', encoding='utf-8') as f:
                 content = f.read()
+            # Heuristic: Check for 'Assessment:' in the first line for reqaps
             if "Assessment:" in content.split('\n', 1)[0]:
                 assessment = content.split('\n', 1)[0].split(":", 1)[1].strip()
         else:
-            content = f"[ERROR] reQap not found at {reqap_path}"
+            content = f"[ERROR] Cheqpoint file not found at {cheq_path}"
     except: pass
 
-    if args.auto:
+    if is_autonomous:
         msg = "Autonomous Mode: Qontinuing..."
         if ui: ui.log_main(f"{gate_prefix}{msg}")
         else:
             print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
             print(content)
             print(f"{gate_prefix}{msg}")
-        promote_reqap(cycle, prefix, path_manager, ui=ui)
+        if is_final_cheq:
+            promote_reqap(cycle, prefix, path_manager, cheq_path, ui=ui)
         return 'QONTINUE'
 
     while True:
         if ui:
-            ui.log_main(f"--- reQap Cycle {cycle} ---")
+            ui.log_main(f"--- Cheqpoint Cycle {cycle} ---")
             ui.log_main(f"{gate_prefix}Result: {assessment}")
             prompt = f"{gate_prefix}[Q]ontinue, [T]weaQ (Edit), [X]Quit"
             choice = ui.get_input_blocking(prompt).lower()
@@ -242,32 +244,32 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
             print(choice)
 
         if choice == 'q':
-            msg = "gateQeeper's reQap imported..."
+            msg = "gateQeeper's cheqpoint imported..."
             if ui: ui.log_main(f"{gate_prefix}{msg}")
             else: print(f"{gate_prefix}{msg}")
-            promote_reqap(cycle, prefix, path_manager, ui=ui)
+            if is_final_cheq:
+                promote_reqap(cycle, prefix, path_manager, cheq_path, ui=ui)
             return 'QONTINUE'
         elif choice == 'x': return 'QUIT'
         elif choice == 't':
             editor = os.environ.get('EDITOR', 'vim')
-            if ui: ui.suspend_and_run([editor, str(reqap_path)])
-            else: subprocess.call([editor, str(reqap_path)])
+            if ui: ui.suspend_and_run([editor, str(cheq_path)])
+            else: subprocess.call([editor, str(cheq_path)])
             try:
-                with open(reqap_path, 'r', encoding='utf-8') as f: content = f.read()
+                with open(cheq_path, 'r', encoding='utf-8') as f: content = f.read()
             except: pass
             continue
 
-def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
-    src = path_manager.get_reqap_path(cycle)
+def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, src_path: Path, ui=None):
     dst = path_manager.get_tasq_path(cycle + 1)
 
     target_width = 11
     qrane_padding = " " * (target_width - 5)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
-    if src.exists():
+    if src_path.exists():
         os.makedirs(dst.parent, exist_ok=True)
-        with open(src, 'r') as f: content = f.read()
+        with open(src_path, 'r') as f: content = f.read()
 
         assessment_status = "Unknown"
         for line in content.split('\n'):
@@ -293,6 +295,7 @@ def getch():
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")
     parser.add_argument("-a", "--auto", action="store_true", help="Autonomous Mode")
+    parser.add_argument("-u", "--user", action="store_true", help="Force User-gated Mode")
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
     parser.add_argument("-V", "--version", action="version", version=get_version())
@@ -391,13 +394,17 @@ def run_orchestration(args, prefix, ui):
                 return tpl
 
             agents_to_run = []
+            has_explicit_cheqpoints = False
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
                 script = agent_def['script']
                 input_path = path_manager.root / resolve_template(agent_def['input'])
                 output_path = path_manager.root / resolve_template(agent_def['output'])
                 cmd = ["python3", str(AGENT_MODULE_DIR / script), str(input_path), str(output_path)]
-                agents_to_run.append((name, cmd))
+
+                cheq_enabled = agent_def.get('checkpoint', False)
+                if cheq_enabled: has_explicit_cheqpoints = True
+                agents_to_run.append({'name': name, 'cmd': cmd, 'cheq': cheq_enabled, 'output': output_path})
 
             AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA}
 
@@ -406,19 +413,41 @@ def run_orchestration(args, prefix, ui):
             else:
                 start_msg = f"Starting {Colors.C}cyQle {cycle}{Colors.R}..."
                 print(f"{qrane_prefix}{start_msg}\r")
-                if args.auto:
-                     inst_padding = " " * 1
-                     print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R}Ingesting cyqle{cycle}_tasq.md...\r")
 
-            for name, cmd in agents_to_run:
+            for i, agent_run in enumerate(agents_to_run):
+                name = agent_run['name']
+                cmd = agent_run['cmd']
                 log_file = path_manager.get_agent_log_path(cycle, name)
                 if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, log_file, env, ui):
-                    session_failed = True; break
+                    session_failed = True
+                    break
+
+                # If explicit cheqpoints are enabled, run them after the agent step
+                if has_explicit_cheqpoints and agent_run['cheq']:
+                    # Determine autonomy: --user forces manual, --auto forces auto, otherwise config dictates
+                    is_autonomous = (args.auto or not args.user) and agent_run['cheq']
+                    if args.user: is_autonomous = False
+
+                    # The final cheqpoint in the list promotes to the next cycle
+                    is_final = (i == len(agents_to_run) - 1)
+
+                    res = handle_cheqpoint(cycle, is_autonomous, agent_run['output'], prefix, path_manager, is_final, ui)
+                    if res == 'QUIT':
+                        session_failed = True
+                        user_aborted = True
+                        break
 
             if session_failed: break
 
-            res = handle_cheqpoint(cycle, args, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)
-            if res == 'QUIT': break
+            # If no explicit cheqpoints, run the default end-of-cycle cheqpoint
+            if not has_explicit_cheqpoints:
+                is_autonomous = args.auto and not args.user
+                reqap_path = path_manager.get_reqap_path(cycle)
+                res = handle_cheqpoint(cycle, is_autonomous, reqap_path, prefix, path_manager, True, ui)
+                if res == 'QUIT':
+                    user_aborted = True
+                    break
+            
             cycle += 1
 
     except KeyboardInterrupt:
