@@ -76,7 +76,7 @@ def run_pre_flight_checks(path_manager: PathManager, ui=None) -> bool:
             if provider:
                 required_providers.add(provider)
 
-    provider_map = { 'openai': 'sgpt', 'gemini': 'gemini' }
+    provider_map = { 'openai': 'sgpt', 'gemini': 'gemini', 'deepseek': 'deepseek' }
 
     all_found = True
     for provider in required_providers:

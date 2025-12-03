@@ -19,6 +19,10 @@ def run_ai_completion(provider: str, model: str, prompt: str, context_files: lis
     elif provider.lower() == 'gemini':
         cmd = ['gemini', 'prompt', '--model', model, '--approval-mode', 'yolo']
         return _run_streaming_process(cmd, input_text=full_prompt)
+    elif provider.lower() == 'deepseek':
+        # Assuming official 'deepseek' CLI - arguments may vary
+        cmd = ['deepseek', 'chat', '--model', model]
+        return _run_streaming_process(cmd, input_text=full_prompt)
     elif provider.lower() == 'claude':
         # Assuming 'claude' CLI from 'claude-code' package
         cmd = ['claude', '--model', model, '--no-interactive']

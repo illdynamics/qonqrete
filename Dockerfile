@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y nodejs
 
 # 2. Install Python packages for agents
 RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir pyyaml shell-gpt google-generativeai claude-code
+RUN pip3 install --no-cache-dir pyyaml shell-gpt google-generativeai claude-code deepseek-cli
 
 # 3. Install Gemini CLI using npm
 RUN npm install -g @google/gemini-cli
