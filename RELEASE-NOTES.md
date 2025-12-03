@@ -1,5 +1,10 @@
 # Release Notes
 
+## [v0.4.6-alpha] - 2025-12-02
+### Added
+- **Claude Provider**: Added support for `claude-code` via the `claude` CLI. Configure `provider: claude` in `config.yaml`.
+- **API Key Handling**: `qonqrete.sh` now supports `ANTHROPIC_API_KEY` and relaxes the strict startup check.
+
 ## [v0.4.5-alpha] - 2025-12-02
 ### Fixed
 - **ConstruQtor File Writing**: Fixed critical issue where `construQtor` would not write generated code to disk.
