@@ -41,16 +41,16 @@ def clean_filename_slug(text: str) -> str:
 
 def get_sensitivity_prompt(level: int) -> str:
     prompts = {
-        0: "**CRITICAL RULE (LEVEL 0 - ATOMIC):** 1. Create separate Briqs for EVERY SINGLE class, function, and interface. 2. NO grouping allowed. 3. Mandatory separate Briqs for all boilerplate (logs, configs, exceptions). Expect 50+ Briqs.",
-        1: "**LEVEL 1 - EXTREME DETAIL:** One file per Briq. Separate all classes. Group only trivial helpers. Expect 40-50 Briqs.",
-        2: "**LEVEL 2 - HIGH DETAIL:** Standard One-Class-Per-File. Separate configuration and interfaces. Expect 30-40 Briqs.",
-        3: "**LEVEL 3 - STANDARD GRANULARITY:** Major classes in separate files. Utils can be grouped by domain. Expect 20-30 Briqs.",
-        4: "**LEVEL 4 - LOGICAL GROUPING:** Group tightly coupled classes into modules. Expect 15-20 Briqs.",
-        5: "**LEVEL 5 - COMPONENT LEVEL:** One Briq per major component (e.g., AuthSystem, DatabaseLayer). Expect 10-15 Briqs.",
-        6: "**LEVEL 6 - FEATURE LEVEL:** One Briq per full feature implementation. Expect 8-12 Briqs.",
-        7: "**LEVEL 7 - PHASE LEVEL:** Group features into development phases (Setup, Core, UI). Expect 5-8 Briqs.",
-        8: "**LEVEL 8 - MILESTONE LEVEL:** Broad milestones. Very large tasks per Briq. Expect 3-5 Briqs.",
-        9: "**LEVEL 9 - MONOLITHIC:** The entire project in 1 or 2 massive Briqs."
+        0: "**CRITICAL RULE (LEVEL 0 - ATOMIC):** Deconstruct the request into the smallest possible logical code units. A simple web server should be 20-25 briqs. Separate every function, class, and utility. Be extremely granular.",
+        1: "**LEVEL 1 - EXTREME DETAIL:** Break down into individual files for each class. Minor utility functions can be grouped. A simple web server should be 15-20 briqs.",
+        2: "**LEVEL 2 - HIGH DETAIL:** Use a standard one-class-per-file approach. Group closely related utilities and configuration. A simple web server should be 10-15 briqs.",
+        3: "**LEVEL 3 - STANDARD GRANULARITY:** Group major classes into modules. Create separate briqs for distinct features. A simple web server should be 8-12 briqs.",
+        4: "**LEVEL 4 - LOGICAL GROUPING:** Group tightly coupled classes and functions into component-based briqs. A simple web server should be 6-10 briqs.",
+        5: "**LEVEL 5 - COMPONENT LEVEL:** Create one briq for each major architectural component (e.g., API, Authentication, Data Processing). A simple web server should be 5-7 briqs.",
+        6: "**LEVEL 6 - FEATURE LEVEL:** One briq per complete feature. A simple web server would be 3-5 briqs.",
+        7: "**LEVEL 7 - PHASE LEVEL:** Group related features into a single development phase (e.g., Backend Setup, Frontend UI). A simple web server would be 2-3 briqs.",
+        8: "**LEVEL 8 - MILESTONE LEVEL:** Broad milestones. A simple web server and its deployment might be a single briq.",
+        9: "**LEVEL 9 - MONOLITHIC:** The entire project in a single briq."
     }
     return prompts.get(level, prompts[5])
 
