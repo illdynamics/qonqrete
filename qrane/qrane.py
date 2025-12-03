@@ -137,9 +137,11 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             if any(x in clean for x in VISIBLE_KEYWORDS):
                                 ui.log_main(f"{agent_prefix} {clean}")
                             ui.log_agent(f"[{agent_display_name}] {clean}")
+                            os.makedirs(log_file.parent, exist_ok=True)
                             with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
                         elif r == proc.stderr:
                             ui.log_agent(f"[{agent_display_name} RAW] {clean}")
+                            os.makedirs(log_file.parent, exist_ok=True)
                             with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
                     if proc.poll() is not None and not reads: break
 
@@ -171,10 +173,12 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
+                    os.makedirs(log_file.parent, exist_ok=True)
                     with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
             stderr = proc.stderr.read()
             if stderr:
+                os.makedirs(log_file.parent, exist_ok=True)
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(stderr)
 
