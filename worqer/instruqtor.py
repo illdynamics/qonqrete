@@ -40,18 +40,19 @@ def clean_filename_slug(text: str) -> str:
     return slug if slug else "task"
 
 def get_sensitivity_prompt(level: int) -> str:
-    if level == 0:
-        return """
-**CRITICAL GRANULARITY RULE (LEVEL 0 - ATOMIC):**
-1. **ONE FILE PER BRIQ:** You are FORBIDDEN from creating multiple files in a single Briq.
-2. **EXPLODE MODULES:** If the report mentions "Network Module", you must create separate Briqs for: `network_core.py`, `network_utils.py`, `network_listener.py`, `network_config.py`.
-3. **MANDATORY BOILERPLATE:** You MUST include Briqs for `logger.py`, `exceptions.py`, `constants.py`, and `config_loader.py`.
-4. **SCALE:** For a large report, I expect 30-60 Briqs. Do not summarize.
-"""
-    elif level <= 5:
-        return "Create one Briq per logical component."
-    else:
-        return "Group related tasks into major phases."
+    prompts = {
+        0: "**CRITICAL RULE (LEVEL 0 - ATOMIC):** Deconstruct the project into the maximum number of granular tasks possible. Target **50 or more** briqs. Deconstruct every single class, function, helper, and configuration file into its own briq. No grouping is permitted.",
+        1: "**CRITICAL RULE (LEVEL 1 - VERY HIGH GRANULARITY):** Break down the project into **30-40** briqs. Each major class and module should be a separate briq.",
+        2: "**CRITICAL RULE (LEVEL 2 - HIGH GRANULARITY):** Break down the project into **20-30** briqs. Group only very tightly coupled utility functions.",
+        3: "**CRITICAL RULE (LEVEL 3 - STANDARD GRANULARITY):** Break down the project into **15-20** briqs. This is the standard for most projects.",
+        4: "**CRITICAL RULE (LEVEL 4 - BALANCED):** Break down the project into **10-15** briqs. Group related classes and modules into logical components.",
+        5: "**CRITICAL RULE (LEVEL 5 - COMPONENT-LEVEL):** Break down the project into **8-12** briqs. Each briq should represent a major component or feature.",
+        6: "**CRITICAL RULE (LEVEL 6 - FEATURE-LEVEL):** Break down the project into **5-8** briqs. Each briq should represent a complete feature.",
+        7: "**CRITICAL RULE (LEVEL 7 - BROAD):** Break down the project into **3-5** briqs. These are large, multi-feature briqs.",
+        8: "**CRITICAL RULE (LEVEL 8 - VERY BROAD):** Break down the project into **2-3** briqs. The entire backend could be one briq, and the frontend another.",
+        9: "**CRITICAL RULE (LEVEL 9 - MONOLITHIC):** Output the entire project as **exactly 1** briq. Do not split it under any circumstances.",
+    }
+    return prompts.get(level, prompts[3]) # Default to 3 if out of range
 
 def main() -> None:
     if len(sys.argv) != 3: sys.exit(1)
@@ -79,44 +80,39 @@ def main() -> None:
 
     sens_prompt = get_sensitivity_prompt(sensitivity)
 
-    planner_prompt = f"""
-You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MODE**.
-**OPERATIONAL MODE:** {mode.upper()}
+    # Gather Qodeyard Context
+    qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
+    context_files = []
+    if qodeyard_path.exists():
+        for root, _, files in os.walk(qodeyard_path):
+            for file in files:
+                context_files.append(os.path.join(root, file))
 
-**INPUT:** A Technical Specification.
-**YOUR GOAL:** Explode this document into a massive list of tiny, single-file development tasks.
+    planner_prompt = f"""
+You are the **Principal Software Architect** and your only purpose is to break down a technical specification into a precise number of tasks, called 'briqs'. You must follow the rules exactly as specified.
 
 {sens_prompt}
 
 **ARCHITECTURAL DIRECTIVES:**
-1.  **INFER THE STRUCTURE:** Deduce every necessary class, utility, and config file.
-2.  **IGNORE FLUFF:** Ignore "Executive Summaries". Focus purely on technical implementation.
-3.  **SETUP FIRST:** Briq 00-05 should be Project Structure, Gitignore, Requirements, Configs, Loggers.
-4.  **IMPLEMENTATION:** Create separate files for every feature mentioned.
+1.  **ADHERE TO THE BRIQ COUNT:** This is not a suggestion, it is a strict requirement. The number of briqs you generate must be within the range specified in the CRITICAL RULE.
+2.  **INFER THE STRUCTURE:** From the input document, deduce every necessary class, utility, configuration file, and boilerplate code.
+3.  **SETUP FIRST:** The first few briqs should always be the project setup: creating the root directory, gitignore, requirements files, configuration, and loggers.
+4.  **LOGICAL BREAKDOWN:** After the setup, break down the implementation logically based on the required briq count.
 
 **OUTPUT FORMAT (STRICT XML):**
-<briq title="000_Project_Root_Setup">
-- Create `requirements.txt`
-</briq>
-...
+You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` tags. The title should be short and descriptive. Do not include any other text or formatting outside of the `<briq>` tags.
 
 **INPUT DOCUMENT:**
 {task_content}
 
-**BEGIN ATOMIC BREAKDOWN:**
+**BEGIN ATOMIC BREAKDOWN (Adhering to the CRITICAL RULE):**
 """
 
     master_plan = ""
     try:
-        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
+        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt, context_files=context_files)
     except Exception as e:
-        # [FIX] If the AI failed but we captured output (partial stream), check if it's usable.
-        print(f"[WARN] AI Stream Signal: {e}", flush=True)
-        # In a real streaming scenario, we rely on what was captured if possible.
-        # But if lib_ai raised, we might rely on what it printed to stderr/logs.
-        # For Instruqtor, we can't easily recover the string if exception raised unless lib_ai returns partial.
-        # However, with the new lib_ai, this exception shouldn't happen for just a closed pipe.
-        sys.stderr.write(f"Instruqtor Failure: {e}\n")
+        sys.stderr.write(f"Instruqtor Failure: {e}\\n")
         sys.exit(1)
 
     briqs = parse_xml_briqs(master_plan)
