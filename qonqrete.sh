@@ -172,6 +172,21 @@ case "$COMMAND" in
         ;;
 
     run)
+        if [ ! -f "${WORKSPACE_DIR}/config.yaml" ]; then
+            log_qrane "QonQrete session ended: config.yaml not found."
+            exit 1
+        fi
+
+        if [ ! -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then
+            log_qrane "QonQrete session ended: pipeline_config.yaml not found."
+            exit 1
+        fi
+
+        if [ ! -f "${WORKSPACE_DIR}/tasq.md" ]; then
+            log_qrane "QonQrete session ended: tasq.md not found."
+            exit 1
+        fi
+
         if [[ -z "${OPENAI_API_KEY:-}" || -z "${GOOGLE_API_KEY:-}" ]]; then
             log_qrane "[ERROR] API Keys missing."; exit 1
         fi
