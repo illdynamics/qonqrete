@@ -34,10 +34,6 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
     within the qodeyard.
     """
     qodeyard.mkdir(parents=True, exist_ok=True)
-
-    pattern = re.compile(r"```(?:\w+:)?([\w\./-]+)?\s*\n(.*?)\n```", re.DOTALL)
-    matches = pattern.findall(result)
-    
     written_files = []
     
     language_keywords = {
@@ -45,30 +41,22 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         'sh', 'bash', 'go', 'rust', 'java', 'c', 'cpp', 'csharp', 'sql', 'ruby'
     }
 
+    # Pattern to find markdown code blocks with filenames, e.g., ```python:main.py
+    pattern = re.compile(r"```(?:\w+:)([\w\./-]+)?\s*\n(.*?)\n```", re.DOTALL)
+    matches = pattern.findall(result)
+
     if not matches:
-        if "```" in result:
-            fallback_pattern = re.compile(r"```\s*\n(.*?)\n```", re.DOTALL)
-            fallback_matches = fallback_pattern.findall(result)
-            if fallback_matches:
-                code_content = "\n".join(fallback_matches).strip()
-                if code_content:
-                    fallback_file = qodeyard / "construqted_code.txt"
-                    fallback_file.write_text(code_content, encoding='utf-8')
-                    written_files.append(str(fallback_file))
-                    validate_code(fallback_file)
         return written_files
 
     for filename, code_content in matches:
-        if filename and filename.lower() in language_keywords:
-            filename = None
-
-        if not filename:
-            fallback_file = qodeyard / "construqted_code.txt"
-            with open(fallback_file, 'a', encoding='utf-8') as f:
-                f.write(code_content.strip() + "\n\n")
-            if str(fallback_file) not in written_files:
-                written_files.append(str(fallback_file))
+        # If the AI provided a language keyword as a filename, treat it as no-filename
+        if not filename or (filename and filename.lower() in language_keywords):
+            print(f"     [WARN] Skipping code block with invalid filename: {filename}", flush=True)
             continue
+
+        # [FIX] Sanitize filename to prevent nested qodeyard directories
+        if filename.strip().startswith('qodeyard/'):
+            filename = filename.strip()[len('qodeyard/'):]
 
         qodeyard_abs = qodeyard.resolve()
         proposed_path = qodeyard_abs.joinpath(filename.strip())
@@ -129,9 +117,18 @@ def main():
 
         prompt = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan.
-**ABSOLUTE DIRECTIVE: ALL code output MUST be written to the `qodeyard/` directory. NO EXCEPTIONS. You are FORBIDDEN from writing to any other location. All file paths in your output MUST begin with `qodeyard/`. This is a STRICT requirement.**
-**RESTRICTION:** GENERATE CODE ONLY.
-**OUTPUT:** Return the code files inside markdown blocks.
+**ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
+**OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
+
+**EXAMPLE:**
+```python:qodeyard/main.py
+print("Hello, World!")
+```
+```markdown:qodeyard/README.md
+This is a test project.
+```
+
+**RESTRICTION:** GENERATE ONLY THE FILE BLOCKS AS SHOWN IN THE EXAMPLE. Do not add any other text, conversation, or explanations outside the markdown blocks.
 
 **MODE:** {mode.upper()}
 {mode_prompt}
