@@ -95,12 +95,11 @@ def main():
 
     briq_dir = Path(sys.argv[1])
     summary_file = Path(sys.argv[2])
-    worqspace_root = Path(os.getcwd())
-    qodeyard_path = worqspace_root / "qodeyard"
+    qodeyard_path = Path.cwd() # The CWD is now qodeyard
     qodeyard_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
+        with open('/qonq_conf/config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     agent_cfg = config.get('agents', {}).get('construqtor', {})
