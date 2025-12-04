@@ -16,83 +16,77 @@ def get_mode_persona(mode: str) -> str:
     if m == 'security': return "Code Style: Security. Validate all inputs, use secure defaults."
     return "Code Style: Functional."
 
+def validate_code(file_path: Path):
+    """
+    Validates the generated code for common errors, such as syntax errors.
+    """
+    if file_path.suffix == '.py':
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                compile(f.read(), str(file_path), 'exec')
+        except SyntaxError as e:
+            print(f"     [WARN] Syntax error in {file_path}: {e}", flush=True)
+
 def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
     """
     Parses the AI's markdown output, extracts all code blocks, and writes them
     to the specified qodeyard directory. It enforces that all paths are safely
     within the qodeyard.
     """
-    # Pattern to find markdown code blocks with optional filenames
-    # e.g., ```python:main.py or ```json
+    qodeyard.mkdir(parents=True, exist_ok=True)
+
     pattern = re.compile(r"```(?:\w+:)?([\w\./-]+)?\s*\n(.*?)\n```", re.DOTALL)
     matches = pattern.findall(result)
     
     written_files = []
     
-    # List of common language identifiers that might be mistaken for filenames
     language_keywords = {
         'python', 'javascript', 'typescript', 'html', 'css', 'json', 'yaml', 'yml',
         'sh', 'bash', 'go', 'rust', 'java', 'c', 'cpp', 'csharp', 'sql', 'ruby'
     }
 
     if not matches:
-        # If no filenames are specified, write the whole blob to a default file
         if "```" in result:
-             # Fallback for code blocks without language specifier
             fallback_pattern = re.compile(r"```\s*\n(.*?)\n```", re.DOTALL)
             fallback_matches = fallback_pattern.findall(result)
             if fallback_matches:
                 code_content = "\n".join(fallback_matches).strip()
                 if code_content:
                     fallback_file = qodeyard / "construqted_code.txt"
-                    fallback_file.parent.mkdir(parents=True, exist_ok=True)
-                    with open(fallback_file, 'w', encoding='utf-8') as f:
-                        f.write(code_content)
+                    fallback_file.write_text(code_content, encoding='utf-8')
                     written_files.append(str(fallback_file))
+                    validate_code(fallback_file)
         return written_files
 
     for filename, code_content in matches:
-        # If the AI provided a language keyword as a filename, treat it as no-filename
         if filename and filename.lower() in language_keywords:
             filename = None
 
         if not filename:
-            # Use a default filename for code blocks without a specified name
             fallback_file = qodeyard / "construqted_code.txt"
-            fallback_file.parent.mkdir(parents=True, exist_ok=True)
-            # Append if it exists, as there might be multiple unnamed blocks
             with open(fallback_file, 'a', encoding='utf-8') as f:
                 f.write(code_content.strip() + "\n\n")
             if str(fallback_file) not in written_files:
                 written_files.append(str(fallback_file))
             continue
 
-        # --- SECURITY CRITICAL ---
-        # 1. Forcibly remove any parent directory traversal attempts.
-        # 2. Normalize the path to resolve any '.' or residual '..' components.
-        # 3. Ensure the resolved path is inside the qodeyard.
-        safe_filename = filename.strip().replace("../", "").replace("..\\", "")
-        safe_filename = os.path.normpath(safe_filename)
+        qodeyard_abs = qodeyard.resolve()
+        proposed_path = qodeyard_abs.joinpath(filename.strip())
+        proposed_abs = proposed_path.resolve()
 
-        if os.path.isabs(safe_filename):
-            # If path is absolute after sanitization, strip leading chars to make it relative
-            safe_filename = re.sub(r'^[./\\]+', '', safe_filename)
-
-        full_path = qodeyard.joinpath(safe_filename).resolve()
-
-        # Final check: is the resolved path a child of the qodeyard?
-        if qodeyard.resolve() != full_path and qodeyard.resolve() not in full_path.parents:
-            print(f"     [WARN] Skipping unsafe file path after sanitization: {filename}", flush=True)
+        if not str(proposed_abs).startswith(str(qodeyard_abs)):
+            print(f"     [WARN] Skipping unsafe file path that resolves outside qodeyard: {filename}", flush=True)
             continue
         
-        # Create subdirectories if they don't exist
-        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path = proposed_abs
+        safe_filename = full_path.relative_to(qodeyard_abs)
         
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(code_content.strip())
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(code_content.strip(), encoding='utf-8')
         
         written_files.append(str(full_path))
         print(f"     - Wrote [Code] {safe_filename}", flush=True)
+        validate_code(full_path)
 
     return written_files
 
@@ -103,7 +97,6 @@ def main():
     summary_file = Path(sys.argv[2])
     worqspace_root = Path(os.getcwd())
     qodeyard_path = worqspace_root / "qodeyard"
-    qodeyard_path.mkdir(parents=True, exist_ok=True)
 
     try:
         with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
@@ -136,7 +129,7 @@ def main():
 
         prompt = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan.
-**CRITICAL RULE:** You MUST write all code files to the `qodeyard/` directory. You can create subdirectories inside `qodeyard/`, but you are forbidden from writing to any other location. All file paths in your output must start with `qodeyard/`.
+**ABSOLUTE DIRECTIVE: ALL code output MUST be written to the `qodeyard/` directory. NO EXCEPTIONS. You are FORBIDDEN from writing to any other location. All file paths in your output MUST begin with `qodeyard/`. This is a STRICT requirement.**
 **RESTRICTION:** GENERATE CODE ONLY.
 **OUTPUT:** Return the code files inside markdown blocks.
 
@@ -174,7 +167,7 @@ def main():
         status = "success" if success else "failure"
         if not success: failure_count += 1
 
-        all_briqs_summary.append({ 
+        all_briqs_summary.append({
             'briq_file': briq_file.name, 
             'status': status,
             'files_written': written_files 
