@@ -40,18 +40,19 @@ def clean_filename_slug(text: str) -> str:
     return slug if slug else "task"
 
 def get_sensitivity_prompt(level: int) -> str:
-    if level == 0:
-        return """
-**CRITICAL GRANULARITY RULE (LEVEL 0 - ATOMIC):**
-1. **ONE FILE PER BRIQ:** You are FORBIDDEN from creating multiple files in a single Briq.
-2. **EXPLODE MODULES:** If the report mentions "Network Module", you must create separate Briqs for: `network_core.py`, `network_utils.py`, `network_listener.py`, `network_config.py`.
-3. **MANDATORY BOILERPLATE:** You MUST include Briqs for `logger.py`, `exceptions.py`, `constants.py`, and `config_loader.py`.
-4. **SCALE:** For a large report, I expect 30-60 Briqs. Do not summarize.
-"""
-    elif level <= 5:
-        return "Create one Briq per logical component."
-    else:
-        return "Group related tasks into major phases."
+    prompts = {
+        0: "**CRITICAL RULE (LEVEL 0 - ATOMIC):** Deconstruct the request into the smallest possible logical code units. A simple web server should be 20-25 briqs. Separate every function, class, and utility. Be extremely granular.",
+        1: "**LEVEL 1 - EXTREME DETAIL:** Break down into individual files for each class. Minor utility functions can be grouped. A simple web server should be 15-20 briqs.",
+        2: "**LEVEL 2 - HIGH DETAIL:** Use a standard one-class-per-file approach. Group closely related utilities and configuration. A simple web server should be 10-15 briqs.",
+        3: "**LEVEL 3 - STANDARD GRANULARITY:** Group major classes into modules. Create separate briqs for distinct features. A simple web server should be 8-12 briqs.",
+        4: "**LEVEL 4 - LOGICAL GROUPING:** Group tightly coupled classes and functions into component-based briqs. A simple web server should be 6-10 briqs.",
+        5: "**LEVEL 5 - COMPONENT LEVEL:** Create one briq for each major architectural component (e.g., API, Authentication, Data Processing). A simple web server should be 5-7 briqs.",
+        6: "**LEVEL 6 - FEATURE LEVEL:** One briq per complete feature. A simple web server would be 3-5 briqs.",
+        7: "**LEVEL 7 - PHASE LEVEL:** Group related features into a single development phase (e.g., Backend Setup, Frontend UI). A simple web server would be 2-3 briqs.",
+        8: "**LEVEL 8 - MILESTONE LEVEL:** Broad milestones. A simple web server and its deployment might be a single briq.",
+        9: "**LEVEL 9 - MONOLITHIC:** The entire project in a single briq."
+    }
+    return prompts.get(level, prompts[5])
 
 def main() -> None:
     if len(sys.argv) != 3: sys.exit(1)
@@ -66,7 +67,7 @@ def main() -> None:
     os.makedirs(output_dir, exist_ok=True)
 
     try:
-        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
+        with open('/qonq_conf/config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     agent_cfg = config.get('agents', {}).get('instruqtor', {})
@@ -78,6 +79,14 @@ def main() -> None:
     except: sensitivity = 5
 
     sens_prompt = get_sensitivity_prompt(sensitivity)
+
+    # Gather Qodeyard Context
+    qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
+    context_files = []
+    if qodeyard_path.exists():
+        for root, _, files in os.walk(qodeyard_path):
+            for file in files:
+                context_files.append(os.path.join(root, file))
 
     planner_prompt = f"""
 You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MODE**.
@@ -108,7 +117,7 @@ You are the **Principal Software Architect** operating in **ATOMIC BREAKDOWN MOD
 
     master_plan = ""
     try:
-        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
+        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt, context_files=context_files)
     except Exception as e:
         # [FIX] If the AI failed but we captured output (partial stream), check if it's usable.
         print(f"[WARN] AI Stream Signal: {e}", flush=True)
