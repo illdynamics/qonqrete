@@ -38,5 +38,12 @@ class PathManager:
     def get_reqap_path(self, cycle: int) -> Path:
         return self.get_reqap_dir() / f"cyqle{cycle}_reqap.md"
 
-    def get_agent_log_path(self, cycle: int, agent_name: str) -> Path:
-        return self.struqture_dir / f"cyqle{cycle}_{agent_name}.log"
+    def get_qonsole_log_path(self, agent_name: str) -> Path:
+        log_dir = self.struqture_dir
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return log_dir / f"qonsole_{agent_name}.log"
+
+    def get_events_log_path(self, agent_name: str) -> Path:
+        log_dir = self.struqture_dir
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return log_dir / f"events_{agent_name}.log"

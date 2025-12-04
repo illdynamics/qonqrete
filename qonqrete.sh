@@ -41,7 +41,10 @@ log_qrane() {
 
 exec_qrane() {
     "$@" 2>&1 | while IFS= read -r line; do
-        echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        # Filter out empty or whitespace-only lines
+        if [[ -n "${line//[[:space:]]/}" ]]; then
+            echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
+        fi
     done
 }
 
@@ -176,48 +179,63 @@ case "$COMMAND" in
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
-        
-        # Create all necessary directories on the host
+
+        log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"
+
         mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture}
 
-        # Copy configs into the root of the run directory
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi
-        if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then 
-            cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
-        else 
-            echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+
+        # Sqrapyard seeding logic
+        SQrapyard_PATH="${WORKSPACE_DIR}/sqrapyard"
+        log_qrane "Cheqking for project seed in sqrapyard..."
+        if [ -d "$SQrapyard_PATH" ] && [ -n "$(ls -A "$SQrapyard_PATH")" ]; then
+            log_qrane "Found qontent in sqrapyard, seeding this run..."
+            cp -r "$SQrapyard_PATH"/* "$RUN_HOST_PATH/qodeyard/"
+            if [ -f "$SQrapyard_PATH/tasq.md" ]; then
+                log_qrane "Using tasq.md from sqrapyard for initial cyqle."
+                cp "$SQrapyard_PATH/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            elif [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
+                 log_qrane "No tasq.md in sqrapyard, using default tasq.md."
+                 cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            else
+                log_qrane "No tasq.md found, creating default tasq."
+                echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            fi
+        else
+            log_qrane "No qontent in sqrapyard, starting fresh tasq."
+            if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
+                cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            else
+                echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            fi
         fi
 
-        # If sQrapyard has content, copy it to the run-specific qodeyard
-        if [ -d "${WORKSPACE_DIR}/sqrapyard" ] && [ "$(ls -A "${WORKSPACE_DIR}/sqrapyard")" ]; then
-            cp -r "${WORKSPACE_DIR}/sqrapyard/"* "$RUN_HOST_PATH/qodeyard/"
-        fi
-        
-        # --- Define Mounts & Container Command ---
+        log_qrane "Handing off to Qrane in 3 seconds..."
+        sleep 3
+
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
-        
-        # New Mount Structure:
-        # - /qonq_conf (read-only) for configs, tasqs, etc.
-        # - /qonq/qodeyard (read-write) for the agent's work
-        RUN_MOUNTS="-v ${RUN_HOST_PATH}:/qonq_conf:ro -v ${RUN_HOST_PATH}/qodeyard:/qonq/qodeyard"
+        RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
+        # [NEW] Container-side Splash Logic
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
              SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
         fi
 
+        # [FIX] Construct the internal command string safely
         CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
 
-        # Note: CONTAINER_WORKSPACE is now just the root, /qonq. Scripts will construct paths from there.
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
             $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
-                -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" -e GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" -e GEMINI_API_KEY="${GOOGLE_API_KEY:-}" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
+            # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
             docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
-                -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" -e GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" -e GEMINI_API_KEY="${GOOGLE_API_KEY:-}" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
         ;;

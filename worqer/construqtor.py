@@ -16,77 +16,65 @@ def get_mode_persona(mode: str) -> str:
     if m == 'security': return "Code Style: Security. Validate all inputs, use secure defaults."
     return "Code Style: Functional."
 
-def extract_and_write_files(response: str, output_base: Path) -> list[str]:
+def validate_code(file_path: Path):
     """
-    Parses the AI response for code blocks and writes them to files.
-    Expected format:
-    ```ext
-    # filename: path/to/file.ext
-    code
-    ```
+    Validates the generated code for common errors, such as syntax errors.
     """
+    if file_path.suffix == '.py':
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                compile(f.read(), str(file_path), 'exec')
+        except SyntaxError as e:
+            print(f"     [WARN] Syntax error in {file_path}: {e}", flush=True)
+
+def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
+    """
+    Parses the AI's markdown output, extracts all code blocks, and writes them
+    to the specified qodeyard directory. It enforces that all paths are safely
+    within the qodeyard.
+    """
+    qodeyard.mkdir(parents=True, exist_ok=True)
     written_files = []
-    # Regex to capture code blocks. 
-    # Group 1: Optional language (ignored)
-    # Group 2: Content including the potential filename comment
-    code_block_pattern = re.compile(r'```(\w+)?\n(.*?)```', re.DOTALL)
     
-    matches = code_block_pattern.findall(response)
-    
-    for _, content in matches:
-        lines = content.strip().split('\n')
-        if not lines: continue
-        
-        # Check first line for filename
-        first_line = lines[0].strip()
-        filename = None
-        
-        # Support formats: "# filename: path" or "# path" or "// path" etc
-        if re.match(r'^(\#|//|<!--)\s*(filename:)?\s*[\w\-\./\\]+', first_line, re.IGNORECASE):
-            parts = first_line.split()
-            # Try to find the part that looks like a filename
-            for part in parts:
-                if '.' in part and '/' in part: # rudimentary check for path
-                    filename = part
-                    break
-                if '.' in part and len(parts) <= 3: # simple filename in short comment
-                    filename = part
-                    break
-            
-            # If we found a potential filename, strip comment chars
-            if filename:
-                filename = re.sub(r'^[\#//<!--]+', '', filename).strip()
-                # Clean up "filename:" prefix if it got stuck
-                filename = re.sub(r'^filename:', '', filename, flags=re.IGNORECASE).strip()
-            
-            # Remove the filename line from content
-            file_content = "\n".join(lines[1:])
-        else:
-            # Fallback: No filename found in block. 
-            # In a real system, we might skip or use a default.
-            # For now, let's look for a separate pattern or skip.
-            # We will try to match "File: xxx" before the block if we were fancier.
-            # But let's stick to the prompt enforcing the pattern.
+    language_keywords = {
+        'python', 'javascript', 'typescript', 'html', 'css', 'json', 'yaml', 'yml',
+        'sh', 'bash', 'go', 'rust', 'java', 'c', 'cpp', 'csharp', 'sql', 'ruby'
+    }
+
+    # Pattern to find markdown code blocks with filenames, e.g., ```python:main.py
+    pattern = re.compile(r"```(?:\w+:)([\w\./-]+)?\s*\n(.*?)\n```", re.DOTALL)
+    matches = pattern.findall(result)
+
+    if not matches:
+        return written_files
+
+    for filename, code_content in matches:
+        # If the AI provided a language keyword as a filename, treat it as no-filename
+        if not filename or (filename and filename.lower() in language_keywords):
+            print(f"     [WARN] Skipping code block with invalid filename: {filename}", flush=True)
             continue
 
-        if filename:
-            # Security: Prevent escaping qodeyard
-            clean_name = os.path.basename(filename) 
-            # Allow subdirectories relative to qodeyard
-            # But resolving absolute paths or .. is dangerous. 
-            # Let's trust the AI but sandboxed to output_base.
-            try:
-                target_path = (output_base / filename).resolve()
-                if not str(target_path).startswith(str(output_base.resolve())):
-                    print(f"[WARN] Skipped unsafe path: {filename}", flush=True)
-                    continue
-                    
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(target_path, 'w', encoding='utf-8') as f:
-                    f.write(file_content)
-                written_files.append(str(target_path.relative_to(output_base)))
-            except Exception as e:
-                print(f"[ERROR] Failed to write {filename}: {e}", flush=True)
+        # [FIX] Sanitize filename to prevent nested qodeyard directories
+        if filename.strip().startswith('qodeyard/'):
+            filename = filename.strip()[len('qodeyard/'):]
+
+        qodeyard_abs = qodeyard.resolve()
+        proposed_path = qodeyard_abs.joinpath(filename.strip())
+        proposed_abs = proposed_path.resolve()
+
+        if not str(proposed_abs).startswith(str(qodeyard_abs)):
+            print(f"     [WARN] Skipping unsafe file path that resolves outside qodeyard: {filename}", flush=True)
+            continue
+        
+        full_path = proposed_abs
+        safe_filename = full_path.relative_to(qodeyard_abs)
+        
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(code_content.strip(), encoding='utf-8')
+        
+        written_files.append(str(full_path))
+        print(f"     - Wrote [Code] {safe_filename}", flush=True)
+        validate_code(full_path)
 
     return written_files
 
@@ -95,11 +83,11 @@ def main():
 
     briq_dir = Path(sys.argv[1])
     summary_file = Path(sys.argv[2])
-    qodeyard_path = Path.cwd() # The CWD is now qodeyard
-    qodeyard_path.mkdir(parents=True, exist_ok=True)
+    worqspace_root = Path(os.getcwd())
+    qodeyard_path = worqspace_root / "qodeyard"
 
     try:
-        with open('/qonq_conf/config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
+        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     agent_cfg = config.get('agents', {}).get('construqtor', {})
@@ -134,15 +122,18 @@ def main():
 
         prompt = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan.
-**RESTRICTION:** GENERATE CODE ONLY.
-**OUTPUT FORMAT:**
-You MUST wrap code in markdown blocks.
-The FIRST LINE of the code block MUST be a comment specifying the filename.
-Example:
-```python
-# filename: src/utils.py
-def my_func(): ...
+**ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
+**OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
+
+**EXAMPLE:**
+```python:qodeyard/main.py
+print("Hello, World!")
 ```
+```markdown:qodeyard/README.md
+This is a test project.
+```
+
+**RESTRICTION:** GENERATE ONLY THE FILE BLOCKS AS SHOWN IN THE EXAMPLE. Do not add any other text, conversation, or explanations outside the markdown blocks.
 
 **MODE:** {mode.upper()}
 {mode_prompt}
@@ -173,10 +164,22 @@ def my_func(): ...
             # If partial result handling is needed, it goes here.
             success = False
 
+        written_files = []
+        if success:
+            written_files = _write_ai_output_to_qodeyard(result, qodeyard_path)
+            # If the parser found no files, it could be a raw code block.
+            # Re-evaluate success based on whether files were actually written.
+            if not written_files:
+                success = False
+
         status = "success" if success else "failure"
         if not success: failure_count += 1
 
-        all_briqs_summary.append({ 'briq_file': briq_file.name, 'status': status })
+        all_briqs_summary.append({
+            'briq_file': briq_file.name, 
+            'status': status,
+            'files_written': written_files 
+        })
         print(f"-- Executed Briq: {briq_file.name} (Status: {status}) --", flush=True)
 
     final_status = "Success" if failure_count == 0 else ("Partial" if failure_count < len(briq_files) else "Failure")
@@ -185,6 +188,9 @@ def my_func(): ...
     summary_content += f"**Processed:** {len(briq_files)} | **Failures:** {failure_count}\n\n"
     for item in all_briqs_summary:
         summary_content += f"- **{item['briq_file']}**: {item['status']}\n"
+        if item['files_written']:
+            for f in item['files_written']:
+                summary_content += f"  - `{f}`\n"
 
     os.makedirs(summary_file.parent, exist_ok=True)
     with open(summary_file, 'w', encoding='utf-8') as f: f.write(summary_content)
