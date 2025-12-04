@@ -169,7 +169,7 @@ case "$COMMAND" in
         ;;
 
     run)
-        if [[ -z "${OPENAI_API_KEY:-}" && -z "${GOOGLE_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        if [[ -z "${OPENAI_API_KEY:-}" && -z "${GOOGLE_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" && -z "${DEEPSEEK_API_KEY:-}" ]]; then
              log_qrane "[WARN] No API keys detected. Agents may fail."; 
         fi
 
@@ -205,12 +205,12 @@ case "$COMMAND" in
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
             $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
-                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" -e DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
             # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
             docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
-                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" -e DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
         ;;
