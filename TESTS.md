@@ -7,29 +7,29 @@ This document outlines a comprehensive suite of functional tests designed to val
 ### 1.1. `qonqrete.sh` CLI
 
 -   [ ] **`init` Command**:
-    -   [ ] Run `./qonqrete.sh init`. Verify Docker builds the `qonqrete-qage` image successfully.
+    -   [x] Run `./qonqrete.sh init`. Verify Docker builds the `qonqrete-qage` image successfully.
     -   [ ] Run `./qonqrete.sh init --msb`. Verify Microsandbox builds the `qonqrete-qage` image successfully.
     -   [ ] Run `./qonqrete.sh init` without Docker or `msb` installed. Verify it exits with a clear error message.
--   [ ] **`run` Command**:
-    -   [ ] Run `./qonqrete.sh run` without `OPENAI_API_KEY` and `GOOGLE_API_KEY` environment variables set. Verify it fails with a "API Keys missing" error.
-    -   [ ] Run `./qonqrete.sh run` with API keys set. Verify a `qage_<timestamp>` directory is created in `worqspace/`.
-    -   [ ] Verify the new `qage` directory contains copies of `config.yaml`, `pipeline_config.yaml`, and `tasq.md`.
-    -   [ ] Delete `worqspace/tasq.md` and run `./qonqrete.sh run`. Verify a default `tasq.md` is created in the `qage` directory.
--   [ ] **`clean` Command**:
-    -   [ ] With `qage_*` directories present, run `./qonqrete.sh clean`. When prompted with "[y/N]", enter "n". Verify directories are not deleted.
-    -   [ ] Run `./qonqrete.sh clean` again. When prompted, enter "y". Verify all `qage_*` directories are deleted.
-    -   [ ] Run `./qonqrete.sh clean` when no `qage_*` directories exist. Verify it prints a "No 'qage_*' directories found" message and exits.
+-   [x] **`run` Command**:
+    -   [x] Run `./qonqrete.sh run` without `OPENAI_API_KEY` and `GOOGLE_API_KEY` environment variables set. Verify it fails with a "API Keys missing" error.
+    -   [x] Run `./qonqrete.sh run` with API keys set. Verify a `qage_<timestamp>` directory is created in `worqspace/`.
+    -   [x] Verify the new `qage` directory contains copies of `config.yaml`, `pipeline_config.yaml`, and `cyqle1_tasq.md` (a copy of the original `tasq.md`).
+    -   [x] Delete `worqspace/tasq.md` and run `./qonqrete.sh run`. Verify it quits and tells us it's missing the `tasq.md` file.
+-   [x] **`clean` Command**:
+    -   [x] With `qage_*` directories present, run `./qonqrete.sh clean`. When prompted with "[y/N]", enter "n". Verify directories are not deleted.
+    -   [x] Run `./qonqrete.sh clean` again. When prompted, enter "y". Verify all `qage_*` directories are deleted.
+    -   [x] Run `./qonqrete.sh clean` when no `qage_*` directories exist. Verify it prints a "No 'qage_*' directories found" message and exits.
 -   [ ] **Command-Line Flags**:
     -   [ ] Test each flag individually: `./qonqrete.sh run --auto`, `--tui`, `--mode security`, `--briq-sensitivity 7`, `--msb`, `--docker`, `--wonqrete`. Verify the corresponding arguments are passed to `qrane.py`.
     -   [ ] Test short versions of flags: `-a`, `-t`, `-m security`, `-b 7`, `-s`, `-d`, `-w`.
     -   [ ] Test a combination of flags: `./qonqrete.sh run --auto --tui --mode enterprise -b 3`.
     -   [ ] Test overriding `pipeline_config.yaml` (`microsandbox: true`) with `./qonqrete.sh run --docker`.
--   [ ] **Help and Version**:
-    -   [ ] Run `./qonqrete.sh --help` and `-h`. Verify the help message is displayed.
-    -   [ ] Run `./qonqrete.sh --version` and `-V`. Verify the version from the `VERSION` file is displayed.
+-   [x] **Help and Version**:
+    -   [x] Run `./qonqrete.sh --help` and `-h`. Verify the help message is displayed.
+    -   [x] Run `./qonqrete.sh --version` and `-V`. Verify the version from the `VERSION` file is displayed.
 -   [ ] **Pre-flight Checks**:
-    -   [ ] Temporarily rename `config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error. (Note: Pre-flight checks are currently optional in `qrane.py`).
-    -   [ ] In a container without `sgpt` installed, run the system. Verify it exits with a "CLI tool... not found" error.
+    -   [x] Temporarily rename `config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error. (Note: Pre-flight checks are currently optional in `qrane.py`).
+    -   [x] Temporarily rename `pipeline_config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error. (Note: Pre-flight checks are currently optional in `qrane.py`).
 
 ## 2. Core Orchestration (`Qrane`) Tests
 
