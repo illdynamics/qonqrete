@@ -418,7 +418,7 @@ def run_orchestration(args, prefix, ui):
                 output_path = path_manager.root / resolve_template(agent_def['output'])
                 cmd = ["python3", str(AGENT_MODULE_DIR / script), str(input_path), str(output_path)]
 
-                cheq_enabled = agent_def.get('checkpoint', False)
+                cheq_enabled = agent_def.get('cheqpoint', False)
                 if cheq_enabled: has_explicit_cheqpoints = True
                 agents_to_run.append({'name': name, 'cmd': cmd, 'cheq': cheq_enabled, 'output': output_path})
 
@@ -440,9 +440,12 @@ def run_orchestration(args, prefix, ui):
 
                 # If explicit cheqpoints are enabled, run them after the agent step
                 if has_explicit_cheqpoints and agent_run['cheq']:
-                    # Determine autonomy: --user forces manual, --auto forces auto, otherwise config dictates
-                    is_autonomous = (args.auto or not args.user) and agent_run['cheq']
-                    if args.user: is_autonomous = False
+                    # Determine autonomy: --user forces manual, --auto forces auto. If neither, use config.
+                    is_autonomous = agent_run['cheq']
+                    if args.auto:
+                        is_autonomous = True
+                    elif args.user:
+                        is_autonomous = False
 
                     # The final cheqpoint in the list promotes to the next cycle
                     is_final = (i == len(agents_to_run) - 1)
@@ -457,7 +460,9 @@ def run_orchestration(args, prefix, ui):
 
             # If no explicit cheqpoints, run the default end-of-cycle cheqpoint
             if not has_explicit_cheqpoints:
-                is_autonomous = args.auto and not args.user
+                is_autonomous = args.auto
+                if args.user:
+                    is_autonomous = False
                 reqap_path = path_manager.get_reqap_path(cycle)
                 res = handle_cheqpoint(cycle, is_autonomous, reqap_path, prefix, path_manager, True, ui)
                 if res == 'QUIT':

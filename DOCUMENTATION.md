@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.3.0-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -179,6 +179,7 @@ The behavior of the QonQrete system can be configured in the `worqspace/` direct
 -   **`pipeline_config.yaml`**:
     -   **`microsandbox`**: Set to `true` to make Microsandbox (`msb`) the default container runtime.
     -   **`agents`**: Defines the sequence of agents in the pipeline.
+        -   **`cheqpoint`**: (Optional) A boolean flag (`true`/`false`). If set to `true`, a user-gated `CheQpoint` will be triggered immediately after this agent completes its run. This setting can be overridden by the `--auto` (forces autonomous mode) and `--user` (forces user-gated mode) command-line flags.
 
 ## Getting Started
 

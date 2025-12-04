@@ -1,5 +1,12 @@
 # Release Notes
 
+## [v0.4.6-alpha] - 2025-12-04
+### Added
+- **Configurable Cheqpoints**: Added a `cheqpoint: true` flag in `pipeline_config.yaml` to make human-in-the-loop gates optional per-step.
+### Changed
+- **Cheqpoint Overrides**: The `--auto` and `--user` CLI flags now override the `cheqpoint` configuration, allowing for forced autonomous or user-gated modes.
+- **Terminology**: Renamed all instances of "checkpoint" to "cheqpoint" to align with project terminology.
+
 ## [v0.4.5-alpha] - 2025-12-03
 ### Changed
 - **Briq Sensitivity**: Tuned the briq sensitivity prompts in the `instruqtor` to be approximately 50% less granular, providing more cohesive and manageable task breakdowns.

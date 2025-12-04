@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.4.1-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -41,6 +41,8 @@ Advanced options can be set in `worqspace/`.
     -   `briq_sensitivity`: Set the default task breakdown granularity (0=atomic, 9=monolithic).
 -   **`pipeline_config.yaml`**:
     -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime.
+    -   `agents`: Defines the sequence of agents in the pipeline.
+        -   **`cheqpoint`**: (Optional) A boolean flag (`true`/`false`). If set to `true`, a user-gated `CheQpoint` will be triggered. This can be overridden by the `--auto` and `--user` flags.
 
 ## 5. Cleaning the Workspace
 To remove all `qage_<timestamp>` run directories, use the `clean` command.
