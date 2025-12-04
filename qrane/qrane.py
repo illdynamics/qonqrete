@@ -447,16 +447,34 @@ def run_orchestration(args, prefix, ui):
                 start_msg = f"Starting {Colors.C}cyQle {cycle}{Colors.R}..."
                 print(f"{qrane_prefix}{start_msg}\r")
 
-            for name, cmd in agents_to_run:
+            last_agent_in_cycle = agents_to_run[-1]['name'] if agents_to_run else None
+            for agent_info in agents_to_run:
+                name = agent_info['name']
+                cmd = agent_info['cmd']
                 qonsole_log_path = path_manager.get_qonsole_log_path(name)
                 events_log_path = path_manager.get_events_log_path(name)
-                if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, qonsole_log_path, events_log_path, env, ui):
-                    session_failed = True; break
 
-            if session_failed: break
+                if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, qonsole_log_path, events_log_path, env, ui):
+                    session_failed = True
+                    break
+
+                if agent_info.get('cheq', False):
+                    is_autonomous = args.auto
+                    if args.user:
+                        is_autonomous = False
+
+                    is_final_cheq = (name == last_agent_in_cycle)
+                    cheq_path = agent_info['output']
+
+                    res = handle_cheqpoint(cycle, is_autonomous, cheq_path, prefix, path_manager, is_final_cheq, ui)
+                    if res == 'QUIT':
+                        user_aborted = True
+                        break
+
+            if session_failed or user_aborted: break
 
             # If no explicit cheqpoints, run the default end-of-cycle cheqpoint
-            if not has_explicit_cheqpoints:
+            if not has_explicit_cheqpoints and not user_aborted:
                 is_autonomous = args.auto
                 if args.user:
                     is_autonomous = False

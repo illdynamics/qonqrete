@@ -16,7 +16,7 @@ agents:
     script: inspeqtor.py
     input: exeq.d/cyqle{N}_summary.md
     output: reqap.d/cyqle{N}_reqap.md
-    cheqpoint: true
+    cheqpoint: false
     description: "Reviews the markdown summary and qodeyard artifacts, producing a markdown reqap."
 
 options:
