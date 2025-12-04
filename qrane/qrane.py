@@ -52,16 +52,15 @@ def get_worqspace() -> Path:
     return Path(env_path) if env_path else PROJECT_ROOT / "worqspace"
 
 def run_pre_flight_checks(path_manager: PathManager, ui=None) -> bool:
-    conf_dir = Path("/qonq_conf")
     try:
-        if not (conf_dir / 'pipeline_config.yaml').exists():
-            raise FileNotFoundError(f"pipeline_config.yaml missing at {conf_dir}")
-        if not (conf_dir / 'config.yaml').exists():
-            raise FileNotFoundError(f"config.yaml missing at {conf_dir}")
+        if not (path_manager.root / 'pipeline_config.yaml').exists():
+            raise FileNotFoundError(f"pipeline_config.yaml missing at {path_manager.root}")
+        if not (path_manager.root / 'config.yaml').exists():
+            raise FileNotFoundError(f"config.yaml missing at {path_manager.root}")
 
-        with open(conf_dir / 'pipeline_config.yaml', 'r') as f:
+        with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
             pipeline_config = yaml.safe_load(f) or {}
-        with open(conf_dir / 'config.yaml', 'r') as f:
+        with open(path_manager.root / 'config.yaml', 'r') as f:
             agent_config = yaml.safe_load(f) or {}
     except Exception as e:
         msg = f"CRITICAL: Configuration error: {e}"
@@ -102,7 +101,7 @@ def check_tui_keys(ui, proc=None):
         if proc: proc.kill()
         raise KillSignal
 
-def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logger: logging.Logger, log_file: Path, env: dict, ui=None) -> bool:
+def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logger: logging.Logger, qonsole_log_path: Path, events_log_path: Path, env: dict, ui=None) -> bool:
     agent_display_name = agent_name.replace('q', 'Q')
     target_width = 11
     padding = " " * (target_width - len(agent_display_name))
@@ -111,19 +110,22 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
     agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
 
-    # [FIX] Expanded keyword list ensures logs from InstruQtor and ConstruQtor are visible
     VISIBLE_KEYWORDS = [
         "Handing off", "Processing", "Executed", "Wrote", "reQap",
         "Checking", "Generating", "Ingesting", "Architect", "Plan",
         "Found", "Summary"
     ]
 
-    agent_cwd = get_worqspace() / "qodeyard"
+    event_start_msg = f"Initiating {agent_display_name}..."
+    with open(events_log_path, 'a', encoding='utf-8') as f:
+        f.write(f"[{time.strftime('%H:%M:%S')}] {event_start_msg}\n")
 
     if ui:
-        ui.log_main(f"{qrane_prefix}Initiating {agent_display_name}...")
+        ui.log_main(f"{qrane_prefix}{event_start_msg}")
         try:
-            with subprocess.Popen(command, cwd=str(agent_cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
+            with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc, \
+                 open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
+                
                 reads = [proc.stdout, proc.stderr]
                 while True:
                     check_tui_keys(ui, proc)
@@ -131,67 +133,87 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                     for r in readable:
                         line = r.readline()
                         if not line: reads.remove(r); continue
+                        
+                        qonsole_log.write(line)
+                        
                         clean = line.strip()
                         if r == proc.stdout:
-                            # [FIX] Use visibility list
                             if any(x in clean for x in VISIBLE_KEYWORDS):
                                 ui.log_main(f"{agent_prefix} {clean}")
                             ui.log_agent(f"[{agent_display_name}] {clean}")
-                            os.makedirs(log_file.parent, exist_ok=True)
-                            with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
                         elif r == proc.stderr:
                             ui.log_agent(f"[{agent_display_name} RAW] {clean}")
-                            os.makedirs(log_file.parent, exist_ok=True)
-                            with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
+                            
                     if proc.poll() is not None and not reads: break
 
                 if proc.returncode != 0:
+                    event_fail_msg = f"Agent {agent_display_name} FAILED (Code {proc.returncode})"
+                    with open(events_log_path, 'a', encoding='utf-8') as f:
+                        f.write(f"[{time.strftime('%H:%M:%S')}] {event_fail_msg}\n")
                     ui.log_main(f"{agent_prefix}FAILED (Code {proc.returncode})")
                     return False
+                
+                event_ok_msg = f"Agent {agent_display_name} finished successfully."
+                with open(events_log_path, 'a', encoding='utf-8') as f:
+                    f.write(f"[{time.strftime('%H:%M:%S')}] {event_ok_msg}\n")
                 return True
         except KillSignal: raise
         except Exception as e:
             ui.log_main(f"CRITICAL EXCEPTION: {e}")
             return False
     else:
-        print(f"{qrane_prefix}Initiating {agent_display_name}...")
+        print(f"{qrane_prefix}{event_start_msg}")
         spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
         spinner.start()
         try:
-            proc = subprocess.Popen(command, cwd=str(agent_cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True)
-            reads = [proc.stdout, proc.stderr]
-            while True:
-                readable, _, _ = select.select(reads, [], [], 0.05)
-                if not readable and proc.poll() is not None: break
-                for r in readable:
-                    line = r.readline()
-                    if not line: reads.remove(r); continue
-                    clean = line.strip()
-                    if r == proc.stdout:
-                        # [FIX] Use visibility list
-                        if any(x in clean for x in VISIBLE_KEYWORDS):
+            stderr_capture = []
+            with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True) as proc, \
+                 open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
+                
+                reads = [proc.stdout, proc.stderr]
+                while True:
+                    readable, _, _ = select.select(reads, [], [], 0.05)
+                    if not readable and proc.poll() is not None: break
+                    for r in readable:
+                        line = r.readline()
+                        if not line: 
+                            reads.remove(r)
+                            continue
+                        
+                        qonsole_log.write(line)
+                        
+                        if r == proc.stderr:
+                            stderr_capture.append(line)
+                        
+                        clean = line.strip()
+                        if r == proc.stdout and any(x in clean for x in VISIBLE_KEYWORDS):
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
-                    os.makedirs(log_file.parent, exist_ok=True)
-                    with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
-
-            stderr = proc.stderr.read()
-            if stderr:
-                os.makedirs(log_file.parent, exist_ok=True)
-                with open(log_file, 'a', encoding='utf-8') as f:
-                    f.write(stderr)
 
             spinner.stop()
+
             if proc.returncode != 0:
+                event_fail_msg = f"Agent {agent_display_name} FAILED (Code {proc.returncode})"
+                with open(events_log_path, 'a', encoding='utf-8') as f:
+                    f.write(f"[{time.strftime('%H:%M:%S')}] {event_fail_msg}\n")
+                
                 print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
-                if stderr:
+                
+                stderr_output = "".join(stderr_capture)
+                if stderr_output:
                     print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}")
-                    for line in stderr.strip().split('\n'):
+                    for line in stderr_output.strip().split('\n'):
                         print(f"{Colors.RED}{line}{Colors.R}")
                 return False
+            
+            event_ok_msg = f"Agent {agent_display_name} finished successfully."
+            with open(events_log_path, 'a', encoding='utf-8') as f:
+                f.write(f"[{time.strftime('%H:%M:%S')}] {event_ok_msg}\n")
             return True
-        except KillSignal: spinner.stop(); raise
+        except KillSignal: 
+            spinner.stop()
+            raise
         except KeyboardInterrupt:
             spinner.stop()
             try: proc.kill()
@@ -200,6 +222,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         except Exception as e:
             spinner.stop()
             print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
+            traceback.print_exc() # Print traceback for debugging
             return False
 
 def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manager: PathManager, ui=None) -> str:
@@ -214,11 +237,14 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
         if reqap_path.exists():
             with open(reqap_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            if "Assessment:" in content.split('\n', 1)[0]:
-                assessment = content.split('\n', 1)[0].split(":", 1)[1].strip()
+            # [FIX] Use regex to find the Assessment line regardless of leading chars/lists
+            match = re.search(r"Assessment:\s*(.*)", content, re.IGNORECASE)
+            if match:
+                assessment = match.group(1).strip()
         else:
             content = f"[ERROR] reQap not found at {reqap_path}"
-    except: pass
+    except Exception as e:
+        content = f"[ERROR] Could not read reQap: {e}"
 
     if args.auto:
         msg = "Autonomous Mode: Qontinuing..."
@@ -278,8 +304,9 @@ def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
 
         assessment_status = "Unknown"
         for line in content.split('\n'):
-            if "Assessment:" in line:
-                assessment_status = line.split(":", 1)[1].strip()
+            clean_line = line.strip()
+            if clean_line.startswith("Assessment:"):
+                assessment_status = clean_line.split(":", 1)[1].strip()
                 break
 
         header = f"# Cycle {cycle+1} Directive\n\n**PREVIOUS CYCLE STATUS:** {assessment_status}\n\n**CRITICAL INSTRUCTION:**\n1. Analyze Assessment.\n2. Fix failures if Partial/Failure.\n3. Implement suggestions if Success.\n\n---\n\n"
@@ -346,9 +373,8 @@ def run_orchestration(args, prefix, ui):
     #     if not ui: print("Pre-flight checks failed.")
     #     return
 
-    conf_dir = Path("/qonq_conf")
     try:
-        with open(conf_dir / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
+        with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
@@ -371,14 +397,6 @@ def run_orchestration(args, prefix, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
-    # [FIX] Ensure the initial tasq.md for cycle 1 is in the correct location
-    initial_tasq = path_manager.get_tasq_path(1)
-    if not initial_tasq.exists():
-        main_tasq = path_manager.root / 'tasq.md'
-        if main_tasq.exists():
-            os.makedirs(initial_tasq.parent, exist_ok=True)
-            shutil.copy(main_tasq, initial_tasq)
-
     cycle = 1
     session_failed = False
     user_aborted = False
@@ -396,7 +414,7 @@ def run_orchestration(args, prefix, ui):
             env["CYCLE_NUM"] = str(cycle)
 
             try:
-                with open(conf_dir / 'pipeline_config.yaml', 'r') as f:
+                with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
                     pipeline_config = yaml.safe_load(f)
             except:
                 if ui: ui.log_main("Config Error"); break
@@ -427,8 +445,9 @@ def run_orchestration(args, prefix, ui):
                      print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R}Ingesting cyqle{cycle}_tasq.md...\r")
 
             for name, cmd in agents_to_run:
-                log_file = path_manager.get_agent_log_path(cycle, name)
-                if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, log_file, env, ui):
+                qonsole_log_path = path_manager.get_qonsole_log_path(name)
+                events_log_path = path_manager.get_events_log_path(name)
+                if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, qonsole_log_path, events_log_path, env, ui):
                     session_failed = True; break
 
             if session_failed: break
