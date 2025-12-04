@@ -97,30 +97,30 @@ while [[ $# -gt 0 ]]; do
         init|run|clean)
             COMMAND="$1"
             shift
-            ;;
-        -h|--help) show_help; exit 0 ;;
-        -V|--version) show_version; exit 0 ;;
+            ;; 
+        -h|--help) show_help; exit 0 ;; 
+        -V|--version) show_version; exit 0 ;; 
 
-        -a|--auto) PY_ARGS="$PY_ARGS --auto"; shift ;;
-        -t|--tui) PY_ARGS="$PY_ARGS --tui"; shift ;;
-        -w|--wonqrete) PY_ARGS="$PY_ARGS --wonqrete"; shift ;;
+        -a|--auto) PY_ARGS="$PY_ARGS --auto"; shift ;; 
+        -t|--tui) PY_ARGS="$PY_ARGS --tui"; shift ;; 
+        -w|--wonqrete) PY_ARGS="$PY_ARGS --wonqrete"; shift ;; 
 
         -m|--mode)
             PY_ARGS="$PY_ARGS --mode $2"
             shift 2
-            ;;
+            ;; 
         -b|--briq-sensitivity)
             PY_ARGS="$PY_ARGS --briq-sensitivity $2"
             shift 2
-            ;;
+            ;; 
 
-        -s|--msb) RUNTIME_MODE="msb"; shift ;;
-        -d|--docker) RUNTIME_MODE="docker"; shift ;;
+        -s|--msb) RUNTIME_MODE="msb"; shift ;; 
+        -d|--docker) RUNTIME_MODE="docker"; shift ;; 
 
         *)
             log_qrane "[WARN] Unknown argument: $1"
             shift
-            ;;
+            ;; 
     esac
 done
 
@@ -134,7 +134,7 @@ cd "$SCRIPT_DIR"
 case "$COMMAND" in
     init)
         log_qrane "Initializing QonQrete..."
-        BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V}"
+        BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V} --build-arg UID=$(id -u) --build-arg GID=$(id -g)"
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             log_qrane "Building Qage with Microsandbox..."
@@ -145,7 +145,7 @@ case "$COMMAND" in
             log_qrane "Building Qage with Docker..."
             exec_qrane docker build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
         fi
-        ;;
+        ;; 
 
     clean)
         log_qrane "Cleaning QonQrete workspaces..."
@@ -166,7 +166,7 @@ case "$COMMAND" in
         else
             log_qrane "No 'qage_*' directories found."
         fi
-        ;;
+        ;; 
 
     run)
         if [[ -z "${OPENAI_API_KEY:-}" && -z "${GOOGLE_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
@@ -176,42 +176,49 @@ case "$COMMAND" in
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
-
-        if [ "$RUNTIME_MODE" == "msb" ]; then
-             log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"
-        else
-             log_qrane "Seeding worQspace locally at: $RUN_HOST_PATH"
-        fi
-
+        
+        # Create all necessary directories on the host
         mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture}
 
+        # Copy configs into the root of the run directory
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi
-        if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
-        else echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"; fi
+        if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then 
+            cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+        else 
+            echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+        fi
 
+        # If sQrapyard has content, copy it to the run-specific qodeyard
+        if [ -d "${WORKSPACE_DIR}/sqrapyard" ] && [ "$(ls -A "${WORKSPACE_DIR}/sqrapyard")" ]; then
+            cp -r "${WORKSPACE_DIR}/sqrapyard/"* "$RUN_HOST_PATH/qodeyard/"
+        fi
+        
+        # --- Define Mounts & Container Command ---
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
-        RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
+        
+        # New Mount Structure:
+        # - /qonq_conf (read-only) for configs, tasqs, etc.
+        # - /qonq/qodeyard (read-write) for the agent's work
+        RUN_MOUNTS="-v ${RUN_HOST_PATH}:/qonq_conf:ro -v ${RUN_HOST_PATH}/qodeyard:/qonq/qodeyard"
 
-        # [NEW] Container-side Splash Logic
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
              SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
         fi
 
-        # [FIX] Construct the internal command string safely
         CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
 
+        # Note: CONTAINER_WORKSPACE is now just the root, /qonq. Scripts will construct paths from there.
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
             $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
-                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+                -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" -e GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" -e GEMINI_API_KEY="${GOOGLE_API_KEY:-}" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
-            # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
             docker run --rm -it --user "$(id -u):$(id -g)" $RUN_MOUNTS $DEV_MOUNTS \
-                -e OPENAI_API_KEY="$OPENAI_API_KEY" -e GOOGLE_API_KEY="$GOOGLE_API_KEY" -e GEMINI_API_KEY="$GOOGLE_API_KEY" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+                -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" -e GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" -e GEMINI_API_KEY="${GOOGLE_API_KEY:-}" -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
-        ;;
+        ;; 
 esac

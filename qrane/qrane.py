@@ -48,19 +48,20 @@ def get_version():
     return f"QonQrete v?.?.?{suffix}"
 
 def get_worqspace() -> Path:
-    env_path = os.environ.get("QONQ_WORKSPACE")
-    return Path(env_path) if env_path else PROJECT_ROOT / "worqspace"
+    # In the container, the workspace is always at /qonq
+    return Path("/qonq")
 
 def run_pre_flight_checks(path_manager: PathManager, ui=None) -> bool:
+    conf_dir = Path("/qonq_conf")
     try:
-        if not (path_manager.root / 'pipeline_config.yaml').exists():
-            raise FileNotFoundError(f"pipeline_config.yaml missing at {path_manager.root}")
-        if not (path_manager.root / 'config.yaml').exists():
-            raise FileNotFoundError(f"config.yaml missing at {path_manager.root}")
+        if not (conf_dir / 'pipeline_config.yaml').exists():
+            raise FileNotFoundError(f"pipeline_config.yaml missing at {conf_dir}")
+        if not (conf_dir / 'config.yaml').exists():
+            raise FileNotFoundError(f"config.yaml missing at {conf_dir}")
 
-        with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
+        with open(conf_dir / 'pipeline_config.yaml', 'r') as f:
             pipeline_config = yaml.safe_load(f) or {}
-        with open(path_manager.root / 'config.yaml', 'r') as f:
+        with open(conf_dir / 'config.yaml', 'r') as f:
             agent_config = yaml.safe_load(f) or {}
     except Exception as e:
         msg = f"CRITICAL: Configuration error: {e}"
@@ -112,16 +113,23 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
 
     VISIBLE_KEYWORDS = ["Handing off", "Processing", "Executed", "Wrote", "reQap", "Checking", "Generating", "Ingesting", "Architect", "Plan", "Found", "Summary"]
 
+    agent_cwd = get_worqspace() / "qodeyard"
+
     spinner = None
     if not ui:
         print(f"{qrane_prefix}Initiating {agent_display_name}...")
-        spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
+        spinner = Spinner(prefix=f"　〘{prefix}〙", message=f"Running {agent_display_name}...")
         spinner.start()
     else:
         ui.log_main(f"{qrane_prefix}Initiating {agent_display_name}...")
 
     try:
-        with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc:
+        # Ensure log directory exists
+        os.makedirs(log_file.parent, exist_ok=True)
+        
+        with subprocess.Popen(command, cwd=str(agent_cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc, \
+             open(log_file, 'a', encoding='utf-8') as f_log:
+            
             reads = [proc.stdout, proc.stderr]
             while True:
                 if ui: check_tui_keys(ui, proc)
@@ -136,8 +144,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                         reads.remove(r)
                         continue
                     
+                    f_log.write(line) # Write all output to log file
                     clean = line.strip()
-                    with open(log_file, 'a', encoding='utf-8') as f: f.write(line)
 
                     if ui:
                         if r == proc.stdout:
@@ -146,29 +154,21 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             ui.log_agent(f"[{agent_display_name}] {clean}")
                         elif r == proc.stderr:
                             ui.log_agent(f"[{agent_display_name} RAW] {clean}")
-                    else:
+                    else: # Headless mode
                         if r == proc.stdout and any(x in clean for x in VISIBLE_KEYWORDS):
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
-
-            if spinner: spinner.stop()
-
-            if proc.returncode != 0:
-                stderr_output = proc.stderr.read()
-                if stderr_output:
-                    with open(log_file, 'a', encoding='utf-8') as f: f.write(stderr_output)
-                
-                if ui:
-                    ui.log_main(f"{agent_prefix}FAILED (Code {proc.returncode})")
-                else:
-                    print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
-                    if stderr_output:
-                        print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}")
-                        for line in stderr_output.strip().split('\n'):
-                            print(f"{Colors.RED}{line}{Colors.R}")
-                return False
-            return True
+            
+        if spinner: spinner.stop()
+        
+        if proc.returncode != 0:
+            if ui:
+                ui.log_main(f"{agent_prefix}FAILED (Code {proc.returncode})")
+            else:
+                print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
+            return False
+        return True
 
     except KillSignal:
         if spinner: spinner.stop()
@@ -176,14 +176,14 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     except KeyboardInterrupt:
         if spinner: spinner.stop()
         try: proc.kill()
-        except NameError: pass # proc might not be defined
+        except NameError: pass
         raise
     except Exception as e:
         if spinner: spinner.stop()
         if ui: ui.log_main(f"CRITICAL EXCEPTION: {e}")
         else: print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
+        traceback.print_exc()
         return False
-
 
 def handle_cheqpoint(cycle: int, is_autonomous: bool, cheq_path: Path, prefix: str, path_manager: PathManager, is_final_cheq: bool, ui=None) -> str:
     target_width = 11
@@ -297,7 +297,6 @@ def getch():
             # Fallback for other systems or environments
             return sys.stdin.read(1)
 
-
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")
     parser.add_argument("-a", "--auto", action="store_true", help="Autonomous Mode")
@@ -343,13 +342,9 @@ def run_orchestration(args, prefix, ui):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
 
-    # [OPTIONAL] Pre-flight checks (uncomment if strictness required)
-    # if not run_pre_flight_checks(path_manager, ui):
-    #     if not ui: print("Pre-flight checks failed.")
-    #     return
-
+    conf_dir = Path("/qonq_conf")
     try:
-        with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
+        with open(conf_dir / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
@@ -372,6 +367,13 @@ def run_orchestration(args, prefix, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
+    initial_tasq = path_manager.get_tasq_path(1)
+    if not initial_tasq.exists():
+        main_tasq = conf_dir / 'tasq.d' / 'cyqle1_tasq.md'
+        if main_tasq.exists():
+            os.makedirs(initial_tasq.parent, exist_ok=True)
+            shutil.copy(main_tasq, initial_tasq)
+
     cycle = 1
     session_failed = False
     user_aborted = False
@@ -389,7 +391,7 @@ def run_orchestration(args, prefix, ui):
             env["CYCLE_NUM"] = str(cycle)
 
             try:
-                with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
+                with open(conf_dir / 'pipeline_config.yaml', 'r') as f:
                     pipeline_config = yaml.safe_load(f)
             except:
                 if ui: ui.log_main("Config Error"); break
@@ -404,8 +406,9 @@ def run_orchestration(args, prefix, ui):
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
                 script = agent_def['script']
-                input_path = path_manager.root / resolve_template(agent_def['input'])
-                output_path = path_manager.root / resolve_template(agent_def['output'])
+                # Paths are now relative to the new structure
+                input_path = conf_dir / resolve_template(agent_def['input'])
+                output_path = worqspace / resolve_template(agent_def['output'])
                 cmd = ["python3", str(AGENT_MODULE_DIR / script), str(input_path), str(output_path)]
 
                 cheq_enabled = agent_def.get('checkpoint', False)
@@ -428,15 +431,11 @@ def run_orchestration(args, prefix, ui):
                     session_failed = True
                     break
 
-                # If explicit cheqpoints are enabled, run them after the agent step
                 if has_explicit_cheqpoints and agent_run['cheq']:
-                    # Determine autonomy: --user forces manual, --auto forces auto, otherwise config dictates
                     is_autonomous = (args.auto or not args.user) and agent_run['cheq']
                     if args.user: is_autonomous = False
 
-                    # The final cheqpoint in the list promotes to the next cycle
                     is_final = (i == len(agents_to_run) - 1)
-
                     res = handle_cheqpoint(cycle, is_autonomous, agent_run['output'], prefix, path_manager, is_final, ui)
                     if res == 'QUIT':
                         session_failed = True
@@ -445,7 +444,6 @@ def run_orchestration(args, prefix, ui):
 
             if session_failed: break
 
-            # If no explicit cheqpoints, run the default end-of-cycle cheqpoint
             if not has_explicit_cheqpoints:
                 is_autonomous = args.auto and not args.user
                 reqap_path = path_manager.get_reqap_path(cycle)
