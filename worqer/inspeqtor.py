@@ -24,7 +24,7 @@ def main() -> None:
     except: summary_content = "Summary not found."
 
     try:
-        with open('config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
+        with open('/qonq_conf/config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
     except: config = {}
 
     agent_cfg = config.get('agents', {}).get('inspeqtor', {})
@@ -35,6 +35,8 @@ def main() -> None:
     context_str = f"## ConstruQtor's Report\n{summary_content}\n\n## Artifacts\n"
     total_chars = 0
     MAX_CHARS = 300000 # ~75k tokens, safe for GPT-4o
+    
+    qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
 
     if qodeyard_path.is_dir():
         for root, _, files in os.walk(qodeyard_path):

@@ -5,6 +5,8 @@ import sys
 import os
 import threading
 import time
+import select
+
 
 def run_ai_completion(provider: str, model: str, prompt: str, context_files: list[str] = None) -> str:
     if context_files is None: context_files = []
@@ -44,67 +46,93 @@ def _build_prompt(base_prompt, context_files):
 
 def _run_streaming_process(cmd, input_text=None) -> str:
     """
-    Robust execution: Streams stdout to stderr (visual), collects it for return.
-    Avoids communicate() to prevent 'I/O operation on closed file' race conditions.
+    Robust, infinitely retrying execution: Streams stdout for visuals, 
+    collects it for return, and retries on common transient API errors.
     """
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE if input_text else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
+    original_input_text = input_text
+    retry_count = 0
 
-        # 1. Handle Stdin in a thread to prevent deadlocks
-        def writer():
-            try:
-                if input_text:
-                    proc.stdin.write(input_text)
-                    proc.stdin.flush()
-            except (BrokenPipeError, OSError, ValueError):
-                # Process closed pipe early. This is expected behavior for some errors.
-                pass
-            finally:
-                try: proc.stdin.close()
-                except: pass
+    while True: # Infinite retry loop
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE if input_text else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
 
-        if input_text:
-            t = threading.Thread(target=writer)
-            t.start()
+            def writer():
+                try:
+                    if input_text:
+                        proc.stdin.write(input_text)
+                        proc.stdin.flush()
+                except (BrokenPipeError, OSError, ValueError):
+                    pass # Expected behavior if process closes pipe early
+                finally:
+                    try: proc.stdin.close()
+                    except: pass
 
-        captured_stdout = []
+            if input_text:
+                t = threading.Thread(target=writer)
+                t.start()
 
-        # 2. Manual Streaming Loop (Reads Stdout)
-        while True:
-            char = proc.stdout.read(1)
-            if not char and proc.poll() is not None:
-                break
-            if char:
-                captured_stdout.append(char)
-                # Mirror to stderr so Qrane logs show progress
-                sys.stderr.write(char)
-                sys.stderr.flush()
+            captured_stdout = []
+            captured_stderr = []
 
-        # 3. Cleanup - Do NOT use communicate()
-        # Read any remaining stderr (usually errors)
-        stderr_output = proc.stderr.read()
+            # Non-blocking read from both stdout and stderr
+            while True:
+                reads = [proc.stdout, proc.stderr]
+                ret = select.select(reads, [], [], 0.1)
 
-        proc.wait() # Wait for exit code
+                for r in ret[0]:
+                    if r is proc.stdout:
+                        char = proc.stdout.read(1)
+                        if char:
+                            captured_stdout.append(char)
+                            sys.stderr.write(char)
+                            sys.stderr.flush()
+                    elif r is proc.stderr:
+                        line = proc.stderr.readline()
+                        if line:
+                            captured_stderr.append(line)
+                            # Also print to main stderr for visibility
+                            sys.stderr.write(f"[AI STDERR]: {line}")
+                            sys.stderr.flush()
 
-        if input_text:
-            t.join(timeout=2) # Ensure writer thread finishes
+                if proc.poll() is not None and not ret[0]:
+                    break
 
-        if proc.returncode != 0:
-            if stderr_output:
-                sys.stderr.write(f"\n[AI ERROR]: {stderr_output}\n")
-            raise RuntimeError(f"AI Provider failed with code {proc.returncode}")
+            proc.wait()
+            if input_text:
+                t.join(timeout=2)
 
-        return "".join(captured_stdout).strip()
+            stderr_output = "".join(captured_stderr)
 
-    except FileNotFoundError:
-        raise RuntimeError(f"Missing binary for command: {cmd[0]}")
-    except Exception as e:
-        raise RuntimeError(f"Subprocess execution failed: {e}")
+            # --- QonQrete Error Handling & Retry Logic ---
+            error_signatures = ["503", "400", "service unavailable", "model overloaded", "rate limit"]
+            if proc.returncode != 0 and any(sig in stderr_output.lower() for sig in error_signatures):
+                retry_count += 1
+                error_message = f"[AI WARN] Transient error detected (e.g., 503/400/Overload). Retrying in 10s... (Attempt {retry_count})"
+                sys.stderr.write(f"\n{error_message}\n")
+                time.sleep(10)
+                
+                # Modify prompt for continuation
+                input_text = f"Continue where you left off please?\n\n{original_input_text}"
+                continue # Retry the loop
+
+            if proc.returncode != 0:
+                sys.stderr.write(f"\n[AI ERROR]: Non-recoverable error. Full stderr below:\n{stderr_output}\n")
+                raise RuntimeError(f"AI Provider failed with a non-recoverable error (Code {proc.returncode})")
+
+            # If successful, break the loop and return
+            return "".join(captured_stdout).strip()
+
+        except FileNotFoundError:
+            raise RuntimeError(f"Missing binary for command: {cmd[0]}")
+        except Exception as e:
+            # Catch other potential exceptions during process handling
+            raise RuntimeError(f"Subprocess execution failed: {e}")
+
