@@ -179,7 +179,6 @@ case "$COMMAND" in
         ;;
 
     run)
-<<<<<<< HEAD
         if [ ! -f "${WORKSPACE_DIR}/config.yaml" ]; then
             log_qrane "QonQrete session ended: config.yaml not found."
             exit 1
