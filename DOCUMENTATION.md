@@ -186,6 +186,7 @@ The behavior of the QonQrete system can be configured in the `worqspace/` direct
     -   **`microsandbox`**: Set to `true` to make Microsandbox (`msb`) the default container runtime.
     -   **`agents`**: Defines the sequence of agents in the pipeline.
         -   **`cheqpoint`**: (Optional) A boolean flag (`true`/`false`). If set to `true`, a user-gated `CheQpoint` will be triggered immediately after this agent completes its run. This setting can be overridden by the `--auto` (forces autonomous mode) and `--user` (forces user-gated mode) command-line flags.
+    -   **`auto_mode_default`**: (Optional) A boolean flag (`true`/`false`). Sets the default behavior for cheqpoints when no override flags are provided. `false` means user-gated, `true` means autonomous.
 
 ## Getting Started
 

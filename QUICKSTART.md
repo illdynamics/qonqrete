@@ -51,6 +51,7 @@ Advanced options can be set in `worqspace/`.
     -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime.
     -   `agents`: Defines the sequence of agents in the pipeline.
         -   **`cheqpoint`**: (Optional) A boolean flag (`true`/`false`). If set to `true`, a user-gated `CheQpoint` will be triggered. This can be overridden by the `--auto` and `--user` flags.
+    -   `auto_mode_default`: (Optional) A boolean flag (`true`/`false`). Sets the default behavior for cheqpoints when no override flags are provided. `false` means user-gated, `true` means autonomous.
 
 ## 6. Cleaning the Workspace
 To remove all `qage_<timestamp>` run directories, use the `clean` command.

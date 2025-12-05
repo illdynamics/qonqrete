@@ -2,7 +2,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
 
-![Splash](qrane/logo.png)
+![Splash](qrane/splash.png)
 
 
 
@@ -290,29 +290,85 @@ To run the system with the Text-based User Interface (TUI) and set an operationa
 
 
 
-To run in autonomous mode with a specific task granularity:
+
+
+
+
+To run in user-gated mode:
+
+
 
 ```bash
 
-./qonqrete.sh run --auto --briq-sensitivity 2
+
+
+./qonqrete.sh run --user
+
+
 
 ```
 
 
 
-You can override the configured runtime using flags:
+
+
+
+
+To run in autonomous mode with a specific task granularity:
+
+
 
 ```bash
 
+
+
+./qonqrete.sh run --auto --briq-sensitivity 2
+
+
+
+```
+
+
+
+
+
+
+
+**Note:** The `--auto` and `--user` flags are mutually exclusive.
+
+
+
+
+
+
+
+You can override the configured runtime using flags:
+
+
+
+```bash
+
+
+
 # Force run with Microsandbox
+
+
 
 ./qonqrete.sh run --msb
 
 
 
+
+
+
+
 # Force run with Docker
 
+
+
 ./qonqrete.sh run --docker
+
+
 
 ```
 

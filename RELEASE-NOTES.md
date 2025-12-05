@@ -1,5 +1,22 @@
 # Release Notes
 
+## [v0.4.6-alpha] - 2025-12-05
+
+### Added
+- **User-Gated Mode Flag**: Introduced `--user` and `-u` flags to explicitly force user-gated `CheQpoint`s, overriding any default autonomous settings.
+- **Configurable Default Mode**: Added an `auto_mode_default` boolean option to `pipeline_config.yaml`. This allows the user to define the default behavior of `CheQpoint`s (`true` for autonomous, `false` for user-gated) when no command-line flags are provided.
+
+### Changed
+- **CheQpoint Logic**: The `CheQpoint` system now follows a clear override hierarchy:
+  1.  `--auto` or `--user` flags provide the highest level of control.
+  2.  If no flags are used, the system falls back to the `auto_mode_default` setting in `pipeline_config.yaml`.
+
+### Fixed
+- **Mutually Exclusive Flags**: The system now exits with an error if both `--auto` and `--user` flags are used simultaneously, preventing conflicting states.
+- **Merge Conflicts**: Resolved merge conflicts between the `main` and `feat/cheqpoint-config` branches.
+
+---
+
 ## [v0.4.5-alpha] - 2025-12-04
 
 ### Changed

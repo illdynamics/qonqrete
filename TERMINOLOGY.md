@@ -24,5 +24,6 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 ### User Interaction
 - **gateQeeper**: The human user responsible for making decisions at the `CheQpoint`.
 - **CheQpoint**: The mandatory pause after a `cyQle` for user review.
+- **auto_mode_default**: A configuration setting in `pipeline_config.yaml` that sets the default behavior of a `CheQpoint`.
 - **Qommander**: In TUI mode, the top panel showing the main execution flow.
 - **Qonsole**: In TUI mode, the bottom panel showing raw agent logs.

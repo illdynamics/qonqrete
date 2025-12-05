@@ -336,6 +336,10 @@ def main():
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
     args = parser.parse_args()
 
+    if args.auto and args.user:
+        print("ERROR: --auto and --user flags are mutually exclusive.")
+        sys.exit(1)
+
     prefix = "aQQ" if args.auto else "uQQ"
     if args.wonqrete: prefix = "aWQ" if args.auto else "uWQ"
 
@@ -418,6 +422,7 @@ def run_orchestration(args, prefix, ui):
             try:
                 with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
                     pipeline_config = yaml.safe_load(f)
+                auto_mode_default = pipeline_config.get('options', {}).get('auto_mode_default', False)
             except:
                 if ui: ui.log_main("Config Error"); break
                 else: print("Config Error"); break
@@ -459,9 +464,12 @@ def run_orchestration(args, prefix, ui):
                     break
 
                 if agent_info.get('cheq', False):
-                    is_autonomous = args.auto
-                    if args.user:
+                    if args.auto:
+                        is_autonomous = True
+                    elif args.user:
                         is_autonomous = False
+                    else:
+                        is_autonomous = auto_mode_default
 
                     is_final_cheq = (name == last_agent_in_cycle)
                     cheq_path = agent_info['output']
@@ -475,9 +483,12 @@ def run_orchestration(args, prefix, ui):
 
             # If no explicit cheqpoints, run the default end-of-cycle cheqpoint
             if not has_explicit_cheqpoints and not user_aborted:
-                is_autonomous = args.auto
-                if args.user:
+                if args.auto:
+                    is_autonomous = True
+                elif args.user:
                     is_autonomous = False
+                else:
+                    is_autonomous = auto_mode_default
                 reqap_path = path_manager.get_reqap_path(cycle)
                 res = handle_cheqpoint(cycle, is_autonomous, reqap_path, prefix, path_manager, True, ui)
                 if res == 'QUIT':

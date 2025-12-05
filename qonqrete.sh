@@ -68,6 +68,7 @@ Global Options:
 
 Run Options:
   -a, --auto                  Enable Autonomous Mode.
+  -u, --user                  Enable User-gated Mode.
   -t, --tui                   Enable TUI Mode.
   -m, --mode <NAME>           Set Operational Mode (program, enterprise, security, etc).
   -b, --briq-sensitivity <N>  Set Granularity (0-9).
@@ -105,6 +106,7 @@ while [[ $# -gt 0 ]]; do
         -V|--version) show_version; exit 0 ;; 
 
         -a|--auto) PY_ARGS="$PY_ARGS --auto"; shift ;; 
+        -u|--user) PY_ARGS="$PY_ARGS --user"; shift ;;
         -t|--tui) PY_ARGS="$PY_ARGS --tui"; shift ;; 
         -w|--wonqrete) PY_ARGS="$PY_ARGS --wonqrete"; shift ;; 
 
@@ -126,6 +128,11 @@ while [[ $# -gt 0 ]]; do
             ;; 
     esac
 done
+
+if [[ "$PY_ARGS" == *"--auto"* && "$PY_ARGS" == *"--user"* ]]; then
+    log_qrane "[ERROR] --auto and --user are mutually exclusive."
+    exit 1
+fi
 
 if [[ -z "$COMMAND" ]]; then
     log_qrane "[ERROR] No command specified."; show_help; exit 1
@@ -172,8 +179,24 @@ case "$COMMAND" in
         ;;
 
     run)
-        if [[ -z "${OPENAI_API_KEY:-}" && -z "${GOOGLE_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
-             log_qrane "[WARN] No API keys detected. Agents may fail."; 
+<<<<<<< HEAD
+        if [ ! -f "${WORKSPACE_DIR}/config.yaml" ]; then
+            log_qrane "QonQrete session ended: config.yaml not found."
+            exit 1
+        fi
+
+        if [ ! -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then
+            log_qrane "QonQrete session ended: pipeline_config.yaml not found."
+            exit 1
+        fi
+
+        if [ ! -f "${WORKSPACE_DIR}/tasq.md" ]; then
+            log_qrane "QonQrete session ended: tasq.md not found."
+            exit 1
+        fi
+
+        if [[ -z "${OPENAI_API_KEY:-}" || -z "${GOOGLE_API_KEY:-}" ]]; then
+            log_qrane "[ERROR] API Keys missing."; exit 1
         fi
 
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
