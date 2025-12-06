@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.4.5-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -31,6 +31,9 @@ This is the default manual mode. You can combine flags for different behaviors.
 
 # Run in auto mode with highly granular task breakdown
 ./qonqrete.sh run --auto --briq-sensitivity 1
+
+# Force user-gated mode, overriding a `cheqpoint: false` setting in config.yaml
+./qonqrete.sh run --user
 ```
 At the `CheQpoint`, you will be prompted to `[Q]ontinue`, `[T]weaQ`, or `[X]Quit`.
 
@@ -43,6 +46,7 @@ To begin a `cyQle` with a pre-existing codebase:
 ## 5. Configuration
 Advanced options can be set in `worqspace/`.
 -   **`config.yaml`**:
+    -   `cheqpoint`: Sets the default behavior. `true` for user-gated mode, `false` for autonomous. Can be overridden with `--user` or `--auto`.
     -   `auto_cycle_limit`: Set the maximum number of cycles for auto-mode.
     -   `agents`: Change the AI models for each agent.
     -   `mode`: Set the default operational mode for agent personas (e.g., `program`, `enterprise`, `security`, `performance`, `innovative`).

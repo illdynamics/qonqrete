@@ -1,5 +1,25 @@
 # Release Notes
 
+## [v0.4.6-alpha] - 2025-12-06
+
+### Added
+- **Configurable Execution Mode**: The default execution mode can now be controlled via a `cheqpoint` boolean in `worqspace/config.yaml`.
+  - `cheqpoint: true` (default): The system runs in user-gated mode, pausing at each CheQpoint for user approval.
+  - `cheqpoint: false`: The system runs in autonomous mode by default.
+- **`--user` / `-u` Flag**: A new command-line flag to force user-gated mode, which overrides a `cheqpoint: false` setting in the configuration.
+
+### Changed
+- **Command-Line Flag Precedence**: The `--auto` and `--user` flags now have the highest precedence, allowing users to override the default mode set in `config.yaml` for any given run.
+- **Mutual Exclusion for Flags**: The `--auto` and `--user` flags are now mutually exclusive. Using both at the same time will result in an error and prevent the system from running.
+
+### Fixed
+- **TUI Mode Crash**: Fixed a critical "I/O operation on closed file" error that occurred in the non-TUI mode by ensuring all agent output streams are read before the process terminates.
+- **Gatekeeper Assessment Parsing**: The `gateQeeper`'s parsing logic is now more robust. It uses a regular expression to find the "Assessment:" status anywhere in the `reqap.md` file, preventing the "Result: Unknown" bug caused by AI formatting inconsistencies.
+- **`construqtor` Path Duplication**: The `construqtor` agent no longer creates nested `qodeyard/qodeyard` directories. It now automatically sanitizes filenames provided by the AI to strip any redundant `qodeyard/` prefixes.
+- **`construqtor` AI Output Parsing**: The `construqtor`'s system prompt is now extremely strict, providing a clear example of the required output format. This, combined with simpler parsing logic, resolves failures caused by the AI not providing filenames in the markdown tag. The agent no longer creates an unwanted `construqted_code.txt` file.
+
+---
+
 ## [v0.4.5-alpha] - 2025-12-04
 
 ### Changed

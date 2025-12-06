@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.4.5-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -105,7 +105,7 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
 
 ### 2. Main Execution Flow (`./qonqrete.sh run`)
 
-1.  **User Input**: User executes `./qonqrete.sh run`. Optional flags like `--auto` and `--tui` can be included.
+1.  **User Input**: User executes `./qonqrete.sh run`. Optional flags like `--auto`, `--user`, and `--tui` can be included.
 2.  **`qonqrete.sh`**:
     *   Parses the `run` command and any additional flags.
     *   Verifies that `OPENAI_API_KEY` and `GOOGLE_API_KEY` are exported in the shell.
@@ -121,7 +121,7 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
     *   It executes each agent in sequence.
 5.  **The `CheQpoint`**:
     *   `qrane.py` reads the final `reQap.md` of the cycle.
-    *   It pauses and prompts the user for input (`[Q]ontinue`, `[T]weaQ`, `[X]Quit`), unless in `--auto` mode.
+    *   It pauses and prompts the user for input (`[Q]ontinue`, `[T]weaQ`, `[X]Quit`), unless in autonomous mode. The default behavior (autonomous vs. user-gated) is controlled by the `cheqpoint` option in `config.yaml`, and can be overridden by the `--auto` or `--user` flags.
 6.  **Loop Continuation**:
     *   If approved, the `reQap.md` is promoted to become the task for the next cycle.
     *   The cycle counter increments, and the loop repeats.
@@ -180,6 +180,7 @@ All agents utilize this central library to interact with AI models by wrapping t
 The behavior of the QonQrete system can be configured in the `worqspace/` directory.
 
 -   **`config.yaml`**:
+    -   **`cheqpoint`**: A boolean that sets the default execution mode. `true` (the default) enables user-gated `cheqpoints`. `false` makes the system autonomous by default. This can be overridden by the `--user` and `--auto` command-line flags.
     -   **`auto_cycle_limit`**: The maximum number of `cyQle`s to run in autonomous mode. `0` means infinite.
     -   **`agents`**: The AI models to be used by each agent.
 -   **`pipeline_config.yaml`**:

@@ -22,7 +22,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
-**Version:** `v0.4.5-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
 
 
 
@@ -54,7 +54,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
-4.  **Human‑in‑the‑Loop Control**: A non‑negotiable **CheQpoint** pauses the system after each `cyQle`. The user, acting as the `gateQeeper`, must review the results and provide explicit instructions to **[Q]ontinue**, **[T]weaQ**, or **[X]Quit**.
+4.  **Human-in-the-Loop Control**: By default, a non-negotiable **CheQpoint** pauses the system after each `cyQle`. The user, acting as the `gateQeeper`, must review the results and provide explicit instructions to **[Q]ontinue**, **[T]weaQ**, or **[X]Quit**. This behavior can be configured to be autonomous by default.
 
 
 
@@ -74,7 +74,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
--   `worqer/`: Contains the individual AI agent scripts (`instruQtor`, `construqtor`, `inspeQtor`).
+-   `worqer/`: Contains the individual AI agent scripts (`instruQtor`, `construQtor`, `inspeQtor`).
 
 
 
@@ -300,6 +300,11 @@ To run in autonomous mode with a specific task granularity:
 
 
 
+To force user-gated mode (overriding a config file set to auto):
+```bash
+./qonqrete.sh run --user
+```
+
 You can override the configured runtime using flags:
 
 ```bash
@@ -323,7 +328,6 @@ To clean up the workspace and remove all previous run data:
 ```bash
 
 ./qonqrete.sh clean
-
 ```
 
 ## License
