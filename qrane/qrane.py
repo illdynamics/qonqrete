@@ -335,6 +335,10 @@ def main():
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
     args = parser.parse_args()
 
+    if args.auto and args.user:
+        sys.stderr.write("Error: --auto and --user flags are mutually exclusive.\\n")
+        sys.exit(1)
+
     worqspace = get_worqspace()
     try:
         with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
