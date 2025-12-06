@@ -14,7 +14,7 @@ The following items are planned enhancements based on a deep analysis of the sys
 
 ### Modularity Enhancements
 -   **Generic Agent Interface**: Define a standardized CLI argument structure for all agents.
--   **Configurable Checkpoints**: Add a `checkpoint: true` flag in `pipeline_config.yaml` to make human-in-the-loop gates optional per-step.
+-   **Granular Checkpoints**: While a system-wide default is now configurable via `cheqpoint` in `config.yaml`, a future enhancement will be to allow per-step checkpoint flags in `pipeline_config.yaml` for more fine-grained control.
 
 ### Performance Enhancements
 -   **Multi-Stage Docker Builds**: Optimize container images for faster `init` times.
