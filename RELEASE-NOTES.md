@@ -7,8 +7,8 @@
 - **Hybrid Provider Model**: The AI interaction library (`worqer/lib_ai.py`) now supports a hybrid model, using Python libraries for OpenAI, Gemini, and Anthropic, and a command-line tool for DeepSeek.
 
 ### Changed
+- **Dynamic API Key Validation**: The `qrane.py` orchestrator now reads `config.yaml` to identify all required AI providers and validates that their corresponding API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`) are set in the environment. It will exit with a clear error message if any are missing.
 - **Container Dependencies**: The `Dockerfile` has been updated to install the `deepseek-cli` Python package.
-- **API Key Management**: The `qonqrete.sh` script now checks for and passes the `DEEPSEEK_API_KEY` environment variable to the container.
 
 ---
 
