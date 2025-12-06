@@ -68,6 +68,7 @@ Global Options:
 
 Run Options:
   -a, --auto                  Enable Autonomous Mode.
+  -u, --user                  Force User-gated Mode.
   -t, --tui                   Enable TUI Mode.
   -m, --mode <NAME>           Set Operational Mode (program, enterprise, security, etc).
   -b, --briq-sensitivity <N>  Set Granularity (0-9).
@@ -105,6 +106,7 @@ while [[ $# -gt 0 ]]; do
         -V|--version) show_version; exit 0 ;;
 
         -a|--auto) PY_ARGS="$PY_ARGS --auto"; shift ;;
+        -u|--user) PY_ARGS="$PY_ARGS --user"; shift ;;
         -t|--tui) PY_ARGS="$PY_ARGS --tui"; shift ;;
         -w|--wonqrete) PY_ARGS="$PY_ARGS --wonqrete"; shift ;;
 

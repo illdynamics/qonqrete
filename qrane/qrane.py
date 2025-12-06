@@ -225,7 +225,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             traceback.print_exc() # Print traceback for debugging
             return False
 
-def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manager: PathManager, ui=None) -> str:
+def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: str, path_manager: PathManager, ui=None) -> str:
     target_width = 11
     gatekeeper_name = "gateQeeper"
     p_padding = " " * (target_width - len(gatekeeper_name))
@@ -246,7 +246,7 @@ def handle_cheqpoint(cycle: int, args, reqap_path: Path, prefix: str, path_manag
     except Exception as e:
         content = f"[ERROR] Could not read reQap: {e}"
 
-    if args.auto:
+    if is_autonomous:
         msg = "Autonomous Mode: Qontinuing..."
         if ui: ui.log_main(f"{gate_prefix}{msg}")
         else:
@@ -327,6 +327,7 @@ def getch():
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")
     parser.add_argument("-a", "--auto", action="store_true", help="Autonomous Mode")
+    parser.add_argument("-u", "--user", action="store_true", help="Force User-gated Mode")
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
     parser.add_argument("-V", "--version", action="version", version=get_version())
@@ -334,8 +335,26 @@ def main():
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
     args = parser.parse_args()
 
-    prefix = "aQQ" if args.auto else "uQQ"
-    if args.wonqrete: prefix = "aWQ" if args.auto else "uWQ"
+    if args.auto and args.user:
+        sys.stderr.write("Error: --auto and --user flags are mutually exclusive.\\n")
+        sys.exit(1)
+
+    worqspace = get_worqspace()
+    try:
+        with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
+    except: config = {}
+
+    cheqpoint_config = config.get('options', {}).get('cheqpoint', True)
+
+    if args.user:
+        is_autonomous = False
+    elif args.auto:
+        is_autonomous = True
+    else:
+        is_autonomous = not cheqpoint_config
+    
+    prefix = "aQQ" if is_autonomous else "uQQ"
+    if args.wonqrete: prefix = "aWQ" if is_autonomous else "uWQ"
 
     target_width = 11
     qrane_padding = " " * (target_width - 5)
@@ -344,7 +363,7 @@ def main():
     if args.tui and tui:
         try:
             with tui.QonqreteTUI() as ui:
-                run_orchestration(args, prefix, ui)
+                run_orchestration(args, prefix, is_autonomous, config, ui)
         except KillSignal:
             print(f"\n{Colors.RED}︻デ┳═ー{Colors.WHITE} - - - {Colors.RED}Qilled{Colors.WHITE} all agents in the Qage...{Colors.R}")
             print(); print(f"{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
@@ -352,7 +371,7 @@ def main():
             traceback.print_exc(); print("TUI Crashed.")
     else:
         try:
-            run_orchestration(args, prefix, ui=None)
+            run_orchestration(args, prefix, is_autonomous, config, ui=None)
         except KillSignal:
             print(f"\r{qrane_prefix}{Colors.RED}︻デ┳═ー - - - Qilled all agents in the Qage...{Colors.R}")
             print(); print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended by {Colors.RED}guns{Colors.R}{Colors.WHITE}.{Colors.R}")
@@ -362,7 +381,7 @@ def main():
         except Exception as e:
             traceback.print_exc()
 
-def run_orchestration(args, prefix, ui):
+def run_orchestration(args, prefix, is_autonomous, config, ui):
     worqspace = get_worqspace()
     path_manager = PathManager(worqspace)
     logging.basicConfig(level=logging.INFO)
@@ -372,10 +391,6 @@ def run_orchestration(args, prefix, ui):
     # if not run_pre_flight_checks(path_manager, ui):
     #     if not ui: print("Pre-flight checks failed.")
     #     return
-
-    try:
-        with open(worqspace / 'config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
-    except: config = {}
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
     final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 5)
@@ -403,7 +418,7 @@ def run_orchestration(args, prefix, ui):
 
     try:
         while True:
-            if args.auto and max_cycles > 0 and cycle > max_cycles:
+            if is_autonomous and max_cycles > 0 and cycle > max_cycles:
                 limit_str = f"{Colors.C}{max_cycles}{Colors.R}"
                 msg = f"Max cyQle limit hit ({limit_str}) - Edit config.yaml to change this."
                 if ui: ui.log_main(f"{qrane_prefix}{msg}")
@@ -452,7 +467,7 @@ def run_orchestration(args, prefix, ui):
 
             if session_failed: break
 
-            res = handle_cheqpoint(cycle, args, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)
+            res = handle_cheqpoint(cycle, is_autonomous, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)
             if res == 'QUIT': break
             cycle += 1
 

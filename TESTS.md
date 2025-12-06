@@ -20,12 +20,13 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [x] Run `./qonqrete.sh clean` again. When prompted, enter "y". Verify all `qage_*` directories are deleted.
     -   [x] Run `./qonqrete.sh clean` when no `qage_*` directories exist. Verify it prints a "No 'qage_*' directories found" message and exits.
 -   [ ] **Command-Line Flags**:
-    -   [ ] Test each flag individually: `./qonqrete.sh run --auto`, `--tui`, `--mode security`, `--briq-sensitivity 7`, `--msb`, `--docker`, `--wonqrete`. Verify the corresponding arguments are passed to `qrane.py`.
-    -   [ ] Test short versions of flags: `-a`, `-t`, `-m security`, `-b 7`, `-s`, `-d`, `-w`.
+    -   [ ] Test each flag individually: `./qonqrete.sh run --auto`, `--user`, `--tui`, `--mode security`, `--briq-sensitivity 7`, `--msb`, `--docker`, `--wonqrete`. Verify the corresponding arguments are passed to `qrane.py`.
+    -   [ ] Test short versions of flags: `-a`, `-u`, `-t`, `-m security`, `-b 7`, `-s`, `-d`, `-w`.
+    -   [ ] Test using `--auto` and `--user` together. Verify the script exits with a "mutually exclusive" error message.
     -   [ ] Test a combination of flags: `./qonqrete.sh run --auto --tui --mode enterprise -b 3`.
     -   [ ] Test overriding `pipeline_config.yaml` (`microsandbox: true`) with `./qonqrete.sh run --docker`.
 -   [x] **Help and Version**:
-    -   [x] Run `./qonqrete.sh --help` and `-h`. Verify the help message is displayed.
+    -   [x] Run `./qonqrete.sh --help` and `-h`. Verify the help message is displayed and includes the new `--user` flag.
     -   [x] Run `./qonqrete.sh --version` and `-V`. Verify the version from the `VERSION` file is displayed.
 -   [ ] **Pre-flight Checks**:
     -   [x] Temporarily rename `config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error. (Note: Pre-flight checks are currently optional in `qrane.py`).
@@ -43,7 +44,16 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] Run with `--auto`. Verify the system runs through cycles without user interaction.
     -   [ ] In `config.yaml`, set `auto_cycle_limit: 2`. Run in auto mode. Verify the system stops after cycle 2 with a "Max cyQle limit hit" message.
     -   [ ] Set `auto_cycle_limit: 0`. Verify it runs until the task is complete or it fails.
-### 2.2. Cycle and File Management
+
+### 2.2. Cheqpoint Configuration (`config.yaml`)
+-   [ ] **`cheqpoint: true` (Default)**:
+    -   [ ] Set `cheqpoint: true` in `config.yaml`. Run `./qonqrete.sh run`. Verify it runs in user-gated mode.
+    -   [ ] With `cheqpoint: true`, run `./qonqrete.sh run --auto`. Verify it correctly overrides the config and runs in autonomous mode.
+-   [ ] **`cheqpoint: false`**:
+    -   [ ] Set `cheqpoint: false` in `config.yaml`. Run `./qonqrete.sh run`. Verify it runs in autonomous mode by default.
+    -   [ ] With `cheqpoint: false`, run `./qonqrete.sh run --user`. Verify it correctly overrides the config and runs in user-gated mode.
+
+### 2.3. Cycle and File Management
 -   [ ] **I/O Flow**: After a successful cycle 1, verify that `cyqle1_reqap.md` is correctly used to generate `cyqle2_tasq.md`.
 -   [ ] **Header Promotion**: Check the content of `cyqle2_tasq.md`. It must contain a header with the "Assessment" status from the previous cycle.
 -   [ ] **Agent Failure**: Introduce an error in an agent script (e.g., `sys.exit(1)` in `construqtor.py`). Run the system. Verify the cycle fails and the orchestration stops with an error message.
