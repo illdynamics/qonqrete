@@ -12,10 +12,6 @@ The following items are planned enhancements based on a deep analysis of the sys
 -   **Anthropic Claude 3.5 Sonnet**: Integration via the official `@anthropic-ai/claude-code` CLI.
 -   **DeepSeek Coder**: Integration via the official `deepseek-cli`.
 
-### Modularity Enhancements
--   **Generic Agent Interface**: Define a standardized CLI argument structure for all agents.
--   **Granular Checkpoints**: While a system-wide default is now configurable via `cheqpoint` in `config.yaml`, a future enhancement will be to allow per-step checkpoint flags in `pipeline_config.yaml` for more fine-grained control.
-
 ### Performance Enhancements
 -   **Multi-Stage Docker Builds**: Optimize container images for faster `init` times.
 -   **Parallel Agent Execution**: Investigate parallel execution of independent `briQ` files.
