@@ -1,12 +1,12 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.7-alpha` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
 ## Prerequisites
 - **Docker:** Ensure the Docker daemon is running (or see `README.md` for Microsandbox setup).
-- **API Keys:** You must have `OPENAI_API_KEY` and `GOOGLE_API_KEY` exported in your shell environment.
+- **API Keys:** You must have `OPENAI_API_KEY`, `GOOGLE_API_KEY`, and `ANTHROPIC_API_KEY` exported in your shell environment.
 
 ## 1. First-Time Setup
 Build the secure `Qage` environment. You only need to do this once.

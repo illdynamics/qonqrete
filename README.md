@@ -22,7 +22,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
-**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.7-alpha` (See `VERSION` file for the canonical version).
 
 
 
@@ -214,7 +214,7 @@ The `Qrane` requires Python 3.
 
 
 
-The only Python dependency for `Qrane` is `PyYAML`. You can install it via pip:
+The Python dependencies for `Qrane` are `PyYAML`, `openai`, `anthropic`, and `google-generativeai`. You can install them via pip:
 
 
 
@@ -222,7 +222,7 @@ The only Python dependency for `Qrane` is `PyYAML`. You can install it via pip:
 
 
 
-pip3 install pyyaml
+pip3 install pyyaml openai anthropic google-generativeai
 
 
 
