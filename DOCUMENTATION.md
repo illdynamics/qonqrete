@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.7-alpha` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -66,8 +66,9 @@ graph TD
         instruQtor -- Uses --> LibAI;
         construQtor -- Uses --> LibAI;
         inspeQtor -- Uses --> LibAI;
-        LibAI -- Wraps --> SGPT(sgpt CLI);
-        LibAI -- Wraps --> Gemini(gemini CLI);
+        LibAI -- Wraps --> OpenAI;
+        LibAI -- Wraps --> Gemini;
+        LibAI -- Wraps --> Anthropic;
     end
 
     User -- 17. Interacts with --> CheQpoint;
@@ -84,7 +85,7 @@ graph TD
     class Container,Worqspace,Image container;
     class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,CheQpoint,TUI,Loader qonqrete;
     class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard volume;
-    class LibAI,SGPT,Gemini abstraction;
+    class LibAI,OpenAI,Gemini,Anthropic abstraction;
 ```
 
 ---
@@ -108,7 +109,7 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
 1.  **User Input**: User executes `./qonqrete.sh run`. Optional flags like `--auto`, `--user`, and `--tui` can be included.
 2.  **`qonqrete.sh`**:
     *   Parses the `run` command and any additional flags.
-    *   Verifies that `OPENAI_API_KEY` and `GOOGLE_API_KEY` are exported in the shell.
+    *   Verifies that `OPENAI_API_KEY`, `GOOGLE_API_KEY`, and `ANTHROPIC_API_KEY` are exported in the shell.
     *   Reads the `VERSION` file and exports it as `QONQ_VERSION`.
     *   Creates a unique timestamped run directory (`qage_<timestamp>`) inside `worqspace/`.
     *   **Sqrapyard Initialization**: It checks the persistent `worqspace/sqrapyard` directory. If it contains files, they are copied into the new `qage_<timestamp>/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
@@ -149,7 +150,6 @@ The `Qrane` is the heart of the system.
 -   **Dynamic Pipeline Loading**: On startup, the `Qrane` reads the `worqspace/pipeline_config.yaml` file. It iterates through the `agents` list defined in this file to build the execution pipeline for the cycle.
 -   **Generic Execution**: For each agent in the pipeline, the orchestrator constructs the appropriate command-line arguments based on the `script`, `input`, and `output` fields in the config.
 -   **Centralized Paths**: It utilizes the `PathManager` class to resolve all file and directory paths.
--   **Pre-flight Checks**: Before starting the cycle, it performs a check to ensure that all required CLI tools are available.
 
 ### Default Agent Logic
 
@@ -157,7 +157,7 @@ The following describes the logic of the three default agents that constitute th
 
 #### Core Abstraction: `worqer/lib_ai.py`
 
-All agents utilize this central library to interact with AI models by wrapping their respective CLI tools (`sgpt`, `gemini`). This design makes adding new providers highly modular.
+All agents utilize this central library to interact with AI models. It now uses the official Python libraries for OpenAI, Google Gemini, and Anthropic, providing a consistent and modular interface for all AI interactions.
 
 #### 1. `instruQtor` (The Planner)
 -   **Purpose**: To decompose a high-level task (`tasQ.md`) into a series of small, actionable steps (`briQ.md` files).

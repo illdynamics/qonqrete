@@ -1,5 +1,20 @@
 # Release Notes
 
+## [v0.4.7-alpha] - 2025-12-06
+
+### Added
+- **Anthropic Claude Provider**: The system now supports Anthropic's Claude models as a configurable AI provider.
+- **Unified Python Provider Interface**: The AI interaction library (`worqer/lib_ai.py`) has been refactored to use official Python clients for all providers (OpenAI, Google Gemini, and Anthropic), replacing the previous CLI-based approach.
+
+### Changed
+- **Container Dependencies**: The `Dockerfile` has been updated to install the `anthropic`, `openai`, and `google-generativeai` Python libraries, and the `shell-gpt` and `@google/gemini-cli` dependencies have been removed.
+- **API Key Management**: The `qonqrete.sh` script now checks for and passes the `ANTHROPIC_API_KEY` environment variable to the container.
+
+### Removed
+- **CLI Pre-flight Checks**: The pre-flight check for `sgpt` and `gemini` CLIs in `qrane/qrane.py` has been removed as it is no longer relevant.
+
+---
+
 ## [v0.4.6-alpha] - 2025-12-06
 
 ### Added

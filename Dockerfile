@@ -26,17 +26,14 @@ RUN apt-get update && apt-get install -y nodejs
 
 # 2. Install Python packages for agents
 RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir shell-gpt pyyaml tiktoken
+RUN pip3 install --no-cache-dir pyyaml openai anthropic google-generativeai
 
-# 3. Install Gemini CLI using npm
-RUN npm install -g @google/gemini-cli
-
-# 4. Create a working directory for the project
+# 3. Create a working directory for the project
 WORKDIR /qonqrete
 
-# 5. Copy the entire project into the container
+# 4. Copy the entire project into the container
 COPY . .
 
-# 6. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
+# 5. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
 ARG QONQ_VERSION
 ENV QONQ_VERSION=${QONQ_VERSION}
