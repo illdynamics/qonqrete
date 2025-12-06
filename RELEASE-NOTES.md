@@ -1,5 +1,17 @@
 # Release Notes
 
+## [v0.4.8-alpha] - 2025-12-06
+
+### Added
+- **DeepSeek Provider**: The system now supports DeepSeek models via the `deepseek-cli` tool.
+- **Hybrid Provider Model**: The AI interaction library (`worqer/lib_ai.py`) now supports a hybrid model, using Python libraries for OpenAI, Gemini, and Anthropic, and a command-line tool for DeepSeek.
+
+### Changed
+- **Container Dependencies**: The `Dockerfile` has been updated to install the `deepseek-cli` Python package.
+- **API Key Management**: The `qonqrete.sh` script now checks for and passes the `DEEPSEEK_API_KEY` environment variable to the container.
+
+---
+
 ## [v0.4.7-alpha] - 2025-12-06
 
 ### Added

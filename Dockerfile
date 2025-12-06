@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y nodejs
 
 # 2. Install Python packages for agents
 RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir pyyaml openai anthropic google-generativeai
+RUN pip3 install --no-cache-dir pyyaml openai anthropic google-generativeai deepseek-cli
 
 # 3. Create a working directory for the project
 WORKDIR /qonqrete
