@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.4.7-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.8-alpha` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -69,6 +69,7 @@ graph TD
         LibAI -- Wraps --> OpenAI;
         LibAI -- Wraps --> Gemini;
         LibAI -- Wraps --> Anthropic;
+        LibAI -- Wraps --> DeepSeek;
     end
 
     User -- 17. Interacts with --> CheQpoint;
@@ -85,7 +86,7 @@ graph TD
     class Container,Worqspace,Image container;
     class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,CheQpoint,TUI,Loader qonqrete;
     class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard volume;
-    class LibAI,OpenAI,Gemini,Anthropic abstraction;
+    class LibAI,OpenAI,Gemini,Anthropic,DeepSeek abstraction;
 ```
 
 ---
@@ -109,7 +110,7 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
 1.  **User Input**: User executes `./qonqrete.sh run`. Optional flags like `--auto`, `--user`, and `--tui` can be included.
 2.  **`qonqrete.sh`**:
     *   Parses the `run` command and any additional flags.
-    *   Verifies that `OPENAI_API_KEY`, `GOOGLE_API_KEY`, and `ANTHROPIC_API_KEY` are exported in the shell.
+    *   Verifies that `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, and `DEEPSEEK_API_KEY` are exported in the shell.
     *   Reads the `VERSION` file and exports it as `QONQ_VERSION`.
     *   Creates a unique timestamped run directory (`qage_<timestamp>`) inside `worqspace/`.
     *   **Sqrapyard Initialization**: It checks the persistent `worqspace/sqrapyard` directory. If it contains files, they are copied into the new `qage_<timestamp>/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
@@ -157,7 +158,7 @@ The following describes the logic of the three default agents that constitute th
 
 #### Core Abstraction: `worqer/lib_ai.py`
 
-All agents utilize this central library to interact with AI models. It now uses the official Python libraries for OpenAI, Google Gemini, and Anthropic, providing a consistent and modular interface for all AI interactions.
+All agents utilize this central library to interact with AI models. It uses a hybrid approach: official Python libraries are used for OpenAI, Google Gemini, and Anthropic, while the `deepseek-cli` command-line tool is used for the DeepSeek provider. This provides a consistent and modular interface for all AI interactions.
 
 #### 1. `instruQtor` (The Planner)
 -   **Purpose**: To decompose a high-level task (`tasQ.md`) into a series of small, actionable steps (`briQ.md` files).
