@@ -6,7 +6,11 @@ This guide will walk you through running your first `cyQle` with the QonQrete sy
 
 ## Prerequisites
 - **Docker:** Ensure the Docker daemon is running (or see `README.md` for Microsandbox setup).
-- **API Keys:** You must have `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, and `DEEPSEEK_API_KEY` exported in your shell environment.
+- **API Keys:** Before running, you must export the API keys for the AI providers you intend to use. The system will automatically check for the necessary keys based on your `worqspace/config.yaml` and exit with an error if they are not set.
+  - `export OPENAI_API_KEY='your-key'`
+  - `export GOOGLE_API_KEY='your-key'` (or `GEMINI_API_KEY`)
+  - `export ANTHROPIC_API_KEY='your-key'`
+  - `export DEEPSEEK_API_KEY='your-key'`
 
 ## 1. First-Time Setup
 Build the secure `Qage` environment. You only need to do this once.
