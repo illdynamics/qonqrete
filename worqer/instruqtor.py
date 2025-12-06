@@ -36,7 +36,7 @@ def parse_xml_briqs(content: str) -> list[dict]:
 
 def clean_filename_slug(text: str) -> str:
     clean = re.sub(r'[^a-zA-Z0-9 ]', '', text)
-    slug = "-".join(clean.split()[:8]).lower()
+    slug = "_".join(clean.split()[:8]).lower()
     return slug if slug else "task"
 
 def get_sensitivity_prompt(level: int) -> str:
