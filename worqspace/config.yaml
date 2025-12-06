@@ -14,6 +14,11 @@ agents:
     model: gpt-4o
 
 options:
+  # Cheqpoint Configuration
+  # true = User-gated mode by default (cheqpoints enabled).
+  # false = Autonomous mode by default (cheqpoints disabled).
+  cheqpoint: true
+
   # Max number of cycles to run in auto-mode.
   auto_cycle_limit: 4
 
