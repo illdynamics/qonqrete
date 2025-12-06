@@ -11,6 +11,7 @@
 ### Changed
 - **Command-Line Flag Precedence**: The `--auto` and `--user` flags now have the highest precedence, allowing users to override the default mode set in `config.yaml` for any given run.
 - **Mutual Exclusion for Flags**: The `--auto` and `--user` flags are now mutually exclusive. Using both at the same time will result in an error and prevent the system from running.
+- **Briq Filename Formatting**: The `instruqtor` agent now generates `briq` filenames in kebab-case (e.g., `create-web-server.md`) instead of snake_case for improved readability.
 
 ### Fixed
 - **TUI Mode Crash**: Fixed a critical "I/O operation on closed file" error that occurred in the non-TUI mode by ensuring all agent output streams are read before the process terminates.
