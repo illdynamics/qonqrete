@@ -93,6 +93,8 @@ detect_runtime() {
 COMMAND=""
 PY_ARGS=""
 RUNTIME_MODE=$(detect_runtime)
+AUTO_FLAG_SET=false
+USER_FLAG_SET=false
 
 if [[ $# -eq 0 ]]; then show_help; exit 0; fi
 
@@ -105,8 +107,8 @@ while [[ $# -gt 0 ]]; do
         -h|--help) show_help; exit 0 ;;
         -V|--version) show_version; exit 0 ;;
 
-        -a|--auto) PY_ARGS="$PY_ARGS --auto"; shift ;;
-        -u|--user) PY_ARGS="$PY_ARGS --user"; shift ;;
+        -a|--auto) PY_ARGS="$PY_ARGS --auto"; AUTO_FLAG_SET=true; shift ;;
+        -u|--user) PY_ARGS="$PY_ARGS --user"; USER_FLAG_SET=true; shift ;;
         -t|--tui) PY_ARGS="$PY_ARGS --tui"; shift ;;
         -w|--wonqrete) PY_ARGS="$PY_ARGS --wonqrete"; shift ;;
 
@@ -128,6 +130,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [ "$AUTO_FLAG_SET" = true ] && [ "$USER_FLAG_SET" = true ]; then
+    log_qrane "[ERROR] --auto and --user flags are mutually exclusive."
+    exit 1
+fi
 
 if [[ -z "$COMMAND" ]]; then
     log_qrane "[ERROR] No command specified."; show_help; exit 1
