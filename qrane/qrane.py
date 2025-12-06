@@ -51,44 +51,6 @@ def get_worqspace() -> Path:
     env_path = os.environ.get("QONQ_WORKSPACE")
     return Path(env_path) if env_path else PROJECT_ROOT / "worqspace"
 
-def run_pre_flight_checks(path_manager: PathManager, ui=None) -> bool:
-    try:
-        if not (path_manager.root / 'pipeline_config.yaml').exists():
-            raise FileNotFoundError(f"pipeline_config.yaml missing at {path_manager.root}")
-        if not (path_manager.root / 'config.yaml').exists():
-            raise FileNotFoundError(f"config.yaml missing at {path_manager.root}")
-
-        with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
-            pipeline_config = yaml.safe_load(f) or {}
-        with open(path_manager.root / 'config.yaml', 'r') as f:
-            agent_config = yaml.safe_load(f) or {}
-    except Exception as e:
-        msg = f"CRITICAL: Configuration error: {e}"
-        if ui: ui.log_main(msg)
-        else: print(msg)
-        return False
-
-    required_providers = set()
-    for agent_pipeline_config in pipeline_config.get('agents', []):
-        agent_name = agent_pipeline_config.get('name')
-        if agent_name:
-            provider = agent_config.get('agents', {}).get(agent_name, {}).get('provider')
-            if provider:
-                required_providers.add(provider)
-
-    provider_map = { 'openai': 'sgpt', 'gemini': 'gemini' }
-
-    all_found = True
-    for provider in required_providers:
-        tool = provider_map.get(provider)
-        if not tool or not shutil.which(tool):
-            msg = f"CRITICAL: CLI tool for provider '{provider}' ('{tool}') not found in PATH."
-            if ui: ui.log_main(msg)
-            else: print(msg)
-            all_found = False
-
-    return all_found
-
 def check_tui_keys(ui, proc=None):
     key = ui.get_key_nonblocking()
     if key == -1: return
@@ -386,11 +348,6 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     path_manager = PathManager(worqspace)
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
-
-    # [OPTIONAL] Pre-flight checks (uncomment if strictness required)
-    # if not run_pre_flight_checks(path_manager, ui):
-    #     if not ui: print("Pre-flight checks failed.")
-    #     return
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
     final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 5)
