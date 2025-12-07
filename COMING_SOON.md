@@ -115,3 +115,416 @@ Transform the agent ecosystem into a dynamic marketplace.
 
 ### Model Context Protocol (MCP)
 *   Adopt the emerging MCP standard as the interface for agent-tool interaction. Instead of manually interacting with the file system or shell, agents communicate with MCP servers that securely expose capabilities, standardizing the Agent-Computer Interface (ACI).
+
+---
+
+QonQrete
+Deep Technical Audit Report
+Multi-Agent AI Construction Pipeline
+December 2025
+Version 1.0
+
+Executive Summary
+QonQrete is an ambitious multi-agent AI construction pipeline designed as a self-hosted alternative to E2B. The system features a three-agent architecture (Planner/instruqtor, Executor/construqtor, Reviewer/inspeqtor) with human-in-the-loop controls, orchestrated by the Qrane engine. This audit examines the codebase across 15 critical dimensions.
+Overall Assessment: The codebase demonstrates solid architectural vision with clear separation of concerns. However, several critical security vulnerabilities and operational gaps require immediate attention before production deployment.
+Critical Priority Items:
+    1. API key exposure risk in shell environment handling
+    2. Code block parsing regex vulnerabilities in construqtor.py
+    3. Missing input validation and sanitization across agents
+    4. No rate limiting or circuit breaker patterns for AI API calls
+    5. Insufficient error recovery and retry mechanisms
+
+1. Security Analysis 🔐
+1.1 Hard-coded Secrets & API Keys
+CRITICAL: qonqrete.sh lines 244-249 expose API keys via command line arguments to Docker/msb containers. These can be visible in process listings.
+    • Issue: API_ENV_VARS construction concatenates keys directly: -e OPENAI_API_KEY=${OPENAI_API_KEY}
+    • Risk: Keys visible via 'ps aux', docker inspect, process monitoring
+    • Fix: Use Docker secrets, --env-file, or Podman secret mounts instead
+1.2 Command Injection Patterns
+MEDIUM RISK: Several shell commands constructed with variable interpolation:
+    • qonqrete.sh line 142: BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V}"
+    • qonqrete.sh line 242: CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
+    • Fix: Quote all variables, use arrays for command construction, validate inputs
+1.3 Path Traversal Vulnerabilities
+GOOD: construqtor.py lines 61-67 implements proper path traversal protection:
+qodeyard_abs = qodeyard.resolve()
+proposed_abs = proposed_path.resolve()
+if not str(proposed_abs).startswith(str(qodeyard_abs)):
+Recommendation: Extend this pattern to all file operations across the codebase.
+1.4 Input Validation & Sanitization
+HIGH RISK: Multiple input validation gaps identified:
+    • instruqtor.py clean_input_content() only handles encoding issues, not malicious content
+    • AI response parsing uses regex without sanitization (parse_xml_briqs)
+    • YAML files loaded with yaml.safe_load() (good) but no schema validation
+    • Fix: Implement pydantic/dataclasses for config validation, add content security policies for AI outputs
+1.5 Config & Secrets Handling Recommendations
+    • Create .env.example template with placeholder values
+    • Add .env to .gitignore (currently no .gitignore present)
+    • Implement python-dotenv for Python scripts
+    • Consider HashiCorp Vault or SOPS for production secrets management
+    • Add config validation with fail-fast on missing required keys
+
+2. Performance & Efficiency ⚡
+2.1 Hot-Path Optimization
+    • Issue: inspeqtor.py lines 39-49 walks entire qodeyard for every review cycle
+    • Fix: Cache file list between cycles, use incremental scanning based on mtime
+    • Issue: construqtor.py re-reads context_dirs for every briq file
+    • Fix: Build context once at start, update incrementally as files are written
+2.2 Memory Usage Concerns
+    • Issue: lib_ai.py _build_prompt() loads all context files into memory simultaneously
+    • Issue: inspeqtor.py context_str can grow to MAX_CHARS (300KB) in memory
+    • Fix: Implement streaming for large file contexts, use generators for file iteration
+2.3 Async/Concurrency Opportunities
+Current architecture is entirely synchronous. Key opportunities:
+    • AI API calls could use asyncio with aiohttp for parallel provider queries
+    • Multiple briq processing in construqtor could be parallelized (with dependency tracking)
+    • File I/O operations could leverage asyncio.to_thread() or aiofiles
+    • Recommended Stack: asyncio + httpx for AI calls, anyio for portable async
+2.4 Token/Context Management
+    • Issue: No token counting before API calls - may exceed model limits
+    • Fix: Integrate tiktoken for OpenAI, implement provider-specific tokenizers
+    • Issue: anthropic max_tokens hardcoded to 4096 in lib_ai.py line 129
+    • Fix: Make configurable per-agent in config.yaml
+
+3. Code Quality & Maintainability 🧹
+3.1 Refactoring Opportunities
+    • Duplication: qrane_prefix construction repeated in qonqrete.sh, qrane.py (5+ locations)
+    • Fix: Extract to shared utility function/class
+    • God Function: run_agent() in qrane.py is 120+ lines handling multiple concerns
+    • Fix: Split into: process_spawning, output_handling, logging, status_reporting
+3.2 Architecture Patterns
+Recommended refactoring towards clean architecture:
+    • Domain Layer: Agent, Briq, Cycle, Task entities with business logic
+    • Application Layer: Orchestration services, use cases
+    • Infrastructure Layer: AI providers, file system, container runtime adapters
+    • Adapters Layer: CLI, TUI, future web interfaces
+3.3 Type Safety Recommendations
+Current codebase lacks type hints. Recommended additions:
+    • Add py.typed marker and mypy configuration
+    • Define TypedDict for config structures
+    • Use Protocol classes for AI provider interface
+    • Add Literal types for mode/status enums
+# Example: from typing import TypedDict, Literal
+class AgentConfig(TypedDict):
+    provider: Literal['openai', 'anthropic', 'gemini', 'deepseek']
+    model: str
+3.4 Naming Improvements
+    • Issue: 'q' replacements (Qrane, briq, tasq) while creative, reduce searchability
+    • Suggestion: Keep Q-branding for UI/user-facing, use standard names internally
+    • Issue: Single-letter variables: B, W, R for colors, f for files
+    • Fix: Use BLUE, WHITE, RESET; use descriptive names in loops
+
+4. Error Handling & Resilience 🛟
+4.1 Current Error Handling Gaps
+    • Bare except clauses: Found in qrane.py lines 333-334, 419, instruqtor.py line 71
+    • Swallowed exceptions: lib_ai.py line 41 'except: pass' silently ignores file read errors
+    • Generic error messages: 'Config Error' without context in qrane.py
+4.2 Recommended Error Strategy
+    • Define custom exception hierarchy: QonQreteError -> AgentError, ConfigError, AIProviderError
+    • Implement structured error responses with error codes
+    • Add error context propagation (cause chaining)
+    • Create centralized error handler with logging hooks
+4.3 Retry & Backoff Patterns
+CRITICAL GAP: No retry logic for AI API calls. Single failure = pipeline failure.
+Recommended implementation:
+from tenacity import retry, stop_after_attempt, wait_exponential
+ @retry(stop=stop_after_attempt(3),
+       wait=wait_exponential(multiplier=1, min=4, max=60))
+def run_ai_completion(...):
+4.4 Circuit Breaker Pattern
+For AI provider failover, implement circuit breaker:
+    • Track failure rates per provider
+    • Open circuit after N consecutive failures
+    • Fallback to backup provider (configurable)
+    • Half-open state for recovery testing
+    • Library: pybreaker or circuitbreaker
+
+5. Validation, Logging & Observability 👀
+5.1 Current Logging Analysis
+    • Good: Structured log paths via PathManager.get_qonsole_log_path()
+    • Good: Events log separation from console output
+    • Issue: Uses print() instead of logging module in most agents
+    • Issue: No log levels (DEBUG, INFO, WARN, ERROR)
+    • Issue: No correlation IDs for tracing requests across agents
+5.2 Logging Strategy Recommendations
+    • Implement structlog for structured JSON logging
+    • Add cycle_id and agent_name to all log entries
+    • Configure log rotation (current logs grow unbounded)
+    • Add sensitive data filtering (API keys, tokens)
+    • Separate human-readable console output from machine logs
+5.3 Metrics & Tracing
+Suggested metrics to expose:
+    • qonqrete_cycle_duration_seconds (histogram)
+    • qonqrete_agent_success_total (counter by agent)
+    • qonqrete_ai_api_latency_seconds (histogram by provider)
+    • qonqrete_tokens_used_total (counter by provider)
+    • Stack: prometheus_client + OpenTelemetry for distributed tracing
+5.4 Health Checks
+For container deployments, add:
+    • Liveness probe: Basic process health
+    • Readiness probe: AI provider connectivity check
+    • Startup probe: Config validation, workspace initialization
+
+6. Testing & QA 🧪
+6.1 Current Test Coverage
+CRITICAL GAP: No test files present in the repository. Zero automated test coverage.
+6.2 Unit Test Priorities
+    • High Priority: parse_xml_briqs() - critical parsing logic
+    • High Priority: _write_ai_output_to_qodeyard() - file creation logic
+    • High Priority: PathManager methods - path construction correctness
+    • Medium Priority: Config loading and validation
+    • Medium Priority: clean_input_content() edge cases
+6.3 Integration Test Strategy
+    • Mock AI providers with recorded responses (VCR pattern)
+    • Test full cycle with fixture task definitions
+    • Verify file system artifacts post-cycle
+    • Container-based tests for Docker/msb modes
+6.4 Test Infrastructure
+    • Framework: pytest with pytest-cov, pytest-asyncio
+    • Mocking: unittest.mock + responses for HTTP
+    • Fixtures: Factory pattern for test data generation
+    • Coverage target: 80% for core modules
+6.5 Fuzz Testing Candidates
+    • XML/regex parsing in instruqtor.py
+    • Code block parsing in construqtor.py
+    • File path handling for path traversal prevention
+    • Tool: Hypothesis for property-based testing, atheris for fuzzing
+
+7. API & UX/DX Design 🌐
+7.1 CLI Design Assessment
+    • Good: Clear command structure (init, run, clean)
+    • Good: Helpful help text with usage examples
+    • Issue: No shell completion support
+    • Issue: No config file generation command (init --config)
+    • Issue: No dry-run mode for validation
+7.2 CLI Improvements
+    • Add 'qonqrete validate' command for config checking
+    • Add 'qonqrete status' to show current workspace state
+    • Add '--dry-run' flag to preview actions
+    • Add '--verbose' / '-v' for debug output
+    • Add '--output-format json' for scripting
+7.3 TUI Enhancement Ideas
+    • Real-time progress bars for AI API calls
+    • Split-pane view: agent output + file tree
+    • Keyboard shortcuts reference panel
+    • Agent status indicators (spinner, checkmark, X)
+    • Framework: textual or rich for enhanced TUI
+7.4 Future API Considerations
+For programmatic access (SDK/API):
+    • gRPC for high-performance internal communication
+    • REST API for external integrations
+    • WebSocket for real-time progress streaming
+    • OpenAPI spec for documentation
+
+8. Configuration, Deployability & Ops 🛠️
+8.1 Config Management Assessment
+    • Good: YAML-based configuration with reasonable defaults
+    • Good: Separation of pipeline_config.yaml from main config
+    • Issue: No environment-specific configs (dev/staging/prod)
+    • Issue: No config schema validation
+    • Issue: Environment variable overrides not supported
+8.2 12-Factor App Compliance
+    • Codebase: ✓ Single repo
+    • Dependencies: ✗ No requirements.txt/pyproject.toml
+    • Config: ✗ Not fully env-based
+    • Backing services: ✓ AI providers as attached resources
+    • Processes: ✓ Stateless execution
+    • Port binding: N/A (CLI tool)
+    • Logs: ✗ Not streamed to stdout as events
+8.3 Containerization Improvements
+Dockerfile recommendations (not present, assuming exists):
+    • Use multi-stage builds to minimize image size
+    • Pin base image versions (python:3.11-slim, not :latest)
+    • Add HEALTHCHECK instruction
+    • Non-root user for runtime
+    • Use .dockerignore for build context
+8.4 Runtime Safety
+    • Issue: No graceful shutdown handling in qrane.py
+    • Issue: Child processes may become orphans on SIGTERM
+    • Fix: Implement signal handlers (SIGTERM, SIGINT) with cleanup
+    • Fix: Add process group management for child processes
+
+9. Architecture & Scalability 🏗️
+9.1 Current Architecture Analysis
+The three-agent pipeline (Planner → Executor → Reviewer) is well-designed:
+    • Strengths: Clear separation of concerns, YAML-based communication
+    • Strengths: Human-in-the-loop checkpoints (gateQeeper)
+    • Strengths: Cycle-based iteration with persistent artifacts
+9.2 Scalability Considerations
+    • Bottleneck: Sequential agent execution (instruqtor → construqtor → inspeqtor)
+    • Opportunity: Parallel briq processing in construqtor (independent units)
+    • Opportunity: Distributed workers for multi-project orchestration
+9.3 Microservices Evolution Path
+Recommendation: Keep monolithic for now. Extract services when:
+    • Need independent scaling of specific agents
+    • Multi-tenant requirements emerge
+    • Different deployment cadences needed
+Potential service boundaries:
+    • AI Gateway Service (provider abstraction, rate limiting)
+    • Task Queue Service (briq distribution)
+    • Artifact Storage Service (S3-compatible)
+9.4 Message Queue Integration
+For async processing, consider:
+    • Redis + RQ: Simple, good for single-node
+    • Celery + RabbitMQ: Production-grade distributed tasks
+    • Temporal: Durable execution, complex workflows
+
+10. Documentation & Developer Onboarding 📚
+10.1 Current Documentation Gaps
+    • Missing: README.md with getting started guide
+    • Missing: Architecture overview diagram
+    • Missing: API key setup instructions
+    • Missing: Example task files (tasq.md)
+    • Missing: Troubleshooting guide
+10.2 README Structure Recommendation
+# QonQrete
+## Overview
+## Quick Start
+### Prerequisites
+### Installation
+### Your First Build
+## Architecture
+## Configuration
+## Advanced Usage
+## Contributing
+## License
+10.3 Inline Documentation
+    • Add Google-style docstrings to all public functions
+    • Document complex regex patterns (parse_xml_briqs, _write_ai_output_to_qodeyard)
+    • Add module-level docstrings explaining purpose
+    • Comment non-obvious design decisions
+10.4 Example Repository
+    • Create examples/ directory with sample projects
+    • Include: simple-python-cli, fastapi-app, react-dashboard
+    • Each example: tasq.md + expected output + config
+
+11. Dependency & Build Hygiene 🧬
+11.1 Current Dependency Analysis
+CRITICAL: No requirements.txt or pyproject.toml present. Dependencies inferred from imports:
+    • anthropic - Anthropic Claude API
+    • openai - OpenAI API (also used for DeepSeek)
+    • google-generativeai - Google Gemini API
+    • pyyaml - YAML parsing
+11.2 Recommended pyproject.toml
+[project]
+name = "qonqrete"
+requires-python = ">=3.10"
+dependencies = [
+  "anthropic>=0.34.0",
+  "openai>=1.0.0",
+  "google-generativeai>=0.8.0",
+  "pyyaml>=6.0",
+]
+11.3 Security Recommendations
+    • Add pip-audit to CI for vulnerability scanning
+    • Use dependabot/renovate for automated updates
+    • Pin exact versions in production lockfile
+    • Use hashes for verification (pip install --require-hashes)
+11.4 Optional Dependencies to Consider
+    • tenacity: Retry logic for API calls
+    • structlog: Structured logging
+    • pydantic: Config validation and serialization
+    • tiktoken: Token counting for OpenAI
+    • textual: Modern TUI framework
+
+12. Internationalization & Accessibility 🌍
+12.1 i18n Considerations
+    • CLI messages currently hardcoded in English
+    • Unicode box-drawing characters may not render everywhere
+    • AI prompts would need localization for non-English outputs
+Recommendation: Low priority unless multi-language support is planned
+12.2 Terminal Accessibility
+    • ANSI color codes should be optional (--no-color flag)
+    • Detect NO_COLOR environment variable
+    • Ensure screen reader compatibility for TUI mode
+    • Provide text-only output option for logging
+
+13. Licensing, Compliance & Project Hygiene ⚖️
+13.1 License Recommendations
+    • Missing: LICENSE file not present
+Options based on goals:
+    • MIT: Maximum adoption, commercial-friendly
+    • Apache 2.0: Patent protection, enterprise adoption
+    • AGPL-3.0: Strong copyleft, requires source for network use
+    • BSL/SSPL: Source-available with commercial restrictions
+13.2 Third-Party License Audit
+Dependencies and their licenses:
+    • anthropic: MIT
+    • openai: Apache-2.0
+    • google-generativeai: Apache-2.0
+    • pyyaml: MIT
+All compatible with MIT/Apache/AGPL
+13.3 Project Structure Improvements
+    • Add .gitignore (Python, IDE, OS artifacts)
+    • Add .editorconfig for consistent formatting
+    • Add CHANGELOG.md following Keep a Changelog format
+    • Add CONTRIBUTING.md with contribution guidelines
+    • Add SECURITY.md for vulnerability reporting
+
+14. Future Features & Wild Ideas 🤯
+14.1 Obvious Next Steps
+    • Web Dashboard: Real-time monitoring UI for cycle progress
+    • Provider Failover: Automatic fallback when one AI provider fails
+    • Cost Tracking: Token usage and cost per cycle/project
+    • Project Templates: Pre-built configurations for common project types
+    • Git Integration: Auto-commit per cycle, branch per run
+14.2 Stretch Goals
+    • Plugin System: Custom agents via Python modules
+    • Multi-Tenant Mode: Isolated workspaces with RBAC
+    • Agent Marketplace: Community-contributed agent types
+    • IDE Extensions: VS Code / Cursor integration
+    • CI/CD Native: GitHub Action / GitLab CI runner
+14.3 'Infinite Time' Ideas
+    • Self-Improving Pipeline: Agent that optimizes prompts based on success rates
+    • Auto-Scaling Clusters: K8s operator for distributed QonQrete
+    • Knowledge Graph: Cross-project learning from past builds
+    • Interactive Debugging: Step through agent decisions with rewind
+    • MicroVM Fleet: Firecracker-based agent isolation at scale
+
+15. Meta-Stuff: Workflow & Process 🧠
+15.1 Branching Strategy
+Recommended: Trunk-based development for small team
+    • main - Always deployable
+    • feature/* - Short-lived feature branches
+    • release/vX.Y - Release candidates
+    • hotfix/* - Production fixes
+15.2 Code Review Checklist
+    • Security: No hardcoded secrets, input validation
+    • Error handling: No bare except, proper logging
+    • Tests: New functionality has tests
+    • Documentation: Docstrings, README updates
+    • Config: No environment-specific values hardcoded
+15.3 Issue & Label Scheme
+    • type/bug: Something broken
+    • type/feature: New functionality
+    • type/security: Security-related
+    • priority/critical: Blocking production
+    • area/instruqtor: Planner agent
+    • area/construqtor: Executor agent
+    • area/qrane: Orchestration
+15.4 CI/CD Pipeline Suggestion
+    • On PR: lint (ruff), type check (mypy), unit tests, SAST (bandit)
+    • On merge to main: Integration tests, build Docker image
+    • On tag: Release to registry, generate changelog
+15.5 Automated Tooling
+    • pre-commit hooks: ruff format, ruff check, mypy, detect-secrets
+    • Commit format: Conventional Commits (feat:, fix:, chore:)
+    • Release: semantic-release for automated versioning
+
+Appendix: Priority Matrix
+Summary of recommendations by priority and effort:
+Category	Item	Priority	Effort
+Security	API key exposure fix	CRITICAL	Low
+Security	Input validation	HIGH	Medium
+Error Handling	Retry/backoff for AI calls	HIGH	Low
+Testing	Unit test foundation	HIGH	Medium
+Dependencies	Add requirements.txt	HIGH	Low
+Docs	README.md	HIGH	Low
+Performance	Token counting	MEDIUM	Low
+Code Quality	Type hints	MEDIUM	High
+Logging	Structured logging	MEDIUM	Medium
+Config	Environment overrides	MEDIUM	Low
+Architecture	Circuit breaker	MEDIUM	Medium
+CLI	Validation command	LOW	Low
+Future	Web dashboard	LOW	High
+End of Report
