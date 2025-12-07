@@ -6,12 +6,12 @@ agents:
     model: gpt-4o
 
   construqtor:
-    provider: deepseek
-    model: deepseek-coder
+    provider: gemini
+    model: gemini-2.5-flash
 
   inspeqtor:
-    provider: deepseek
-    model: deepseek-coder
+    provider: openai
+    model: gpt-4o
 
 options:
   # Cheqpoint Configuration
