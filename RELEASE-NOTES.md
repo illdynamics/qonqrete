@@ -10,6 +10,9 @@
 - **Roadmap**: Updated `COMING_SOON.md` to remove features that have already been implemented (Claude and DeepSeek provider support).
 - **Suggestions**: Added a new `SUGGESTIONS.md` file containing a summary of findings from a code audit, with recommendations for improving performance, efficiency, and code quality.
 
+### Testing
+- **Functional Tests**: Performed a series of functional tests for the `qonqrete.sh` CLI, including run and clean commands, command-line flags, and pre-flight checks. The `TESTS.md` file has been updated to reflect the results.
+
 ---
 
 ## [v0.4.8-alpha] - 2025-12-06
