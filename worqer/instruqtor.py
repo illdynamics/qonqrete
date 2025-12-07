@@ -2,7 +2,7 @@
 # worqer/instruqtor.py
 import os
 import sys
-import yaml
+import argparse
 import re
 from pathlib import Path
 
@@ -55,24 +55,24 @@ def get_sensitivity_prompt(level: int) -> str:
     return prompts.get(level, prompts[3]) # Default to 3 if out of range
 
 def main() -> None:
-    if len(sys.argv) != 3: sys.exit(1)
+    parser = argparse.ArgumentParser(description="Instruqtor Agent")
+    parser.add_argument("input_file", help="Path to the input task file.")
+    parser.add_argument("output_dir", help="Directory to save the output briqs.")
+    parser.add_argument("--provider", required=True, help="AI provider to use.")
+    parser.add_argument("--model", required=True, help="AI model to use.")
+    args = parser.parse_args()
 
-    input_file = Path(sys.argv[1])
-    output_dir = Path(sys.argv[2])
+    input_file = Path(args.input_file)
+    output_dir = Path(args.output_dir)
+    ai_provider = args.provider
+    ai_model = args.model
+    
     cycle_num = os.environ.get('CYCLE_NUM', '1')
 
     print(f"--- Architect analyzing: {input_file.name} ---", flush=True)
     with open(input_file, 'r', encoding='utf-8') as f: task_content = clean_input_content(f.read())
 
     os.makedirs(output_dir, exist_ok=True)
-
-    try:
-        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
-    except: config = {}
-
-    agent_cfg = config.get('agents', {}).get('instruqtor', {})
-    ai_provider = agent_cfg.get('provider', 'openai')
-    ai_model = agent_cfg.get('model', 'gpt-4o')
 
     mode = os.environ.get('QONQ_MODE', 'enterprise')
     try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))

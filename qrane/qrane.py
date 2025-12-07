@@ -397,6 +397,49 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
+    # --- Configuration Validation ---
+    try:
+        with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
+            pipeline_config = yaml.safe_load(f)
+        if not pipeline_config or 'agents' not in pipeline_config:
+            print(f"{qrane_prefix}[ERROR] `pipeline_config.yaml` is missing or malformed. It must contain an 'agents' list.", file=sys.stderr)
+            sys.exit(1)
+    except FileNotFoundError:
+        print(f"{qrane_prefix}[ERROR] `pipeline_config.yaml` not found in the worqspace.", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"{qrane_prefix}[ERROR] Failed to load or parse `pipeline_config.yaml`: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    agent_configs = config.get('agents', {})
+    agents_in_pipeline = [agent['name'] for agent in pipeline_config.get('agents', [])]
+
+    if not agents_in_pipeline:
+        print(f"{qrane_prefix}[ERROR] No agents defined in `pipeline_config.yaml`.", file=sys.stderr)
+        sys.exit(1)
+
+    for agent_name in agents_in_pipeline:
+        if agent_name not in agent_configs:
+            print(f"{qrane_prefix}[ERROR] Agent '{agent_name}' is in the pipeline but has no configuration in `config.yaml`.", file=sys.stderr)
+            sys.exit(1)
+        
+        agent_conf = agent_configs[agent_name]
+        if not agent_conf:
+            print(f"{qrane_prefix}[ERROR] Configuration for agent '{agent_name}' is empty in `config.yaml`.", file=sys.stderr)
+            sys.exit(1)
+
+        provider = agent_conf.get('provider')
+        model = agent_conf.get('model')
+
+        if not provider or not isinstance(provider, str) or provider.strip() == "":
+            print(f"{qrane_prefix}[ERROR] 'provider' is missing, empty, or invalid for agent '{agent_name}' in `config.yaml`.", file=sys.stderr)
+            sys.exit(1)
+        
+        if not model or not isinstance(model, str) or model.strip() == "":
+            print(f"{qrane_prefix}[ERROR] 'model' is missing, empty, or invalid for agent '{agent_name}' in `config.yaml`.", file=sys.stderr)
+            sys.exit(1)
+    # --- End Validation ---
+
     cycle = 1
     session_failed = False
     user_aborted = False
@@ -430,7 +473,15 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 script = agent_def['script']
                 input_path = path_manager.root / resolve_template(agent_def['input'])
                 output_path = path_manager.root / resolve_template(agent_def['output'])
-                cmd = ["python3", str(AGENT_MODULE_DIR / script), str(input_path), str(output_path)]
+                
+                agent_conf = agent_configs.get(name, {})
+                provider = agent_conf.get('provider')
+                model = agent_conf.get('model')
+
+                cmd = ["python3", str(AGENT_MODULE_DIR / script), 
+                       str(input_path), str(output_path),
+                       "--provider", provider,
+                       "--model", model]
                 agents_to_run.append((name, cmd))
 
             AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA}

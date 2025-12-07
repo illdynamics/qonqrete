@@ -143,8 +143,8 @@ case "$COMMAND" in
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             log_qrane "Building Qage with Microsandbox..."
-            if command -v msb >/dev/null 2>&1; then exec_qrane msb build . -t "$IMAGE_NAME" $BUILD_ARGS
-            elif command -v mbx >/dev/null 2>&1; then exec_qrane mbx build . -t "$IMAGE_NAME" $BUILD_ARGS
+            if command -v msb >/dev/null 2>&1; then exec_qrane msb build . "$IMAGE_NAME"
+            elif command -v mbx >/dev/null 2>&1; then exec_qrane mbx build . "$IMAGE_NAME"
             else log_qrane "[ERROR] msb/mbx not found."; exit 1; fi
         else
             log_qrane "Building Qage with Docker..."
@@ -250,7 +250,7 @@ case "$COMMAND" in
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
-            $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
+            $CMD_BIN run $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else

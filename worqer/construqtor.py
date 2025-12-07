@@ -2,7 +2,7 @@
 # worqer/construqtor.py
 import sys
 import os
-import yaml
+import argparse
 import re
 from pathlib import Path
 
@@ -79,20 +79,20 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
     return written_files
 
 def main():
-    if len(sys.argv) < 3: print("Usage: construqtor.py <input> <output>"); sys.exit(1)
+    parser = argparse.ArgumentParser(description="Construqtor Agent")
+    parser.add_argument("input_dir", help="Directory containing the input briq files.")
+    parser.add_argument("output_file", help="Path to save the output summary file.")
+    parser.add_argument("--provider", required=True, help="AI provider to use.")
+    parser.add_argument("--model", required=True, help="AI model to use.")
+    args = parser.parse_args()
 
-    briq_dir = Path(sys.argv[1])
-    summary_file = Path(sys.argv[2])
+    briq_dir = Path(args.input_dir)
+    summary_file = Path(args.output_file)
+    ai_provider = args.provider
+    ai_model = args.model
+
     worqspace_root = Path(os.getcwd())
     qodeyard_path = worqspace_root / "qodeyard"
-
-    try:
-        with open('config.yaml', 'r', encoding='utf-8') as f: config = yaml.safe_load(f) or {}
-    except: config = {}
-
-    agent_cfg = config.get('agents', {}).get('construqtor', {})
-    ai_provider = agent_cfg.get('provider', 'gemini')
-    ai_model = agent_cfg.get('model', 'gemini-1.5-pro')
 
     mode = os.environ.get('QONQ_MODE', 'enterprise')
     mode_prompt = get_mode_persona(mode)
@@ -140,11 +140,13 @@ This is a test project.
         result = ""
         try:
             result = lib_ai.run_ai_completion(ai_provider, ai_model, prompt, context_files=context_dirs)
-            success = True
+            if result and "```" in result:
+                success = True
         except Exception as e:
-            # [FIX] If we got a partial result or pipe error, check if code was generated anyway
-            print(f"     [WARN] AI Pipe Signal: {e}", flush=True)
-            if "```" in str(e) or (result and "```" in result):
+            sys.stderr.write(f"     [ERROR] AI provider call failed for briq {briq_file.name}: {e}\n")
+            result = str(e)  # Check if the error string itself contains code
+            if "```" in result:
+                sys.stderr.write(f"     [INFO] Attempting to recover partial code from error output.\n")
                 success = True
             else:
                 success = False
@@ -183,5 +185,9 @@ This is a test project.
 
     os.makedirs(summary_file.parent, exist_ok=True)
     with open(summary_file, 'w', encoding='utf-8') as f: f.write(summary_content)
+
+    if failure_count > 0:
+        sys.stderr.write(f"CRITICAL: Construqtor failed to process {failure_count} briq(s).\n")
+        sys.exit(1)
 
 if __name__ == "__main__": main()

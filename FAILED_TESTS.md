@@ -1,11 +1,24 @@
-# Failed Tests Report
+- **Test:** Single-Provider Sweep
+- **Provider:** gemini
+- **Model:** gemini-2.5-pro
+- **Failure:** The `construqtor` agent failed with a 429 quota error.
 
-The following tests failed or could not be executed successfully in the current environment:
+- **Test:** Single-Provider Sweep
+- **Provider:** anthropic
+- **Model:** claude-3-5-sonnet
+- **Failure:** The `instruqtor` agent failed with a 404 error, indicating that `claude-3-5-sonnet` is not a valid or accessible model name.
 
-## Microsandbox (msb)
-- [ ] **Init with msb**: `Run ./qonqrete.sh init --msb`. Failed because `msb` is not installed or configured in the test environment.
-- [ ] **Run with msb**: `Run a full task cycle using ./qonqrete.sh run --msb`. Failed because `msb` is not installed.
-- [ ] **Default Detection**: `Set microsandbox: true in pipeline_config.yaml and run without the --msb flag`. Failed/Skipped due to missing `msb`.
+- **Test:** Single-Provider Sweep
+- **Provider:** anthropic
+- **Model:** claude-3-5-haiku
+- **Failure:** The `instruqtor` agent failed with a 404 error, indicating that `claude-3-5-haiku` is not a valid or accessible model name.
 
-## TUI Mode
-- [ ] **Interactive TUI**: Full interactive TUI tests (scrolling, keypresses) could not be verified in the non-interactive test environment.
+- **Test:** `init` without Docker/msb
+- **Failure:** Unable to reliably simulate an environment without Docker/msb. The `PATH` manipulation tests were unsuccessful.
+
+- **Test:** Microsandbox (`msb`) functionality
+- **Failure:** The `msb` command does not support the `-t`, `--build-arg`, `--rm`, or `-it` flags used by the `qonqrete.sh` script, causing the `init` and `run` commands to fail.
+
+- **Test:** CLI Override Tests
+- **Command:** `./qonqrete.sh run --auto --mode security --briq-sensitivity 0`
+- **Failure:** The `construqtor` agent failed to process a briq related to "addcommentsforclarity" and exited with a non-zero status code.

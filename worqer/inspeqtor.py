@@ -2,7 +2,7 @@
 # worqer/inspeqtor.py
 import os
 import sys
-import yaml
+import argparse
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -10,10 +10,18 @@ try: import lib_ai
 except ImportError: sys.exit(1)
 
 def main() -> None:
-    if len(sys.argv) != 3: sys.exit(1)
+    parser = argparse.ArgumentParser(description="Inspeqtor Agent")
+    parser.add_argument("input_file", help="Path to the input summary file.")
+    parser.add_argument("output_file", help="Path to save the output reQap file.")
+    parser.add_argument("--provider", required=True, help="AI provider to use.")
+    parser.add_argument("--model", required=True, help="AI model to use.")
+    args = parser.parse_args()
 
-    summary_path = Path(sys.argv[1])
-    reqap_path = Path(sys.argv[2])
+    summary_path = Path(args.input_file)
+    reqap_path = Path(args.output_file)
+    ai_provider = args.provider
+    ai_model = args.model
+
     cycle_num = os.environ.get('CYCLE_NUM', '1')
     qodeyard_path = Path(os.getcwd()) / 'qodeyard'
 
@@ -21,15 +29,10 @@ def main() -> None:
 
     try:
         with open(summary_path, 'r', encoding='utf-8') as f: summary_content = f.read()
-    except: summary_content = "Summary not found."
-
-    try:
-        with open('config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
-    except: config = {}
-
-    agent_cfg = config.get('agents', {}).get('inspeqtor', {})
-    ai_provider = agent_cfg.get('provider', 'openai')
-    ai_model = agent_cfg.get('model', 'gpt-4o')
+    except FileNotFoundError:
+        summary_content = f"Summary file not found at: {summary_path}"
+    except Exception as e:
+        summary_content = f"Could not read summary file: {e}"
 
     # Gather Code Context (Safe Limit)
     context_str = f"## ConstruQtor's Report\n{summary_content}\n\n## Artifacts\n"
@@ -38,6 +41,7 @@ def main() -> None:
 
     if qodeyard_path.is_dir():
         for root, _, files in os.walk(qodeyard_path):
+            if total_chars > MAX_CHARS: break
             for name in files:
                 if total_chars > MAX_CHARS: break
                 fpath = os.path.join(root, name)
@@ -46,7 +50,9 @@ def main() -> None:
                         content = f.read()
                         context_str += f"\n### File: `{name}`\n```\n{content}\n```\n"
                         total_chars += len(content)
-                except: pass
+                except Exception as e:
+                    context_str += f"\n### File: `{name}`\n```\n[Could not read file: {e}]\n```\n"
+
 
     reviewer_prompt = f"""
 You are the 'inspeQtor'.
@@ -63,7 +69,6 @@ You are the 'inspeQtor'.
 """
 
     try:
-        # [FIX] This will now use stdin via lib_ai, avoiding Argument list too long
         content = lib_ai.run_ai_completion(ai_provider, ai_model, reviewer_prompt)
 
         os.makedirs(reqap_path.parent, exist_ok=True)
@@ -71,9 +76,9 @@ You are the 'inspeQtor'.
         print(f"reQap written to {reqap_path}", flush=True)
 
     except Exception as e:
-        print(f"Inspeqtor Failure: {e}", flush=True)
-        # Create a fallback reqap so the cycle doesn't crash hard
-        with open(reqap_path, 'w') as f: f.write(f"Assessment: Partial\nError: {e}")
+        sys.stderr.write(f"CRITICAL: Inspeqtor AI call failed: {e}\n")
+        # Do not create a fallback, let the orchestrator know we failed.
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
