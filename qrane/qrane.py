@@ -202,7 +202,7 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
             # [FIX] Use regex to find the Assessment line regardless of leading chars/lists
             match = re.search(r"Assessment:\s*(.*)", content, re.IGNORECASE)
             if match:
-                assessment = match.group(1).strip()
+                assessment = match.group(1).strip().strip('*').strip()
         else:
             content = f"[ERROR] reQap not found at {reqap_path}"
     except Exception as e:
@@ -265,11 +265,9 @@ def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
         with open(src, 'r') as f: content = f.read()
 
         assessment_status = "Unknown"
-        for line in content.split('\n'):
-            clean_line = line.strip()
-            if clean_line.startswith("Assessment:"):
-                assessment_status = clean_line.split(":", 1)[1].strip()
-                break
+        match = re.search(r"Assessment:\s*(.*)", content, re.IGNORECASE)
+        if match:
+            assessment_status = match.group(1).strip().strip('*').strip()
 
         header = f"# Cycle {cycle+1} Directive\n\n**PREVIOUS CYCLE STATUS:** {assessment_status}\n\n**CRITICAL INSTRUCTION:**\n1. Analyze Assessment.\n2. Fix failures if Partial/Failure.\n3. Implement suggestions if Success.\n\n---\n\n"
         with open(dst, 'w') as f: f.write(header + content)

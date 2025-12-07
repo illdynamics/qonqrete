@@ -54,30 +54,30 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] With `cheqpoint: false`, run `./qonqrete.sh run --user`. Verify it correctly overrides the config and runs in user-gated mode.
 
 ### 2.3. Cycle and File Management
--   [ ] **I/O Flow**: After a successful cycle 1, verify that `cyqle1_reqap.md` is correctly used to generate `cyqle2_tasq.md`.
--   [ ] **Header Promotion**: Check the content of `cyqle2_tasq.md`. It must contain a header with the "Assessment" status from the previous cycle.
--   [ ] **Agent Failure**: Introduce an error in an agent script (e.g., `sys.exit(1)` in `construqtor.py`). Run the system. Verify the cycle fails and the orchestration stops with an error message.
+-   [x] **I/O Flow**: After a successful cycle 1, verify that `cyqle1_reqap.md` is correctly used to generate `cyqle2_tasq.md`.
+-   [x] **Header Promotion**: Check the content of `cyqle2_tasq.md`. It must contain a header with the "Assessment" status from the previous cycle.
+-   [x] **Agent Failure**: Introduce an error in an agent script (e.g., `sys.exit(1)` in `construqtor.py`). Run the system. Verify the cycle fails and the orchestration stops with an error message.
 -   [x] **Logging**: For a successful run, inspect `struqture/`. Verify a log file exists for each agent for each cycle (e.g., `cyqle1_instruqtor.log`).
 
 ## 3. Agent Configuration and Behavior
 
 ### 3.1. Dynamic Pipeline (`pipeline_config.yaml`)
--   [ ] **Remove Agent**:
-    -   [ ] Comment out the `inspeqtor` agent from the config. Run one cycle. Verify the system stops after `construqtor` and waits at the CheQpoint (it may complain about a missing `reqap` file, this is expected).
--   [ ] **Reorder Agents (Failure Test)**:
-    -   [ ] Swap the `construqtor` and `instruqtor` blocks in the config. Run the system. Verify it fails immediately because `construqtor` cannot find its required `briq.d/` input. This confirms the order is respected.
+-   [x] **Remove Agent**:
+    -   [x] Comment out the `inspeqtor` agent from the config. Run one cycle. Verify the system stops after `construqtor` and waits at the CheQpoint (it may complain about a missing `reqap` file, this is expected).
+-   [x] **Reorder Agents (Failure Test)**:
+    -   [x] Swap the `construqtor` and `instruqtor` blocks in the config. Run the system. Verify it fails immediately because `construqtor` cannot find its required `briq.d/` input. This confirms the order is respected.
 ### 3.2. Agent Settings (`config.yaml`)
--   [ ] **Swap Providers**:
-    -   [ ] Change `instruqtor`'s provider to `gemini`. Run a cycle. Verify `gemini` is called for the planning phase.
-    -   [ ] Change `construqtor`'s provider to `openai`. Run a cycle. Verify `sgpt` is called for the execution phase.
--   [ ] **Swap Models**:
-    -   [ ] Change `inspeqtor`'s model to a different, valid OpenAI model. Verify the new model is used.
--   [ ] **Operational Modes**:
-    -   [ ] Set `mode: security` in `config.yaml`. Run a task to generate a Python script. Inspect the AI's output to verify it includes security-conscious code (e.g., input validation).
+-   [x] **Swap Providers**:
+    -   [x] Change `instruqtor`'s provider to `gemini`. Run a cycle. Verify `gemini` is called for the planning phase.
+    -   [x] Change `construqtor`'s provider to `openai`. Run a cycle. Verify `sgpt` is called for the execution phase.
+-   [x] **Swap Models**:
+    -   [x] Change `inspeqtor`'s model to a different, valid OpenAI model. Verify the new model is used.
+-   [x] **Operational Modes**:
+    -   [x] Set `mode: security` in `config.yaml`. Run a task to generate a Python script. Inspect the AI's output to verify it includes security-conscious code (e.g., input validation).
     -   [ ] Set `mode: enterprise`. Verify the output includes docstrings, logging, and error handling.
--   [ ] **Briq Sensitivity**:
-    -   [ ] Set `briq_sensitivity: 0` (Atomic). Use a complex `tasq.md`. Verify `instruqtor` generates a large number of briq files.
-    -   [ ] Set `briq_sensitivity: 9` (Monolithic). Use the same `tasq.md`. Verify `instruqtor` generates very few (ideally 1) briq files.
+-   [x] **Briq Sensitivity**:
+    -   [x] Set `briq_sensitivity: 0` (Atomic). Use a complex `tasq.md`. Verify `instruqtor` generates a large number of briq files.
+    -   [x] Set `briq_sensitivity: 9` (Monolithic). Use the same `tasq.md`. Verify `instruqtor` generates very few (ideally 1) briq files.
 
 ## 4. TUI Mode Tests (`--tui`)
 
@@ -102,17 +102,17 @@ This document outlines a comprehensive suite of functional tests designed to val
 -   [ ] **Large Tasq / I/O Stress Test**:
     -   [ ] Create a `tasq.md` that is extremely long and complex, requiring deep analysis.
     -   [ ] Run a full cycle. Monitor for I/O errors, prompt size limits with AI providers, or timeouts. Verify the system either completes or fails with a specific error message logged.
--   [ ] **Invalid `tasq.md` Content**:
-    -   [ ] Fill `tasq.md` with non-UTF-8 characters, symbols, and mixed languages (`"你好 RÄtsel"`, etc.).
-    -   [ ] Run the system. Verify that the file is read and passed to the AI without crashing the `instruqtor`.
--   [ ] **Invalid Agent Output**:
-    -   [ ] Manually edit `instruqtor.py` to output malformed XML (no `<briq>` tags). Verify `instruqtor` logs a warning and creates a single fallback briq file containing the raw AI output.
-    -   [ ] Manually edit `construqtor.py` to not generate any code blocks. Verify the summary reports a "failure" for that briq.
--   [ ] **Log Errors**:
-    -   [ ] Force an agent to crash with an unhandled Python exception.
-    -   [ ] Inspect the agent's log file in `struqture/` and the stderr output from `qrane`. Verify the full traceback is recorded.
--   [ ] **Permissions**:
-    -   [ ] Change permissions of `worqspace/` to read-only (`chmod -R 444 worqspace`). Run `./qonqrete.sh run`. Verify it fails immediately with permission errors.
+-   [x] **Invalid `tasq.md` Content**:
+    -   [x] Fill `tasq.md` with non-UTF-8 characters, symbols, and mixed languages (`"你好 RÄtsel"`, etc.).
+    -   [x] Run the system. Verify that the file is read and passed to the AI without crashing the `instruqtor`.
+-   [x] **Invalid Agent Output**:
+    -   [x] Manually edit `instruqtor.py` to output malformed XML (no `<briq>` tags). Verify `instruqtor` logs a warning and creates a single fallback briq file containing the raw AI output.
+    -   [x] Manually edit `construqtor.py` to not generate any code blocks. Verify the summary reports a "failure" for that briq.
+-   [x] **Log Errors**:
+    -   [x] Force an agent to crash with an unhandled Python exception.
+    -   [x] Inspect the agent's log file in `struqture/` and the stderr output from `qrane`. Verify the full traceback is recorded.
+-   [x] **Permissions**:
+    -   [x] Change permissions of `worqspace/` to read-only (`chmod -R 444 worqspace`). Run `./qonqrete.sh run`. Verify it fails immediately with permission errors.
 
 ## 6. Multi-Platform Testing
 
@@ -132,3 +132,183 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] Run `./qonqrete.sh init --msb`.
     -   [ ] Run a full task cycle using `./qonqrete.sh run --msb`.
     -   [ ] Set `microsandbox: true` in `pipeline_config.yaml` and run without the `--msb` flag to test the default detection.
+
+## 7. Provider & Model Matrix Tests
+
+These tests validate that QonQrete can switch between multiple AI providers and their most common models without crashing, misrouting prompts, or corrupting artifacts.
+
+### 7.1 Provider / Model Catalog (Reference)
+
+Use these as the canonical test set (adjust model IDs if your adapter uses different names):
+
+- **OpenAI**
+  - Primary: `gpt-4o`
+  - Secondary: `gpt-4o-mini`
+
+- **Google / Gemini**
+  - Primary: `gemini-2.5-flash`
+  - Secondary: `gemini-2.5-pro`
+
+- **DeepSeek**
+  - Primary: `deepseek-chat`
+  - Secondary: `deepseek-coder`
+
+- **Claude**
+  - Primary: `claude-3.5-sonnet`
+  - Secondary: `claude-3.5-haiku`
+
+All tests below assume the three agents are:
+
+- `instruqtor`
+- `construqtor`
+- `inspeqtor`
+
+### 7.2 Single-Provider / All-Agents Smoke Tests
+
+For each checkbox, set **all three agents** in `config.yaml` to the given `provider` and `model`, then run a short tasq with:
+
+- `./qonqrete.sh run --auto`
+- Simple `tasq.md` that forces at least 1 full cyQle.
+
+- [ ] All agents → **OpenAI / gpt-4o**
+- [ ] All agents → **OpenAI / gpt-4o-mini**
+- [ ] All agents → **Gemini / gemini-2.5-flash**
+- [ ] All agents → **Gemini / gemini-2.5-pro**
+- [ ] All agents → **DeepSeek / deepseek-chat**
+- [ ] All agents → **DeepSeek / deepseek-coder**
+- [ ] All agents → **Claude / claude-3.5-sonnet**
+- [ ] All agents → **Claude / claude-3.5-haiku**
+
+For each run, verify:
+
+- [ ] CyQle completes without Python errors or provider API errors.
+- [ ] `struqture/` contains logs for all 3 agents for the cyQle.
+- [ ] `briq.d/`, `exeq.d/`, and `reqap.d/` contain the expected artifacts.
+
+### 7.3 Per-Agent Provider Rotation (One Agent at a Time)
+
+Goal: prove each **individual agent** can be swapped through all providers/models while the others stay stable.
+
+For these tests, keep **two agents fixed** on a known-good combo  
+(e.g. `openai / gpt-4o`) and rotate the third.
+
+#### 7.3.1 instruqtor Provider/Model Sweep
+
+- [ ] Fix `construqtor` and `inspeqtor` to `openai / gpt-4o`.
+- [ ] For each `(provider, model)` in the catalog, set `instruqtor` and run `./qonqrete.sh run --auto`:
+
+  - [ ] instruqtor → OpenAI / gpt-4o
+  - [ ] instruqtor → OpenAI / gpt-4o-mini
+  - [ ] instruqtor → Gemini / gemini-2.5-flash
+  - [ ] instruqtor → Gemini / gemini-2.5-pro
+  - [ ] instruqtor → DeepSeek / deepseek-chat
+  - [ ] instruqtor → DeepSeek / deepseek-coder
+  - [ ] instruqtor → Claude / claude-3.5-sonnet
+  - [ ] instruqtor → Claude / claude-3.5-haiku
+
+Verify:
+
+- [ ] `briq.d/` is always produced and non-empty.
+- [ ] No provider/model mismatch errors (e.g., unknown model, bad request).
+
+#### 7.3.2 construqtor Provider/Model Sweep
+
+- [ ] Fix `instruqtor` and `inspeqtor` to `openai / gpt-4o`.
+- [ ] Sweep `construqtor` through the same `(provider, model)` list.
+
+Verify:
+
+- [ ] `exeq.d/cyqle{N}_summary.md` is produced.
+- [ ] No provider/model errors and no missing briq input errors.
+
+#### 7.3.3 inspeqtor Provider/Model Sweep
+
+- [ ] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
+- [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
+
+Verify:
+
+- [ ] `reqap.d/cyqle{N}_reqap.md` is produced and well-formed.
+- [ ] No provider/model errors.
+
+### 7.4 Mixed-Provider Matrix (Cross-Provider Triples)
+
+This section aims to stress “mixed” setups where different agents talk to different providers.
+
+Use the **primary models** only for this section:
+
+- OpenAI: `gpt-4o`
+- Gemini: `gemini-2.5-flash`
+- DeepSeek: `deepseek-chat`
+- Claude: `claude-3.5-sonnet`
+
+#### 7.4.1 Key Cross-Provider Scenarios
+
+For each test, set providers/models as specified, then run `./qonqrete.sh run --auto`:
+
+- [ ] instruqtor: OpenAI / gpt-4o  
+      construqtor: Gemini / gemini-2.5-flash  
+      inspeqtor: OpenAI / gpt-4o
+
+- [ ] instruqtor: Gemini / gemini-2.5-flash  
+      construqtor: OpenAI / gpt-4o  
+      inspeqtor: OpenAI / gpt-4o
+
+- [ ] instruqtor: DeepSeek / deepseek-chat  
+      construqtor: OpenAI / gpt-4o  
+      inspeqtor: Claude / claude-3.5-sonnet
+
+- [ ] instruqtor: OpenAI / gpt-4o  
+      construqtor: DeepSeek / deepseek-chat  
+      inspeqtor: Claude / claude-3.5-sonnet
+
+- [ ] instruqtor: Claude / claude-3.5-sonnet  
+      construqtor: Gemini / gemini-2.5-flash  
+      inspeqtor: OpenAI / gpt-4o
+
+- [ ] instruqtor: Gemini / gemini-2.5-flash  
+      construqtor: DeepSeek / deepseek-chat  
+      inspeqtor: Claude / claude-3.5-sonnet
+
+Verify for each:
+
+- [ ] No provider-specific tracebacks in logs.
+- [ ] All expected artifacts (`briq.d/`, `exeq.d/`, `reqap.d/`) are present.
+- [ ] `struqture/` logs show correct provider/model per agent.
+
+#### 7.4.2 Full Provider Triple Matrix (Optional Exhaustive Sweep)
+
+**Optional but ideal for automation:**
+
+- [ ] Programmatically iterate over all triples  
+      `(P_instruqtor, P_construqtor, P_inspeqtor)` in `{openai, gemini, deepseek, claude}^3`,  
+      using primary models, and run a short cyQle.
+
+Record for each:
+
+- [ ] Whether the run completed successfully.
+- [ ] Any provider/model-specific errors.
+- [ ] Whether all three artifact directories were populated.
+
+### 7.5 Model Variant Swaps Within a Provider
+
+For each provider, validate swapping between its primary and secondary model with all agents set to the same provider.
+
+Example for OpenAI:
+
+- [ ] All agents → `openai / gpt-4o`
+- [ ] All agents → `openai / gpt-4o-mini`
+- [ ] Mixed models:  
+      instruqtor: gpt-4o-mini, construqtor: gpt-4o, inspeqtor: gpt-4o-mini
+
+Repeat equivalent tests for:
+
+- [ ] Gemini (flash vs pro)
+- [ ] DeepSeek (chat vs coder)
+- [ ] Claude (sonnet vs haiku)
+
+Verify:
+
+- [ ] No “unknown model” or schema errors.
+- [ ] Prompt/response handling still works (no parsing crashes).
+
