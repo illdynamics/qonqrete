@@ -34,8 +34,9 @@ WORKDIR /qonqrete
 # 4. Copy the entire project into the container
 COPY . .
 
-# 5. Copy the sqeleton directory into the container
-COPY sqeleton ./sqeleton
+# 5. Set PYTHONPATH and make provider executable
+ENV PYTHONPATH="/qonqrete"
+RUN chmod +x sqeleton/deepseek_provider.py
 
 # 6. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
 ARG QONQ_VERSION

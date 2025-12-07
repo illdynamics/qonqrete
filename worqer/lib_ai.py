@@ -7,6 +7,7 @@ import threading
 import anthropic
 import openai
 import google.generativeai as genai
+from sqeleton.deepseek_provider import DeepSeekProvider
 
 def run_ai_completion(provider: str, model: str, prompt: str, context_files: list[str] = None) -> str:
     if context_files is None: context_files = []
@@ -20,12 +21,13 @@ def run_ai_completion(provider: str, model: str, prompt: str, context_files: lis
         elif provider.lower() == 'anthropic':
             return _run_anthropic(model, full_prompt)
         elif provider.lower() == 'deepseek':
-            return _run_deepseek_cli(model, full_prompt)
+            return _run_deepseek(model, full_prompt)
         else:
             raise ValueError(f"Unknown AI Provider: {provider}")
     except Exception as e:
         sys.stderr.write(f"\n[AI ERROR - {provider.upper()}]: {e}\n")
         raise
+
 
 def _build_prompt(base_prompt, context_files):
     full = base_prompt
@@ -136,6 +138,14 @@ def _run_anthropic(model, prompt):
             sys.stderr.flush()
     return "".join(captured_chunks).strip()
 
-def _run_deepseek_cli(model, prompt):
-    cmd = ['deepseek', 'chat', '--model', model]
-    return _run_streaming_cli_process(cmd, input_text=prompt)
+def _run_deepseek(model, prompt):
+    provider = DeepSeekProvider(model=model)
+    # The DeepSeek provider currently doesn't support streaming to stderr,
+    # so we print a marker and then the final result.
+    sys.stderr.write("[Querying DeepSeek...]")
+    sys.stderr.flush()
+    response = provider.query(prompt)
+    sys.stderr.write(response)
+    sys.stderr.flush()
+    return response
+
