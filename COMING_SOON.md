@@ -8,10 +8,6 @@ This document outlines the planned features and improvements for future releases
 
 The following items are planned enhancements based on a deep analysis of the system's architecture and capabilities.
 
-### Expanded LLM Provider Support
--   **Anthropic Claude 3.5 Sonnet**: Integration via the official `@anthropic-ai/claude-code` CLI.
--   **DeepSeek Coder**: Integration via the official `deepseek-cli`.
-
 ### Performance Enhancements
 -   **Multi-Stage Docker Builds**: Optimize container images for faster `init` times.
 -   **Parallel Agent Execution**: Investigate parallel execution of independent `briQ` files.
