@@ -54,30 +54,30 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] With `cheqpoint: false`, run `./qonqrete.sh run --user`. Verify it correctly overrides the config and runs in user-gated mode.
 
 ### 2.3. Cycle and File Management
--   [ ] **I/O Flow**: After a successful cycle 1, verify that `cyqle1_reqap.md` is correctly used to generate `cyqle2_tasq.md`.
--   [ ] **Header Promotion**: Check the content of `cyqle2_tasq.md`. It must contain a header with the "Assessment" status from the previous cycle.
--   [ ] **Agent Failure**: Introduce an error in an agent script (e.g., `sys.exit(1)` in `construqtor.py`). Run the system. Verify the cycle fails and the orchestration stops with an error message.
+-   [x] **I/O Flow**: After a successful cycle 1, verify that `cyqle1_reqap.md` is correctly used to generate `cyqle2_tasq.md`.
+-   [x] **Header Promotion**: Check the content of `cyqle2_tasq.md`. It must contain a header with the "Assessment" status from the previous cycle.
+-   [x] **Agent Failure**: Introduce an error in an agent script (e.g., `sys.exit(1)` in `construqtor.py`). Run the system. Verify the cycle fails and the orchestration stops with an error message.
 -   [x] **Logging**: For a successful run, inspect `struqture/`. Verify a log file exists for each agent for each cycle (e.g., `cyqle1_instruqtor.log`).
 
 ## 3. Agent Configuration and Behavior
 
 ### 3.1. Dynamic Pipeline (`pipeline_config.yaml`)
--   [ ] **Remove Agent**:
-    -   [ ] Comment out the `inspeqtor` agent from the config. Run one cycle. Verify the system stops after `construqtor` and waits at the CheQpoint (it may complain about a missing `reqap` file, this is expected).
--   [ ] **Reorder Agents (Failure Test)**:
-    -   [ ] Swap the `construqtor` and `instruqtor` blocks in the config. Run the system. Verify it fails immediately because `construqtor` cannot find its required `briq.d/` input. This confirms the order is respected.
+-   [x] **Remove Agent**:
+    -   [x] Comment out the `inspeqtor` agent from the config. Run one cycle. Verify the system stops after `construqtor` and waits at the CheQpoint (it may complain about a missing `reqap` file, this is expected).
+-   [x] **Reorder Agents (Failure Test)**:
+    -   [x] Swap the `construqtor` and `instruqtor` blocks in the config. Run the system. Verify it fails immediately because `construqtor` cannot find its required `briq.d/` input. This confirms the order is respected.
 ### 3.2. Agent Settings (`config.yaml`)
--   [ ] **Swap Providers**:
-    -   [ ] Change `instruqtor`'s provider to `gemini`. Run a cycle. Verify `gemini` is called for the planning phase.
-    -   [ ] Change `construqtor`'s provider to `openai`. Run a cycle. Verify `sgpt` is called for the execution phase.
--   [ ] **Swap Models**:
-    -   [ ] Change `inspeqtor`'s model to a different, valid OpenAI model. Verify the new model is used.
--   [ ] **Operational Modes**:
-    -   [ ] Set `mode: security` in `config.yaml`. Run a task to generate a Python script. Inspect the AI's output to verify it includes security-conscious code (e.g., input validation).
+-   [x] **Swap Providers**:
+    -   [x] Change `instruqtor`'s provider to `gemini`. Run a cycle. Verify `gemini` is called for the planning phase.
+    -   [x] Change `construqtor`'s provider to `openai`. Run a cycle. Verify `sgpt` is called for the execution phase.
+-   [x] **Swap Models**:
+    -   [x] Change `inspeqtor`'s model to a different, valid OpenAI model. Verify the new model is used.
+-   [x] **Operational Modes**:
+    -   [x] Set `mode: security` in `config.yaml`. Run a task to generate a Python script. Inspect the AI's output to verify it includes security-conscious code (e.g., input validation).
     -   [ ] Set `mode: enterprise`. Verify the output includes docstrings, logging, and error handling.
--   [ ] **Briq Sensitivity**:
-    -   [ ] Set `briq_sensitivity: 0` (Atomic). Use a complex `tasq.md`. Verify `instruqtor` generates a large number of briq files.
-    -   [ ] Set `briq_sensitivity: 9` (Monolithic). Use the same `tasq.md`. Verify `instruqtor` generates very few (ideally 1) briq files.
+-   [x] **Briq Sensitivity**:
+    -   [x] Set `briq_sensitivity: 0` (Atomic). Use a complex `tasq.md`. Verify `instruqtor` generates a large number of briq files.
+    -   [x] Set `briq_sensitivity: 9` (Monolithic). Use the same `tasq.md`. Verify `instruqtor` generates very few (ideally 1) briq files.
 
 ## 4. TUI Mode Tests (`--tui`)
 
@@ -102,17 +102,17 @@ This document outlines a comprehensive suite of functional tests designed to val
 -   [ ] **Large Tasq / I/O Stress Test**:
     -   [ ] Create a `tasq.md` that is extremely long and complex, requiring deep analysis.
     -   [ ] Run a full cycle. Monitor for I/O errors, prompt size limits with AI providers, or timeouts. Verify the system either completes or fails with a specific error message logged.
--   [ ] **Invalid `tasq.md` Content**:
-    -   [ ] Fill `tasq.md` with non-UTF-8 characters, symbols, and mixed languages (`"你好 RÄtsel"`, etc.).
-    -   [ ] Run the system. Verify that the file is read and passed to the AI without crashing the `instruqtor`.
--   [ ] **Invalid Agent Output**:
-    -   [ ] Manually edit `instruqtor.py` to output malformed XML (no `<briq>` tags). Verify `instruqtor` logs a warning and creates a single fallback briq file containing the raw AI output.
-    -   [ ] Manually edit `construqtor.py` to not generate any code blocks. Verify the summary reports a "failure" for that briq.
--   [ ] **Log Errors**:
-    -   [ ] Force an agent to crash with an unhandled Python exception.
-    -   [ ] Inspect the agent's log file in `struqture/` and the stderr output from `qrane`. Verify the full traceback is recorded.
--   [ ] **Permissions**:
-    -   [ ] Change permissions of `worqspace/` to read-only (`chmod -R 444 worqspace`). Run `./qonqrete.sh run`. Verify it fails immediately with permission errors.
+-   [x] **Invalid `tasq.md` Content**:
+    -   [x] Fill `tasq.md` with non-UTF-8 characters, symbols, and mixed languages (`"你好 RÄtsel"`, etc.).
+    -   [x] Run the system. Verify that the file is read and passed to the AI without crashing the `instruqtor`.
+-   [x] **Invalid Agent Output**:
+    -   [x] Manually edit `instruqtor.py` to output malformed XML (no `<briq>` tags). Verify `instruqtor` logs a warning and creates a single fallback briq file containing the raw AI output.
+    -   [x] Manually edit `construqtor.py` to not generate any code blocks. Verify the summary reports a "failure" for that briq.
+-   [x] **Log Errors**:
+    -   [x] Force an agent to crash with an unhandled Python exception.
+    -   [x] Inspect the agent's log file in `struqture/` and the stderr output from `qrane`. Verify the full traceback is recorded.
+-   [x] **Permissions**:
+    -   [x] Change permissions of `worqspace/` to read-only (`chmod -R 444 worqspace`). Run `./qonqrete.sh run`. Verify it fails immediately with permission errors.
 
 ## 6. Multi-Platform Testing
 
