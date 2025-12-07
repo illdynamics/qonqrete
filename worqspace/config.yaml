@@ -2,16 +2,16 @@
 
 agents:
   instruqtor:
-    provider: openai
-    model: gpt-4o
+    provider: deepseek
+    model: deepseek-chat
 
   construqtor:
-    provider: gemini
-    model: gemini-2.5-flash
+    provider: deepseek
+    model: deepseek-chat
 
   inspeqtor:
-    provider: openai
-    model: gpt-4o
+    provider: deepseek
+    model: deepseek-chat
 
 options:
   # Cheqpoint Configuration

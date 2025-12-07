@@ -20,4 +20,3 @@ agents:
 
 options:
   microsandbox: false
-  auto_mode_default: false
