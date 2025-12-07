@@ -189,9 +189,6 @@ case "$COMMAND" in
             exit 1
         fi
 
-        if [[ -z "${OPENAI_API_KEY:-}" || -z "${GOOGLE_API_KEY:-}" || -z "${ANTHROPIC_API_KEY:-}" || -z "${DEEPSEEK_API_KEY:-}" ]]; then
-            log_qrane "[ERROR] API Keys missing. Ensure OPENAI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, and DEEPSEEK_API_KEY are set."; exit 1
-        fi
 
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
