@@ -2,6 +2,9 @@
 
 ## [v0.4.9-alpha] - 2025-12-07
 
+### Changed
+- **DeepSeek Provider**: Replaced the non-functional `deepseek-cli` package with a custom provider implementation (`sqeleton/deepseek_provider.py`) that uses the official OpenAI client to communicate with the DeepSeek API. This approach is more reliable and aligns with DeepSeek's official documentation.
+
 ### Fixed
 - **Environment Variable Handling**: The `qonqrete.sh` script now conditionally passes API keys to the container, preventing "unbound variable" errors when running with `set -u` and not all possible API keys are exported.
 

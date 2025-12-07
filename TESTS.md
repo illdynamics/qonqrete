@@ -132,3 +132,183 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] Run `./qonqrete.sh init --msb`.
     -   [ ] Run a full task cycle using `./qonqrete.sh run --msb`.
     -   [ ] Set `microsandbox: true` in `pipeline_config.yaml` and run without the `--msb` flag to test the default detection.
+
+## 7. Provider & Model Matrix Tests
+
+These tests validate that QonQrete can switch between multiple AI providers and their most common models without crashing, misrouting prompts, or corrupting artifacts.
+
+### 7.1 Provider / Model Catalog (Reference)
+
+Use these as the canonical test set (adjust model IDs if your adapter uses different names):
+
+- **OpenAI**
+  - Primary: `gpt-4o`
+  - Secondary: `gpt-4o-mini`
+
+- **Google / Gemini**
+  - Primary: `gemini-2.5-flash`
+  - Secondary: `gemini-2.5-pro`
+
+- **DeepSeek**
+  - Primary: `deepseek-chat`
+  - Secondary: `deepseek-coder`
+
+- **Claude**
+  - Primary: `claude-3.5-sonnet`
+  - Secondary: `claude-3.5-haiku`
+
+All tests below assume the three agents are:
+
+- `instruqtor`
+- `construqtor`
+- `inspeqtor`
+
+### 7.2 Single-Provider / All-Agents Smoke Tests
+
+For each checkbox, set **all three agents** in `config.yaml` to the given `provider` and `model`, then run a short tasq with:
+
+- `./qonqrete.sh run --auto`
+- Simple `tasq.md` that forces at least 1 full cyQle.
+
+- [ ] All agents → **OpenAI / gpt-4o**
+- [ ] All agents → **OpenAI / gpt-4o-mini**
+- [ ] All agents → **Gemini / gemini-2.5-flash**
+- [ ] All agents → **Gemini / gemini-2.5-pro**
+- [ ] All agents → **DeepSeek / deepseek-chat**
+- [ ] All agents → **DeepSeek / deepseek-coder**
+- [ ] All agents → **Claude / claude-3.5-sonnet**
+- [ ] All agents → **Claude / claude-3.5-haiku**
+
+For each run, verify:
+
+- [ ] CyQle completes without Python errors or provider API errors.
+- [ ] `struqture/` contains logs for all 3 agents for the cyQle.
+- [ ] `briq.d/`, `exeq.d/`, and `reqap.d/` contain the expected artifacts.
+
+### 7.3 Per-Agent Provider Rotation (One Agent at a Time)
+
+Goal: prove each **individual agent** can be swapped through all providers/models while the others stay stable.
+
+For these tests, keep **two agents fixed** on a known-good combo  
+(e.g. `openai / gpt-4o`) and rotate the third.
+
+#### 7.3.1 instruqtor Provider/Model Sweep
+
+- [ ] Fix `construqtor` and `inspeqtor` to `openai / gpt-4o`.
+- [ ] For each `(provider, model)` in the catalog, set `instruqtor` and run `./qonqrete.sh run --auto`:
+
+  - [ ] instruqtor → OpenAI / gpt-4o
+  - [ ] instruqtor → OpenAI / gpt-4o-mini
+  - [ ] instruqtor → Gemini / gemini-2.5-flash
+  - [ ] instruqtor → Gemini / gemini-2.5-pro
+  - [ ] instruqtor → DeepSeek / deepseek-chat
+  - [ ] instruqtor → DeepSeek / deepseek-coder
+  - [ ] instruqtor → Claude / claude-3.5-sonnet
+  - [ ] instruqtor → Claude / claude-3.5-haiku
+
+Verify:
+
+- [ ] `briq.d/` is always produced and non-empty.
+- [ ] No provider/model mismatch errors (e.g., unknown model, bad request).
+
+#### 7.3.2 construqtor Provider/Model Sweep
+
+- [ ] Fix `instruqtor` and `inspeqtor` to `openai / gpt-4o`.
+- [ ] Sweep `construqtor` through the same `(provider, model)` list.
+
+Verify:
+
+- [ ] `exeq.d/cyqle{N}_summary.md` is produced.
+- [ ] No provider/model errors and no missing briq input errors.
+
+#### 7.3.3 inspeqtor Provider/Model Sweep
+
+- [ ] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
+- [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
+
+Verify:
+
+- [ ] `reqap.d/cyqle{N}_reqap.md` is produced and well-formed.
+- [ ] No provider/model errors.
+
+### 7.4 Mixed-Provider Matrix (Cross-Provider Triples)
+
+This section aims to stress “mixed” setups where different agents talk to different providers.
+
+Use the **primary models** only for this section:
+
+- OpenAI: `gpt-4o`
+- Gemini: `gemini-2.5-flash`
+- DeepSeek: `deepseek-chat`
+- Claude: `claude-3.5-sonnet`
+
+#### 7.4.1 Key Cross-Provider Scenarios
+
+For each test, set providers/models as specified, then run `./qonqrete.sh run --auto`:
+
+- [ ] instruqtor: OpenAI / gpt-4o  
+      construqtor: Gemini / gemini-2.5-flash  
+      inspeqtor: OpenAI / gpt-4o
+
+- [ ] instruqtor: Gemini / gemini-2.5-flash  
+      construqtor: OpenAI / gpt-4o  
+      inspeqtor: OpenAI / gpt-4o
+
+- [ ] instruqtor: DeepSeek / deepseek-chat  
+      construqtor: OpenAI / gpt-4o  
+      inspeqtor: Claude / claude-3.5-sonnet
+
+- [ ] instruqtor: OpenAI / gpt-4o  
+      construqtor: DeepSeek / deepseek-chat  
+      inspeqtor: Claude / claude-3.5-sonnet
+
+- [ ] instruqtor: Claude / claude-3.5-sonnet  
+      construqtor: Gemini / gemini-2.5-flash  
+      inspeqtor: OpenAI / gpt-4o
+
+- [ ] instruqtor: Gemini / gemini-2.5-flash  
+      construqtor: DeepSeek / deepseek-chat  
+      inspeqtor: Claude / claude-3.5-sonnet
+
+Verify for each:
+
+- [ ] No provider-specific tracebacks in logs.
+- [ ] All expected artifacts (`briq.d/`, `exeq.d/`, `reqap.d/`) are present.
+- [ ] `struqture/` logs show correct provider/model per agent.
+
+#### 7.4.2 Full Provider Triple Matrix (Optional Exhaustive Sweep)
+
+**Optional but ideal for automation:**
+
+- [ ] Programmatically iterate over all triples  
+      `(P_instruqtor, P_construqtor, P_inspeqtor)` in `{openai, gemini, deepseek, claude}^3`,  
+      using primary models, and run a short cyQle.
+
+Record for each:
+
+- [ ] Whether the run completed successfully.
+- [ ] Any provider/model-specific errors.
+- [ ] Whether all three artifact directories were populated.
+
+### 7.5 Model Variant Swaps Within a Provider
+
+For each provider, validate swapping between its primary and secondary model with all agents set to the same provider.
+
+Example for OpenAI:
+
+- [ ] All agents → `openai / gpt-4o`
+- [ ] All agents → `openai / gpt-4o-mini`
+- [ ] Mixed models:  
+      instruqtor: gpt-4o-mini, construqtor: gpt-4o, inspeqtor: gpt-4o-mini
+
+Repeat equivalent tests for:
+
+- [ ] Gemini (flash vs pro)
+- [ ] DeepSeek (chat vs coder)
+- [ ] Claude (sonnet vs haiku)
+
+Verify:
+
+- [ ] No “unknown model” or schema errors.
+- [ ] Prompt/response handling still works (no parsing crashes).
+
