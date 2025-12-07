@@ -57,8 +57,8 @@ The `Qrane` orchestrator runs directly on the host, while the `Qrew` of AI agent
 Docker is the default, essential runtime for the secure `Qage` environment.
 -   **macOS**: Install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/).
 -   **Linux**:
--   **Debian/Ubuntu**: `sudo apt-get update && sudo apt-get install docker-ce docker-ce-cli containerd.io`
--   **Fedora/CentOS**: `sudo dnf install dnf-plugins-core && sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo && sudo dnf install docker-ce docker-ce-cli containerd.io`
+    -   **Debian/Ubuntu**: `sudo apt-get update && sudo apt-get install docker-ce docker-ce-cli containerd.io`
+    -   **Fedora/CentOS**: `sudo dnf install dnf-plugins-core && sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo && sudo dnf install docker-ce docker-ce-cli containerd.io`
 -   **Windows**: Install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/).
 
 > **Note for Docker Desktop (macOS & Windows) Users:**
@@ -88,7 +88,9 @@ First, initialize the system. This builds the secure container environment.
 ```bash
 # For Docker (default)
 ./qonqrete.sh init
+```
 
+```bash
 # If you use Microsandbox
 ./qonqrete.sh init --msb
 ```
@@ -116,7 +118,9 @@ You can override the configured runtime using flags:
 ```bash
 # Force run with Microsandbox
 ./qonqrete.sh run --msb
+```
 
+```bash
 # Force run with Docker
 ./qonqrete.sh run --docker
 ```
@@ -126,6 +130,9 @@ To clean up the workspace and remove all previous run data:
 ```bash
 # Force run with Microsandbox
 ./qonqrete.sh run --msb
+```
+
+```bash
 # Force run with Docker
 ./qonqrete.sh run --docker
 ```
