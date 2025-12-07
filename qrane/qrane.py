@@ -33,7 +33,7 @@ AGENT_MODULE_DIR = PROJECT_ROOT / "worqer"
 class KillSignal(Exception): pass
 
 def get_version():
-    suffix = "-alpha"
+    suffix = "-beta"
     v = os.environ.get("QONQ_VERSION")
     if v:
         clean_v = v.replace("v", "")
