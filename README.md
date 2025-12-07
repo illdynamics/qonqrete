@@ -22,7 +22,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
-**Version:** `v0.4.8-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.9-alpha` (See `VERSION` file for the canonical version).
 
 
 
@@ -175,102 +175,6 @@ Docker is the default, essential runtime for the secure `Qage` environment.
 
 
 > You MUST grant Docker permission to access the project directory. Go to **Settings > Resources > File Sharing** and add the path to your `qonqrete` project folder. This allows the `worqspace` volume to be mounted correctly.
-
-
-
-
-
-
-
-### 2. Python 3
-
-
-
-The `Qrane` requires Python 3.
-
-
-
--   **macOS**: Python 3 is typically pre-installed. You can also install it via [Homebrew](https://brew.sh/): `brew install python`.
-
-
-
--   **Linux**:
-
-
-
-    -   **Debian/Ubuntu**: `sudo apt-get update && sudo apt-get install python3 python3-pip`
-
-
-
-    -   **Fedora/CentOS**: `sudo dnf install python3 python3-pip`
-
-
-
--   **Windows**: Download and install Python from the [official website](https://www.python.org/downloads/).
-
-
-
-
-
-
-
-The Python dependencies for `Qrane` are `PyYAML`, `openai`, `anthropic`, and `google-generativeai`. You can install them via pip:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```bash
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-pip3 install pyyaml openai anthropic google-generativeai
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```
-
-
-
-
-
-
-
-
 
 
 
