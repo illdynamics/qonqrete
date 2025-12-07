@@ -19,18 +19,18 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [x] With `qage_*` directories present, run `./qonqrete.sh clean`. When prompted with "[y/N]", enter "n". Verify directories are not deleted.
     -   [x] Run `./qonqrete.sh clean` again. When prompted, enter "y". Verify all `qage_*` directories are deleted.
     -   [x] Run `./qonqrete.sh clean` when no `qage_*` directories exist. Verify it prints a "No 'qage_*' directories found" message and exits.
--   [ ] **Command-Line Flags**:
+-   [x] **Command-Line Flags**:
     -   [ ] Test each flag individually: `./qonqrete.sh run --auto`, `--user`, `--tui`, `--mode security`, `--briq-sensitivity 7`, `--msb`, `--docker`, `--wonqrete`. Verify the corresponding arguments are passed to `qrane.py`.
     -   [ ] Test short versions of flags: `-a`, `-u`, `-t`, `-m security`, `-b 7`, `-s`, `-d`, `-w`.
-    -   [ ] Test using `--auto` and `--user` together. Verify the script exits with a "mutually exclusive" error message.
+    -   [x] Test using `--auto` and `--user` together. Verify the script exits with a "mutually exclusive" error message.
     -   [ ] Test a combination of flags: `./qonqrete.sh run --auto --tui --mode enterprise -b 3`.
     -   [ ] Test overriding `pipeline_config.yaml` (`microsandbox: true`) with `./qonqrete.sh run --docker`.
 -   [x] **Help and Version**:
     -   [x] Run `./qonqrete.sh --help` and `-h`. Verify the help message is displayed and includes the new `--user` flag.
     -   [x] Run `./qonqrete.sh --version` and `-V`. Verify the version from the `VERSION` file is displayed.
--   [ ] **Pre-flight Checks**:
-    -   [x] Temporarily rename `config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error. (Note: Pre-flight checks are currently optional in `qrane.py`).
-    -   [x] Temporarily rename `pipeline_config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error. (Note: Pre-flight checks are currently optional in `qrane.py`).
+-   [x] **Pre-flight Checks**:
+    -   [x] Temporarily rename `config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error.
+    -   [x] Temporarily rename `pipeline_config.yaml` and run `./qonqrete.sh run`. Verify the system exits with a clear error.
 
 ## 2. Core Orchestration (`Qrane`) Tests
 
@@ -40,9 +40,9 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] At the CheQpoint, press 'q'. Verify the system continues to the next cycle.
     -   [ ] At the CheQpoint, press 'x'. Verify the system quits gracefully.
     -   [ ] At the CheQpoint, press 't'. Verify `$EDITOR` opens with the `reqap.md` file. After closing the editor, verify the prompt is shown again.
--   [ ] **Autonomous Mode (`--auto`)**:
-    -   [ ] Run with `--auto`. Verify the system runs through cycles without user interaction.
-    -   [ ] In `config.yaml`, set `auto_cycle_limit: 2`. Run in auto mode. Verify the system stops after cycle 2 with a "Max cyQle limit hit" message.
+-   [x] **Autonomous Mode (`--auto`)**:
+    -   [x] Run with `--auto`. Verify the system runs through cycles without user interaction.
+    -   [x] In `config.yaml`, set `auto_cycle_limit: 2`. Run in auto mode. Verify the system stops after cycle 2 with a "Max cyQle limit hit" message.
     -   [ ] Set `auto_cycle_limit: 0`. Verify it runs until the task is complete or it fails.
 
 ### 2.2. Cheqpoint Configuration (`config.yaml`)
@@ -57,7 +57,7 @@ This document outlines a comprehensive suite of functional tests designed to val
 -   [ ] **I/O Flow**: After a successful cycle 1, verify that `cyqle1_reqap.md` is correctly used to generate `cyqle2_tasq.md`.
 -   [ ] **Header Promotion**: Check the content of `cyqle2_tasq.md`. It must contain a header with the "Assessment" status from the previous cycle.
 -   [ ] **Agent Failure**: Introduce an error in an agent script (e.g., `sys.exit(1)` in `construqtor.py`). Run the system. Verify the cycle fails and the orchestration stops with an error message.
--   [ ] **Logging**: For a successful run, inspect `struqture/`. Verify a log file exists for each agent for each cycle (e.g., `cyqle1_instruqtor.log`).
+-   [x] **Logging**: For a successful run, inspect `struqture/`. Verify a log file exists for each agent for each cycle (e.g., `cyqle1_instruqtor.log`).
 
 ## 3. Agent Configuration and Behavior
 
