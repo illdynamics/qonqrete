@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y nodejs
 
 # 2. Install Python packages for agents
 RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir pyyaml openai anthropic google-generativeai deepseek-cli
+RUN pip3 install --no-cache-dir pyyaml openai anthropic google-generativeai
 
 # 3. Create a working directory for the project
 WORKDIR /qonqrete
@@ -34,6 +34,9 @@ WORKDIR /qonqrete
 # 4. Copy the entire project into the container
 COPY . .
 
-# 5. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
+# 5. Copy the sqeleton directory into the container
+COPY sqeleton ./sqeleton
+
+# 6. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
 ARG QONQ_VERSION
 ENV QONQ_VERSION=${QONQ_VERSION}

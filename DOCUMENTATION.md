@@ -161,7 +161,7 @@ The following describes the logic of the three default agents that constitute th
 
 All agents utilize this central library to interact with AI models. It uses a hybrid approach:
 - **Official Python Libraries**: Used for OpenAI, Google Gemini, and Anthropic. These libraries read their respective API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`) directly from the environment.
-- **Command-Line Tool**: The `deepseek-cli` tool is used for the DeepSeek provider. This tool is expected to read the `DEEPSEEK_API_KEY` from the environment.
+- **Custom Provider**: A custom, OpenAI-compatible provider located in `sqeleton/deepseek_provider.py` is used for DeepSeek. This method is more reliable and uses the `DEEPSEEK_API_KEY` from the environment.
 
 This provides a consistent and modular interface for all AI interactions.
 
