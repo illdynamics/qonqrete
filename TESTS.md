@@ -23,7 +23,7 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] Test each flag individually: `./qonqrete.sh run --auto`, `--user`, `--tui`, `--mode security`, `--briq-sensitivity 7`, `--msb`, `--docker`, `--wonqrete`. Verify the corresponding arguments are passed to `qrane.py`.
     -   [ ] Test short versions of flags: `-a`, `-u`, `-t`, `-m security`, `-b 7`, `-s`, `-d`, `-w`.
     -   [x] Test using `--auto` and `--user` together. Verify the script exits with a "mutually exclusive" error message.
-    -   [ ] Test a combination of flags: `./qonqrete.sh run --auto --tui --mode enterprise -b 3`.
+    -   [x] Test a combination of flags: `./qonqrete.sh run --auto --tui --mode enterprise -b 3`.
     -   [x] Test overriding `pipeline_config.yaml` (`microsandbox: true`) with `./qonqrete.sh run --docker`.
 -   [x] **Help and Version**:
     -   [x] Run `./qonqrete.sh --help` and `-h`. Verify the help message is displayed and includes the new `--user` flag.
@@ -154,8 +154,9 @@ Use these as the canonical test set (adjust model IDs if your adapter uses diffe
   - Secondary: `deepseek-coder`
 
 - **Claude**
-  - Primary: `claude-3.5-sonnet`
-  - Secondary: `claude-3.5-haiku`
+  - Primary: `claude-sonnet-4-5`
+  - Secondary: `claude-haiku-4-5`
+  - Tertiary: `claude-opus-4-5`
 
 All tests below assume the three agents are:
 
@@ -176,8 +177,9 @@ For each checkbox, set **all three agents** in `config.yaml` to the given `provi
 - [ ] All agents → **Gemini / gemini-2.5-pro**
 - [x] All agents → **DeepSeek / deepseek-chat**
 - [x] All agents → **DeepSeek / deepseek-coder**
-- [ ] All agents → **Claude / claude-3.5-sonnet**
-- [ ] All agents → **Claude / claude-3.5-haiku**
+- [x] All agents → **Claude / claude-sonnet-4-5**
+- [x] All agents → **Claude / claude-haiku-4-5**
+- [ ] All agents → **Claude / claude-opus-4-5**
 
 For each run, verify:
 
@@ -198,13 +200,14 @@ For these tests, keep **two agents fixed** on a known-good combo
 - [ ] For each `(provider, model)` in the catalog, set `instruqtor` and run `./qonqrete.sh run --auto`:
 
   - [x] instruqtor → OpenAI / gpt-4o
-  - [ ] instruqtor → OpenAI / gpt-4o-mini
+  - [x] instruqtor → OpenAI / gpt-4o-mini
   - [x] instruqtor → Gemini / gemini-2.5-flash
   - [ ] instruqtor → Gemini / gemini-2.5-pro
   - [x] instruqtor → DeepSeek / deepseek-chat
   - [x] instruqtor → DeepSeek / deepseek-coder
-  - [ ] instruqtor → Claude / claude-3.5-sonnet
-  - [ ] instruqtor → Claude / claude-3.5-haiku
+  - [x] instruqtor → Claude / claude-sonnet-4-5
+  - [x] instruqtor → Claude / claude-haiku-4-5
+  - [ ] instruqtor → Claude / claude-opus-4-5
 
 Verify:
 
@@ -217,13 +220,14 @@ Verify:
 - [ ] Sweep `construqtor` through the same `(provider, model)` list.
 
   - [x] construqtor → OpenAI / gpt-4o
-  - [ ] construqtor → OpenAI / gpt-4o-mini
+  - [x] construqtor → OpenAI / gpt-4o-mini
   - [x] construqtor → Gemini / gemini-2.5-flash
   - [ ] construqtor → Gemini / gemini-2.5-pro
   - [x] construqtor → DeepSeek / deepseek-chat
   - [x] construqtor → DeepSeek / deepseek-coder
-  - [ ] construqtor → Claude / claude-3.5-sonnet
-  - [ ] construqtor → Claude / claude-3.5-haiku
+  - [x] construqtor → Claude / claude-sonnet-4-5
+  - [x] construqtor → Claude / claude-haiku-4-5
+  - [ ] construqtor → Claude / claude-opus-4-5
 
 Verify:
 
@@ -241,8 +245,9 @@ Verify:
   - [ ] inspeqtor → Gemini / gemini-2.5-pro
   - [x] inspeqtor → DeepSeek / deepseek-chat
   - [x] inspeqtor → DeepSeek / deepseek-coder
-  - [ ] inspeqtor → Claude / claude-3.5-sonnet
-  - [ ] inspeqtor → Claude / claude-3.5-haiku
+  - [x] inspeqtor → Claude / claude-sonnet-4-5
+  - [x] inspeqtor → Claude / claude-haiku-4-5
+  - [ ] inspeqtor → Claude / claude-opus-4-5
 
 Verify:
 
@@ -280,21 +285,21 @@ For each test, set providers/models as specified, then run `./qonqrete.sh run --
       construqtor: OpenAI / gpt-4o  
       inspeqtor: DeepSeek / deepseek-chat
 
-- [ ] instruqtor: DeepSeek / deepseek-chat  
+- [x] instruqtor: DeepSeek / deepseek-chat  
       construqtor: OpenAI / gpt-4o  
-      inspeqtor: Claude / claude-3.5-sonnet
+      inspeqtor: Claude / claude-sonnet-4-5
 
-- [ ] instruqtor: OpenAI / gpt-4o  
+- [x] instruqtor: OpenAI / gpt-4o  
       construqtor: DeepSeek / deepseek-chat  
-      inspeqtor: Claude / claude-3.5-sonnet
+      inspeqtor: Claude / claude-sonnet-4-5
 
-- [ ] instruqtor: Claude / claude-3.5-sonnet  
+- [ ] instruqtor: Claude / claude-sonnet-4-5  
       construqtor: Gemini / gemini-2.5-flash  
       inspeqtor: OpenAI / gpt-4o
 
 - [ ] instruqtor: Gemini / gemini-2.5-flash  
       construqtor: DeepSeek / deepseek-chat  
-      inspeqtor: Claude / claude-3.5-sonnet
+      inspeqtor: Claude / claude-sonnet-4-5
 
 Verify for each:
 
@@ -394,14 +399,14 @@ For each run, verify:
 - [ ] For each `briq_sensitivity` (0–9), run a full cyQle and record number of briqs.
 
 - [x] `briq_sensitivity: 0` (50 briqs, failed)
-- [ ] `briq_sensitivity: 1`
-- [ ] `briq_sensitivity: 2`
-- [ ] `briq_sensitivity: 3`
-- [ ] `briq_sensitivity: 4`
-- [ ] `briq_sensitivity: 5`
-- [ ] `briq_sensitivity: 6`
-- [ ] `briq_sensitivity: 7`
-- [ ] `briq_sensitivity: 8`
+- [x] `briq_sensitivity: 1`
+- [x] `briq_sensitivity: 2`
+- [x] `briq_sensitivity: 3`
+- [x] `briq_sensitivity: 4`
+- [x] `briq_sensitivity: 5`
+- [x] `briq_sensitivity: 6`
+- [x] `briq_sensitivity: 7`
+- [x] `briq_sensitivity: 8`
 - [x] `briq_sensitivity: 9` (1 briq)
 
 For each run, verify:
