@@ -114,10 +114,10 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
     *   Creates a unique timestamped run directory (`qage_<timestamp>`) inside `worqspace/`.
     *   **Sqrapyard Initialization**: It checks the persistent `worqspace/sqrapyard` directory. If it contains files, they are copied into the new `qage_<timestamp>/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
     *   Copies configuration files into the new run directory.
-    *   Constructs the `docker run` or `msb run` command, mounting the `qage_<timestamp>` directory.
+    *   Constructs the `docker run` or `msb run` command, mounting the `qage_<timestamp>` directory and passing the necessary environment variables.
 3.  **`qrane.py` (Inside the Container)**:
     *   The orchestrator starts.
-    *   **API Key Validation**: It reads `config.yaml` to identify all unique AI providers being used. It then checks that the corresponding environment variables (`OPENAI_API_KEY`, `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`) are set. If a required key is missing, it exits with an error.
+    *   **API Key Validation**: It reads `config.yaml` to identify all unique AI providers being used for the current run. It then checks that the corresponding environment variables (e.g., `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`) are set. If a required key for a configured provider is missing, it exits with a clear error message.
     *   It determines the UI mode (TUI/headless) and enters the main `cyQle` loop.
 4.  **The `cyQle` Loop**:
     *   The `Qrane` dynamically loads the agent pipeline from `pipeline_config.yaml`.
