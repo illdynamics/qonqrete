@@ -335,53 +335,10 @@ First, initialize the system. This builds the secure container environment.
 
 
 ```bash
-
-
-
-
-
-
-
 # For Docker (default)
-
-
-
-
-
-
-
 ./qonqrete.sh init
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # If you use Microsandbox
-
-
-
-
-
-
-
 ./qonqrete.sh init --msb
-
-
-
-
-
-
-
 ```
 
 
@@ -407,21 +364,7 @@ To run the system with the Text-based User Interface (TUI) and set an operationa
 
 
 ```bash
-
-
-
-
-
-
-
 ./qonqrete.sh run --tui --mode security
-
-
-
-
-
-
-
 ```
 
 
@@ -447,21 +390,7 @@ To run in autonomous mode with a specific task granularity:
 
 
 ```bash
-
-
-
-
-
-
-
 ./qonqrete.sh run --auto --briq-sensitivity 2
-
-
-
-
-
-
-
 ```
 
 
@@ -487,21 +416,7 @@ To force user-gated mode (overriding a config file set to auto):
 
 
 ```bash
-
-
-
-
-
-
-
 ./qonqrete.sh run --user
-
-
-
-
-
-
-
 ```
 
 
@@ -527,53 +442,10 @@ You can override the configured runtime using flags:
 
 
 ```bash
-
-
-
-
-
-
-
 # Force run with Microsandbox
-
-
-
-
-
-
-
 ./qonqrete.sh run --msb
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Force run with Docker
-
-
-
-
-
-
-
 ./qonqrete.sh run --docker
-
-
-
-
-
-
-
 ```
 
 
@@ -599,21 +471,7 @@ To clean up the workspace and remove all previous run data:
 
 
 ```bash
-
-
-
-
-
-
-
 ./qonqrete.sh clean
-
-
-
-
-
-
-
 ```
 
 
