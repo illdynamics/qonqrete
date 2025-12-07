@@ -1,5 +1,20 @@
 # Release Notes
 
+## [v0.4.8-alpha] - 2025-12-06
+
+### Added
+- **DeepSeek Provider**: The system now supports DeepSeek models via the `deepseek-cli` tool.
+- **Hybrid Provider Model**: The AI interaction library (`worqer/lib_ai.py`) now supports a hybrid model, using Python libraries for OpenAI, Gemini, and Anthropic, and a command-line tool for DeepSeek.
+
+### Changed
+- **Dynamic API Key Validation**: The `qrane.py` orchestrator now reads `config.yaml` to identify all required AI providers and validates that their corresponding API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`) are set in the environment. It will exit with a clear error message if any are missing.
+- **Container Dependencies**: The `Dockerfile` has been updated to install the `deepseek-cli` Python package.
+
+### Fixed
+- **API Key Validation**: Removed the static, pre-emptive API key check from `qonqrete.sh`. The validation is now handled exclusively by the `qrane.py` orchestrator, which correctly checks for the required keys based on the providers listed in `config.yaml`.
+
+---
+
 ## [v0.4.7-alpha] - 2025-12-06
 
 ### Added

@@ -22,7 +22,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 
 
-**Version:** `v0.4.7-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.4.8-alpha` (See `VERSION` file for the canonical version).
 
 
 
@@ -218,7 +218,31 @@ The Python dependencies for `Qrane` are `PyYAML`, `openai`, `anthropic`, and `go
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 ```bash
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -226,7 +250,27 @@ pip3 install pyyaml openai anthropic google-generativeai
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
 
 
 
@@ -238,11 +282,39 @@ pip3 install pyyaml openai anthropic google-generativeai
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 As a lightweight alternative to Docker, you can use `msb`.
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 -   **Installation**: Follow the instructions at the [official Microsandbox repository](https://github.com/a-i-s-r/microsandbox).
+
+
+
+
 
 
 
@@ -254,7 +326,27 @@ As a lightweight alternative to Docker, you can use `msb`.
 
 
 
+
+
+
+
+
+
+
+
 ## Getting Started
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -262,80 +354,440 @@ For a full guide on setting up the environment and running your first `cyQle`, p
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+**API Key Configuration**: Before running, you must export the API keys for the AI providers you intend to use. The system will automatically check for the necessary keys based on your `worqspace/config.yaml`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-   `export OPENAI_API_KEY='your-key'`
+
+
+
+
+
+
+
+-   `export GOOGLE_API_KEY='your-key'` (or `GEMINI_API_KEY`)
+
+
+
+
+
+
+
+-   `export ANTHROPIC_API_KEY='your-key'`
+
+
+
+
+
+
+
+-   `export DEEPSEEK_API_KEY='your-key'`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 First, initialize the system. This builds the secure container environment.
+
+
+
+
+
+
 
 ```bash
 
+
+
+
+
+
+
 # For Docker (default)
+
+
+
+
+
+
 
 ./qonqrete.sh init
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 # If you use Microsandbox
+
+
+
+
+
+
 
 ./qonqrete.sh init --msb
 
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 To run the system with the Text-based User Interface (TUI) and set an operational mode:
 
+
+
+
+
+
+
 ```bash
+
+
+
+
+
+
 
 ./qonqrete.sh run --tui --mode security
 
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 To run in autonomous mode with a specific task granularity:
 
+
+
+
+
+
+
 ```bash
+
+
+
+
+
+
 
 ./qonqrete.sh run --auto --briq-sensitivity 2
 
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 To force user-gated mode (overriding a config file set to auto):
+
+
+
+
+
+
+
 ```bash
+
+
+
+
+
+
+
 ./qonqrete.sh run --user
+
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 You can override the configured runtime using flags:
 
+
+
+
+
+
+
 ```bash
 
+
+
+
+
+
+
 # Force run with Microsandbox
+
+
+
+
+
+
 
 ./qonqrete.sh run --msb
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 # Force run with Docker
+
+
+
+
+
+
 
 ./qonqrete.sh run --docker
 
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 To clean up the workspace and remove all previous run data:
 
+
+
+
+
+
+
 ```bash
 
+
+
+
+
+
+
 ./qonqrete.sh clean
+
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## License
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 QonQrete is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+
+
+
+
+
+
+
 This ensures that any modifications or derivative works deployed as a service
+
+
+
+
+
+
+
 must also be released as open source under the same license.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 See the LICENSE file for full text.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ![Scarf](https://static.scarf.sh/a.png?x-pxid=242de794-2b10-4e34-a6cd-eab9e46cc793)

@@ -286,6 +286,35 @@ def getch():
         finally: termios.tcsetattr(fd, termios.TCSADRAIN, old)
     except: return sys.stdin.read(1)
 
+def check_api_keys(config, qrane_prefix):
+    providers = set()
+    for agent_config in config.get('agents', {}).values():
+        if 'provider' in agent_config:
+            providers.add(agent_config['provider'].lower())
+
+    if not providers:
+        return
+
+    key_mapping = {
+        'openai': 'OPENAI_API_KEY',
+        'anthropic': 'ANTHROPIC_API_KEY',
+        'deepseek': 'DEEPSEEK_API_KEY'
+    }
+    
+    missing_keys = []
+    for provider in providers:
+        if provider == 'gemini':
+            if not (os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')):
+                missing_keys.append('GOOGLE_API_KEY/GEMINI_API_KEY')
+        elif provider in key_mapping:
+            key_name = key_mapping[provider]
+            if not os.environ.get(key_name):
+                missing_keys.append(key_name)
+
+    if missing_keys:
+        print(f"{qrane_prefix}[ERROR] API Keys missing. Ensure the following environment variables are set for the providers listed in your config.yaml: {', '.join(missing_keys)}")
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")
     parser.add_argument("-a", "--auto", action="store_true", help="Autonomous Mode")
@@ -321,6 +350,7 @@ def main():
     target_width = 11
     qrane_padding = " " * (target_width - 5)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
+    check_api_keys(config, qrane_prefix)
 
     if args.tui and tui:
         try:
