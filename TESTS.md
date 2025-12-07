@@ -271,7 +271,7 @@ Use the **primary models** only for this section:
 - OpenAI: `gpt-4o`
 - Gemini: `gemini-2.5-flash`
 - DeepSeek: `deepseek-chat`
-- Claude: `claude-3.5-sonnet`
+- Claude: `claude-sonnet-4-5`
 
 #### 7.4.1 Key Cross-Provider Scenarios
 

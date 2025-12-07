@@ -1,11 +1,15 @@
-# Failed Tests Report
+- **Test:** Single-Provider Sweep
+- **Provider:** gemini
+- **Model:** gemini-2.5-pro
+- **Failure:** The `construqtor` agent failed with a 429 quota error.
 
-The following tests failed or could not be executed successfully in the current environment:
+- **Test:** Single-Provider Sweep
+- **Provider:** anthropic
+- **Model:** claude-opus-4-5
+- **Failure:** The `inspeqtor` agent failed with a "Partial" assessment, indicating that the generated code was not fully functional.
 
-## Microsandbox (msb)
-- [ ] **Init with msb**: `Run ./qonqrete.sh init --msb`. Failed because `msb` is not installed or configured in the test environment.
-- [ ] **Run with msb**: `Run a full task cycle using ./qonqrete.sh run --msb`. Failed because `msb` is not installed.
-- [ ] **Default Detection**: `Set microsandbox: true in pipeline_config.yaml and run without the --msb flag`. Failed/Skipped due to missing `msb`.
+- **Test:** `init` without Docker/msb
+- **Failure:** Unable to reliably simulate an environment without Docker/msb. The `PATH` manipulation tests were unsuccessful.
 
-## TUI Mode
-- [ ] **Interactive TUI**: Full interactive TUI tests (scrolling, keypresses) could not be verified in the non-interactive test environment.
+- **Test:** Microsandbox (`msb`) functionality
+- **Failure:** The `msb` command does not support the `-t`, `--build-arg`, `--rm`, or `-it` flags used by the `qonqrete.sh` script, causing the `init` and `run` commands to fail.
