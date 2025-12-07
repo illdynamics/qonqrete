@@ -7,12 +7,15 @@
 **exeq.d/*
 **reqap.d/*
 **qodeyard/*
+**sqrapyard/*
 
 # Logs
 **struqture/*
 
 # Qages
 worqspace/qage**
+worqspace/sqrapyard**
+worqspace/struqture**
 
 # PyCache
 **__pycache**
