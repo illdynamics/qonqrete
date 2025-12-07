@@ -11,7 +11,13 @@ The following items are planned enhancements based on a deep analysis of the sys
 ### Performance Enhancements
 -   **Multi-Stage Docker Builds**: Optimize container images for faster `init` times.
 -   **Parallel Agent Execution**: Investigate parallel execution of independent `briQ` files.
+### Performance
 -   **Refined TUI Rendering**: Implement a batched-update mechanism for smoother logging.
+
+### Code Quality and Efficiency
+-   **Refactor `run_agent`**: Reduce code duplication in the `run_agent` function by creating a central function for subprocess management and delegating output to separate TUI and headless handlers.
+-   **Improve Exception Handling**: Replace broad `except` clauses with specific exception types (e.g., `FileNotFoundError`) to make error handling more robust and debugging easier.
+-   **Clean Up Import Handling**: Remove `try...except ImportError` blocks for local modules to ensure that missing internal files cause an immediate and clear `ImportError`.
 
 ### Security Hardening
 -   **Reduced Container Privileges**: Implement a non-root user within the `Qage` container.
