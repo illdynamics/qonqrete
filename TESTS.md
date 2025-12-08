@@ -257,7 +257,7 @@ Verify:
   - [x] inspeqtor → gemini/gemini-2.5-flash-lite
   - [ ] inspeqtor → gemini/gemini-2.5-flash
   - [x] inspeqtor → gemini/gemini-2.5-pro
-  - [ ] inspeqtor → claude/claude-opus-4.5
+  - [x] inspeqtor → claude/claude-opus-4-5
   - [x] inspeqtor → claude/claude-haiku-4.5
   - [x] inspeqtor → claude/claude-sonnet-4-5
 
