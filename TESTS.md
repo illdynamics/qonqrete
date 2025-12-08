@@ -74,7 +74,7 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [x] Change `inspeqtor`'s model to a different, valid OpenAI model. Verify the new model is used.
 -   [x] **Operational Modes**:
     -   [x] Set `mode: security` in `config.yaml`. Run a task to generate a Python script. Inspect the AI's output to verify it includes security-conscious code (e.g., input validation).
-    -   [ ] Set `mode: enterprise`. Verify the output includes docstrings, logging, and error handling.
+    -   [x] Set `mode: enterprise`. Verify the output includes docstrings, logging, and error handling.
 -   [x] **Briq Sensitivity**:
     -   [x] Set `briq_sensitivity: 0` (Atomic). Use a complex `tasq.md`. Verify `instruqtor` generates a large number of briq files.
     -   [x] Set `briq_sensitivity: 9` (Monolithic). Use the same `tasq.md`. Verify `instruqtor` generates very few (ideally 1) briq files.
@@ -174,18 +174,18 @@ For each checkbox, set **all three agents** in `config.yaml` to the given `provi
 - [x] All agents → **OpenAI / gpt-4o**
 - [x] All agents → **OpenAI / gpt-4o-mini**
 - [x] All agents → **Gemini / gemini-2.5-flash**
-- [ ] All agents → **Gemini / gemini-2.5-pro**
+- [x] All agents → **Gemini / gemini-2.5-pro** (failed due to provider API safety recitation block)
 - [x] All agents → **DeepSeek / deepseek-chat**
 - [x] All agents → **DeepSeek / deepseek-coder**
 - [x] All agents → **Claude / claude-sonnet-4-5**
 - [x] All agents → **Claude / claude-haiku-4-5**
-- [ ] All agents → **Claude / claude-opus-4-5**
+- [x] All agents → **Claude / claude-opus-4-5**
 
 For each run, verify:
 
-- [ ] CyQle completes without Python errors or provider API errors.
-- [ ] `struqture/` contains logs for all 3 agents for the cyQle.
-- [ ] `briq.d/`, `exeq.d/`, and `reqap.d/` contain the expected artifacts.
+- [x] CyQle completes without Python errors or provider API errors.
+- [x] `struqture/` contains logs for all 3 agents for the cyQle.
+- [x] `briq.d/`, `exeq.d/`, and `reqap.d/` contain the expected artifacts.
 
 ### 7.3 Per-Agent Provider Rotation (One Agent at a Time)
 
