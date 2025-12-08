@@ -293,7 +293,7 @@ For each test, set providers/models as specified, then run `./qonqrete.sh run --
       construqtor: DeepSeek / deepseek-chat
       inspeqtor: OpenAI / gpt-4o
 
-- [ ] instruqtor: DeepSeek / deepseek-chat
+- [x] instruqtor: DeepSeek / deepseek-chat
       construqtor: OpenAI / gpt-4o
       inspeqtor: DeepSeek / deepseek-chat
 
@@ -315,9 +315,9 @@ For each test, set providers/models as specified, then run `./qonqrete.sh run --
 
 Verify for each:
 
-- [ ] No provider-specific tracebacks in logs.
-- [ ] All expected artifacts (`briq.d/`, `exeq.d/`, `reqap.d/`) are present.
-- [ ] `struqture/` logs show correct provider/model per agent.
+- [x] No provider-specific tracebacks in logs.
+- [x] All expected artifacts (`briq.d/`, `exeq.d/`, `reqap.d/`) are present.
+- [x] `struqture/` logs show correct provider/model per agent.
 
 #### 7.4.2 Full Provider Triple Matrix (Optional Exhaustive Sweep)
 
