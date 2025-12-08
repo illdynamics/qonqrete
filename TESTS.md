@@ -254,7 +254,7 @@ Verify:
   - [x] inspeqtor → openai/gpt-4.1
   - [x] inspeqtor → openai/gpt-4.1-mini
   - [x] inspeqtor → openai/gpt-4.1-nano
-  - [ ] inspeqtor → gemini/gemini-2.5-flash-lite
+  - [x] inspeqtor → gemini/gemini-2.5-flash-lite
   - [ ] inspeqtor → gemini/gemini-2.5-flash
   - [ ] inspeqtor → gemini/gemini-2.5-pro
   - [ ] inspeqtor → claude/claude-opus-4.5
