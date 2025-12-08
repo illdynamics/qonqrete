@@ -234,9 +234,9 @@ Verify:
   - [x] construqtor → gemini/gemini-2.5-flash-lite
   - [x] construqtor → gemini/gemini-2.5-flash
   - [x] construqtor → gemini/gemini-2.5-pro
-  - [x] construqtor → claude/claude-opus-4-5 (partial success)
-  - [ ] construqtor → claude/claude-haiku-4-5
-  - [ ] construqtor → claude/claude-sonnet-4-5
+  - [x] construqtor → claude/claude-opus-4-5
+  - [x] construqtor → claude/claude-haiku-4-5
+  - [x] construqtor → claude/claude-sonnet-4-5
 
 Verify:
 
@@ -249,7 +249,7 @@ Verify:
 - [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
 
   - [x] inspeqtor → deepseek/deepseek-chat
-  - [x] inspeqtor → deepseek/deepseek-coder (partial success)
+  - [x] inspeqtor → deepseek/deepseek-coder
   - [ ] inspeqtor → deepseek/deepseek-reasoner
   - [ ] inspeqtor → openai/gpt-4.1
   - [ ] inspeqtor → openai/gpt-4.1-mini
