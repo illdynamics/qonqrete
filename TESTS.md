@@ -253,7 +253,7 @@ Verify:
   - [x] inspeqtor → deepseek/deepseek-reasoner
   - [x] inspeqtor → openai/gpt-4.1
   - [x] inspeqtor → openai/gpt-4.1-mini
-  - [ ] inspeqtor → openai/gpt-4.1-nano
+  - [x] inspeqtor → openai/gpt-4.1-nano
   - [ ] inspeqtor → gemini/gemini-2.5-flash-lite
   - [ ] inspeqtor → gemini/gemini-2.5-flash
   - [ ] inspeqtor → gemini/gemini-2.5-pro
@@ -266,7 +266,7 @@ Verify:
 - [x] `reqap.d/cyqle{N}_reqap.md` is produced and well-formed.
 - [x] No provider/model errors.
 
-- [ ] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
+- [x] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
 - [x] Sweep `inspeqtor` through all `(provider, model)` combos.
 
 Verify:
