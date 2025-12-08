@@ -245,14 +245,14 @@ Verify:
 
 #### 7.3.3 inspeqtor Provider/Model Sweep
 
-- [ ] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
-- [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
+- [x] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
+- [x] Sweep `inspeqtor` through all `(provider, model)` combos.
 
   - [x] inspeqtor → deepseek/deepseek-chat
   - [x] inspeqtor → deepseek/deepseek-coder
   - [x] inspeqtor → deepseek/deepseek-reasoner
   - [x] inspeqtor → openai/gpt-4.1
-  - [ ] inspeqtor → openai/gpt-4.1-mini
+  - [x] inspeqtor → openai/gpt-4.1-mini
   - [ ] inspeqtor → openai/gpt-4.1-nano
   - [ ] inspeqtor → gemini/gemini-2.5-flash-lite
   - [ ] inspeqtor → gemini/gemini-2.5-flash
