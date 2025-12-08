@@ -234,7 +234,7 @@ Verify:
   - [x] construqtor → gemini/gemini-2.5-flash-lite
   - [x] construqtor → gemini/gemini-2.5-flash
   - [x] construqtor → gemini/gemini-2.5-pro
-  - [ ] construqtor → claude/claude-opus-4-5
+  - [x] construqtor → claude/claude-opus-4-5 (partial success)
   - [ ] construqtor → claude/claude-haiku-4-5
   - [ ] construqtor → claude/claude-sonnet-4-5
 
