@@ -378,19 +378,19 @@ These tests validate how QonQrete behaves across all combinations of:
 ### 8.1 Reference: Baseline Behavior
 
 - [x] **Baseline: Balanced / briq 5**
-  - [ ] Set `mode: balanced` and `briq_sensitivity: 5` in `config.yaml`.
-  - [ ] Run `./qonqrete.sh run --auto`.
-  - [ ] Record:
-    - [ ] Number of briqs in `briq.d/`.
-    - [ ] Overall style of generated code/docs.
-  - [ ] This run is the reference for comparing all other combinations.
+  - [x] Set `mode: balanced` and `briq_sensitivity: 5` in `config.yaml`.
+  - [x] Run `./qonqrete.sh run --auto`.
+  - [x] Record:
+    - [x] Number of briqs in `briq.d/`.
+    - [x] Overall style of generated code/docs.
+  - [x] This run is the reference for comparing all other combinations.
 
 ### 8.2 Single-Dimension Sweeps
 
 #### 8.2.1 Mode Sweep with Fixed Briq Sensitivity
 
-- [ ] Fix `briq_sensitivity: 5` (balanced splitting).
-- [ ] For each mode value, run a full cyQle and record behavioral differences.
+- [x] Fix `briq_sensitivity: 5` (balanced splitting).
+- [x] For each mode value, run a full cyQle and record behavioral differences.
 
 - [x] `mode: program` (10 briqs)
 - [x] `mode: enterprise` (8 briqs)
@@ -401,14 +401,14 @@ These tests validate how QonQrete behaves across all combinations of:
 
 For each run, verify:
 
-- [ ] No runtime errors.
-- [ ] Style matches expectations (e.g. `enterprise` = more docs/logging; `security` = stricter checks; `performance` = optimizations, etc.).
-- [ ] Briq count remains roughly similar (only style changes, not splitting).
+- [x] No runtime errors.
+- [x] Style matches expectations (e.g. `enterprise` = more docs/logging; `security` = stricter checks; `performance` = optimizations, etc.).
+- [x] Briq count remains roughly similar (only style changes, not splitting).
 
 #### 8.2.2 Briq Sensitivity Sweep with Fixed Mode
 
-- [ ] Fix `mode: balanced`.
-- [ ] For each `briq_sensitivity` (0–9), run a full cyQle and record number of briqs.
+- [x] Fix `mode: balanced`.
+- [x] For each `briq_sensitivity` (0–9), run a full cyQle and record number of briqs.
 
 - [x] `briq_sensitivity: 0` (50 briqs)
 - [x] `briq_sensitivity: 1`
@@ -423,9 +423,9 @@ For each run, verify:
 
 For each run, verify:
 
-- [ ] System completes without errors.
-- [ ] Number of files in `briq.d/` decreases monotonically (or at least trends downward) as sensitivity increases.
-- [ ] At `0`, you get many briqs; at `9`, you get very few (ideally 1).
+- [x] System completes without errors.
+- [x] Number of files in `briq.d/` decreases monotonically (or at least trends downward) as sensitivity increases.
+- [x] At `0`, you get many briqs; at `9`, you get very few (ideally 1).
 
 ### 8.3 Full Mode × Briq Sensitivity Matrix
 
@@ -445,16 +445,16 @@ For **each** combination below:
 
 #### 8.3.1 `mode: program`
 
-- [ ] program / briq 0
-- [ ] program / briq 1
-- [ ] program / briq 2
-- [ ] program / briq 3
-- [ ] program / briq 4
-- [ ] program / briq 5
-- [ ] program / briq 6
-- [ ] program / briq 7
-- [ ] program / briq 8
-- [ ] program / briq 9
+- [x] program / briq 0
+- [x] program / briq 1
+- [x] program / briq 2
+- [x] program / briq 3
+- [x] program / briq 4
+- [x] program / briq 5
+- [x] program / briq 6
+- [x] program / briq 7
+- [x] program / briq 8
+- [x] program / briq 9
 
 #### 8.3.2 `mode: enterprise`
 
