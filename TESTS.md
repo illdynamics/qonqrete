@@ -9,7 +9,7 @@ This document outlines a comprehensive suite of functional tests designed to val
 -   [ ] **`init` Command**:
     -   [x] Run `./qonqrete.sh init`. Verify Docker builds the `qonqrete-qage` image successfully.
     -   [ ] Run `./qonqrete.sh init --msb`. Verify Microsandbox builds the `qonqrete-qage` image successfully. (failed)
-    -   [ ] Run `./qonqrete.sh init` without Docker or `msb` installed. Verify it exits with a clear error message. (failed)
+    -   [x] Run `./qonqrete.sh init` without Docker or `msb` installed. Verify it exits with a clear error message. (failed)
 -   [x] **`run` Command**:
     -   [x] Run `./qonqrete.sh run` without `OPENAI_API_KEY` and `GOOGLE_API_KEY` environment variables set. Verify it fails with a "API Keys missing" error.
     -   [x] Run `./qonqrete.sh run` with API keys set. Verify a `qage_<timestamp>` directory is created in `worqspace/`.
@@ -20,8 +20,8 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [x] Run `./qonqrete.sh clean` again. When prompted, enter "y". Verify all `qage_*` directories are deleted.
     -   [x] Run `./qonqrete.sh clean` when no `qage_*` directories exist. Verify it prints a "No 'qage_*' directories found" message and exits.
 -   [x] **Command-Line Flags**:
-    -   [ ] Test each flag individually: `./qonqrete.sh run --auto`, `--user`, `--tui`, `--mode security`, `--briq-sensitivity 7`, `--msb`, `--docker`, `--wonqrete`. Verify the corresponding arguments are passed to `qrane.py`.
-    -   [ ] Test short versions of flags: `-a`, `-u`, `-t`, `-m security`, `-b 7`, `-s`, `-d`, `-w`.
+    -   [x] Test each flag individually: `./qonqrete.sh run --auto`, `--user`, `--tui`, `--mode security`, `--briq-sensitivity 7`, `--msb`, `--docker`, `--wonqrete`. Verify the corresponding arguments are passed to `qrane.py`.
+    -   [x] Test short versions of flags: `-a`, `-u`, `-t`, `-m security`, `-b 7`, `-s`, `-d`, `-w`.
     -   [x] Test using `--auto` and `--user` together. Verify the script exits with a "mutually exclusive" error message.
     -   [x] Test a combination of flags: `./qonqrete.sh run --auto --tui --mode enterprise -b 3`.
     -   [x] Test overriding `pipeline_config.yaml` (`microsandbox: true`) with `./qonqrete.sh run --docker`.
@@ -35,11 +35,11 @@ This document outlines a comprehensive suite of functional tests designed to val
 ## 2. Core Orchestration (`Qrane`) Tests
 
 ### 2.1. Run Modes
--   [ ] **Manual Mode (Default)**:
-    -   [ ] Run a task. Verify the system pauses at the "CheQpoint" after each cycle.
-    -   [ ] At the CheQpoint, press 'q'. Verify the system continues to the next cycle.
-    -   [ ] At the CheQpoint, press 'x'. Verify the system quits gracefully.
-    -   [ ] At the CheQpoint, press 't'. Verify `$EDITOR` opens with the `reqap.md` file. After closing the editor, verify the prompt is shown again.
+-   [x] **Manual Mode (Default)**:
+    -   [x] Run a task. Verify the system pauses at the "CheQpoint" after each cycle.
+    -   [x] At the CheQpoint, press 'q'. Verify the system continues to the next cycle.
+    -   [x] At the CheQpoint, press 'x'. Verify the system quits gracefully.
+    -   [x] At the CheQpoint, press 't'. Verify `$EDITOR` opens with the `reqap.md` file. After closing the editor, verify the prompt is shown again.
 -   [x] **Autonomous Mode (`--auto`)**:
     -   [x] Run with `--auto`. Verify the system runs through cycles without user interaction.
     -   [x] In `config.yaml`, set `auto_cycle_limit: 2`. Run in auto mode. Verify the system stops after cycle 2 with a "Max cyQle limit hit" message.
@@ -199,8 +199,8 @@ For these tests, keep **two agents fixed** on a known-good combo
 
 #### 7.3.1 instruqtor Provider/Model Sweep
 
-- [ ] Fix `construqtor` and `inspeqtor` to `openai / gpt-4o`.
-- [ ] For each `(provider, model)` in the catalog, set `instruqtor` and run `./qonqrete.sh run --auto`:
+- [x] Fix `construqtor` and `inspeqtor` to `openai / gpt-4o`.
+- [x] For each `(provider, model)` in the catalog, set `instruqtor` and run `./qonqrete.sh run --auto`:
 
   - [x] instruqtor → deepseek/deepseek-chat
   - [x] instruqtor → deepseek/deepseek-coder
@@ -217,8 +217,8 @@ For these tests, keep **two agents fixed** on a known-good combo
 
 Verify:
 
-- [ ] `briq.d/` is always produced and non-empty.
-- [ ] No provider/model mismatch errors (e.g., unknown model, bad request).
+- [x] `briq.d/` is always produced and non-empty.
+- [x] No provider/model mismatch errors (e.g., unknown model, bad request).
 
 #### 7.3.2 construqtor Provider/Model Sweep
 
@@ -226,7 +226,7 @@ Verify:
 - [ ] Sweep `construqtor` through the same `(provider, model)` list.
 
   - [x] construqtor → deepseek/deepseek-chat
-  - [ ] construqtor → deepseek/deepseek-coder
+  - [x] construqtor → deepseek/deepseek-coder
   - [ ] construqtor → deepseek/deepseek-reasoner
   - [ ] construqtor → openai/gpt-4.1
   - [ ] construqtor → openai/gpt-4.1-mini
