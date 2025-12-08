@@ -8,8 +8,8 @@ This document outlines a comprehensive suite of functional tests designed to val
 
 -   [ ] **`init` Command**:
     -   [x] Run `./qonqrete.sh init`. Verify Docker builds the `qonqrete-qage` image successfully.
-    -   [ ] Run `./qonqrete.sh init --msb`. Verify Microsandbox builds the `qonqrete-qage` image successfully. (failed)
-    -   [x] Run `./qonqrete.sh init` without Docker or `msb` installed. Verify it exits with a clear error message. (failed)
+    -   [ ] Run `./qonqrete.sh init --msb`. Verify Microsandbox builds the `qonqrete-qage` image successfully.
+    -   [x] Run `./qonqrete.sh init` without Docker or `msb` installed. Verify it exits with a clear error message.
 -   [x] **`run` Command**:
     -   [x] Run `./qonqrete.sh run` without `OPENAI_API_KEY` and `GOOGLE_API_KEY` environment variables set. Verify it fails with a "API Keys missing" error.
     -   [x] Run `./qonqrete.sh run` with API keys set. Verify a `qage_<timestamp>` directory is created in `worqspace/`.
@@ -129,9 +129,9 @@ This document outlines a comprehensive suite of functional tests designed to val
     -   [ ] Test TUI mode (`--tui`), as terminal behavior can differ.
 -   [ ] **Microsandbox (`msb`)**:
     -   [ ] On a Linux machine with `msb` installed:
-    -   [ ] Run `./qonqrete.sh init --msb`. (failed)
-    -   [ ] Run a full task cycle using `./qonqrete.sh run --msb`. (failed)
-    -   [ ] Set `microsandbox: true` in `pipeline_config.yaml` and run without the `--msb` flag to test the default detection. (failed)
+    -   [ ] Run `./qonqrete.sh init --msb`.
+    -   [ ] Run a full task cycle using `./qonqrete.sh run --msb`.
+    -   [ ] Set `microsandbox: true` in `pipeline_config.yaml` and run without the `--msb` flag to test the default detection.
 
 ## 7. Provider & Model Matrix Tests
 
@@ -228,8 +228,7 @@ Verify:
   - [x] construqtor → deepseek/deepseek-chat
   - [x] construqtor → deepseek/deepseek-coder
   - [x] construqtor → deepseek/deepseek-reasoner
-  - [ ] construqtor → openai/gpt-4.1
-  - [ ] construqtor → openai/gpt-4.1-mini
+    - [x] construqtor → openai/gpt-4.1  - [ ] construqtor → openai/gpt-4.1-mini
   - [ ] construqtor → openai/gpt-4.1-nano
   - [ ] construqtor → gemini/gemini-2.5-flash-lite
   - [ ] construqtor → gemini/gemini-2.5-flash
@@ -410,7 +409,7 @@ For each run, verify:
 - [ ] Fix `mode: balanced`.
 - [ ] For each `briq_sensitivity` (0–9), run a full cyQle and record number of briqs.
 
-- [x] `briq_sensitivity: 0` (50 briqs, failed)
+- [x] `briq_sensitivity: 0` (50 briqs)
 - [x] `briq_sensitivity: 1`
 - [x] `briq_sensitivity: 2`
 - [x] `briq_sensitivity: 3`
@@ -527,7 +526,7 @@ These verify that CLI flags override `config.yaml` correctly and interact well w
 
 - [ ] Start with `mode: balanced`, `briq_sensitivity: 5` in `config.yaml`.
 - [ ] Run:
-  - [x] `./qonqrete.sh run --mode security --briq-sensitivity 0` (50 briqs, failed)
+  - [x] `./qonqrete.sh run --mode security --briq-sensitivity 0` (50 briqs)
   - [x] `./qonqrete.sh run --mode enterprise -b 9` (1 briq)
   - [x] `./qonqrete.sh run --mode performance -b 3` (20 briqs)
 - [ ] For each of the above, verify:
