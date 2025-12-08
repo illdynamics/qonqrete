@@ -230,7 +230,7 @@ Verify:
   - [x] construqtor → deepseek/deepseek-reasoner
   - [x] construqtor → openai/gpt-4.1
   - [x] construqtor → openai/gpt-4.1-mini
-  - [ ] construqtor → openai/gpt-4.1-nano
+  - [x] construqtor → openai/gpt-4.1-nano
   - [ ] construqtor → gemini/gemini-2.5-flash-lite
   - [ ] construqtor → gemini/gemini-2.5-flash
   - [ ] construqtor → gemini/gemini-2.5-pro
