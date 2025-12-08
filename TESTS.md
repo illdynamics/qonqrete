@@ -525,14 +525,14 @@ For **each** combination below:
 
 These verify that CLI flags override `config.yaml` correctly and interact well with the matrix.
 
-- [ ] Start with `mode: balanced`, `briq_sensitivity: 5` in `config.yaml`.
-- [ ] Run:
+- [x] Start with `mode: balanced`, `briq_sensitivity: 5` in `config.yaml`.
+- [x] Run:
   - [x] `./qonqrete.sh run --mode security --briq-sensitivity 0` (50 briqs)
   - [x] `./qonqrete.sh run --mode enterprise -b 9` (1 briq)
   - [x] `./qonqrete.sh run --mode performance -b 3` (20 briqs)
-- [ ] For each of the above, verify:
-  - [ ] No conflict between CLI flags and `config.yaml`.
-  - [ ] `qrane.py` logs the effective mode and briq sensitivity.
+- [x] For each of the above, verify:
+  - [x] No conflict between CLI flags and `config.yaml`.
+  - [x] `qrane.py` logs the effective mode and briq sensitivity.
 
 ### 8.5 Edge & Regression Scenarios
 
