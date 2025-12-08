@@ -227,7 +227,7 @@ Verify:
 
   - [x] construqtor → deepseek/deepseek-chat
   - [x] construqtor → deepseek/deepseek-coder
-  - [ ] construqtor → deepseek/deepseek-reasoner
+  - [x] construqtor → deepseek/deepseek-reasoner
   - [ ] construqtor → openai/gpt-4.1
   - [ ] construqtor → openai/gpt-4.1-mini
   - [ ] construqtor → openai/gpt-4.1-nano
