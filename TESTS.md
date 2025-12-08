@@ -249,7 +249,7 @@ Verify:
 - [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
 
   - [x] inspeqtor → deepseek/deepseek-chat
-  - [ ] inspeqtor → deepseek/deepseek-coder
+  - [x] inspeqtor → deepseek/deepseek-coder (partial success)
   - [ ] inspeqtor → deepseek/deepseek-reasoner
   - [ ] inspeqtor → openai/gpt-4.1
   - [ ] inspeqtor → openai/gpt-4.1-mini
