@@ -171,13 +171,12 @@ For each checkbox, set **all three agents** in `config.yaml` to the given `provi
 - `./qonqrete.sh run --auto`
 - Simple `tasq.md` that forces at least 1 full cyQle.
 
-- [x] All agents → **OpenAI / gpt-4o**
-- [ ] All agents → **OpenAI / gpt-5.1-codex** (failed, not a chat model)
-- [x] All agents → **OpenAI / gpt-4o-mini**
+- [x] All agents → **OpenAI / gpt-4.1**
+- [x] All agents → **OpenAI / gpt-4.1-mini** (partial success)
+- [x] All agents → **OpenAI / gpt-4.1-nano**
 - [x] All agents → **Gemini / gemini-2.5-flash**
 - [x] All agents → **Gemini / gemini-2.5-flash-lite**
 - [x] All agents → **Gemini / gemini-2.5-pro** (partial success)
-- [ ] All agents → **Gemini / gemini-3-pro-preview** (failed due to 504 Deadline Exceeded)
 - [x] All agents → **DeepSeek / deepseek-chat**
 - [x] All agents → **DeepSeek / deepseek-reasoner**
 - [x] All agents → **DeepSeek / deepseek-coder**
@@ -203,15 +202,18 @@ For these tests, keep **two agents fixed** on a known-good combo
 - [ ] Fix `construqtor` and `inspeqtor` to `openai / gpt-4o`.
 - [ ] For each `(provider, model)` in the catalog, set `instruqtor` and run `./qonqrete.sh run --auto`:
 
-  - [x] instruqtor → OpenAI / gpt-4o
-  - [x] instruqtor → OpenAI / gpt-4o-mini
-  - [x] instruqtor → Gemini / gemini-2.5-flash
-  - [ ] instruqtor → Gemini / gemini-2.5-pro
-  - [x] instruqtor → DeepSeek / deepseek-chat
-  - [x] instruqtor → DeepSeek / deepseek-coder
-  - [x] instruqtor → Claude / claude-sonnet-4-5
-  - [x] instruqtor → Claude / claude-haiku-4-5
-  - [ ] instruqtor → Claude / claude-opus-4-5
+  - [x] instruqtor → deepseek/deepseek-chat (partial success)
+  - [x] instruqtor → deepseek/deepseek-coder
+  - [x] instruqtor → deepseek/deepseek-reasoner (partial success)
+  - [x] instruqtor → openai/gpt-4.1
+  - [x] instruqtor → openai/gpt-4.1-mini
+  - [x] instruqtor → openai/gpt-4.1-nano
+  - [x] instruqtor → gemini/gemini-2.5-flash-lite
+  - [x] instruqtor → gemini/gemini-2.5-flash (partial success)
+  - [x] instruqtor → gemini/gemini-2.5-pro
+  - [ ] instruqtor → claude/claude-opus-4-5
+  - [ ] instruqtor → claude/claude-haiku-4-5
+  - [ ] instruqtor → claude/claude-sonnet-4-5
 
 Verify:
 
@@ -223,15 +225,18 @@ Verify:
 - [ ] Fix `instruqtor` and `inspeqtor` to `openai / gpt-4o`.
 - [ ] Sweep `construqtor` through the same `(provider, model)` list.
 
-  - [x] construqtor → OpenAI / gpt-4o
-  - [x] construqtor → OpenAI / gpt-4o-mini
-  - [x] construqtor → Gemini / gemini-2.5-flash
-  - [ ] construqtor → Gemini / gemini-2.5-pro
-  - [x] construqtor → DeepSeek / deepseek-chat
-  - [x] construqtor → DeepSeek / deepseek-coder
-  - [x] construqtor → Claude / claude-sonnet-4-5
-  - [x] construqtor → Claude / claude-haiku-4-5
-  - [ ] construqtor → Claude / claude-opus-4-5
+  - [ ] construqtor → deepseek/deepseek-chat
+  - [ ] construqtor → deepseek/deepseek-coder
+  - [ ] construqtor → deepseek/deepseek-reasoner
+  - [ ] construqtor → openai/gpt-4.1
+  - [ ] construqtor → openai/gpt-4.1-mini
+  - [ ] construqtor → openai/gpt-4.1-nano
+  - [ ] construqtor → gemini/gemini-2.5-flash-lite
+  - [ ] construqtor → gemini/gemini-2.5-flash
+  - [ ] construqtor → gemini/gemini-2.5-pro
+  - [ ] construqtor → claude/claude-opus-4-5
+  - [ ] construqtor → claude/claude-haiku-4-5
+  - [ ] construqtor → claude/claude-sonnet-4-5
 
 Verify:
 
@@ -243,15 +248,18 @@ Verify:
 - [ ] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
 - [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
 
-  - [x] inspeqtor → OpenAI / gpt-4o
-  - [x] inspeqtor → OpenAI / gpt-4o-mini
-  - [x] inspeqtor → Gemini / gemini-2.5-flash
-  - [ ] inspeqtor → Gemini / gemini-2.5-pro
-  - [x] inspeqtor → DeepSeek / deepseek-chat
-  - [x] inspeqtor → DeepSeek / deepseek-coder
-  - [x] inspeqtor → Claude / claude-sonnet-4-5
-  - [x] inspeqtor → Claude / claude-haiku-4-5
-  - [ ] inspeqtor → Claude / claude-opus-4-5
+  - [ ] inspeqtor → deepseek/deepseek-chat
+  - [ ] inspeqtor → deepseek/deepseek-coder
+  - [ ] inspeqtor → deepseek/deepseek-reasoner
+  - [ ] inspeqtor → openai/gpt-4.1
+  - [ ] inspeqtor → openai/gpt-4.1-mini
+  - [ ] inspeqtor → openai/gpt-4.1-nano
+  - [ ] inspeqtor → gemini/gemini-2.5-flash-lite
+  - [ ] inspeqtor → gemini/gemini-2.5-flash
+  - [ ] inspeqtor → gemini/gemini-2.5-pro
+  - [ ] inspeqtor → claude/claude-opus-4.5
+  - [ ] inspeqtor → claude/claude-haiku-4.5
+  - [ ] inspeqtor → claude/claude-sonnet-4-5
 
 Verify:
 
