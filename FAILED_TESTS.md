@@ -1,4 +1,8 @@
 - **Test:** Single-Provider Sweep
+- **Provider:** openai
+- **Model:** gpt-5.1-codex
+- **Failure:** The `instruqtor` agent failed with a 404 error because the model is not a chat model and is not supported in the v1/chat/completions endpoint.
+- **Test:** Single-Provider Sweep
 - **Provider:** gemini
 - **Model:** gemini-2.5-pro
 - **Failure:** The test failed with a `404 Not Found` error, indicating that the model name `gemini-2.5-pro` is incorrect or not available.

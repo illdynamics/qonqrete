@@ -172,16 +172,18 @@ For each checkbox, set **all three agents** in `config.yaml` to the given `provi
 - Simple `tasq.md` that forces at least 1 full cyQle.
 
 - [x] All agents → **OpenAI / gpt-4o**
+- [ ] All agents → **OpenAI / gpt-5.1-codex** (failed, not a chat model)
 - [x] All agents → **OpenAI / gpt-4o-mini**
 - [x] All agents → **Gemini / gemini-2.5-flash**
 - [x] All agents → **Gemini / gemini-2.5-flash-lite**
-- [ ] All agents → **Gemini / gemini-2.5-pro** (failed due to invalid model name)
+- [x] All agents → **Gemini / gemini-2.5-pro** (partial success)
 - [ ] All agents → **Gemini / gemini-3-pro-preview** (failed due to 504 Deadline Exceeded)
 - [x] All agents → **DeepSeek / deepseek-chat**
+- [x] All agents → **DeepSeek / deepseek-reasoner**
 - [x] All agents → **DeepSeek / deepseek-coder**
 - [x] All agents → **Claude / claude-sonnet-4-5**
 - [x] All agents → **Claude / claude-haiku-4-5**
-- [x] All agents → **Claude / claude-opus-4-5**
+- [x] All agents → **Claude / claude-opus-4-5** (partial success)
 
 For each run, verify:
 
