@@ -250,8 +250,8 @@ Verify:
 
   - [x] inspeqtor → deepseek/deepseek-chat
   - [x] inspeqtor → deepseek/deepseek-coder
-  - [x] inspeqtor → deepseek/deepseek-reasoner (partial success)
-  - [ ] inspeqtor → openai/gpt-4.1
+  - [x] inspeqtor → deepseek/deepseek-reasoner
+  - [x] inspeqtor → openai/gpt-4.1
   - [ ] inspeqtor → openai/gpt-4.1-mini
   - [ ] inspeqtor → openai/gpt-4.1-nano
   - [ ] inspeqtor → gemini/gemini-2.5-flash-lite
