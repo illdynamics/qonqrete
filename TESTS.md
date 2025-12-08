@@ -248,7 +248,7 @@ Verify:
 - [ ] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
 - [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
 
-  - [ ] inspeqtor → deepseek/deepseek-chat
+  - [x] inspeqtor → deepseek/deepseek-chat
   - [ ] inspeqtor → deepseek/deepseek-coder
   - [ ] inspeqtor → deepseek/deepseek-reasoner
   - [ ] inspeqtor → openai/gpt-4.1
