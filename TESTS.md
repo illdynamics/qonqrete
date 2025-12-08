@@ -233,7 +233,7 @@ Verify:
   - [x] construqtor → openai/gpt-4.1-nano
   - [x] construqtor → gemini/gemini-2.5-flash-lite
   - [ ] construqtor → gemini/gemini-2.5-flash
-  - [ ] construqtor → gemini/gemini-2.5-pro
+  - [x] construqtor → gemini/gemini-2.5-pro
   - [ ] construqtor → claude/claude-opus-4-5
   - [ ] construqtor → claude/claude-haiku-4-5
   - [ ] construqtor → claude/claude-sonnet-4-5
