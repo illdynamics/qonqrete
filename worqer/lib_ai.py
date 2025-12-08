@@ -115,9 +115,10 @@ def _run_gemini(model, prompt):
     
     captured_chunks = []
     for chunk in response_stream:
-        if chunk.text:
-            captured_chunks.append(chunk.text)
-            sys.stderr.write(chunk.text)
+        text = getattr(chunk, 'text', None)
+        if text:
+            captured_chunks.append(text)
+            sys.stderr.write(text)
             sys.stderr.flush()
     return "".join(captured_chunks).strip()
 

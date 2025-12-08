@@ -2,16 +2,16 @@
 
 agents:
   instruqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: gemini
+    model: gemini-3-pro-preview
 
   construqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: gemini
+    model: gemini-3-pro-preview
 
   inspeqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: gemini
+    model: gemini-3-pro-preview
 
 options:
   # Cheqpoint Configuration

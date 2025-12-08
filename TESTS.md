@@ -174,7 +174,9 @@ For each checkbox, set **all three agents** in `config.yaml` to the given `provi
 - [x] All agents → **OpenAI / gpt-4o**
 - [x] All agents → **OpenAI / gpt-4o-mini**
 - [x] All agents → **Gemini / gemini-2.5-flash**
-- [x] All agents → **Gemini / gemini-2.5-pro** (failed due to provider API safety recitation block)
+- [x] All agents → **Gemini / gemini-2.5-flash-lite**
+- [ ] All agents → **Gemini / gemini-2.5-pro** (failed due to invalid model name)
+- [ ] All agents → **Gemini / gemini-3-pro-preview** (failed due to 504 Deadline Exceeded)
 - [x] All agents → **DeepSeek / deepseek-chat**
 - [x] All agents → **DeepSeek / deepseek-coder**
 - [x] All agents → **Claude / claude-sonnet-4-5**
