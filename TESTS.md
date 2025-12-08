@@ -211,9 +211,9 @@ For these tests, keep **two agents fixed** on a known-good combo
   - [x] instruqtor → gemini/gemini-2.5-flash-lite
   - [x] instruqtor → gemini/gemini-2.5-flash (partial success)
   - [x] instruqtor → gemini/gemini-2.5-pro
-  - [ ] instruqtor → claude/claude-opus-4-5
-  - [ ] instruqtor → claude/claude-haiku-4-5
-  - [ ] instruqtor → claude/claude-sonnet-4-5
+  - [x] instruqtor → claude/claude-opus-4-5
+  - [x] instruqtor → claude/claude-haiku-4-5
+  - [x] instruqtor → claude/claude-sonnet-4-5 (partial success)
 
 Verify:
 
@@ -225,7 +225,7 @@ Verify:
 - [ ] Fix `instruqtor` and `inspeqtor` to `openai / gpt-4o`.
 - [ ] Sweep `construqtor` through the same `(provider, model)` list.
 
-  - [ ] construqtor → deepseek/deepseek-chat
+  - [x] construqtor → deepseek/deepseek-chat
   - [ ] construqtor → deepseek/deepseek-coder
   - [ ] construqtor → deepseek/deepseek-reasoner
   - [ ] construqtor → openai/gpt-4.1
