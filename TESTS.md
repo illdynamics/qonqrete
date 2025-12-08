@@ -497,29 +497,29 @@ For **each** combination below:
 
 #### 8.3.5 `mode: innovative`
 
-- [ ] innovative / briq 0
-- [ ] innovative / briq 1
-- [ ] innovative / briq 2
-- [ ] innovative / briq 3
-- [ ] innovative / briq 4
-- [ ] innovative / briq 5
-- [ ] innovative / briq 6
-- [ ] innovative / briq 7
-- [ ] innovative / briq 8
-- [ ] innovative / briq 9
+- [x] innovative / briq 0
+- [x] innovative / briq 1
+- [x] innovative / briq 2
+- [x] innovative / briq 3
+- [x] innovative / briq 4
+- [x] innovative / briq 5
+- [x] innovative / briq 6
+- [x] innovative / briq 7
+- [x] innovative / briq 8
+- [x] innovative / briq 9
 
 #### 8.3.6 `mode: balanced`
 
-- [ ] balanced / briq 0
-- [ ] balanced / briq 1
-- [ ] balanced / briq 2
-- [ ] balanced / briq 3
-- [ ] balanced / briq 4
-- [ ] balanced / briq 5
-- [ ] balanced / briq 6
-- [ ] balanced / briq 7
-- [ ] balanced / briq 8
-- [ ] balanced / briq 9
+- [x] balanced / briq 0
+- [x] balanced / briq 1
+- [x] balanced / briq 2
+- [x] balanced / briq 3
+- [x] balanced / briq 4
+- [x] balanced / briq 5
+- [x] balanced / briq 6
+- [x] balanced / briq 7
+- [x] balanced / briq 8
+- [x] balanced / briq 9
 
 ### 8.4 CLI Override Tests (`--mode` and `--briq-sensitivity`)
 
