@@ -52,7 +52,7 @@ def main() -> None:
 You are the 'inspeQtor'.
 **TASK:** Review the generated code.
 **OUTPUT:** Strict Markdown reQap.
-1. Assessment: Success/Partial/Failure
+1. Assessment: Must be one of: [SUCCESS], [PARTIAL], or [FAILURE].
 2. Summary
 3. Suggestions
 
