@@ -309,7 +309,7 @@ For each test, set providers/models as specified, then run `./qonqrete.sh run --
       construqtor: Gemini / gemini-2.5-flash
       inspeqtor: OpenAI / gpt-4o
 
-- [ ] instruqtor: Gemini / gemini-2.5-flash
+- [x] instruqtor: Gemini / gemini-2.5-flash
       construqtor: DeepSeek / deepseek-chat
       inspeqtor: Claude / claude-sonnet-4-5
 
@@ -323,15 +323,15 @@ Verify for each:
 
 **Optional but ideal for automation:**
 
-- [ ] Programmatically iterate over all triples
+- [x] Programmatically iterate over all triples
       `(P_instruqtor, P_construqtor, P_inspeqtor)` in `{openai, gemini, deepseek, claude}^3`,
       using primary models, and run a short cyQle.
 
 Record for each:
 
-- [ ] Whether the run completed successfully.
-- [ ] Any provider/model-specific errors.
-- [ ] Whether all three artifact directories were populated.
+- [x] Whether the run completed successfully.
+- [x] Any provider/model-specific errors.
+- [x] Whether all three artifact directories were populated.
 
 ### 7.5 Model Variant Swaps Within a Provider
 
@@ -339,21 +339,21 @@ For each provider, validate swapping between its primary and secondary model wit
 
 Example for OpenAI:
 
-- [ ] All agents → `openai / gpt-4o`
-- [ ] All agents → `openai / gpt-4o-mini`
-- [ ] Mixed models:
+- [x] All agents → `openai / gpt-4o`
+- [x] All agents → `openai / gpt-4o-mini`
+- [x] Mixed models:
       instruqtor: gpt-4o-mini, construqtor: gpt-4o, inspeqtor: gpt-4o-mini
 
 Repeat equivalent tests for:
 
-- [ ] Gemini (flash vs pro)
-- [ ] DeepSeek (chat vs coder)
-- [ ] Claude (sonnet vs haiku)
+- [x] Gemini (flash vs pro)
+- [x] DeepSeek (chat vs coder)
+- [x] Claude (sonnet vs haiku)
 
 Verify:
 
-- [ ] No “unknown model” or schema errors.
-- [ ] Prompt/response handling still works (no parsing crashes).
+- [x] No “unknown model” or schema errors.
+- [x] Prompt/response handling still works (no parsing crashes).
 
 ## 8. Mode & Briq Sensitivity Matrix Tests
 
