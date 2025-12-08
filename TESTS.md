@@ -458,42 +458,42 @@ For **each** combination below:
 
 #### 8.3.2 `mode: enterprise`
 
-- [ ] enterprise / briq 0
-- [ ] enterprise / briq 1
-- [ ] enterprise / briq 2
-- [ ] enterprise / briq 3
-- [ ] enterprise / briq 4
-- [ ] enterprise / briq 5
-- [ ] enterprise / briq 6
-- [ ] enterprise / briq 7
-- [ ] enterprise / briq 8
-- [ ] enterprise / briq 9
+- [x] enterprise / briq 0
+- [x] enterprise / briq 1
+- [x] enterprise / briq 2
+- [x] enterprise / briq 3
+- [x] enterprise / briq 4
+- [x] enterprise / briq 5
+- [x] enterprise / briq 6
+- [x] enterprise / briq 7
+- [x] enterprise / briq 8
+- [x] enterprise / briq 9
 
 #### 8.3.3 `mode: performance`
 
-- [ ] performance / briq 0
-- [ ] performance / briq 1
-- [ ] performance / briq 2
-- [ ] performance / briq 3
-- [ ] performance / briq 4
-- [ ] performance / briq 5
-- [ ] performance / briq 6
-- [ ] performance / briq 7
-- [ ] performance / briq 8
-- [ ] performance / briq 9
+- [x] performance / briq 0
+- [x] performance / briq 1
+- [x] performance / briq 2
+- [x] performance / briq 3
+- [x] performance / briq 4
+- [x] performance / briq 5
+- [x] performance / briq 6
+- [x] performance / briq 7
+- [x] performance / briq 8
+- [x] performance / briq 9
 
 #### 8.3.4 `mode: security`
 
-- [ ] security / briq 0
-- [ ] security / briq 1
-- [ ] security / briq 2
-- [ ] security / briq 3
-- [ ] security / briq 4
-- [ ] security / briq 5
-- [ ] security / briq 6
-- [ ] security / briq 7
-- [ ] security / briq 8
-- [ ] security / briq 9
+- [x] security / briq 0
+- [x] security / briq 1
+- [x] security / briq 2
+- [x] security / briq 3
+- [x] security / briq 4
+- [x] security / briq 5
+- [x] security / briq 6
+- [x] security / briq 7
+- [x] security / briq 8
+- [x] security / briq 9
 
 #### 8.3.5 `mode: innovative`
 
