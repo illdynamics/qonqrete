@@ -172,17 +172,17 @@ For each checkbox, set **all three agents** in `config.yaml` to the given `provi
 - Simple `tasq.md` that forces at least 1 full cyQle.
 
 - [x] All agents → **OpenAI / gpt-4.1**
-- [x] All agents → **OpenAI / gpt-4.1-mini** (partial success)
+- [x] All agents → **OpenAI / gpt-4.1-mini**
 - [x] All agents → **OpenAI / gpt-4.1-nano**
 - [x] All agents → **Gemini / gemini-2.5-flash**
 - [x] All agents → **Gemini / gemini-2.5-flash-lite**
-- [x] All agents → **Gemini / gemini-2.5-pro** (partial success)
+- [x] All agents → **Gemini / gemini-2.5-pro**
 - [x] All agents → **DeepSeek / deepseek-chat**
 - [x] All agents → **DeepSeek / deepseek-reasoner**
 - [x] All agents → **DeepSeek / deepseek-coder**
 - [x] All agents → **Claude / claude-sonnet-4-5**
 - [x] All agents → **Claude / claude-haiku-4-5**
-- [x] All agents → **Claude / claude-opus-4-5** (partial success)
+- [x] All agents → **Claude / claude-opus-4-5**
 
 For each run, verify:
 
@@ -202,18 +202,18 @@ For these tests, keep **two agents fixed** on a known-good combo
 - [ ] Fix `construqtor` and `inspeqtor` to `openai / gpt-4o`.
 - [ ] For each `(provider, model)` in the catalog, set `instruqtor` and run `./qonqrete.sh run --auto`:
 
-  - [x] instruqtor → deepseek/deepseek-chat (partial success)
+  - [x] instruqtor → deepseek/deepseek-chat
   - [x] instruqtor → deepseek/deepseek-coder
-  - [x] instruqtor → deepseek/deepseek-reasoner (partial success)
+  - [x] instruqtor → deepseek/deepseek-reasoner
   - [x] instruqtor → openai/gpt-4.1
   - [x] instruqtor → openai/gpt-4.1-mini
   - [x] instruqtor → openai/gpt-4.1-nano
   - [x] instruqtor → gemini/gemini-2.5-flash-lite
-  - [x] instruqtor → gemini/gemini-2.5-flash (partial success)
+  - [x] instruqtor → gemini/gemini-2.5-flash
   - [x] instruqtor → gemini/gemini-2.5-pro
   - [x] instruqtor → claude/claude-opus-4-5
   - [x] instruqtor → claude/claude-haiku-4-5
-  - [x] instruqtor → claude/claude-sonnet-4-5 (partial success)
+  - [x] instruqtor → claude/claude-sonnet-4-5
 
 Verify:
 
