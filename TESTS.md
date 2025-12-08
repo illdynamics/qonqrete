@@ -536,22 +536,22 @@ These verify that CLI flags override `config.yaml` correctly and interact well w
 
 ### 8.5 Edge & Regression Scenarios
 
-- [ ] **Max fragmentation (`security` + briq 0)**:
-  - [ ] Set `mode: security`, `briq_sensitivity: 0`.
-  - [ ] Verify:
-    - [ ] Many briqs generated.
-    - [ ] Security style still present (validations, checks).
-- [ ] **Monolithic enterprise (`enterprise` + briq 9)**:
-  - [ ] Set `mode: enterprise`, `briq_sensitivity: 9`.
-  - [ ] Verify:
-    - [ ] Very few briqs (ideally one).
-    - [ ] Output still has enterprise-style docs/logging.
-- [ ] **Experimental spray (`innovative` + mid briq)**:
-  - [ ] Set `mode: innovative`, `briq_sensitivity: 4–6`.
-  - [ ] Verify:
-    - [ ] Outputs are more creative but still structurally valid.
-- [ ] **Regression check**:
-  - [ ] After running multiple extreme combos, revert to `mode: balanced`, `briq_sensitivity: 5`.
-  - [ ] Run again and verify:
+- [x] **Max fragmentation (`security` + briq 0)**:
+  - [x] Set `mode: security`, `briq_sensitivity: 0`.
+  - [x] Verify:
+    - [x] Many briqs generated.
+    - [x] Security style still present (validations, checks).
+- [x] **Monolithic enterprise (`enterprise` + briq 9)**:
+  - [x] Set `mode: enterprise`, `briq_sensitivity: 9`.
+  - [x] Verify:
+    - [x] Very few briqs (ideally one).
+    - [x] Output still has enterprise-style docs/logging.
+- [x] **Experimental spray (`innovative` + mid briq)**:
+  - [x] Set `mode: innovative`, `briq_sensitivity: 4–6`.
+  - [x] Verify:
+    - [x] Outputs are more creative but still structurally valid.
+- [x] **Regression check**:
+  - [x] After running multiple extreme combos, revert to `mode: balanced`, `briq_sensitivity: 5`.
+  - [x] Run again and verify:
     - [x] Behavior matches the original baseline from §8.1.
 
