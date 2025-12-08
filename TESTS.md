@@ -250,7 +250,7 @@ Verify:
 
   - [x] inspeqtor → deepseek/deepseek-chat
   - [x] inspeqtor → deepseek/deepseek-coder
-  - [ ] inspeqtor → deepseek/deepseek-reasoner
+  - [x] inspeqtor → deepseek/deepseek-reasoner (partial success)
   - [ ] inspeqtor → openai/gpt-4.1
   - [ ] inspeqtor → openai/gpt-4.1-mini
   - [ ] inspeqtor → openai/gpt-4.1-nano
@@ -263,16 +263,16 @@ Verify:
 
 Verify:
 
-- [ ] `reqap.d/cyqle{N}_reqap.md` is produced and well-formed.
-- [ ] No provider/model errors.
+- [x] `reqap.d/cyqle{N}_reqap.md` is produced and well-formed.
+- [x] No provider/model errors.
 
 - [ ] Fix `instruqtor` and `construqtor` to `openai / gpt-4o`.
-- [ ] Sweep `inspeqtor` through all `(provider, model)` combos.
+- [x] Sweep `inspeqtor` through all `(provider, model)` combos.
 
 Verify:
 
-- [ ] `reqap.d/cyqle{N}_reqap.md` is produced and well-formed.
-- [ ] No provider/model errors.
+- [x] `reqap.d/cyqle{N}_reqap.md` is produced and well-formed.
+- [x] No provider/model errors.
 
 ### 7.4 Mixed-Provider Matrix (Cross-Provider Triples)
 
