@@ -305,7 +305,7 @@ For each test, set providers/models as specified, then run `./qonqrete.sh run --
       construqtor: DeepSeek / deepseek-chat
       inspeqtor: Claude / claude-sonnet-4-5
 
-- [ ] instruqtor: Claude / claude-sonnet-4-5
+- [x] instruqtor: Claude / claude-sonnet-4-5
       construqtor: Gemini / gemini-2.5-flash
       inspeqtor: OpenAI / gpt-4o
 
