@@ -222,8 +222,8 @@ Verify:
 
 #### 7.3.2 construqtor Provider/Model Sweep
 
-- [ ] Fix `instruqtor` and `inspeqtor` to `openai / gpt-4o`.
-- [ ] Sweep `construqtor` through the same `(provider, model)` list.
+- [x] Fix `instruqtor` and `inspeqtor` to `openai / gpt-4o`.
+- [x] Sweep `construqtor` through the same `(provider, model)` list.
 
   - [x] construqtor → deepseek/deepseek-chat
   - [x] construqtor → deepseek/deepseek-coder
@@ -232,7 +232,7 @@ Verify:
   - [x] construqtor → openai/gpt-4.1-mini
   - [x] construqtor → openai/gpt-4.1-nano
   - [x] construqtor → gemini/gemini-2.5-flash-lite
-  - [ ] construqtor → gemini/gemini-2.5-flash
+  - [x] construqtor → gemini/gemini-2.5-flash
   - [x] construqtor → gemini/gemini-2.5-pro
   - [ ] construqtor → claude/claude-opus-4-5
   - [ ] construqtor → claude/claude-haiku-4-5
@@ -240,8 +240,8 @@ Verify:
 
 Verify:
 
-- [ ] `exeq.d/cyqle{N}_summary.md` is produced.
-- [ ] No provider/model errors and no missing briq input errors.
+- [x] `exeq.d/cyqle{N}_summary.md` is produced.
+- [x] No provider/model errors and no missing briq input errors.
 
 #### 7.3.3 inspeqtor Provider/Model Sweep
 
