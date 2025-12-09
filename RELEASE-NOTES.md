@@ -1,5 +1,18 @@
 # Release Notes
 
+## [v0.5.0-beta] - 2025-12-08
+
+### Added
+- **Comprehensive Test Suite**: Introduced a new `TESTS.md` file outlining a full suite of functional tests, including a provider and model matrix, mode and briq sensitivity matrix, and edge/regression scenarios.
+- **Extensive Model Support**: Added and verified support for a wide range of new models from OpenAI, Google, Anthropic, and DeepSeek.
+
+### Changed
+- **Version**: Bumped version to `0.5.0` and updated the suffix to `-beta` to reflect the significant increase in test coverage and stability.
+
+### Fixed
+- **Gemini API `response.text` error**: A critical bug causing a crash when the Gemini API returned a blocked or empty response has been fixed by safely accessing the `chunk.text` attribute.
+- **Assessment Parsing**: The logic for parsing the `inspeqtor`'s assessment has been made more robust to handle different output formats, ensuring consistent status reporting.
+
 ## [v0.4.9-alpha] - 2025-12-07
 
 ### Changed
