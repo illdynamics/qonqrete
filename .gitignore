@@ -19,3 +19,6 @@ worqspace/struqture**
 
 # PyCache
 **__pycache**
+
+# Config Backups
+**.config_backup/*
