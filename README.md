@@ -14,7 +14,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.4.9-alpha` (See `VERSION` file for the canonical version).
+**Version:** `v0.5.0-beta` (See `VERSION` file for the canonical version).
 
 > **Note on TUI Mode and Agent Testing:**
 >
