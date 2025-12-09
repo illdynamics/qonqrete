@@ -1,1 +1,3 @@
-Create a simple Python web server that listens on port 8080 and returns "Hello, QonQrete!" for all requests. The script should be executable.
+# Hello Qonqrete
+
+Create a simple Python script that prints "Hello, Qonqrete!" to the console.
