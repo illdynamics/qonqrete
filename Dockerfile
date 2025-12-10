@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
     chafa \
+    vim \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup NodeSource repository for Node.js 20.x
