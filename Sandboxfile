@@ -1,2 +1,9 @@
-# Use your newly pushed image
-FROM docker.io/illdynamics/qonqrete-qage:latest
+sandboxes:
+  qonqrete-qage:
+    image: qonqrete-qage:latest
+    build:
+      dockerfile: Dockerfile
+    mounts:
+      - type: bind
+        source: ~/.qonq
+        target: /qonq
