@@ -45,28 +45,33 @@ def get_ai_config():
     model = agent_cfg.get('model', 'gemini-2.5-flash')
     return provider, model
 
-def generate_qontext_for_file(file_path: Path, provider: str, model: str) -> str:
+def generate_qontext_for_file(file_path: Path, provider: str, model: str, file_type: str) -> str:
     """Generates the YAML qontext for a single file using an AI call."""
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
 
-    # Compress the content before sending it to the AI
-    compressed_content = qompressor.compress_file_content(str(file_path), content)
+    # For non-code files, we don't need to compress them as they are often prose.
+    # For code files, we compress them.
+    if file_type == 'code':
+        content_to_send = qompressor.compress_file_content(str(file_path), content)
+    else:
+        content_to_send = content
+
 
     # Simple heuristic to avoid sending massive files to the AI
-    if len(compressed_content) > 100000:
+    if len(content_to_send) > 100000:
         return f"""
 file_path: {str(file_path.as_posix())}
-error: "File is too large to analyze even after compression."
+error: "File is too large to analyze."
 """
-
-    prompt = f"""
+    if file_type == 'code':
+        prompt = f"""
 Analyze the following 'qompressed' source code file and generate a YAML structure representing its context. The file has had its implementation bodies stripped, but retains all signatures, docstrings, comments, and imports.
 
 **File Path:** {file_path.as_posix()}
 **Qompressed File Content:**
 ```
-{compressed_content}
+{content_to_send}
 ```
 
 **YAML Structure Rules:**
@@ -106,6 +111,52 @@ symbols:
 
 **Generate the YAML for the file provided above:**
 """
+    elif file_type == 'doc':
+        prompt = f"""
+Analyze the following documentation file and generate a YAML structure that summarizes its purpose.
+
+**File Path:** {file_path.as_posix()}
+**File Content:**
+```
+{content_to_send}
+```
+
+**YAML Structure Rules:**
+1.  The root object must have a `file_path` key.
+2.  It must have a `summary` key.
+3.  The `summary` should be a concise, one to three-sentence description of the document's main purpose and content.
+
+**Example Output:**
+```yaml
+file_path: docs/README.md
+summary: "This document provides an overview of the project, its goals, and instructions for how to get started with development."
+```
+
+**Generate the YAML for the file provided above:**
+"""
+    else: # config and other file types
+        prompt = f"""
+Analyze the following configuration file and generate a YAML structure that summarizes its purpose.
+
+**File Path:** {file_path.as_posix()}
+**File Content:**
+```
+{content_to_send}
+```
+
+**YAML Structure Rules:**
+1.  The root object must have a `file_path` key.
+2.  It must have a `summary` key.
+3.  The `summary` should be a concise, one to three-sentence description of the configuration's purpose.
+
+**Example Output:**
+```yaml
+file_path: config/prod.yaml
+summary: "This file contains production-specific configuration settings, including database connection strings, API keys, and logging levels."
+```
+
+**Generate the YAML for the file provided above:**
+"""
     try:
         raw_result = lib_ai.run_ai_completion(provider, model, prompt)
         # Clean the AI output to get only the YAML block
@@ -120,6 +171,16 @@ symbols:
 file_path: {str(file_path.as_posix())}
 error: "Failed to generate context due to an AI error: {e}"
 """
+
+def get_file_type(file_path: Path) -> str:
+    """Determines the type of a file based on its extension or name."""
+    if file_path.suffix in CODE_EXTENSIONS or file_path.name in SPECIAL_FILENAMES:
+        return 'code'
+    elif file_path.suffix in DOCS_EXTENSIONS:
+        return 'doc'
+    elif file_path.suffix in CONFIG_EXTENSIONS:
+        return 'config'
+    return 'unknown'
 
 def should_process_file(file_path: Path) -> bool:
     """Determines if a file should be processed based on its extension or name."""
@@ -138,8 +199,14 @@ def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, provi
     # Create parent directories for the qontext file
     qontext_file.parent.mkdir(parents=True, exist_ok=True)
     
+    file_type = get_file_type(file_path)
+    if file_type == 'unknown':
+        # This case should not be reached if should_process_file is used correctly
+        print(f"  - [WARN] Skipping unknown file type: {relative_path}", flush=True)
+        return
+
     print(f"  - Generating qontext for: {relative_path}", flush=True)
-    yaml_content = generate_qontext_for_file(file_path, provider, model)
+    yaml_content = generate_qontext_for_file(file_path, provider, model, file_type)
     
     with open(qontext_file, 'w', encoding='utf-8') as f:
         f.write(yaml_content)
