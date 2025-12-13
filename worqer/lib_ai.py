@@ -30,16 +30,36 @@ def run_ai_completion(provider: str, model: str, prompt: str, context_files: lis
 
 
 def _build_prompt(base_prompt, context_files):
-    full = base_prompt
+    # --- Log Fallback Context ---
+    log_context = ""
+    prev_log_path = os.environ.get("QONQ_PREVIOUS_LOG")
+    if prev_log_path and os.path.exists(prev_log_path):
+        try:
+            with open(prev_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                log_content = f.read()
+            if log_content:
+                log_context = f"\n\n--- PREVIOUS AGENT LOG (FALLBACK CONTEXT) ---\n{log_content}\n"
+        except:
+            pass # Ignore if reading the log fails
+
+    # --- Architectural Context ---
+    arch_context = ""
     if context_files:
-        full += "\n\n--- EXISTING CODEBASE CONTEXT ---\n"
+        arch_context += "\n\n--- ARCHITECTURAL CONTEXT ---\n"
         for fpath in context_files:
             if os.path.exists(fpath) and not os.path.isdir(fpath):
                 try:
                     with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
-                        full += f"\nFile: {fpath}\n```\n{f.read()}\n```\n"
+                        # Use basename to keep the context clean, and determine language from extension
+                        fname = os.path.basename(fpath)
+                        f_ext = os.path.splitext(fname)[1].lower()
+                        lang = "yaml" if f_ext in ['.yaml', '.q.yaml'] else (f_ext[1:] if f_ext else "")
+                        
+                        arch_context += f"\nFile: {fname}\n```{lang}\n{f.read()}\n```\n"
                 except: pass
-    return full
+    
+    full_prompt = log_context + base_prompt + arch_context
+    return full_prompt
 
 def _run_streaming_cli_process(cmd, input_text) -> str:
     try:

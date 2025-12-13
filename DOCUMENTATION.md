@@ -179,6 +179,29 @@ This provides a consistent and modular interface for all AI interactions.
 -   **Purpose**: To review the `construQtor`'s work and provide feedback for the next cycle.
 -   **Logic**: It gathers all generated code from the `qodeyard`, constructs a prompt instructing the AI to act as a senior code reviewer, and saves the AI's assessment and suggestions to a `reQap.md` file.
 
+### Specialized Agents
+
+The following agents can be added to the pipeline in `pipeline_config.yaml` to provide additional functionality.
+
+#### 1. `qompressor` (The Skeletonizer)
+-   **Purpose**: To create a low-token, high-context representation of the codebase.
+-   **Logic**: It mirrors the `qodeyard` directory into a new `bloq.d` directory. During the mirroring process, it strips the implementation bodies from source code files, keeping only the architectural elements like class/function signatures, imports, and docstrings. This "skeleton" provides the AI with the overall structure of the code at a fraction of the token cost.
+-   **Cost**: Zero token cost. It's a local pre-processing step.
+
+#### 2. `qontextor` (The Symbol Mapper)
+-   **Purpose**: To generate a detailed, machine-readable map of the codebase's symbols and their relationships.
+-   **Logic**: It uses the "skeletonized" output from the `qompressor` to analyze each file. It then uses an AI call to generate a YAML file for each source file, detailing its symbols (classes, functions, etc.), their signatures, their purpose, and their dependencies. This creates a "qontext" (`qontext.d`) of the entire codebase.
+-   **Cost**: Incurs AI token costs. It's best used for initial scans or when major architectural changes occur.
+
+#### 3. `calqulator` (The Cost Estimator)
+-   **Purpose**: To provide a token and cost estimate for the upcoming `construqtor` cycle.
+-   **Logic**: It analyzes the `briQ.md` files for the current cycle. Its calculation includes:
+    1.  A base cost for the "skeletonized" project context from `bloq.d`.
+    2.  The cost of the instructions in each `briQ.md` file.
+    3.  A "deep read" cost for any specific files that are explicitly referenced within a `briQ`.
+-   **Output**: It annotates each `briQ.md` file with its estimated token count and cost, and prints a detailed report to the console.
+-   **Cost**: Zero token cost. It performs local calculations.
+
 ---
 
 ## Configuration

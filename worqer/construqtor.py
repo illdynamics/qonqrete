@@ -72,17 +72,20 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(code_content.strip(), encoding='utf-8')
         
-        written_files.append(str(full_path))
+        written_files.append(str(safe_filename))
         print(f"     - Wrote [Code] {safe_filename}", flush=True)
         validate_code(full_path)
 
     return written_files
 
 def main():
-    if len(sys.argv) < 3: print("Usage: construqtor.py <input> <output>"); sys.exit(1)
+    if len(sys.argv) != 4:
+        print("Usage: construqtor.py <input_dir> <summary_output> <changed_files_output>", flush=True)
+        sys.exit(1)
 
     briq_dir = Path(sys.argv[1])
     summary_file = Path(sys.argv[2])
+    changed_files_summary_file = Path(sys.argv[3])
     worqspace_root = Path(os.getcwd())
     qodeyard_path = worqspace_root / "qodeyard"
 
@@ -102,21 +105,30 @@ def main():
     briq_files = sorted(briq_dir.glob(pattern))
 
     if not briq_files:
-        print(f"CRITICAL: No briqs found.", flush=True); sys.exit(1)
+        print(f"CRITICAL: No briqs found.", flush=True)
+        sys.exit(1)
 
     all_briqs_summary = []
+    all_written_files = []
     failure_count = 0
 
     print(f"--- Construqtor Found {len(briq_files)} Briqs ---", flush=True)
 
-    context_dirs = [str(qodeyard_path.resolve())]
+    # Use the 'bloq.d' directory for structural context
+    bloq_path = worqspace_root / "bloq.d"
+    all_context_files = []
+    if bloq_path.exists() and bloq_path.is_dir():
+        for root, _, files in os.walk(bloq_path):
+            for file in files:
+                all_context_files.append(str(Path(root) / file))
 
     for briq_file in briq_files:
         print(f"-- Processing Briq: {briq_file.name} --", flush=True)
         with open(briq_file, 'r', encoding='utf-8') as f: briq_content = f.read()
 
         prompt = f"""You are the 'construQtor'.
-**OBJECTIVE:** Write the code to implement the plan.
+**OBJECTIVE:** Write the code to implement the plan defined in the 'briq'.
+**CONTEXT:** You have been provided with the 'code skeletons' of the existing codebase from the `bloq.d/` directory. These files contain all the correct class/function signatures, docstrings, and comments, but the implementation bodies have been stripped. Use this structural context to ensure your generated code integrates correctly with the existing project.
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
 
@@ -124,64 +136,65 @@ def main():
 ```python:qodeyard/main.py
 print("Hello, World!")
 ```
-```markdown:qodeyard/README.md
-This is a test project.
-```
 
 **RESTRICTION:** GENERATE ONLY THE FILE BLOCKS AS SHOWN IN THE EXAMPLE. Do not add any other text, conversation, or explanations outside the markdown blocks.
 
 **MODE:** {mode.upper()}
 {mode_prompt}
 
-**Plan:**
+**Plan (from Briq):**
 {briq_content}
 """
         success = False
         result = ""
         try:
-            result = lib_ai.run_ai_completion(ai_provider, ai_model, prompt, context_files=context_dirs)
+            print(f"     - Sending {briq_file.name} to AI for execution...", flush=True)
+            # Note: lib_ai needs to be updated to handle .py files in context correctly if it doesn't already
+            result = lib_ai.run_ai_completion(ai_provider, ai_model, prompt, context_files=all_context_files)
             success = True
         except Exception as e:
-            # [FIX] If we got a partial result or pipe error, check if code was generated anyway
             print(f"     [WARN] AI Pipe Signal: {e}", flush=True)
             if "```" in str(e) or (result and "```" in result):
                 success = True
             else:
                 success = False
 
-        # [FIX] Double check: Did we actually get code?
         if result and "```" in result:
              success = True
-
+        
         written_files = []
         if success:
             written_files = _write_ai_output_to_qodeyard(result, qodeyard_path)
-            # If the parser found no files, it could be a raw code block.
-            # Re-evaluate success based on whether files were actually written.
             if not written_files:
                 success = False
-
+        
+        all_written_files.extend(written_files)
         status = "success" if success else "failure"
         if not success: failure_count += 1
-
         all_briqs_summary.append({
             'briq_file': briq_file.name, 
-            'status': status,
-            'files_written': written_files 
+            'status': status
         })
         print(f"-- Executed Briq: {briq_file.name} (Status: {status}) --", flush=True)
 
     final_status = "Success" if failure_count == 0 else ("Partial" if failure_count < len(briq_files) else "Failure")
 
+    # --- Write Main Summary File ---
     summary_content = f"# Execution Summary\n\n**Overall Status:** {final_status}\n"
     summary_content += f"**Processed:** {len(briq_files)} | **Failures:** {failure_count}\n\n"
     for item in all_briqs_summary:
         summary_content += f"- **{item['briq_file']}**: {item['status']}\n"
-        if item['files_written']:
-            for f in item['files_written']:
-                summary_content += f"  - `{f}`\n"
 
     os.makedirs(summary_file.parent, exist_ok=True)
     with open(summary_file, 'w', encoding='utf-8') as f: f.write(summary_content)
+
+    # --- Write Changed Files Summary ---
+    changed_files_content = "# Changed Files\n\n"
+    # Use set for uniqueness and sort for consistent order
+    for f in sorted(list(set(all_written_files))):
+        changed_files_content += f"- `{f}`\n"
+        
+    os.makedirs(changed_files_summary_file.parent, exist_ok=True)
+    with open(changed_files_summary_file, 'w', encoding='utf-8') as f: f.write(changed_files_content)
 
 if __name__ == "__main__": main()
