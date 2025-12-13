@@ -6,23 +6,39 @@ agents:
     output: briq.d/
     description: "Reads the cycle-specific tasq and generates a comprehensive markdown briq."
 
+  - name: calqulator
+    script: calqulator.py
+    input: "briq.d/"
+    output: "briq.d/" # Modifies files in-place
+    description: "Estimates token count and cost for each briq and annotates the files."
+
   - name: construqtor
     script: construqtor.py
     input: briq.d/
-    output: exeq.d/cyqle{N}_summary.md
-    description: "Parses the markdown briq and executes the steps, outputting a markdown summary."
+    output: 
+      - "exeq.d/cyqle{N}_summary.md"
+      - "exeq.d/cyqle{N}_changed.md"
+    description: "Parses the markdown briq, executes steps, and outputs separate summaries for execution and changed files."
 
   - name: inspeqtor
     script: inspeqtor.py
-    input: exeq.d/cyqle{N}_summary.md
-    output: reqap.d/cyqle{N}_reqap.md
-    description: "Reviews the markdown summary and qodeyard artifacts, producing a markdown reqap."
+    input: 
+      - "exeq.d/cyqle{N}_summary.md"
+      - "exeq.d/cyqle{N}_changed.md"
+    output: "reqap.d/cyqle{N}_reqap.md"
+    description: "Reviews the main execution summary and qodeyard artifacts to produce a markdown reqap."
 
   - name: qontextor
     script: qontextor.py
-    input: exeq.d/cyqle{N}_summary.md
-    output: qontext.d/
-    description: "Updates the qontext files based on the changed files listed in the execution summary."
+    input: "exeq.d/cyqle{N}_changed.md"
+    output: "qontext.d/"
+    description: "Updates the qontext files based on the changed files list."
+
+  - name: qompressor
+    script: qompressor.py
+    input: "qodeyard/"
+    output: "bloq.d/"
+    description: "Mirrors qodeyard into bloq.d, stripping code bodies to create skeletons."
 
 options:
   microsandbox: false

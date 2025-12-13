@@ -397,7 +397,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
-    AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW}
+    AGENT_COLORS = {"instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B}
 
     # --- Initial Qontextor Scan ---
     # This runs once before the cycle loop starts.
@@ -455,12 +455,25 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
                 script = agent_def['script']
-                input_path = path_manager.root / resolve_template(agent_def['input'])
-                output_path = path_manager.root / resolve_template(agent_def['output'])
-                cmd = ["python3", str(AGENT_MODULE_DIR / script), str(input_path), str(output_path)]
-                agents_to_run.append((name, cmd))
+                
+                # Handle single or multiple inputs
+                input_val = agent_def['input']
+                if isinstance(input_val, list):
+                    input_paths = [str(path_manager.root / resolve_template(p)) for p in input_val]
+                else:
+                    input_paths = [str(path_manager.root / resolve_template(input_val))]
 
-            AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA}
+                cmd = ["python3", str(AGENT_MODULE_DIR / script)] + input_paths
+                
+                # Handle single or multiple outputs
+                output_val = agent_def['output']
+                if isinstance(output_val, list):
+                    output_paths = [str(path_manager.root / resolve_template(p)) for p in output_val]
+                    cmd.extend(output_paths)
+                else:
+                    cmd.append(str(path_manager.root / resolve_template(output_val)))
+
+                agents_to_run.append((name, cmd))
 
             if ui:
                 ui.log_main(f"--- Starting Cycle {cycle} ---")
@@ -471,11 +484,17 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                      inst_padding = " " * 1
                      print(f"{Colors.B}〘{prefix}〙『{Colors.LIME}instruQtor{Colors.B}』{inst_padding}⸎ {Colors.R}Ingesting cyqle{cycle}_tasq.md...\r")
 
+            previous_log_path = None
             for name, cmd in agents_to_run:
+                env["QONQ_PREVIOUS_LOG"] = str(previous_log_path) if previous_log_path else ""
+                
                 qonsole_log_path = path_manager.get_qonsole_log_path(name)
                 events_log_path = path_manager.get_events_log_path(name)
+                
                 if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, qonsole_log_path, events_log_path, env, ui):
                     session_failed = True; break
+                
+                previous_log_path = qonsole_log_path # Set for the next agent
 
             if session_failed: break
 

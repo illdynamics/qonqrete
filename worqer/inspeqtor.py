@@ -11,18 +11,29 @@ try: import lib_ai
 except ImportError: sys.exit(1)
 
 def main() -> None:
-    if len(sys.argv) != 3: sys.exit(1)
+    if len(sys.argv) != 4:
+        print("Usage: inspeqtor.py <summary_path> <changed_files_path> <reqap_output_path>", flush=True)
+        sys.exit(1)
 
     summary_path = Path(sys.argv[1])
-    reqap_path = Path(sys.argv[2])
+    changed_files_path = Path(sys.argv[2])
+    reqap_path = Path(sys.argv[3])
     cycle_num = os.environ.get('CYCLE_NUM', '1')
-    qodeyard_path = Path(os.getcwd()) / 'qodeyard'
+    worqspace_root = Path(os.getcwd())
+    qodeyard_path = worqspace_root / "qodeyard"
+    qontext_path = worqspace_root / "qontext.d"
 
     print(f"Checking cyQle {cycle_num} codebase", flush=True)
 
     try:
         with open(summary_path, 'r', encoding='utf-8') as f: summary_content = f.read()
-    except: summary_content = "Summary not found."
+    except Exception as e:
+        summary_content = f"Summary not found or could not be read: {e}"
+
+    try:
+        with open(changed_files_path, 'r', encoding='utf-8') as f: changed_files_content = f.read()
+    except Exception as e:
+        changed_files_content = f"Changed files summary not found or could not be read: {e}"
 
     try:
         with open('config.yaml', 'r') as f: config = yaml.safe_load(f) or {}
@@ -32,8 +43,6 @@ def main() -> None:
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4o')
 
-    qontext_path = Path(os.getcwd()) / "qontext.d"
-
     # --- Step 1: Gather all architectural context ---
     all_qontext_files = []
     if qontext_path.is_dir():
@@ -42,13 +51,13 @@ def main() -> None:
                 if file.endswith('.q.yaml'):
                     all_qontext_files.append(str(Path(root) / file))
     
-    # --- Step 2: Get the new code for changed files ---
+    # --- Step 2: Get the new code for changed files from the dedicated summary ---
     changed_code_context = ""
-    changed_files = re.findall(r'`([^`]+)`', summary_content)
+    # The changed_files_content IS the list of changed files
+    changed_files = re.findall(r'`([^`]+)`', changed_files_content)
     
     if changed_files:
         changed_code_context += "\n## Changed Code Artifacts (for review)\n"
-        # Use a set to avoid reading the same file multiple times
         for file_str in set(changed_files):
             file_path = qodeyard_path / file_str
             if file_path.is_file():
@@ -61,7 +70,7 @@ def main() -> None:
             else:
                 changed_code_context += f"\n### File: `{file_str}`\nFile not found in qodeyard.\n"
     else:
-        changed_code_context = "\n_No changed code artifacts were found in the summary._\n"
+        changed_code_context = "\n_No changed code artifacts were listed for review._\n"
 
     # --- Step 3: Build the final prompt ---
     reviewer_prompt = f"""
@@ -107,11 +116,11 @@ Your goal is to determine if the recent code changes are complete, correct, and 
         os.makedirs(reqap_path.parent, exist_ok=True)
         with open(reqap_path, 'w', encoding='utf-8') as f: f.write(content)
         print(f"reQap written to {reqap_path}", flush=True)
-
     except Exception as e:
         print(f"Inspeqtor Failure: {e}", flush=True)
         # Create a fallback reqap so the cycle doesn't crash hard
-        with open(reqap_path, 'w') as f: f.write(f"Assessment: Partial\nError: {e}")
+        with open(reqap_path, 'w', encoding='utf-8') as f:
+            f.write(f"Assessment: [FAILURE]\n\n**Summary**\n\nThe Inspeqtor agent failed to execute due to a critical error: {e}\n\n**Suggestions**\n- Check the console logs for the `inspeqtor` agent to diagnose the root cause.")
 
 if __name__ == '__main__':
     main()

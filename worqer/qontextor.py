@@ -10,8 +10,9 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import lib_ai
+    import qompressor
 except ImportError:
-    print("CRITICAL: lib_ai.py not found.", flush=True)
+    print("CRITICAL: lib_ai.py or qompressor.py not found.", flush=True)
     sys.exit(1)
 
 # List of file extensions to process
@@ -49,20 +50,23 @@ def generate_qontext_for_file(file_path: Path, provider: str, model: str) -> str
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
 
+    # Compress the content before sending it to the AI
+    compressed_content = qompressor.compress_file_content(str(file_path), content)
+
     # Simple heuristic to avoid sending massive files to the AI
-    if len(content) > 100000:
-        return """
+    if len(compressed_content) > 100000:
+        return f"""
 file_path: {str(file_path.as_posix())}
-error: "File is too large to analyze."
+error: "File is too large to analyze even after compression."
 """
 
     prompt = f"""
-Analyze the following source code file and generate a YAML structure representing its context.
+Analyze the following 'qompressed' source code file and generate a YAML structure representing its context. The file has had its implementation bodies stripped, but retains all signatures, docstrings, comments, and imports.
 
 **File Path:** {file_path.as_posix()}
-**File Content:**
+**Qompressed File Content:**
 ```
-{content}
+{compressed_content}
 ```
 
 **YAML Structure Rules:**

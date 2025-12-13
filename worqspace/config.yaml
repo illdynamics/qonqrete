@@ -5,6 +5,8 @@ agents:
     provider: openai
     model: gpt-4.1
 
+  calqulator: {}
+
   construqtor:
     provider: gemini
     model: gemini-2.5-pro
@@ -16,6 +18,8 @@ agents:
   qontextor:
     provider: gemini
     model: gemini-2.5-flash
+
+  qompressor: {}
 
 options:
   # Cheqpoint Configuration
