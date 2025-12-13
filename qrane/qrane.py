@@ -75,7 +75,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     VISIBLE_KEYWORDS = [
         "Handing off", "Processing", "Executed", "Wrote", "reQap",
         "Checking", "Generating", "Ingesting", "Architect", "Plan",
-        "Found", "Summary"
+        "Found", "Summary", "Skeletonizing", "CalQulator", "Est. Cost"
     ]
 
     event_start_msg = f"Initiating {agent_display_name}..."
@@ -87,7 +87,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         try:
             with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env, universal_newlines=True) as proc, \
                  open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
-                
+
                 reads = [proc.stdout, proc.stderr]
                 while True:
                     check_tui_keys(ui, proc)
@@ -95,9 +95,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                     for r in readable:
                         line = r.readline()
                         if not line: reads.remove(r); continue
-                        
+
                         qonsole_log.write(line)
-                        
+
                         clean = line.strip()
                         if r == proc.stdout:
                             if any(x in clean for x in VISIBLE_KEYWORDS):
@@ -105,7 +105,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             ui.log_agent(f"[{agent_display_name}] {clean}")
                         elif r == proc.stderr:
                             ui.log_agent(f"[{agent_display_name} RAW] {clean}")
-                            
+
                     if proc.poll() is not None and not reads: break
 
                 if proc.returncode != 0:
@@ -114,7 +114,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                         f.write(f"[{time.strftime('%H:%M:%S')}] {event_fail_msg}\n")
                     ui.log_main(f"{agent_prefix}FAILED (Code {proc.returncode})")
                     return False
-                
+
                 event_ok_msg = f"Agent {agent_display_name} finished successfully."
                 with open(events_log_path, 'a', encoding='utf-8') as f:
                     f.write(f"[{time.strftime('%H:%M:%S')}] {event_ok_msg}\n")
@@ -131,22 +131,22 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             stderr_capture = []
             with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True) as proc, \
                  open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
-                
+
                 reads = [proc.stdout, proc.stderr]
                 while True:
                     readable, _, _ = select.select(reads, [], [], 0.05)
                     if not readable and proc.poll() is not None: break
                     for r in readable:
                         line = r.readline()
-                        if not line: 
+                        if not line:
                             reads.remove(r)
                             continue
-                        
+
                         qonsole_log.write(line)
-                        
+
                         if r == proc.stderr:
                             stderr_capture.append(line)
-                        
+
                         clean = line.strip()
                         if r == proc.stdout and any(x in clean for x in VISIBLE_KEYWORDS):
                             spinner.stop()
@@ -159,21 +159,21 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                 event_fail_msg = f"Agent {agent_display_name} FAILED (Code {proc.returncode})"
                 with open(events_log_path, 'a', encoding='utf-8') as f:
                     f.write(f"[{time.strftime('%H:%M:%S')}] {event_fail_msg}\n")
-                
+
                 print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
-                
+
                 stderr_output = "".join(stderr_capture)
                 if stderr_output:
                     print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}")
                     for line in stderr_output.strip().split('\n'):
                         print(f"{Colors.RED}{line}{Colors.R}")
                 return False
-            
+
             event_ok_msg = f"Agent {agent_display_name} finished successfully."
             with open(events_log_path, 'a', encoding='utf-8') as f:
                 f.write(f"[{time.strftime('%H:%M:%S')}] {event_ok_msg}\n")
             return True
-        except KillSignal: 
+        except KillSignal:
             spinner.stop()
             raise
         except KeyboardInterrupt:
@@ -184,7 +184,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         except Exception as e:
             spinner.stop()
             print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
-            traceback.print_exc() # Print traceback for debugging
+            traceback.print_exc()
             return False
 
 def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: str, path_manager: PathManager, ui=None) -> str:
@@ -199,7 +199,6 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
         if reqap_path.exists():
             with open(reqap_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            # [FIX] Use regex to find the Assessment line regardless of leading chars/lists
             match = re.search(r"Assessment:.*?(SUCCESS|PARTIAL|FAILURE)", content, re.IGNORECASE | re.DOTALL)
             if match:
                 assessment = match.group(1).strip()
@@ -298,7 +297,7 @@ def check_api_keys(config, qrane_prefix):
         'anthropic': 'ANTHROPIC_API_KEY',
         'deepseek': 'DEEPSEEK_API_KEY'
     }
-    
+
     missing_keys = []
     for provider in providers:
         if provider == 'gemini':
@@ -341,7 +340,7 @@ def main():
         is_autonomous = True
     else:
         is_autonomous = not cheqpoint_config
-    
+
     prefix = "aQQ" if is_autonomous else "uQQ"
     if args.wonqrete: prefix = "aWQ" if is_autonomous else "uWQ"
 
@@ -399,30 +398,45 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
     AGENT_COLORS = {"instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B}
 
-    # --- Initial Qontextor Scan ---
-    # This runs once before the cycle loop starts.
-    # It checks if the qodeyard was seeded with existing project files.
+    # --- Initial Dual-Core Warmup (Sqrapyard Detection) ---
+    # Checks if qodeyard was seeded. If so, generate Skeletons (Fast) and Context (Smart).
     if any(path_manager.qodeyard_dir.iterdir()):
-        msg = "Seeded qodeyard detected, running initial Qontextor scan..."
+
+        # 1. Run Qompressor (FAST - Structural Warmup)
+        # We need bloq.d populated so Calqulator and Construqtor have skeletons immediately.
+        msg = "Seeded qodeyard detected. Warming up Qompressor (Skeleton Cache)..."
         if ui: ui.log_main(f"{qrane_prefix}{msg}")
         else: print(f"{qrane_prefix}{msg}\r")
-        
-        # We need a temporary env for this one-off run
+
+        # Use a temporary env for initial runs
         initial_env = os.environ.copy()
-        initial_env["CYCLE_NUM"] = "0" # Use cycle 0 for initial scan
-        
+        initial_env["CYCLE_NUM"] = "0"
+
+        qompressor_cmd = ["python3", str(AGENT_MODULE_DIR / "qompressor.py"), str(path_manager.qodeyard_dir), str(path_manager.bloq_dir)]
+        qonsole_log_path = path_manager.get_qonsole_log_path("qompressor_warmup")
+        events_log_path = path_manager.get_events_log_path("qompressor_warmup")
+
+        if not run_agent("qompressor", qompressor_cmd, prefix, AGENT_COLORS.get("qompressor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
+             if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}")
+             else: print(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}\r")
+             # We don't abort for this, but warn.
+
+        # 2. Run Qontextor (SLOW/SMART - Semantic Warmup)
+        msg = "Running initial Qontextor scan (Semantic Indexing)..."
+        if ui: ui.log_main(f"{qrane_prefix}{msg}")
+        else: print(f"{qrane_prefix}{msg}\r")
+
         qontextor_cmd = ["python3", str(AGENT_MODULE_DIR / "qontextor.py"), str(path_manager.qodeyard_dir), str(path_manager.qontext_dir)]
         qonsole_log_path = path_manager.get_qonsole_log_path("qontextor_initial")
         events_log_path = path_manager.get_events_log_path("qontextor_initial")
-        
+
         if not run_agent("qontextor", qontextor_cmd, prefix, AGENT_COLORS.get("qontextor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
-            # If the initial scan fails, we cannot continue.
             if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}")
             else: print(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}\r")
-            return # Exit the orchestration
+            return
         else:
-            if ui: ui.log_main(f"{qrane_prefix}Initial scan complete.")
-            else: print(f"{qrane_prefix}Initial scan complete.\r")
+            if ui: ui.log_main(f"{qrane_prefix}Dual-Core Memory Primed.")
+            else: print(f"{qrane_prefix}Dual-Core Memory Primed.\r")
 
     cycle = 1
     session_failed = False
@@ -455,7 +469,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
                 script = agent_def['script']
-                
+
                 # Handle single or multiple inputs
                 input_val = agent_def['input']
                 if isinstance(input_val, list):
@@ -464,7 +478,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                     input_paths = [str(path_manager.root / resolve_template(input_val))]
 
                 cmd = ["python3", str(AGENT_MODULE_DIR / script)] + input_paths
-                
+
                 # Handle single or multiple outputs
                 output_val = agent_def['output']
                 if isinstance(output_val, list):
@@ -487,14 +501,14 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             previous_log_path = None
             for name, cmd in agents_to_run:
                 env["QONQ_PREVIOUS_LOG"] = str(previous_log_path) if previous_log_path else ""
-                
+
                 qonsole_log_path = path_manager.get_qonsole_log_path(name)
                 events_log_path = path_manager.get_events_log_path(name)
-                
+
                 if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, qonsole_log_path, events_log_path, env, ui):
                     session_failed = True; break
-                
-                previous_log_path = qonsole_log_path # Set for the next agent
+
+                previous_log_path = qonsole_log_path
 
             if session_failed: break
 

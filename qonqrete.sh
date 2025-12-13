@@ -31,7 +31,7 @@ PREFIX_TPL="${B}〘{PREFIX}〙『${W}Qrane${B}』${PADDING}⸎${R}"
 
 log_qrane() {
     local prefix="_QQ"
-    if [[ "$PY_ARGS" == *"--auto"* ]]; then
+    if [[ "${PY_ARGS:-}" == *"--auto"* ]]; then
         prefix="aQQ"
     elif [[ "$COMMAND" == "run" ]]; then
         prefix="_QQ"
@@ -41,7 +41,6 @@ log_qrane() {
 
 exec_qrane() {
     "$@" 2>&1 | while IFS= read -r line; do
-        # Filter out empty or whitespace-only lines
         if [[ -n "${line//[[:space:]]/}" ]]; then
             echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ} $line"
         fi
@@ -184,6 +183,7 @@ case "$COMMAND" in
             exit 1
         fi
 
+        # We verify tasq.md exists here, but we copy it later during seeding
         if [ ! -f "${WORKSPACE_DIR}/tasq.md" ]; then
             log_qrane "QonQrete session ended: tasq.md not found."
             exit 1
@@ -207,14 +207,16 @@ case "$COMMAND" in
         if [ -d "$SQrapyard_PATH" ] && [ -n "$(ls -A "$SQrapyard_PATH")" ]; then
             log_qrane "Found qontent in sqrapyard, seeding this run..."
             cp -r "$SQrapyard_PATH"/* "$RUN_HOST_PATH/qodeyard/"
-            if [ -f "$SQrapyard_PATH/tasq.md" ]; then
-                log_qrane "Using tasq.md from sqrapyard for initial cyqle."
+
+            # [PATCHED LOGIC] Prioritize Workspace tasq.md over Sqrapyard tasq.md
+            if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
+                log_qrane "Using master tasq.md from worqspace."
+                cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+            elif [ -f "$SQrapyard_PATH/tasq.md" ]; then
+                log_qrane "No master tasq found, falling back to sqrapyard tasq.md."
                 cp "$SQrapyard_PATH/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
-            elif [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
-                 log_qrane "No tasq.md in sqrapyard, using default tasq.md."
-                 cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
             else
-                log_qrane "No tasq.md found, creating default tasq."
+                log_qrane "No tasq.md found in either location, creating default."
                 echo "Create a simple Python script." > "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
             fi
         else
@@ -232,13 +234,11 @@ case "$COMMAND" in
         DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
         RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
 
-        # [NEW] Container-side Splash Logic
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
              SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
         fi
 
-        # [FIX] Construct the internal command string safely
         CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
 
         API_ENV_VARS=""
@@ -254,7 +254,6 @@ case "$COMMAND" in
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
-            # [FIX] Pass CONTAINER_CMD as a single quoted argument to bash -c
             docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
