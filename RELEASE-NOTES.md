@@ -1,5 +1,18 @@
 # Release Notes
 
+## [v0.6.0] - 2025-12-13
+
+### Added
+- **CalQulator Agent**: Implemented the CalQulator agent for cost estimation.
+- **Qontextor Agent**: Implemented the Qontextor agent and architecture.
+
+### Changed
+- **Sane Defaults**: Updated sane defaults.
+
+### Fixed
+- **Merge Conflict**: Resolved a merge conflict.
+- **Vim Fix**: Fixed a vim-related issue.
+
 ## [v0.5.0-beta] - 2025-12-08
 
 ### Added

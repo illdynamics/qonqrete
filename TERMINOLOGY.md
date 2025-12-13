@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v0.4.6-alpha` (See `VERSION` file for the canonical version).
+**Version:** `0.6.0` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -8,6 +8,9 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **Qrane**: The host‑layer orchestrator (`qrane/qrane.py`) that runs outside the sandbox.
 - **worQer**: An AI agent that performs a specific role (`instruQtor`, `construQtor`, `inspeQtor`).
 - **Qrew**: The collection of agents that work together inside the `Qage`.
+- **qompressor**: A specialized agent that "skeletonizes" the codebase to create a low-token, high-context representation.
+- **qontextor**: A specialized agent that uses AI to analyze the "skeletonized" code and generate a machine-readable symbol map of the codebase.
+- **calqulator**: A specialized agent that provides a token and cost estimate for an upcoming cycle.
 
 ### Environment & Structure
 - **Qage**: The secure Docker container or Microsandbox that contains the `Qrew`.
