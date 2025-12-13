@@ -148,6 +148,7 @@ print("Hello, World!")
         success = False
         result = ""
         try:
+            print(f"     - Sending {briq_file.name} to AI for execution...", flush=True)
             # Note: lib_ai needs to be updated to handle .py files in context correctly if it doesn't already
             result = lib_ai.run_ai_completion(ai_provider, ai_model, prompt, context_files=all_context_files)
             success = True
