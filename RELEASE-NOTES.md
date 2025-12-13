@@ -3,15 +3,22 @@
 ## [v0.6.0] - 2025-12-13
 
 ### Added
-- **CalQulator Agent**: Implemented the CalQulator agent for cost estimation.
-- **Qontextor Agent**: Implemented the Qontextor agent and architecture.
+- **Qompressor (The Skeletonizer)**: Introduced a new agent that creates a low-token "skeleton" of the codebase in `bloq.d`. This provides architectural context to other agents with zero token cost.
+- **Qontextor (The Symbol Mapper)**: Implemented an agent that uses AI to analyze the skeletonized code and generate a detailed, machine-readable YAML map of the codebase's symbols, purposes, and dependencies in `qontext.d`.
+- **CalQulator (The Cost Estimator)**: Added a new agent that analyzes `briQ` files to provide a token and cost estimate for the upcoming `construqtor` cycle, annotating each `briQ` with its estimated cost.
+- **FunQtions Library**: Added a new shared library `qrane/lib_funqtions.py` to house common utility functions like token estimation and cost calculation.
 
 ### Changed
-- **Sane Defaults**: Updated sane defaults.
+- **Agent Architecture**: The `pipeline_config.yaml` is updated to include the new agents, allowing them to be dynamically included in the execution flow.
+- **Configuration**: `worqspace/config.yaml` has been updated with sane defaults for the new agents.
+- **Core WorQers**: The main agents (`instruQtor`, `construQtor`, `inspeQtor`) have been updated to integrate with the new architectural components and libraries.
+- **Orchestration**: `qrane.py` has been updated to handle the new agents and their interactions within the pipeline.
+
+### Removed
+- (None)
 
 ### Fixed
-- **Merge Conflict**: Resolved a merge conflict.
-- **Vim Fix**: Fixed a vim-related issue.
+- (None in this specific feature branch, focuses on new implementations)
 
 ## [v0.5.0-beta] - 2025-12-08
 
