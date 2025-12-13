@@ -14,7 +14,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.5.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `0.6.0` (See `VERSION` file for the canonical version).
 
 > **Note on TUI Mode and Agent Testing:**
 >
@@ -34,7 +34,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 ## Architecture Overview
 
 -   `qrane/`: Contains the Python-based **Qrane** orchestrator and its command-line interface.
--   `worqer/`: Contains the individual AI agent scripts (`instruQtor`, `construQtor`, `inspeQtor`).
+-   `worqer/`: Contains the individual AI agent scripts (`instruQtor`, `construQtor`, `inspeQtor`). It also includes specialized agents like `qompressor` for creating low-token context, `qontextor` for mapping the codebase, and `calqulator` for cost estimation.
 -   `worqspace/`: The shared data plane. It contains all configuration, the initial `tasQ`, and all generated plans (`briQ`), summaries (`exeQ`), and reviews (`reQap`).
 
 
