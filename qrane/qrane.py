@@ -397,6 +397,33 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
+    AGENT_COLORS = {"instruqtor": Colors.LIME, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW}
+
+    # --- Initial Qontextor Scan ---
+    # This runs once before the cycle loop starts.
+    # It checks if the qodeyard was seeded with existing project files.
+    if any(path_manager.qodeyard_dir.iterdir()):
+        msg = "Seeded qodeyard detected, running initial Qontextor scan..."
+        if ui: ui.log_main(f"{qrane_prefix}{msg}")
+        else: print(f"{qrane_prefix}{msg}\r")
+        
+        # We need a temporary env for this one-off run
+        initial_env = os.environ.copy()
+        initial_env["CYCLE_NUM"] = "0" # Use cycle 0 for initial scan
+        
+        qontextor_cmd = ["python3", str(AGENT_MODULE_DIR / "qontextor.py"), str(path_manager.qodeyard_dir), str(path_manager.qontext_dir)]
+        qonsole_log_path = path_manager.get_qonsole_log_path("qontextor_initial")
+        events_log_path = path_manager.get_events_log_path("qontextor_initial")
+        
+        if not run_agent("qontextor", qontextor_cmd, prefix, AGENT_COLORS.get("qontextor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
+            # If the initial scan fails, we cannot continue.
+            if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}")
+            else: print(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}\r")
+            return # Exit the orchestration
+        else:
+            if ui: ui.log_main(f"{qrane_prefix}Initial scan complete.")
+            else: print(f"{qrane_prefix}Initial scan complete.\r")
+
     cycle = 1
     session_failed = False
     user_aborted = False
