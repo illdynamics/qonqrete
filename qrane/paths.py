@@ -21,6 +21,10 @@ class PathManager:
     def qontext_dir(self) -> Path:
         return self.root / "qontext.d"
 
+    @property
+    def bloq_dir(self) -> Path:
+        return self.root / "bloq.d"
+
     def get_tasq_dir(self) -> Path:
         return self.root / "tasq.d"
 
