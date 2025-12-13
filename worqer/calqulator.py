@@ -15,13 +15,16 @@ except ImportError:
     sys.exit(1)
 
 def load_config():
-    """Reads config to find the active model for construqtor."""
+    """Reads config to find the active provider and model for construqtor."""
     try:
         with open('config.yaml', 'r', encoding='utf-8') as f:
             cfg = yaml.safe_load(f)
-        return cfg.get('agents', {}).get('construqtor', {}).get('model', 'gemini-2.5-flash')
+        construqtor_cfg = cfg.get('agents', {}).get('construqtor', {})
+        provider = construqtor_cfg.get('provider', 'gemini')
+        model = construqtor_cfg.get('model', 'gemini-2.5-flash')
+        return provider, model
     except:
-        return 'gemini-2.5-flash'
+        return 'gemini', 'gemini-2.5-flash'
 
 def get_directory_token_size(path: Path, model: str) -> int:
     """Calculates total tokens for all files in a directory (recursive)."""
@@ -54,7 +57,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
     Finds all relevant briq files, calculates costs, annotates them,
     and prints a detailed ledger to stdout/logs.
     """
-    model = load_config()
+    provider, model = load_config()
 
     # 1. Base Context Cost
     bloq_tokens = get_directory_token_size(bloq_path, model)
@@ -62,7 +65,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
     base_context_tokens = bloq_tokens + system_prompt_buffer
 
     # --- START LOG TABLE ---
-    print(f"\n--- 🧮 CalQulator Audit Report (Model: {model}) ---", flush=True)
+    print(f"\n--- 🧮 CalQulator Audit Report (Provider: {provider}, Model: {model}) ---", flush=True)
     print(f"Base Overhead (Skeletons + Sys): {base_context_tokens:,} tokens", flush=True)
     print("-" * 85, flush=True)
     print(f"{'Briq File':<45} | {'Tokens':<12} | {'Est. Cost':<12}", flush=True)
