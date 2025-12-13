@@ -17,6 +17,10 @@ class PathManager:
     def qodeyard_dir(self) -> Path:
         return self.root / "qodeyard"
 
+    @property
+    def qontext_dir(self) -> Path:
+        return self.root / "qontext.d"
+
     def get_tasq_dir(self) -> Path:
         return self.root / "tasq.d"
 

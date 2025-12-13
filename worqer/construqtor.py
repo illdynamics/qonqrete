@@ -72,7 +72,7 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(code_content.strip(), encoding='utf-8')
         
-        written_files.append(str(full_path))
+        written_files.append(str(safe_filename))
         print(f"     - Wrote [Code] {safe_filename}", flush=True)
         validate_code(full_path)
 
@@ -109,14 +109,21 @@ def main():
 
     print(f"--- Construqtor Found {len(briq_files)} Briqs ---", flush=True)
 
-    context_dirs = [str(qodeyard_path.resolve())]
+    qontext_path = worqspace_root / "qontext.d"
+    all_qontext_files = []
+    if qontext_path.exists() and qontext_path.is_dir():
+        for root, _, files in os.walk(qontext_path):
+            for file in files:
+                if file.endswith('.q.yaml'):
+                    all_qontext_files.append(str(Path(root) / file))
 
     for briq_file in briq_files:
         print(f"-- Processing Briq: {briq_file.name} --", flush=True)
         with open(briq_file, 'r', encoding='utf-8') as f: briq_content = f.read()
 
         prompt = f"""You are the 'construQtor'.
-**OBJECTIVE:** Write the code to implement the plan.
+**OBJECTIVE:** Write the code to implement the plan defined in the 'briq'.
+**CONTEXT:** You have been provided with the full architectural context of the existing codebase via a set of `.q.yaml` files. Each file describes the symbols (classes, functions, etc.) within a corresponding source file. Use this context to understand dependencies and ensure your generated code is consistent with the overall project design.
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
 
@@ -124,22 +131,19 @@ def main():
 ```python:qodeyard/main.py
 print("Hello, World!")
 ```
-```markdown:qodeyard/README.md
-This is a test project.
-```
 
 **RESTRICTION:** GENERATE ONLY THE FILE BLOCKS AS SHOWN IN THE EXAMPLE. Do not add any other text, conversation, or explanations outside the markdown blocks.
 
 **MODE:** {mode.upper()}
 {mode_prompt}
 
-**Plan:**
+**Plan (from Briq):**
 {briq_content}
 """
         success = False
         result = ""
         try:
-            result = lib_ai.run_ai_completion(ai_provider, ai_model, prompt, context_files=context_dirs)
+            result = lib_ai.run_ai_completion(ai_provider, ai_model, prompt, context_files=all_qontext_files)
             success = True
         except Exception as e:
             # [FIX] If we got a partial result or pipe error, check if code was generated anyway

@@ -18,5 +18,11 @@ agents:
     output: reqap.d/cyqle{N}_reqap.md
     description: "Reviews the markdown summary and qodeyard artifacts, producing a markdown reqap."
 
+  - name: qontextor
+    script: qontextor.py
+    input: exeq.d/cyqle{N}_summary.md
+    output: qontext.d/
+    description: "Updates the qontext files based on the changed files listed in the execution summary."
+
 options:
   microsandbox: false

@@ -82,11 +82,32 @@ def main() -> None:
 
     # Gather Qodeyard Context
     qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
-    context_files = []
-    if qodeyard_path.exists():
-        for root, _, files in os.walk(qodeyard_path):
-            for file in files:
-                context_files.append(os.path.join(root, file))
+    qodeyard_tree = ""
+    if qodeyard_path.exists() and any(qodeyard_path.iterdir()):
+        tree_lines = []
+        # Start with the root directory name
+        tree_lines.append(f"{qodeyard_path.name}/")
+        
+        # Use a recursive helper function for clarity
+        def build_tree(dir_path: Path, prefix: str):
+            # List items and sort them (directories first, then files)
+            items = sorted(list(dir_path.iterdir()), key=lambda p: (p.is_file(), p.name))
+            for i, path in enumerate(items):
+                is_last = i == (len(items) - 1)
+                connector = '└── ' if is_last else '├── '
+                
+                if path.is_dir():
+                    tree_lines.append(f"{prefix}{connector}{path.name}/")
+                    new_prefix = prefix + ('    ' if is_last else '│   ')
+                    build_tree(path, new_prefix)
+                else:
+                    tree_lines.append(f"{prefix}{connector}{path.name}")
+
+        build_tree(qodeyard_path, "")
+        qodeyard_tree = "\n".join(tree_lines)
+    else:
+        qodeyard_tree = "[qodeyard is empty or does not exist]"
+
 
     planner_prompt = f"""
 You are the **Principal Software Architect** and your only purpose is to break down a technical specification into a precise number of tasks, called 'briqs'. You must follow the rules exactly as specified.
@@ -98,9 +119,15 @@ You are the **Principal Software Architect** and your only purpose is to break d
 2.  **INFER THE STRUCTURE:** From the input document, deduce every necessary class, utility, configuration file, and boilerplate code.
 3.  **SETUP FIRST:** The first few briqs should always be the project setup: creating the root directory, gitignore, requirements files, configuration, and loggers.
 4.  **LOGICAL BREAKDOWN:** After the setup, break down the implementation logically based on the required briq count.
+5.  **CONSIDER EXISTING STRUCTURE:** Do not redefine files that already exist. Use the file tree below as a reference for the current state of the codebase.
 
 **OUTPUT FORMAT (STRICT XML):**
 You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` tags. The title should be short and descriptive. Do not include any other text or formatting outside of the `<briq>` tags.
+
+**EXISTING FILE STRUCTURE in qodeyard:**
+```
+{qodeyard_tree}
+```
 
 **INPUT DOCUMENT:**
 {task_content}
@@ -110,7 +137,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 
     master_plan = ""
     try:
-        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt, context_files=context_files)
+        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
     except Exception as e:
         sys.stderr.write(f"Instruqtor Failure: {e}\\n")
         sys.exit(1)
