@@ -35,9 +35,19 @@ def parse_xml_briqs(content: str) -> list[dict]:
     return results
 
 def clean_filename_slug(text: str) -> str:
-    clean = re.sub(r'[^a-zA-Z0-9 ]', '', text)
-    slug = "_".join(clean.split()[:8]).lower()
-    return slug if slug else "task"
+    """Converts a title into a readable, lowercase, underscore-separated slug."""
+    # Add underscore before uppercase letters (for PascalCase/camelCase)
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', text)
+    s2 = re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1)
+    
+    # Replace non-alphanumeric characters with underscores
+    s3 = re.sub(r'\W+', '_', s2)
+    
+    # Remove leading/trailing underscores and lowercase
+    slug = s3.strip('_').lower()
+    
+    # Limit length to avoid excessively long filenames
+    return "_".join(slug.split('_')[:8]) if slug else "task"
 
 def get_sensitivity_prompt(level: int) -> str:
     prompts = {
