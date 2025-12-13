@@ -43,8 +43,11 @@ def clean_filename_slug(text: str) -> str:
     # Replace non-alphanumeric characters with underscores
     s3 = re.sub(r'\W+', '_', s2)
     
+    # Collapse multiple underscores into one
+    s4 = re.sub(r'_+', '_', s3)
+    
     # Remove leading/trailing underscores and lowercase
-    slug = s3.strip('_').lower()
+    slug = s4.strip('_').lower()
     
     # Limit length to avoid excessively long filenames
     return "_".join(slug.split('_')[:8]) if slug else "task"

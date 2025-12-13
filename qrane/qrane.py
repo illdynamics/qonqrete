@@ -148,7 +148,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             stderr_capture.append(line)
 
                         clean = line.strip()
-                        if r == proc.stdout and any(x in clean for x in VISIBLE_KEYWORDS):
+                        # For the calqulator, print all output to show the table.
+                        # For other agents, only print lines with important keywords.
+                        if agent_name == "calqulator" or any(x in clean for x in VISIBLE_KEYWORDS):
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()

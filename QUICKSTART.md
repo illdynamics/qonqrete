@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `0.6.0` (See `VERSION` file for the canonical version).
+**Version:** `v0.6.0-beta` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
