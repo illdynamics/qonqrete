@@ -124,36 +124,51 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             ui.log_main(f"CRITICAL EXCEPTION: {e}")
             return False
     else:
-        print(f"{qrane_prefix}{event_start_msg}", flush=True)
+        print(f"{qrane_prefix}{event_start_msg}")
+        spinner = Spinner(prefix=f"〘{prefix}〙", message=f"Running {agent_display_name}...")
+        spinner.start()
         try:
-            # Use communicate() for simpler, blocking I/O in headless mode.
-            # This ensures we wait for the process to finish and get all output.
-            proc = subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-            stdout, stderr = proc.communicate()
+            stderr_capture = []
+            with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True) as proc, \
+                 open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
 
-            # Write logs after completion
-            with open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
-                if stdout:
-                    qonsole_log.write(stdout)
-                if stderr:
-                    qonsole_log.write(stderr)
+                reads = [proc.stdout, proc.stderr]
+                while True:
+                    readable, _, _ = select.select(reads, [], [], 0.05)
+                    if not readable and proc.poll() is not None: break
+                    for r in readable:
+                        line = r.readline()
+                        if not line:
+                            reads.remove(r)
+                            continue
 
-            # Print captured stdout for user visibility
-            if stdout:
-                for line in stdout.strip().split('\n'):
-                     # Only print lines that are not empty
-                    if line.strip():
-                        print(f"{agent_prefix}{line.strip()}", flush=True)
-            
+                        qonsole_log.write(line)
+
+                        if r == proc.stderr:
+                            stderr_capture.append(line)
+
+                        clean = line.strip()
+                        # For the calqulator, print all output to show the table.
+                        # For other agents, only print lines with important keywords.
+                        if agent_name == "calqulator" or any(x in clean for x in VISIBLE_KEYWORDS):
+                            spinner.stop()
+                            print(f"{agent_prefix}{clean}")
+                            spinner.start()
+
+            spinner.stop()
+
             if proc.returncode != 0:
                 event_fail_msg = f"Agent {agent_display_name} FAILED (Code {proc.returncode})"
                 with open(events_log_path, 'a', encoding='utf-8') as f:
                     f.write(f"[{time.strftime('%H:%M:%S')}] {event_fail_msg}\n")
-                print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}", flush=True)
-                if stderr:
-                    print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}", flush=True)
-                    for line in stderr.strip().split('\n'):
-                        print(f"{Colors.RED}{line}{Colors.R}", flush=True)
+
+                print(f"{agent_prefix}{Colors.RED}ERROR: Agent exited with code: {proc.returncode}{Colors.R}")
+
+                stderr_output = "".join(stderr_capture)
+                if stderr_output:
+                    print(f"{Colors.RED}--- STDERR DUMP ---{Colors.R}")
+                    for line in stderr_output.strip().split('\n'):
+                        print(f"{Colors.RED}{line}{Colors.R}")
                 return False
 
             event_ok_msg = f"Agent {agent_display_name} finished successfully."
@@ -161,15 +176,16 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                 f.write(f"[{time.strftime('%H:%M:%S')}] {event_ok_msg}\n")
             return True
         except KillSignal:
+            spinner.stop()
             raise
         except KeyboardInterrupt:
-            try: 
-                if 'proc' in locals() and proc.poll() is None:
-                    proc.kill()
+            spinner.stop()
+            try: proc.kill()
             except: pass
             raise
         except Exception as e:
-            print(f"{Colors.RED}Critical Error: {e}{Colors.R}", flush=True)
+            spinner.stop()
+            print(f"{Colors.RED}Critical Error: {e}{Colors.R}")
             traceback.print_exc()
             return False
 
