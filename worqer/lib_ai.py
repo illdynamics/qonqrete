@@ -124,8 +124,6 @@ def _run_openai(model, prompt):
         content = chunk.choices[0].delta.content
         if content:
             captured_chunks.append(content)
-            sys.stderr.write(content)
-            sys.stderr.flush()
     return "".join(captured_chunks).strip()
 
 def _run_gemini(model, prompt):
@@ -138,8 +136,6 @@ def _run_gemini(model, prompt):
         text = getattr(chunk, 'text', None)
         if text:
             captured_chunks.append(text)
-            sys.stderr.write(text)
-            sys.stderr.flush()
     return "".join(captured_chunks).strip()
 
 def _run_anthropic(model, prompt):
@@ -155,18 +151,10 @@ def _run_anthropic(model, prompt):
         if chunk.type == 'content_block_delta' and hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
             content = chunk.delta.text
             captured_chunks.append(content)
-            sys.stderr.write(content)
-            sys.stderr.flush()
     return "".join(captured_chunks).strip()
 
 def _run_deepseek(model, prompt):
     provider = DeepSeekProvider(model=model)
-    # The DeepSeek provider currently doesn't support streaming to stderr,
-    # so we print a marker and then the final result.
-    sys.stderr.write("[Querying DeepSeek...]")
-    sys.stderr.flush()
     response = provider.query(prompt)
-    sys.stderr.write(response)
-    sys.stderr.flush()
     return response
 
