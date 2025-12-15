@@ -83,7 +83,7 @@ graph TD
     subgraph "Shared Volume (worqspace/)"
         Worqspace;
         
-        subgraph "cyQle Input"
+        subgraph cyQle_Input
             direction LR
             TasQ(tasq.md);
             BriQs(briq.d/);
@@ -150,7 +150,7 @@ graph TD
     class User,Shell,Args,VersionFile,BuildFiles host;
     class Container,Worqspace,Image container;
     class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,qompressor,qontextor,calqulator,CheQpoint,TUI,Loader,Agents,LogNode qonqrete;
-    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard,Bloq,Qontext,Struqture,"cyQle Input" volume;
+    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard,Bloq,Qontext,Struqture,cyQle_Input volume;
     class LibAI,OpenAI,Gemini,Anthropic,DeepSeek abstraction;
 ```
 
