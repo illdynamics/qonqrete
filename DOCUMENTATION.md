@@ -36,15 +36,33 @@ graph TD
         Qrane(qrane/qrane.py) -- Uses --> TUI(qrane/tui.py);
         Qrane -- Uses --> Loader(qrane/loader.py);
         Qrane -- 6. Manages --> Pipeline;
+        
         Pipeline -- 7. Calls Agents --> instruQtor;
         instruQtor -- 8. Reads --> TasQ;
         instruQtor -- 9. Writes --> BriQs;
+        
+        Pipeline -- Calls --> qompressor;
+        qompressor -- Reads --> Qodeyard;
+        qompressor -- Writes --> Bloq;
+
+        Pipeline -- Calls --> qontextor;
+        qontextor -- Reads --> Bloq;
+        qontextor -- Writes --> Qontext;
+        
+        Pipeline -- Calls --> calqulator;
+        calqulator -- Reads --> BriQs;
+        calqulator -- Reads --> Bloq;
+
         Pipeline -- 10. Calls Agent --> construQtor;
         construQtor -- 11. Reads --> BriQs;
+        construQtor -- Reads --> Bloq;
+        construQtor -- Reads --> Qontext;
         construQtor -- 12. Writes --> Qodeyard;
+
         Pipeline -- 13. Calls Agent --> inspeQtor;
         inspeQtor -- 14. Reads --> Qodeyard;
         inspeQtor -- 15. Writes --> ReQap;
+        
         Pipeline -- 16. Pauses at --> CheQpoint;
     end
 
@@ -57,6 +75,8 @@ graph TD
         BriQs(briq.d/);
         Qodeyard(qodeyard/);
         ReQap(reqap.d/);
+        Bloq(bloq.d/);
+        Qontext(qontext.d/);
         Sqrapyard -- Optional --> Qodeyard;
         Sqrapyard -- Optional --> TasQ;
     end
@@ -66,6 +86,7 @@ graph TD
         instruQtor -- Uses --> LibAI;
         construQtor -- Uses --> LibAI;
         inspeQtor -- Uses --> LibAI;
+        qontextor -- Uses --> LibAI;
         LibAI -- Wraps --> OpenAI;
         LibAI -- Wraps --> Gemini;
         LibAI -- Wraps --> Anthropic;
@@ -84,8 +105,8 @@ graph TD
 
     class User,Shell,Args,VersionFile,BuildFiles host;
     class Container,Worqspace,Image container;
-    class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,CheQpoint,TUI,Loader qonqrete;
-    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard volume;
+    class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,qompressor,qontextor,calqulator,CheQpoint,TUI,Loader qonqrete;
+    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard,Bloq,Qontext volume;
     class LibAI,OpenAI,Gemini,Anthropic,DeepSeek abstraction;
 ```
 
