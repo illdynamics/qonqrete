@@ -1,6 +1,6 @@
 # Contexting Mechanism in QonQrete
 
-QonQrete's contexting mechanism is how the system provides its AI agents with the necessary information to understand their current task, the state of the codebase, and the historical progression of work. It's designed to be dynamic, layered, and optimized for LLM consumption.
+QonQrete's contexting mechanism is how the system provides its AI agents (including Qwen) with the necessary information to understand their current task, the state of the codebase, and the historical progression of work. It's designed to be dynamic, layered, and optimized for LLM consumption.
 
 The primary goal of contexting is to ensure that LLMs receive relevant, actionable information within their limited context windows, preventing "hallucination" and keeping them grounded in the project's reality.
 

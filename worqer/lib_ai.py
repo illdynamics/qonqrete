@@ -22,6 +22,8 @@ def run_ai_completion(provider: str, model: str, prompt: str, context_files: lis
             return _run_anthropic(model, full_prompt)
         elif provider.lower() == 'deepseek':
             return _run_deepseek(model, full_prompt)
+        elif provider.lower() == 'qwen':
+            return _run_qwen(model, full_prompt)
         else:
             raise ValueError(f"Unknown AI Provider: {provider}")
     except Exception as e:
@@ -169,4 +171,12 @@ def _run_deepseek(model, prompt):
     sys.stderr.write(response)
     sys.stderr.flush()
     return response
+
+def _run_qwen(model, prompt):
+    # Assuming Qwen CLI is installed and configured
+    # The 'qwen chat' command typically expects the prompt via stdin
+    cmd = ["qwen", "chat", "--model", model]
+    sys.stderr.write(f"[Querying Qwen (model: {model})...]")
+    sys.stderr.flush()
+    return _run_streaming_cli_process(cmd, prompt)
 
