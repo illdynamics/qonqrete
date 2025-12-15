@@ -33,50 +33,72 @@ graph TD
     end
 
     subgraph "QonQrete Container"
-        Qrane(qrane/qrane.py) -- Uses --> TUI(qrane/tui.py);
-        Qrane -- Uses --> Loader(qrane/loader.py);
-        Qrane -- 6. Manages --> Pipeline;
+        direction LR
+        Qrane(qrane/qrane.py) -- 6. Manages --> Pipeline;
         
-        Pipeline -- 7. Calls Agents --> instruQtor;
-        instruQtor -- 8. Reads --> TasQ;
-        instruQtor -- 9. Writes --> BriQs;
+        subgraph "Agents"
+            direction TB
+            
+            subgraph "Sqeleton"
+                qompressor;
+            end
+
+            subgraph "Context"
+                qontextor;
+            end
+
+            subgraph "Memory"
+                instruQtor;
+                construQtor;
+                inspeQtor;
+            end
+
+            subgraph "Utility"
+                calqulator;
+            end
+        end
         
+        subgraph "Event/Audit Per-Agent Logging"
+            direction TB
+            LogNode[Logs];
+            qompressor -- Generates --> LogNode;
+            qontextor -- Generates --> LogNode;
+            instruQtor -- Generates --> LogNode;
+            construQtor -- Generates --> LogNode;
+            inspeQtor -- Generates --> LogNode;
+            calqulator -- Generates --> LogNode;
+        end
+
         Pipeline -- Calls --> qompressor;
-        qompressor -- Reads --> Qodeyard;
-        qompressor -- Writes --> Bloq;
-
         Pipeline -- Calls --> qontextor;
-        qontextor -- Reads --> Bloq;
-        qontextor -- Writes --> Qontext;
-        
+        Pipeline -- Calls --> instruQtor;
+        Pipeline -- Calls --> construQtor;
+        Pipeline -- Calls --> inspeQtor;
         Pipeline -- Calls --> calqulator;
-        calqulator -- Reads --> BriQs;
-        calqulator -- Reads --> Bloq;
-
-        Pipeline -- 10. Calls Agent --> construQtor;
-        construQtor -- 11. Reads --> BriQs;
-        construQtor -- Reads --> Bloq;
-        construQtor -- Reads --> Qontext;
-        construQtor -- 12. Writes --> Qodeyard;
-
-        Pipeline -- 13. Calls Agent --> inspeQtor;
-        inspeQtor -- 14. Reads --> Qodeyard;
-        inspeQtor -- 15. Writes --> ReQap;
         
-        Pipeline -- 16. Pauses at --> CheQpoint;
+        Pipeline -- Pauses at --> CheQpoint;
+
     end
 
     subgraph "Shared Volume (worqspace/)"
         Worqspace;
-        Sqrapyard(sqrapyard/);
-        Qrane -- Reads --> PConfig(pipeline_config.yaml);
-        Qrane -- Reads --> Config(config.yaml);
-        TasQ(tasq.md);
-        BriQs(briq.d/);
+        
+        subgraph "cyQle Input"
+            direction LR
+            TasQ(tasq.md);
+            BriQs(briq.d/);
+            Bloq(bloq.d/);
+            Qontext(qontext.d/);
+        end
+        
         Qodeyard(qodeyard/);
         ReQap(reqap.d/);
-        Bloq(bloq.d/);
-        Qontext(qontext.d/);
+        Struqture(struqture/);
+        Sqrapyard(sqrapyard/);
+        
+        PConfig(pipeline_config.yaml);
+        Config(config.yaml);
+        
         Sqrapyard -- Optional --> Qodeyard;
         Sqrapyard -- Optional --> TasQ;
     end
@@ -93,9 +115,31 @@ graph TD
         LibAI -- Wraps --> DeepSeek;
     end
 
-    User -- 17. Interacts with --> CheQpoint;
-    CheQpoint -- 18. Approves/Rejects --> Qrane;
-    Qrane -- 19. Loops or Exits --> Pipeline;
+    User -- Interacts with --> CheQpoint;
+    CheQpoint -- Approves/Rejects --> Qrane;
+    Qrane -- Loops or Exits --> Pipeline;
+
+    instruQtor -- Reads --> TasQ;
+    instruQtor -- Writes --> BriQs;
+    
+    qompressor -- Reads --> Qodeyard;
+    qompressor -- Writes --> Bloq;
+
+    qontextor -- Reads --> Bloq;
+    qontextor -- Writes --> Qontext;
+    
+    calqulator -- Reads --> BriQs;
+    calqulator -- Reads --> Bloq;
+
+    construQtor -- Reads --> BriQs;
+    construQtor -- Reads --> Bloq;
+    construQtor -- Reads --> Qontext;
+    construQtor -- Writes --> Qodeyard;
+
+    inspeQtor -- Reads --> Qodeyard;
+    inspeQtor -- Writes --> ReQap;
+
+    LogNode -- Writes to --> Struqture;
 
     classDef host fill:#511,stroke:#ccc,color:#fff;
     classDef container fill:#115,stroke:#ccc,color:#fff;
@@ -105,8 +149,8 @@ graph TD
 
     class User,Shell,Args,VersionFile,BuildFiles host;
     class Container,Worqspace,Image container;
-    class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,qompressor,qontextor,calqulator,CheQpoint,TUI,Loader qonqrete;
-    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard,Bloq,Qontext volume;
+    class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,qompressor,qontextor,calqulator,CheQpoint,TUI,Loader,Agents,LogNode qonqrete;
+    class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard,Bloq,Qontext,Struqture,"cyQle Input" volume;
     class LibAI,OpenAI,Gemini,Anthropic,DeepSeek abstraction;
 ```
 
