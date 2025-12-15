@@ -1,6 +1,6 @@
 # Local Memory Mechanism in QonQrete
 
-QonQrete implements a sophisticated local memory mechanism designed to provide its AI agents with both short-term operational awareness and structured, long-term knowledge about the codebase. This approach aims to keep AI models grounded in relevant information while optimizing token usage.
+QonQrete implements a sophisticated local memory mechanism designed to provide its AI agents (including Qwen) with both short-term operational awareness and structured, long-term knowledge about the codebase. This approach aims to keep AI models grounded in relevant information while optimizing token usage.
 
 The local memory is managed across several key directories and file types, orchestrated by `qrane/paths.py` and utilized by various `worqer` agents.
 

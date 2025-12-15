@@ -1,6 +1,6 @@
 # Code Skeletonization in QonQrete (Qompressor)
 
-Code skeletonization in QonQrete is a core process implemented by the `worqer/qompressor.py` agent. Its primary purpose is to transform a full codebase into a highly token-efficient, structural representation, often referred to as a "skeleton" or "qompressed" code. This process is crucial for managing the context provided to Large Language Models (LLMs) and significantly reducing processing costs and improving relevance.
+Code skeletonization in QonQrete is a core process implemented by the `worqer/qompressor.py` agent. Its primary purpose is to transform a full codebase into a highly token-efficient, structural representation, often referred to as a "skeleton" or "qompressed" code. This process is crucial for managing the context provided to Large Language Models (LLMs), including Qwen, and significantly reducing processing costs and improving relevance.
 
 ## How Skeletonization Works (`qompressor.py`)
 

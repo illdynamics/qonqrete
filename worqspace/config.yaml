@@ -2,22 +2,22 @@
 
 agents:
   instruqtor:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: qwen
+    model: qwen-max
 
   calqulator: {}
 
   construqtor:
-    provider: gemini
-    model: gemini-2.5-pro
+    provider: qwen
+    model: qwen-max
 
   inspeqtor:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: qwen
+    model: qwen-max
 
   qontextor:
-    provider: gemini
-    model: gemini-2.5-flash
+    provider: qwen
+    model: qwen-turbo
 
   qompressor: {}
 
