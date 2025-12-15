@@ -18,8 +18,8 @@ graph TD
     end
 
     subgraph "Knowledge / Memory Layers"
-        BD[bloq.d/ (Structural Memory/Skeletons)]
-        QD[qontext.d/ (Semantic Memory/Contexts)]
+        BD[bloq.d (Structural Memory - Skeletons)]
+        QD[qontext.d (Semantic Memory - Contexts)]
         RD[reqap.d/ (Operational Memory/Feedback)]
         TD[tasq.d/ (Current Task/Directive)]
         ED[exeq.d/ (Execution Summaries)]
