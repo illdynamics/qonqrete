@@ -1,5 +1,24 @@
 # Release Notes
 
+## [v0.6.1-beta] - 2025-12-16
+
+### Added
+- **Qwen Provider Integration**: Integrated the Qwen AI provider into the system.
+  - Added a `_run_qwen` function to `worqer/lib_ai.py`.
+  - Updated the `Dockerfile` to install the `@qwen-code/qwen-code` npm package.
+  - Changed the default provider to `qwen` in `worqspace/config.yaml`.
+- **New Documentation**: Added extensive documentation on core concepts:
+  - `CONTEXT.md`: Explains the context mechanism.
+  - `MEMORY.md`: Details the local memory mechanism.
+  - `MINDSTACK.md`: Suggestions for the AI agent brain stack.
+  - `MINDSTACK_ARCH.md`: Architecture of the brain stack.
+  - `QWEN_90K_FIX.md`: Verification of Qwen's performance with large context.
+  - `SKELETON.md`: Explains code skeletonization.
+
+### Changed
+- **Default Task**: Updated `worqspace/tasq.md` to a more complex task for better testing of the Qwen model.
+- **Version**: Bumped version to `0.6.1`.
+
 ## [v0.6.0-beta] - 2025-12-13
 
 ### Added
@@ -238,4 +257,4 @@
 - **Workspace Cleaning**: Added the `clean` command to `qonqrete.sh`.
 
 ## [v0.1.0-alpha] - 2025-11-12
-- The initial public alpha release of Qonqrete.
+- The initial public alpha release of QonQrete.
