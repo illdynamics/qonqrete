@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.6.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.6.2-beta` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -113,6 +113,7 @@ graph TD
         LibAI -- Wraps --> Gemini;
         LibAI -- Wraps --> Anthropic;
         LibAI -- Wraps --> DeepSeek;
+        LibAI -- Wraps --> Qwen;
     end
 
     User -- Interacts with --> CheQpoint;
@@ -151,7 +152,7 @@ graph TD
     class Container,Worqspace,Image container;
     class Qrane,Pipeline,instruQtor,construQtor,inspeQtor,qompressor,qontextor,calqulator,CheQpoint,TUI,Loader,Agents,LogNode qonqrete;
     class TasQ,BriQs,Qodeyard,ReQap,Config,PConfig,Sqrapyard,Bloq,Qontext,Struqture,cyQle_Input volume;
-    class LibAI,OpenAI,Gemini,Anthropic,DeepSeek abstraction;
+    class LibAI,OpenAI,Gemini,Anthropic,DeepSeek,Qwen abstraction;
 ```
 
 ---
@@ -227,6 +228,7 @@ The following describes the logic of the three default agents that constitute th
 All agents utilize this central library to interact with AI models. It uses a hybrid approach:
 - **Official Python Libraries**: Used for OpenAI, Google Gemini, and Anthropic. These libraries read their respective API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`) directly from the environment.
 - **Custom Provider**: A custom, OpenAI-compatible provider located in `sqeleton/deepseek_provider.py` is used for DeepSeek. This method is more reliable and uses the `DEEPSEEK_API_KEY` from the environment.
+- **CLI Wrapper**: A wrapper around the `@qwen-code/qwen-code` CLI tool is used for Qwen models.
 
 This provides a consistent and modular interface for all AI interactions.
 
@@ -276,7 +278,7 @@ The behavior of the QonQrete system can be configured in the `worqspace/` direct
 -   **`config.yaml`**:
     -   **`cheqpoint`**: A boolean that sets the default execution mode. `true` (the default) enables user-gated `cheqpoints`. `false` makes the system autonomous by default. This can be overridden by the `--user` and `--auto` command-line flags.
     -   **`auto_cycle_limit`**: The maximum number of `cyQle`s to run in autonomous mode. `0` means infinite.
-    -   **`agents`**: The AI models to be used by each agent.
+    -   **`agents`**: The AI models to be used by each agent. You can also set the provider to `local` for agents that do not use AI.
 -   **`pipeline_config.yaml`**:
     -   **`microsandbox`**: Set to `true` to make Microsandbox (`msb`) the default container runtime.
     -   **`agents`**: Defines the sequence of agents in the pipeline.

@@ -3,23 +3,27 @@
 agents:
   instruqtor:
     provider: qwen
-    model: qwen-turbo
+    model: qwen-max
 
-  calqulator: {}
+  calqulator:
+    provider: local
+    model: calqulator-v0.6.1-beta
 
   construqtor:
     provider: qwen
-    model: qwen-turbo
+    model: qwen-max
 
   inspeqtor:
     provider: qwen
-    model: qwen-turbo
+    model: qwen-max
 
   qontextor:
-    provider: qwen
-    model: qwen-turbo
+    provider: openai
+    model: gpt-4.1-mini
 
-  qompressor: {}
+  qompressor:
+    provider: local
+    model: qompressor-v0.6.1-beta
 
 options:
   # Cheqpoint Configuration

@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `0.6.0` (See `VERSION` file for the canonical version).
+**Version:** `0.6.2` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -11,6 +11,7 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **qompressor**: A specialized agent that "skeletonizes" the codebase to create a low-token, high-context representation.
 - **qontextor**: A specialized agent that uses AI to analyze the "skeletonized" code and generate a machine-readable symbol map of the codebase.
 - **calqulator**: A specialized agent that provides a token and cost estimate for an upcoming cycle.
+- **Local Provider**: A provider type for agents that do not use AI and run completely locally (e.g., `calqulator`, `qompressor`).
 
 ### Environment & Structure
 - **Qage**: The secure Docker container or Microsandbox that contains the `Qrew`.
