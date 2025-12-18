@@ -89,7 +89,7 @@ As a lightweight alternative to Docker, you can use `msb`.
 
 ## Getting Started
 
-For a full guide on setting up the environment and running your first `cyQle`, please see **[QUICKSTART.md](./doc/QUICKSTART.md)**.
+For a full guide on setting up the environment and running your first `cyQle`, please see **[QUICKSTART.md](./QUICKSTART.md)**.
 
 **API Key Configuration**: Before running, you must export the API keys for the AI providers you intend to use. The system will automatically check for the necessary keys based on your `worqspace/config.yaml`.
 
