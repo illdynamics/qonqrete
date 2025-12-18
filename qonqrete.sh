@@ -247,7 +247,6 @@ case "$COMMAND" in
         if [ -n "${GEMINI_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e GEMINI_API_KEY=${GEMINI_API_KEY}"; fi
         if [ -n "${ANTHROPIC_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"; fi
         if [ -n "${DEEPSEEK_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}"; fi
-        if [ -n "${QWEN_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e QWEN_API_KEY=${QWEN_API_KEY}"; fi
 
         if [ "$RUNTIME_MODE" == "msb" ]; then
             CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
