@@ -2,20 +2,20 @@
 
 agents:
   instruqtor:
-    provider: openai
-    model: gpt-4.1-nano
+    provider: qwen
+    model: qwen-max
 
   calqulator:
     provider: local
     model: calqulator
 
   construqtor:
-    provider: gemini
-    model: gemini-2.5-pro
+    provider: qwen
+    model: qwen-max
 
   inspeqtor:
-    provider: openai
-    model: gpt-4.1
+    provider: qwen
+    model: qwen-max
 
   qontextor:
     provider: openai
