@@ -1,5 +1,20 @@
 # Release Notes
 
+## [v0.6.2-beta] - 2025-12-18
+
+### Added
+- **"local" Provider**: Implemented a "local" provider for offline agents like `calqulator` and `qompressor` to make their offline nature explicit.
+- **Qwen Model Testing**: Tested `qwen-turbo`, `qwen-coder`, and `qwen-max` models, with `qwen-max` proving to be the most capable for planning and code generation.
+
+### Changed
+- **Default Briq Format**: The `instruqtor` now defaults to a more reliable markdown-based format for briqs, with improved prompts and examples.
+
+### Fixed
+- **AI Reliability**: The new markdown format for briqs significantly improves the reliability of the `instruqtor` agent with various AI models.
+
+### Chore
+- **Version Bump**: Bumped version to `0.6.2`.
+
 ## [v0.6.1-beta] - 2025-12-16
 
 ### Added

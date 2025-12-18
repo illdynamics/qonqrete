@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.6.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.6.2-beta` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -11,6 +11,7 @@ This guide will walk you through running your first `cyQle` with the QonQrete sy
   - `export GOOGLE_API_KEY='your-key'` (or `GEMINI_API_KEY`)
   - `export ANTHROPIC_API_KEY='your-key'`
   - `export DEEPSEEK_API_KEY='your-key'`
+  - `export QWEN_API_KEY='your-key'`
 
 ## 1. First-Time Setup
 Build the secure `Qage` environment. You only need to do this once.
@@ -52,7 +53,7 @@ Advanced options can be set in `worqspace/`.
 -   **`config.yaml`**:
     -   `cheqpoint`: Sets the default behavior. `true` for user-gated mode, `false` for autonomous. Can be overridden with `--user` or `--auto`.
     -   `auto_cycle_limit`: Set the maximum number of cycles for auto-mode.
-    -   `agents`: Change the AI models for each agent.
+    -   `agents`: Change the AI models for each agent. You can also set the provider to `local` for agents that do not use AI.
     -   `mode`: Set the default operational mode for agent personas (e.g., `program`, `enterprise`, `security`, `performance`, `innovative`).
     -   `briq_sensitivity`: Set the default task breakdown granularity (0=atomic, 9=monolithic).
 -   **`pipeline_config.yaml`**:
