@@ -12,11 +12,13 @@ PRICING = {
     "gemini-1.5-pro":   {"input": 3.50,  "output": 10.50, "char_per_token": 4.0},
     "gpt-4o":           {"input": 2.50,  "output": 10.00, "char_per_token": 4.0},
     "gpt-4o-mini":      {"input": 0.15,  "output": 0.60,  "char_per_token": 4.0},
+    "gpt-4.1-mini":     {"input": 0.15,  "output": 0.60,  "char_per_token": 4.0},
     "claude-3-5-sonnet":{"input": 3.00,  "output": 15.00, "char_per_token": 3.5},
     "deepseek-chat":    {"input": 0.14,  "output": 0.28,  "char_per_token": 4.0}, # Example pricing
+    "qwen-turbo":       {"input": 0.1,   "output": 0.2,   "char_per_token": 3.8},
 }
 
-def estimate_tokens(text: str, model: str = "gemini-2.5-flash") -> int:
+def estimate_tokens(text: str, model: str = "qwen-turbo") -> int:
     """
     Returns an estimated token count based on character length.
     Fast, local, and accurate enough for estimations.
@@ -30,9 +32,9 @@ def estimate_tokens(text: str, model: str = "gemini-2.5-flash") -> int:
     
     return math.ceil(len(text) / ratio)
 
-def calculate_cost(tokens: int, model: str = "gemini-2.5-flash", is_input: bool = True) -> float:
+def calculate_cost(tokens: int, model: str = "qwen-turbo", is_input: bool = True) -> float:
     """Calculates USD cost for a given token count."""
-    specs = PRICING.get(model, PRICING["gemini-2.5-flash"])
+    specs = PRICING.get(model, PRICING["qwen-turbo"])
     price_per_million = specs["input"] if is_input else specs["output"]
     return (tokens / 1_000_000) * price_per_million
 

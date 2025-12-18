@@ -18,20 +18,20 @@ def clean_input_content(text: str) -> str:
     text = "".join(ch for ch in text if ch.isprintable() or ch in ['\n', '\t', '\r'])
     return text
 
-def parse_xml_briqs(content: str) -> list[dict]:
-    # Robust parsing that handles potential AI formatting glitches
-    pattern_strict = re.compile(r'<briq\s+title=["\'](.*?)["\']\s*>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
-    matches = pattern_strict.findall(content)
-    results = [{'title': m[0].strip(), 'content': m[1].strip()} for m in matches]
-
-    if not results:
-        pattern_loose = re.compile(r'<briq>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
-        loose_matches = pattern_loose.findall(content)
-        for i, m in enumerate(loose_matches):
-            lines = m.strip().split('\n')
-            title = lines[0].strip() if lines else f"Task_{i+1}"
-            content_body = "\n".join(lines[1:]) if len(lines) > 1 else m.strip()
-            results.append({'title': title, 'content': content_body})
+def parse_markdown_briqs(content: str) -> list[dict]:
+    """Parses markdown content to extract briqs based on '## Briq:' headings."""
+    results = []
+    # Split by the briq delimiter. The first element will be anything before the first briq.
+    briq_sections = re.split(r'\n## Briq:', content)
+    
+    for section in briq_sections:
+        if not section.strip():
+            continue
+        lines = section.strip().split('\n')
+        title = lines[0].strip() if lines else "Untitled Briq"
+        body = '\n'.join(lines[1:]).strip()
+        results.append({'title': title, 'content': body})
+        
     return results
 
 def clean_filename_slug(text: str) -> str:
@@ -134,8 +134,16 @@ You are the **Principal Software Architect** and your only purpose is to break d
 4.  **LOGICAL BREAKDOWN:** After the setup, break down the implementation logically based on the required briq count.
 5.  **CONSIDER EXISTING STRUCTURE:** Do not redefine files that already exist. Use the file tree below as a reference for the current state of the codebase.
 
-**OUTPUT FORMAT (STRICT XML):**
-You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` tags. The title should be short and descriptive. Do not include any other text or formatting outside of the `<briq>` tags.
+**OUTPUT FORMAT (STRICT MARKDOWN):**
+You must start each task with a Markdown heading like `## Briq: A_Short_And_Clear_Title`. Do not include any other text or formatting before the first heading.
+
+**EXAMPLE:**
+## Briq: Create_Main_File
+This is the first briq. It will create the main file of the application.
+
+## Briq: Add_Functions
+This is the second briq. It will add some functions to the main file.
+
 
 **EXISTING FILE STRUCTURE in qodeyard:**
 ```
@@ -155,10 +163,10 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
         sys.stderr.write(f"Instruqtor Failure: {e}\\n")
         sys.exit(1)
 
-    briqs = parse_xml_briqs(master_plan)
+    briqs = parse_markdown_briqs(master_plan)
 
     if not briqs:
-        print("[WARN] Architect failed to produce valid XML. Generating raw output.", flush=True)
+        print("[WARN] Architect failed to produce valid markdown briqs. Generating raw output.", flush=True)
         briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
 
     print(f"--- Architect Generating {len(briqs)} Build Phases (Sens:{sensitivity}) ---", flush=True)
