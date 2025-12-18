@@ -3,9 +3,11 @@
 agents:
   instruqtor:
     provider: openai
-    model: gpt-4.1-mini
+    model: gpt-4.1-nano
 
-  calqulator: {}
+  calqulator:
+    provider: local
+    model: calqulator
 
   construqtor:
     provider: gemini
@@ -13,13 +15,15 @@ agents:
 
   inspeqtor:
     provider: openai
-    model: gpt-4.1-mini
+    model: gpt-4.1
 
   qontextor:
-    provider: gemini
-    model: gemini-2.5-flash
+    provider: openai
+    model: gpt-4.1-mini
 
-  qompressor: {}
+  qompressor:
+    provider: local
+    model: qompressor
 
 options:
   # Cheqpoint Configuration
@@ -28,7 +32,7 @@ options:
   cheqpoint: false
 
   # Max number of cycles to run in auto-mode.
-  auto_cycle_limit: 4
+  auto_cycle_limit: 1
 
   # Briq Granularity Control (0-9)
   # 0 = Atomic (Every bullet is a file)

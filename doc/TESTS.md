@@ -157,6 +157,10 @@ Use these as the canonical test set (adjust model IDs if your adapter uses diffe
   - Primary: `claude-sonnet-4-5`
   - Secondary: `claude-haiku-4-5`
   - Tertiary: `claude-opus-4-5`
+- **Qwen**
+  - Primary: `qwen-max`
+  - Secondary: `qwen-turbo`
+  - Tertiary: `qwen-coder`
 
 All tests below assume the three agents are:
 
@@ -183,12 +187,16 @@ For each checkbox, set **all three agents** in `config.yaml` to the given `provi
 - [x] All agents → **Claude / claude-sonnet-4-5**
 - [x] All agents → **Claude / claude-haiku-4-5**
 - [x] All agents → **Claude / claude-opus-4-5**
+- [x] All agents → **Qwen / qwen-turbo**
+- [x] All agents → **Qwen / qwen-coder**
+- [x] All agents → **Qwen / qwen-max**
 
 For each run, verify:
 
 - [x] CyQle completes without Python errors or provider API errors.
 - [x] `struqture/` contains logs for all 3 agents for the cyQle.
 - [x] `briq.d/`, `exeq.d/`, and `reqap.d/` contain the expected artifacts.
+
 
 ### 7.3 Per-Agent Provider Rotation (One Agent at a Time)
 
