@@ -2,20 +2,20 @@
 
 agents:
   instruqtor:
-    provider: qwen
-    model: qwen-max
+    provider: openai
+    model: gpt-4.1-nano
 
   calqulator:
     provider: local
-    model: calqulator-v0.6.1-beta
+    model: calqulator
 
   construqtor:
-    provider: qwen
-    model: qwen-max
+    provider: gemini
+    model: gemini-2.5-pro
 
   inspeqtor:
-    provider: qwen
-    model: qwen-max
+    provider: openai
+    model: gpt-4.1
 
   qontextor:
     provider: openai
@@ -23,7 +23,7 @@ agents:
 
   qompressor:
     provider: local
-    model: qompressor-v0.6.1-beta
+    model: qompressor
 
 options:
   # Cheqpoint Configuration
