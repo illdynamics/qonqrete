@@ -23,6 +23,12 @@ try:
 except ImportError:
     JEDI_AVAILABLE = False
 
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
 # --- AI Mode Imports (Optional) ---
 try:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +39,18 @@ except ImportError:
     AI_MODE_AVAILABLE = False
     lib_ai = None
     qompressor = None
+
+# --- Globals for Complex Mode ---
+embedding_model = None
+
+def get_embedding_model():
+    """Lazy loader for the sentence transformer model."""
+    global embedding_model
+    if embedding_model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
+        print("  - Loading semantic analysis model (once)...", flush=True)
+        # Uses a cached model, downloads on first run
+        embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return embedding_model
 
 # --- Configuration & Constants ---
 
@@ -53,7 +71,7 @@ SPECIAL_FILENAMES = {
 
 # --- Data Structures for Local Mode ---
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Any
 
 @dataclass
 class Symbol:
@@ -62,15 +80,20 @@ class Symbol:
     signature: str
     purpose: str
     dependencies: List[str] = field(default_factory=list)
+    embedding: Optional[Any] = None # Stores numpy array from sentence-transformer
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             'name': self.name,
             'type': self.type,
             'signature': self.signature,
             'purpose': self.purpose,
             'dependencies': self.dependencies,
         }
+        # Serialize embedding to a list for YAML compatibility
+        if self.embedding is not None:
+            data['embedding'] = self.embedding.tolist()
+        return data
 
 @dataclass
 class FileContext:
@@ -159,7 +182,7 @@ class SymbolExtractor(ast.NodeVisitor):
 
 def infer_purpose_from_name(name: str, stype: str) -> tuple:
     if name in SPECIAL_METHODS: return SPECIAL_METHODS[name], 0.95
-    words = [w.lower() for w in re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|)', name)]
+    words = [w.lower() for w in re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]| )', name)]
     if not words: return f"Defines {name}.", 0.3
     verb = words[0]
     for pattern, action in VERB_PATTERNS.items():
@@ -172,7 +195,7 @@ def extract_first_sentence(text: str) -> str:
     match = re.split(r'(?<=[.!?])\s+', text.strip())
     return match[0] if match else text.strip()
 
-def generate_context_local(file_path: Path) -> FileContext:
+def generate_context_local(file_path: Path, local_mode: str) -> FileContext:
     ext = file_path.suffix.lower()
     content = file_path.read_text(errors='ignore')
 
@@ -184,9 +207,25 @@ def generate_context_local(file_path: Path) -> FileContext:
     try:
         tree = ast.parse(content)
         extractor.visit(tree)
+        
+        # --- Semantic Enhancement (Complex Mode) ---
+        if local_mode == 'complex':
+            model = get_embedding_model()
+            if model:
+                purposes = [sym.purpose for sym in extractor.symbols if sym.purpose]
+                if purposes:
+                    embeddings = model.encode(purposes)
+                    # Map embeddings back to the symbols that had purposes
+                    emb_idx = 0
+                    for sym in extractor.symbols:
+                        if sym.purpose:
+                            sym.embedding = embeddings[emb_idx]
+                            emb_idx += 1
+        
         return FileContext(file_path=str(file_path), symbols=extractor.symbols)
     except Exception as e:
         return FileContext(str(file_path), error=f"AST Parse Error: {e}")
+
 
 # --- AI Mode Logic ---
 
@@ -271,12 +310,13 @@ def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, confi
     qontext_file.parent.mkdir(parents=True, exist_ok=True)
 
     provider = config.get('provider', 'local')
-    model = config.get('model', 'qontextor') # Default model for local
+    model = config.get('model', 'qontextor')
+    local_mode = config.get('local_mode', 'complex')
 
-    print(f"  - Generating qontext for: {relative_path} (Mode: {provider})", flush=True)
+    print(f"  - Generating qontext for: {relative_path} (Mode: {provider}, Detail: {local_mode})", flush=True)
 
     if provider == 'local':
-        context = generate_context_local(file_path)
+        context = generate_context_local(file_path, local_mode)
         yaml_content = yaml.dump(context.to_dict(), sort_keys=False, default_flow_style=False, indent=2)
     else:
         file_type = get_file_type(file_path)
