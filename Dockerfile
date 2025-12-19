@@ -51,7 +51,7 @@ RUN pip3 install --no-cache-dir pycg
 
 # Optional: Sentence Transformers for semantic similarity (90MB model)
 # Uncomment if you want deep semantic lookup capability
-# RUN pip3 install --no-cache-dir sentence-transformers
+RUN pip3 install --no-cache-dir sentence-transformers
 
 # =============================================================================
 

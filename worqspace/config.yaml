@@ -21,6 +21,9 @@ agents:
   qontextor:
     provider: local
     model: qontextor
+    # local_mode: 'fast' = AST-only analysis
+    #             'complex' = AST + deep semantic analysis (requires sentence-transformers)
+    local_mode: complex
     # To use an AI provider for qontextor, change provider and model, e.g.:
     # provider: gemini
     # model: gemini-2.5-flash-lite
