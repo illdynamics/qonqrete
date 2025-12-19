@@ -3,8 +3,8 @@
 
 agents:
   instruqtor:
-    provider: qwen
-    model: qwen-turbo
+    provider: openai
+    model: gpt-4.1-mini
 
   calqulator:
     provider: local
@@ -12,11 +12,11 @@ agents:
 
   construqtor:
     provider: gemini
-    model: gemini-2.5-flash-lite
+    model: gemini-2.5-flash
 
   inspeqtor:
     provider: openai
-    model: gpt-4.1-nano
+    model: gpt-4.1
 
   qontextor:
     provider: local
