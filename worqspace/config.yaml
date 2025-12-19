@@ -8,8 +8,8 @@ agents:
   calqulator: {}
 
   construqtor:
-    provider: gemini
-    model: gemini-2.5-pro
+    provider: qwen
+    model: qwen-max
 
   inspeqtor:
     provider: openai
