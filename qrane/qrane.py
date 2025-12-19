@@ -297,7 +297,8 @@ def check_api_keys(config, qrane_prefix):
     key_mapping = {
         'openai': 'OPENAI_API_KEY',
         'anthropic': 'ANTHROPIC_API_KEY',
-        'deepseek': 'DEEPSEEK_API_KEY'
+        'deepseek': 'DEEPSEEK_API_KEY',
+        'qwen': 'QWEN_API_KEY'
     }
 
     missing_keys = []
@@ -468,9 +469,31 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 return tpl
 
             agents_to_run = []
+            agent_configs = config.get('agents', {})
+
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
-                script = agent_def['script']
+                agent_config = agent_configs.get(name, {})
+                provider = agent_config.get('provider', None)
+
+                # --- DYNAMIC LOCAL AGENT LOADER ---
+                if provider == 'local':
+                    model_name = agent_config.get('model')
+                    if not model_name:
+                        if ui: ui.log_main(f"Config Error: 'model' not specified for local agent '{name}'")
+                        else: print(f"Config Error: 'model' not specified for local agent '{name}'")
+                        session_failed = True; break
+                    
+                    script = f"{model_name}.py"
+                    
+                    # Security check: ensure the model name is a simple alphanumeric name
+                    if not re.match(r'^[a-zA-Z0-9_]+$', model_name):
+                        if ui: ui.log_main(f"Config Error: Invalid 'model' name for local agent '{name}'")
+                        else: print(f"Config Error: Invalid 'model' name for local agent '{name}'")
+                        session_failed = True; break
+                else:
+                    script = agent_def['script']
+                # --- END DYNAMIC LOADER ---
 
                 # Handle single or multiple inputs
                 input_val = agent_def['input']
