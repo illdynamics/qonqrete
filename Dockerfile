@@ -25,9 +25,6 @@ RUN NODE_MAJOR=20 && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] http
 # Install Node.js from the new repository
 RUN apt-get update && apt-get install -y nodejs
 
-# Install Qwen CLI
-RUN npm install -g @qwen-code/qwen-code
-
 # 2. Install Python packages for agents
 RUN pip3 install --no-cache-dir --upgrade pip
 RUN pip3 install --no-cache-dir pyyaml openai anthropic google-generativeai
