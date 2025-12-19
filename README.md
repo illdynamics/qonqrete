@@ -29,7 +29,7 @@ This release introduces the **Qompressor** and **Qontextor** agents, forming a "
 
 ## Version
 
-**Version:** `v0.6.2-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.6.3-beta` (See `VERSION` file for the canonical version).
 
 > **Note on TUI Mode and Agent Testing:**
 >
