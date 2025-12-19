@@ -1,5 +1,19 @@
 # Release Notes
 
+## [v0.6.3-beta] - 2025-12-19
+
+### Added
+- **Dynamic Local Agent Loader**: Implemented a dynamic local agent loader in `qrane/qrane.py`, allowing agents configured with `provider: local` in `config.yaml` to dynamically load and execute corresponding Python scripts from the `worqer` directory based on their `model` name.
+
+### Changed
+- **`qrane.py`**: Modified `run_orchestration` to dynamically determine agent script paths for local providers.
+- **`Dockerfile`**: Added `npm install -g @qwen-code/qwen-code@latest` to install the Qwen CLI tool, resolving the "Missing binary for command: qwen" error.
+- **`lib_ai.py`**: Modified `_run_qwen` to pass prompts to the `qwen` CLI via standard input instead of command-line arguments, fixing the "Argument list too long" error.
+
+### Fixed
+- **`QWEN_API_KEY` Environment Variable**: Ensured `qonqrete.sh` passes `QWEN_API_KEY` to the container and `qrane/qrane.py` checks for its presence, resolving the "QWEN_API_KEY environment variable not set" error.
+- **`construQtor` Briq Processing**: (Intended Fix): Implemented changes to improve `construQtor`'s handling of briqs. (Note: Full validation of this fix was hampered by external AI provider rate limit issues during testing.)
+
 ## [v0.6.2-beta] - 2025-12-18
 
 ### Added

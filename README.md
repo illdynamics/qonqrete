@@ -29,7 +29,7 @@ This release introduces the **Qompressor** and **Qontextor** agents, forming a "
 
 ## Version
 
-**Version:** `v0.6.2-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.6.3-beta` (See `VERSION` file for the canonical version).
 
 > **Note on TUI Mode and Agent Testing:**
 >
@@ -89,7 +89,7 @@ As a lightweight alternative to Docker, you can use `msb`.
 
 ## Getting Started
 
-For a full guide on setting up the environment and running your first `cyQle`, please see **[QUICKSTART.md](./QUICKSTART.md)**.
+For a full guide on setting up the environment and running your first `cyQle`, please see **[QUICKSTART.md](./doc/QUICKSTART.md)**.
 
 **API Key Configuration**: Before running, you must export the API keys for the AI providers you intend to use. The system will automatically check for the necessary keys based on your `worqspace/config.yaml`.
 
