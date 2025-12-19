@@ -10,8 +10,8 @@ agents:
     model: calqulator
 
   construqtor:
-    provider: anthropic
-    model: claude-opus-4-5
+    provider: gemini
+    model: gemini-2.5-pro
 
   inspeqtor:
     provider: openai
