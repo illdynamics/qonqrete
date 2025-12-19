@@ -5,21 +5,25 @@ agents:
     provider: openai
     model: gpt-4.1-mini
 
-  calqulator: {}
+  calqulator:
+    provider: local
+    model: calqulator
 
   construqtor:
-    provider: qwen
-    model: qwen-max
+    provider: gemini
+    model: gemini-2.5-pro
 
   inspeqtor:
     provider: openai
-    model: gpt-4.1-mini
+    model: gpt-4.1
 
   qontextor:
     provider: gemini
     model: gemini-2.5-flash
 
-  qompressor: {}
+  qompressor:
+    provider: local
+    model: qompressor
 
 options:
   # Cheqpoint Configuration
@@ -34,7 +38,7 @@ options:
   # 0 = Atomic (Every bullet is a file)
   # 5 = Balanced
   # 9 = Monolithic (Whole task is one file)
-  briq_sensitivity: 7
+  briq_sensitivity: 6
 
   # Operational Mode
   # Options: program, enterprise, performance, security, innovative, balanced
