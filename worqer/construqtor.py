@@ -96,6 +96,7 @@ def main():
     agent_cfg = config.get('agents', {}).get('construqtor', {})
     ai_provider = agent_cfg.get('provider', 'gemini')
     ai_model = agent_cfg.get('model', 'gemini-1.5-pro')
+    use_qompressor = config.get('options', {}).get('use_qompressor', True)
 
     mode = os.environ.get('QONQ_MODE', 'enterprise')
     mode_prompt = get_mode_persona(mode)
@@ -114,11 +115,14 @@ def main():
 
     print(f"--- Construqtor Found {len(briq_files)} Briqs ---", flush=True)
 
-    # Use the 'bloq.d' directory for structural context
+    # Determine context source based on config
     bloq_path = worqspace_root / "bloq.d"
+    context_source_path = bloq_path if use_qompressor and bloq_path.is_dir() else qodeyard_path
+    context_type = "code skeletons from `bloq.d/`" if use_qompressor else "full source code from `qodeyard/`"
+
     all_context_files = []
-    if bloq_path.exists() and bloq_path.is_dir():
-        for root, _, files in os.walk(bloq_path):
+    if context_source_path.is_dir():
+        for root, _, files in os.walk(context_source_path):
             for file in files:
                 all_context_files.append(str(Path(root) / file))
 
@@ -128,7 +132,7 @@ def main():
 
         prompt = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan defined in the 'briq'.
-**CONTEXT:** You have been provided with the 'code skeletons' of the existing codebase from the `bloq.d/` directory. These files contain all the correct class/function signatures, docstrings, and comments, but the implementation bodies have been stripped. Use this structural context to ensure your generated code integrates correctly with the existing project.
+**CONTEXT:** You have been provided with the {context_type} of the existing codebase. Use this structural context to ensure your generated code integrates correctly with the existing project.
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
 
