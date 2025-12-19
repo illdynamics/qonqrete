@@ -27,6 +27,22 @@ def validate_code(file_path: Path):
         except SyntaxError as e:
             print(f"     [WARN] Syntax error in {file_path}: {e}", flush=True)
 
+def _handle_unstructured_output(result: str, briq_file_name: str, worqspace_root: Path):
+    """
+    Handles cases where the AI output is unstructured and does not contain the expected code blocks.
+    Saves the output to a directory for manual inspection.
+    """
+    if not result or not result.strip():
+        return
+
+    unprocessed_dir = worqspace_root / "unprocessed_briqs" / briq_file_name
+    unprocessed_dir.mkdir(parents=True, exist_ok=True)
+    
+    output_file = unprocessed_dir / "ai_output.md"
+    output_file.write_text(result, encoding='utf-8')
+    
+    print(f"     [WARN] AI output was unstructured. Saved for inspection at: {output_file}", flush=True)
+
 def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
     """
     Parses the AI's markdown output, extracts all code blocks, and writes them
@@ -166,7 +182,11 @@ print("Hello, World!")
         if success:
             written_files = _write_ai_output_to_qodeyard(result, qodeyard_path)
             if not written_files:
+                _handle_unstructured_output(result, briq_file.stem, worqspace_root)
                 success = False
+        else:
+            _handle_unstructured_output(result, briq_file.stem, worqspace_root)
+
         
         all_written_files.extend(written_files)
         status = "success" if success else "failure"
