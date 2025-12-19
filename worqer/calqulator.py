@@ -15,16 +15,17 @@ except ImportError:
     sys.exit(1)
 
 def load_config():
-    """Reads config to find the active provider and model for construqtor."""
+    """Reads config to find construqtor's model and qompressor setting."""
     try:
         with open('config.yaml', 'r', encoding='utf-8') as f:
-            cfg = yaml.safe_load(f)
+            cfg = yaml.safe_load(f) or {}
         construqtor_cfg = cfg.get('agents', {}).get('construqtor', {})
         provider = construqtor_cfg.get('provider', 'gemini')
         model = construqtor_cfg.get('model', 'gemini-2.5-flash')
-        return provider, model
+        use_qompressor = cfg.get('options', {}).get('use_qompressor', True)
+        return provider, model, use_qompressor
     except:
-        return 'gemini', 'gemini-2.5-flash'
+        return 'gemini', 'gemini-2.5-flash', True
 
 def get_directory_token_size(path: Path, model: str) -> int:
     """Calculates total tokens for all files in a directory (recursive)."""
@@ -57,7 +58,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
     Finds all relevant briq files, calculates costs, annotates them,
     and prints a detailed ledger to stdout/logs.
     """
-    provider, model = load_config()
+    provider, model, use_qompressor = load_config()
 
     # --- Pre-calculation and Setup ---
     cycle_num = os.environ.get('CYCLE_NUM', '1')
@@ -68,21 +69,21 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
     max_filename_len = 0
     if briq_files:
         max_filename_len = max(len(f.name) for f in briq_files)
-    # Ensure a minimum width for the header
-    col_width = max(max_filename_len, len("Briq File")) + 3  # Add padding
+    col_width = max(max_filename_len, len("Briq File")) + 3
 
     # --- Base Context Cost ---
-    bloq_tokens = get_directory_token_size(bloq_path, model)
+    context_source_path = bloq_path if use_qompressor else qodeyard_path
+    context_source_name = "Skeletons" if use_qompressor else "Full Code"
+    context_tokens = get_directory_token_size(context_source_path, model)
     system_prompt_buffer = 2000
-    base_context_tokens = bloq_tokens + system_prompt_buffer
+    base_context_tokens = context_tokens + system_prompt_buffer
 
     # --- Print Header ---
     header_line = f"--- CalQulator Audit Report (Provider: {provider}, Model: {model}) ---"
     print(f"\n{header_line}", flush=True)
-    print(f"Base Overhead (Skeletons + Sys): {base_context_tokens:,} tokens", flush=True)
+    print(f"Base Overhead ({context_source_name} + Sys): {base_context_tokens:,} tokens", flush=True)
     
-    # Dynamic separator line
-    separator = "-" * (col_width + 12 + 15 + 4) # col + tokens + cost + separators
+    separator = "-" * (col_width + 12 + 15 + 4)
     print(separator, flush=True)
     print(f"{'Briq File':<{col_width}} | {'Tokens':<12} | {'Est. Cost':<15}", flush=True)
     print(separator, flush=True)

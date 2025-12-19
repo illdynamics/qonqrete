@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.6.3-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.7.0-beta` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -126,6 +126,7 @@ graph TD
     qompressor -- Reads --> Qodeyard;
     qompressor -- Writes --> Bloq;
 
+    qontextor -- Reads --> Qodeyard;
     qontextor -- Reads --> Bloq;
     qontextor -- Writes --> Qontext;
     
@@ -134,7 +135,6 @@ graph TD
 
     construQtor -- Reads --> BriQs;
     construQtor -- Reads --> Bloq;
-    construQtor -- Reads --> Qontext;
     construQtor -- Writes --> Qodeyard;
 
     inspeQtor -- Reads --> Qodeyard;
@@ -257,8 +257,10 @@ The following agents can be added to the pipeline in `pipeline_config.yaml` to p
 
 #### 2. `qontextor` (The Symbol Mapper)
 -   **Purpose**: To generate a detailed, machine-readable map of the codebase's symbols and their relationships.
--   **Logic**: It uses the "skeletonized" output from the `qompressor` to analyze each file. It then uses an AI call to generate a YAML file for each source file, detailing its symbols (classes, functions, etc.), their signatures, their purpose, and their dependencies. This creates a "qontext" (`qontext.d`) of the entire codebase.
--   **Cost**: Incurs AI token costs. It's best used for initial scans or when major architectural changes occur.
+-   **Dual-Mode Logic**:
+    -   **Local Mode (`provider: local`)**: This is the default mode. `qontextor` performs a deterministic analysis of Python files using Abstract Syntax Trees (AST). It extracts classes, functions, signatures, and purposes with high accuracy and speed, incurring **zero token cost**.
+    -   **AI Mode (`provider: [ai_provider]`)**: In this legacy mode, it uses the "skeletonized" output from the `qompressor` to analyze each file. It then uses an AI call to generate a YAML file for each source file, detailing its symbols (classes, functions, etc.), their signatures, their purpose, and their dependencies.
+-   **Cost**: Incurs AI token costs only when an AI provider is specified. It's best used for initial scans or when major architectural changes occur.
 
 #### 3. `calqulator` (The Cost Estimator)
 -   **Purpose**: To provide a token and cost estimate for the upcoming `construqtor` cycle.

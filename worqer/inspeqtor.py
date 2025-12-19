@@ -42,14 +42,19 @@ def main() -> None:
     agent_cfg = config.get('agents', {}).get('inspeqtor', {})
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4o')
+    use_qontextor = config.get('options', {}).get('use_qontextor', True)
 
     # --- Step 1: Gather all architectural context ---
-    all_qontext_files = []
-    if qontext_path.is_dir():
-        for root, _, files in os.walk(qontext_path):
+    all_context_files = []
+    context_source_path = qontext_path if use_qontextor and qontext_path.is_dir() else qodeyard_path
+    
+    if context_source_path.is_dir():
+        for root, _, files in os.walk(context_source_path):
             for file in files:
-                if file.endswith('.q.yaml'):
-                    all_qontext_files.append(str(Path(root) / file))
+                # If using qontext, only grab .q.yaml files. Otherwise, grab all.
+                if use_qontextor and not file.endswith('.q.yaml'):
+                    continue
+                all_context_files.append(str(Path(root) / file))
     
     # --- Step 2: Get the new code for changed files from the dedicated summary ---
     changed_code_context = ""

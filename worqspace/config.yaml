@@ -1,9 +1,10 @@
 # QonQrete Configuration
+# ========================
 
 agents:
   instruqtor:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: qwen
+    model: qwen-turbo
 
   calqulator:
     provider: local
@@ -11,22 +12,42 @@ agents:
 
   construqtor:
     provider: gemini
-    model: gemini-2.5-pro
+    model: gemini-2.5-flash-lite
 
   inspeqtor:
     provider: openai
-    model: gpt-4.1
+    model: gpt-4.1-nano
 
   qontextor:
-    provider: gemini
-    model: gemini-2.5-flash
+    provider: local
+    model: qontextor
+    # To use an AI provider for qontextor, change provider and model, e.g.:
+    # provider: gemini
+    # model: gemini-2.5-flash-lite
 
   qompressor:
     provider: local
     model: qompressor
 
 options:
+  # ========================
+  # Agent Enable/Disable
+  # ========================
+  
+  # Enable/disable Qompressor (skeleton generation)
+  # true = Generate bloq.d skeletons for AI context (default)
+  # false = Send full codebase to AI agents (more tokens, better context)
+  use_qompressor: true
+  
+  # Enable/disable Qontextor (context indexing)
+  # true = Generate qontext.d semantic maps (default)
+  # false = Skip context generation entirely
+  use_qontextor: true
+
+  # ========================
   # Cheqpoint Configuration
+  # ========================
+  
   # true = User-gated mode by default (cheqpoints enabled).
   # false = Autonomous mode by default (cheqpoints disabled).
   cheqpoint: false
@@ -34,6 +55,10 @@ options:
   # Max number of cycles to run in auto-mode.
   auto_cycle_limit: 4
 
+  # ========================
+  # Generation Settings
+  # ========================
+  
   # Briq Granularity Control (0-9)
   # 0 = Atomic (Every bullet is a file)
   # 5 = Balanced

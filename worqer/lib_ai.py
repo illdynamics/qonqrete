@@ -174,7 +174,7 @@ def _run_deepseek(model, prompt):
 
 def _run_qwen(model, prompt):
     # Assuming Qwen CLI is installed and configured
-    # The 'qwen' command with -p flag expects the prompt from stdin
+    # The 'qwen' command with -p flag expects the prompt as the final argument
     cmd = ["qwen", "-p", "-y", "--model", model, "--auth-type", "openai", "--openai-base-url", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"]
     api_key = os.environ.get("QWEN_API_KEY")
     if api_key:
@@ -182,7 +182,9 @@ def _run_qwen(model, prompt):
     else:
         raise ValueError("QWEN_API_KEY environment variable not set.")
 
+    cmd.append(prompt)
+
     sys.stderr.write(f"[Querying Qwen (model: {model})...]")
     sys.stderr.flush()
-    # Pass the prompt via stdin
-    return _run_streaming_cli_process(cmd, prompt)
+    # The prompt is now passed as an argument, so stdin is empty.
+    return _run_streaming_cli_process(cmd, "")

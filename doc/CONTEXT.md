@@ -20,8 +20,10 @@ QonQrete builds context for its AI agents using several interconnected layers:
 
 ### 3. `qontext.d/` (Semantic Context / Code Index)
 *   **Source:** `worqer/qontextor.py` populates this directory (`worqspace/qontext.d`).
-*   **Content:** Stores AI-generated YAML summaries of files. For code, this includes structured data about symbols (name, type, signature, purpose, dependencies). For documentation and configuration, it includes concise summaries.
-*   **Role in AI interaction:** Offers a higher-level, semantically rich understanding of the codebase. Agents can query this context to find relevant functions, understand their purposes, and identify dependencies without processing raw code. This semantic context is also passed via the `context_files` argument to `worqer/lib_ai.py`, supplementing or replacing direct code examination.
+*   **Content:** Stores YAML summaries of files. This process is now dual-mode:
+    *   **Local Mode (`provider: local`):** When configured for local execution, `qontextor` performs a deterministic analysis using Abstract Syntax Trees (AST) for Python files. It extracts symbols, signatures, and purposes with high accuracy and speed, at zero token cost. This is the default and recommended mode.
+    *   **AI Mode (`provider: [ai_provider]`):** In legacy mode, it uses an AI to generate YAML summaries. For code, this includes structured data about symbols (name, type, signature, purpose, dependencies). For documentation and configuration, it includes concise summaries.
+*   **Role in AI interaction:** Offers a higher-level, semantically rich understanding of the codebase. Agents can query this context to find relevant functions, understand their purposes, and identify dependencies without processing raw code. This semantic context is also passed via the `context_files` argument to `worqer/lib_ai.py`, supplementing or replacing direct code examination. The generation of this context can be disabled by setting `use_qontextor: false` in `config.yaml`.
 
 ### 4. `QONQ_PREVIOUS_LOG` (Operational History Context)
 *   **Source:** `qrane.py` and `worqer/lib_ai.py`.

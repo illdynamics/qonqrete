@@ -22,11 +22,11 @@ The local memory is managed across several key directories and file types, orche
 *   **How it works as memory:** It defines the immediate objective and provides historical context of the task at hand.
 
 ### 3. `qontext.d/` (Semantic Memory / Context Cache)
-*   **Purpose:** Stores structured, AI-generated YAML summaries and symbol information for each processed file (e.g., `file.py.q.yaml`). This directory holds the "semantic context" of the codebase.
+*   **Purpose:** Stores structured YAML summaries and symbol information for each processed file (e.g., `file.py.q.yaml`). This directory holds the "semantic context" of the codebase.
 *   **Mechanism:**
-    *   The `worqer/qontextor.py` agent is responsible for creating and updating these files.
-    *   It analyzes `qompressed` code, documentation, and configuration files using an LLM (via `worqer/lib_ai.py`).
-    *   The LLM extracts key information like function/class names, signatures, purposes, and dependencies for code, and summaries for docs/configs.
+    *   The `worqer/qontextor.py` agent is responsible for creating and updating these files. It operates in two modes based on the `provider` setting in `config.yaml`:
+        *   **Local Mode (`provider: local`):** Performs a deterministic, high-speed analysis of Python files using Abstract Syntax Trees (AST). This extracts symbols and structure without any AI cost. This is the default and recommended mode.
+        *   **AI Mode (`provider: [ai_provider]`):** Uses an LLM (via `worqer/lib_ai.py`) to analyze `qompressed` code, documentation, and configuration files. It extracts key information like function/class names, signatures, purposes, and dependencies.
     *   `qontextor` runs an initial scan and also update scans based on changes detected (e.g., from `construqtor`'s output).
 *   **How it works as memory:** This is a form of long-term, high-level memory about the codebase's functionality and structure, accessible to any agent that needs to understand specific components semantically.
 

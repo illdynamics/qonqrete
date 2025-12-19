@@ -1,5 +1,20 @@
 # Release Notes
 
+## [v0.7.0-beta] - 2025-12-19
+
+### Added
+- **Local Qontextor**: The `qontextor` agent can now run in a fully local mode without needing an AI provider. It performs a deterministic analysis of Python code using Abstract Syntax Trees (AST) to generate high-quality structural context at zero cost and high speed.
+- **Robust Agent Fallbacks**: The entire agent crew (`inspeqtor`, `construqtor`, `calqulator`) is now fully aware of the `use_qontextor` and `use_qompressor` flags from `config.yaml`.
+  - If `use_qontextor` is `false`, agents that rely on contextual information will fall back to using the full source code from the `qodeyard`.
+  - If `use_qompressor` is `false`, agents that use structural information will similarly fall back to the `qodeyard`.
+
+### Changed
+- **Unified Qontextor Agent**: The `qontextor` has been refactored into a single, unified agent. It seamlessly switches between `local` AST-based analysis and AI-powered analysis based on the `provider` setting in `config.yaml`.
+- **Standardized `qontextor` Configuration**: The configuration for `qontextor` in `worqspace/config.yaml` has been simplified to match the standard format of other agents. It now uses `provider: local` and `model: qontextor` to enable the new local mode.
+
+### Fixed
+- **Qwen Provider**: The `_run_qwen` function in `worqer/lib_ai.py` has been fixed to pass the prompt as a command-line argument instead of via stdin, which aligns with the correct usage of the `qwen` CLI tool.
+
 ## [v0.6.3-beta] - 2025-12-19
 
 ### Added

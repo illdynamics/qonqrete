@@ -1,22 +1,41 @@
 #!/usr/bin/env python3
 # worqer/qontextor.py
+"""
+QonQrete Qontextor - Dual-Mode Context Generator
+
+Supports two modes based on the agent's configuration in config.yaml:
+- provider: 'local' -> Pure deterministic analysis using AST and heuristics.
+- provider: [ai_provider] -> Uses an LLM for semantic analysis.
+"""
 import sys
 import os
-import yaml
+import ast
 import re
+import json
+import yaml
+import subprocess
 from pathlib import Path
 
-# Add lib_ai to the path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# --- Local Mode Imports (Optional) ---
 try:
+    import jedi
+    JEDI_AVAILABLE = True
+except ImportError:
+    JEDI_AVAILABLE = False
+
+# --- AI Mode Imports (Optional) ---
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import lib_ai
     import qompressor
+    AI_MODE_AVAILABLE = True
 except ImportError:
-    print("CRITICAL: lib_ai.py or qompressor.py not found.", flush=True)
-    sys.exit(1)
+    AI_MODE_AVAILABLE = False
+    lib_ai = None
+    qompressor = None
 
-# List of file extensions to process
-# TODO: Make this configurable
+# --- Configuration & Constants ---
+
 CODE_EXTENSIONS = {
     '.py', '.js', '.ts', '.go', '.rs', '.java', '.c', '.h', '.cpp', '.cs', '.rb', '.php',
     '.html', '.css', '.scss', '.sql'
@@ -32,38 +51,156 @@ SPECIAL_FILENAMES = {
     'Makefile', 'Jenkinsfile', 'Vagrantfile'
 }
 
-def get_ai_config():
-    """Loads agent configuration from config.yaml."""
-    try:
-        with open('config.yaml', 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        config = {}
-    
-    agent_cfg = config.get('agents', {}).get('qontextor', {})
-    provider = agent_cfg.get('provider', 'gemini')
-    model = agent_cfg.get('model', 'gemini-2.5-flash')
-    return provider, model
+# --- Data Structures for Local Mode ---
+from dataclasses import dataclass, field
+from typing import Optional, List
 
-def generate_qontext_for_file(file_path: Path, provider: str, model: str, file_type: str) -> str:
-    """Generates the YAML qontext for a single file using an AI call."""
+@dataclass
+class Symbol:
+    name: str
+    type: str
+    signature: str
+    purpose: str
+    dependencies: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            'name': self.name,
+            'type': self.type,
+            'signature': self.signature,
+            'purpose': self.purpose,
+            'dependencies': self.dependencies,
+        }
+
+@dataclass
+class FileContext:
+    file_path: str
+    symbols: List[Symbol] = field(default_factory=list)
+    summary: Optional[str] = None
+    error: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        if self.error: return {'file_path': self.file_path, 'error': self.error}
+        if self.summary: return {'file_path': self.file_path, 'summary': self.summary}
+        return {'file_path': self.file_path, 'symbols': [s.to_dict() for s in self.symbols]}
+
+# --- Local Mode Logic ---
+
+VERB_PATTERNS = {
+    r'^(get|fetch|load|read|retrieve|find|lookup|query|select|obtain|pull)': 'Retrieves',
+    r'^(set|update|modify|patch|change|alter|edit|adjust|revise)': 'Updates',
+    r'^(is|has|can|should|will|does|check|verify|validate|test|assert|ensure)': 'Checks',
+    r'^(create|make|build|generate|new|init|initialize|construct|spawn)': 'Creates',
+    r'^(delete|remove|destroy|drop|clear|purge|erase|wipe|discard)': 'Removes',
+    r'^(parse|convert|transform|translate|map|decode|encode|serialize)': 'Transforms',
+    r'^(send|emit|dispatch|publish|broadcast|notify|post|transmit|push)': 'Sends',
+    r'^(receive|handle|process|consume|accept|on_|listen|respond|react)': 'Handles',
+    r'^(save|store|persist|write|commit|flush|dump|export|backup)': 'Saves',
+    r'^(render|display|show|draw|present|format|print|output|visualize)': 'Renders',
+    r'^(start|begin|open|launch|run|execute|invoke|trigger|activate)': 'Starts',
+    r'^(stop|end|close|terminate|shutdown|halt|abort|kill|finish)': 'Stops',
+    r'^(add|append|insert|push|enqueue|register|attach|include)': 'Adds',
+    r'^(pop|dequeue|unregister|detach|exclude|omit)': 'Removes from',
+    r'^(count|measure|calculate|compute|sum|avg|total|aggregate|tally)': 'Calculates',
+}
+SPECIAL_METHODS = {
+    '__init__': 'Initializes a new instance',
+    '__str__': 'Returns string representation',
+    '__repr__': 'Returns detailed string representation for debugging',
+    '__len__': 'Returns the length or size',
+    '__iter__': 'Returns an iterator for the object',
+    '__getitem__': 'Gets item by key or index',
+}
+
+class SymbolExtractor(ast.NodeVisitor):
+    def __init__(self, source_code: str):
+        self.lines = source_code.splitlines()
+        self.symbols: List[Symbol] = []
+        self.current_class: Optional[str] = None
+
+    def _get_sig(self, node):
+        start = node.lineno - 1
+        for i in range(start, min(node.end_lineno, start + 20)):
+            if self.lines[i].strip().endswith(':'):
+                sig_full = " ".join(self.lines[start:i+1]).strip()
+                return sig_full.replace('def ', '').replace('class ', '').rstrip(':')
+        return self.lines[start].strip()
+
+    def visit_Import(self, node):
+        for alias in node.names:
+            name = alias.asname if alias.asname else alias.name
+            self.symbols.append(Symbol(name=name, type='import', signature=f"import {alias.name}", purpose=f"Imports the {alias.name} library."))
+
+    def visit_ImportFrom(self, node):
+        module = node.module or ''
+        for alias in node.names:
+            name = alias.asname if alias.asname else alias.name
+            self.symbols.append(Symbol(name=name, type='import', signature=f"from {module} import {alias.name}", purpose=f"Imports {alias.name} from {module}."))
+
+    def visit_ClassDef(self, node):
+        doc = ast.get_docstring(node)
+        purpose = extract_first_sentence(doc) if doc else infer_purpose_from_name(node.name, 'class')[0]
+        self.symbols.append(Symbol(name=node.name, type='class', signature=self._get_sig(node), purpose=purpose, dependencies=[b.id for b in node.bases if isinstance(b, ast.Name)]))
+        old_class = self.current_class
+        self.current_class = node.name
+        self.generic_visit(node)
+        self.current_class = old_class
+
+    def visit_FunctionDef(self, node):
+        self._process_func(node, "method" if self.current_class else "function")
+
+    def visit_AsyncFunctionDef(self, node):
+        self._process_func(node, "method" if self.current_class else "function")
+
+    def _process_func(self, node, stype):
+        doc = ast.get_docstring(node)
+        purpose = extract_first_sentence(doc) if doc else infer_purpose_from_name(node.name, stype)[0]
+        self.symbols.append(Symbol(name=node.name, type=stype, signature=self._get_sig(node), purpose=purpose))
+
+def infer_purpose_from_name(name: str, stype: str) -> tuple:
+    if name in SPECIAL_METHODS: return SPECIAL_METHODS[name], 0.95
+    words = [w.lower() for w in re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|)', name)]
+    if not words: return f"Defines {name}.", 0.3
+    verb = words[0]
+    for pattern, action in VERB_PATTERNS.items():
+        if re.match(pattern, verb):
+            return f"{action} {' '.join(words[1:])}.", 0.7
+    return f"Logic for {name}.", 0.4
+
+def extract_first_sentence(text: str) -> str:
+    if not text: return ""
+    match = re.split(r'(?<=[.!?])\s+', text.strip())
+    return match[0] if match else text.strip()
+
+def generate_context_local(file_path: Path) -> FileContext:
+    ext = file_path.suffix.lower()
+    content = file_path.read_text(errors='ignore')
+
+    if ext != '.py':
+        if ext in DOCS_EXTENSIONS: return FileContext(str(file_path), summary=extract_first_sentence(content))
+        return FileContext(str(file_path), summary=f"Configuration file: {file_path.name}")
+
+    extractor = SymbolExtractor(content)
+    try:
+        tree = ast.parse(content)
+        extractor.visit(tree)
+        return FileContext(file_path=str(file_path), symbols=extractor.symbols)
+    except Exception as e:
+        return FileContext(str(file_path), error=f"AST Parse Error: {e}")
+
+# --- AI Mode Logic ---
+
+def generate_qontext_ai(file_path: Path, provider: str, model: str, file_type: str) -> str:
+    if not AI_MODE_AVAILABLE:
+        return f"file_path: {str(file_path.as_posix())}\nerror: 'AI mode dependencies (lib_ai, qompressor) are not installed.'"
+
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
 
-    # For non-code files, we don't need to compress them as they are often prose.
-    # For code files, we compress them.
-    if file_type == 'code':
-        content_to_send = qompressor.compress_file_content(str(file_path), content)
-    else:
-        content_to_send = content
-
-
-    # Simple heuristic to avoid sending massive files to the AI
+    content_to_send = qompressor.compress_file_content(str(file_path), content) if file_type == 'code' else content
     if len(content_to_send) > 100000:
-        return f"""
-file_path: {str(file_path.as_posix())}
-error: "File is too large to analyze."
-"""
+        return f"file_path: {str(file_path.as_posix())}\nerror: 'File is too large to analyze.'"
+
     if file_type == 'code':
         prompt = f"""
 Analyze the following 'qompressed' source code file and generate a YAML structure representing its context. The file has had its implementation bodies stripped, but retains all signatures, docstrings, comments, and imports.
@@ -84,36 +221,11 @@ Analyze the following 'qompressed' source code file and generate a YAML structur
     - `signature`: The full signature (e.g., `(self, user_id: int) -> dict`). For imports, this can be the imported module or alias.
     - `purpose`: A concise, one-sentence summary of what the symbol does.
     - `dependencies`: A list of other functions or classes this symbol directly calls or references.
-
-**Example Output:**
-```yaml
-file_path: src/api/user.py
-symbols:
-  - name: flask
-    type: import
-    signature: "from flask import Flask"
-    purpose: "Imports the main Flask framework class."
-    dependencies: []
-  - name: get_user
-    type: function
-    signature: "(user_id: int) -> dict"
-    purpose: "Retrieves a user from the database by their ID."
-    dependencies:
-      - "db.get_connection"
-      - "User.serialize"
-  - name: User
-    type: class
-    signature: "class User(db.Model):"
-    purpose: "Represents the User data model."
-    dependencies:
-      - "db.Model"
-```
-
 **Generate the YAML for the file provided above:**
 """
-    elif file_type == 'doc':
+    else: # doc, config, other
         prompt = f"""
-Analyze the following documentation file and generate a YAML structure that summarizes its purpose.
+Analyze the following file and generate a YAML structure that summarizes its purpose.
 
 **File Path:** {file_path.as_posix()}
 **File Content:**
@@ -122,153 +234,101 @@ Analyze the following documentation file and generate a YAML structure that summ
 ```
 
 **YAML Structure Rules:**
-1.  The root object must have a `file_path` key.
-2.  It must have a `summary` key.
-3.  The `summary` should be a concise, one to three-sentence description of the document's main purpose and content.
-
-**Example Output:**
-```yaml
-file_path: docs/README.md
-summary: "This document provides an overview of the project, its goals, and instructions for how to get started with development."
-```
-
-**Generate the YAML for the file provided above:**
-"""
-    else: # config and other file types
-        prompt = f"""
-Analyze the following configuration file and generate a YAML structure that summarizes its purpose.
-
-**File Path:** {file_path.as_posix()}
-**File Content:**
-```
-{content_to_send}
-```
-
-**YAML Structure Rules:**
-1.  The root object must have a `file_path` key.
-2.  It must have a `summary` key.
-3.  The `summary` should be a concise, one to three-sentence description of the configuration's purpose.
-
-**Example Output:**
-```yaml
-file_path: config/prod.yaml
-summary: "This file contains production-specific configuration settings, including database connection strings, API keys, and logging levels."
-```
-
+1. The root object must have a `file_path` key.
+2. It must have a `summary` key.
+3. The `summary` should be a concise, one to three-sentence description of the document's main purpose.
 **Generate the YAML for the file provided above:**
 """
     try:
         raw_result = lib_ai.run_ai_completion(provider, model, prompt)
-        # Clean the AI output to get only the YAML block
         yaml_match = re.search(r'```yaml\n(.*?)\n```', raw_result, re.DOTALL)
-        if yaml_match:
-            return yaml_match.group(1)
-        # Fallback for when AI doesn't use markdown
-        return raw_result
-
+        return yaml_match.group(1) if yaml_match else raw_result
     except Exception as e:
-        return f"""
-file_path: {str(file_path.as_posix())}
-error: "Failed to generate context due to an AI error: {e}"
-"""
+        return f"file_path: {str(file_path.as_posix())}\nerror: 'Failed to generate context due to an AI error: {e}'"
+
+# --- Orchestration Logic ---
+
+def get_qontextor_config():
+    try:
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        config = {}
+    return config.get('agents', {}).get('qontextor', {})
 
 def get_file_type(file_path: Path) -> str:
-    """Determines the type of a file based on its extension or name."""
-    if file_path.suffix in CODE_EXTENSIONS or file_path.name in SPECIAL_FILENAMES:
-        return 'code'
-    elif file_path.suffix in DOCS_EXTENSIONS:
-        return 'doc'
-    elif file_path.suffix in CONFIG_EXTENSIONS:
-        return 'config'
+    if file_path.suffix in CODE_EXTENSIONS or file_path.name in SPECIAL_FILENAMES: return 'code'
+    if file_path.suffix in DOCS_EXTENSIONS: return 'doc'
+    if file_path.suffix in CONFIG_EXTENSIONS: return 'config'
     return 'unknown'
 
 def should_process_file(file_path: Path) -> bool:
-    """Determines if a file should be processed based on its extension or name."""
-    return (
-        file_path.suffix in CODE_EXTENSIONS or
-        file_path.suffix in CONFIG_EXTENSIONS or
-        file_path.suffix in DOCS_EXTENSIONS or
-        file_path.name in SPECIAL_FILENAMES
-    )
+    return get_file_type(file_path) != 'unknown'
 
-def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, provider: str, model: str):
-    """Processes a single file: generates qontext and saves it."""
+def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, config: dict):
     relative_path = file_path.relative_to(qodeyard_path)
     qontext_file = qontext_path / f"{relative_path}.q.yaml"
-    
-    # Create parent directories for the qontext file
     qontext_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    file_type = get_file_type(file_path)
-    if file_type == 'unknown':
-        # This case should not be reached if should_process_file is used correctly
-        print(f"  - [WARN] Skipping unknown file type: {relative_path}", flush=True)
-        return
 
-    print(f"  - Generating qontext for: {relative_path}", flush=True)
-    yaml_content = generate_qontext_for_file(file_path, provider, model, file_type)
-    
+    provider = config.get('provider', 'local')
+    model = config.get('model', 'qontextor') # Default model for local
+
+    print(f"  - Generating qontext for: {relative_path} (Mode: {provider})", flush=True)
+
+    if provider == 'local':
+        context = generate_context_local(file_path)
+        yaml_content = yaml.dump(context.to_dict(), sort_keys=False, default_flow_style=False, indent=2)
+    else:
+        file_type = get_file_type(file_path)
+        yaml_content = generate_qontext_ai(file_path, provider, model, file_type)
+
     with open(qontext_file, 'w', encoding='utf-8') as f:
         f.write(yaml_content)
 
-def run_initial_scan(qodeyard_path: Path, qontext_path: Path, provider: str, model: str):
-    """Scans the entire qodeyard and generates qontext for all files."""
+def run_initial_scan(qodeyard_path: Path, qontext_path: Path, config: dict):
     print(f"--- Qontextor: Starting initial scan of {qodeyard_path} ---", flush=True)
-    
     for root, _, files in os.walk(qodeyard_path):
         for file in files:
             file_path = Path(root) / file
             if should_process_file(file_path):
-                # Check if qontext already exists
                 relative_path = file_path.relative_to(qodeyard_path)
                 qontext_file = qontext_path / f"{relative_path}.q.yaml"
                 if not qontext_file.exists():
-                    process_file(qodeyard_path, file_path, qontext_path, provider, model)
-    
+                    process_file(qodeyard_path, file_path, qontext_path, config)
     print("--- Qontextor: Initial scan complete ---", flush=True)
 
-def run_update_scan(summary_path: Path, qodeyard_path: Path, qontext_path: Path, provider: str, model: str):
-    """Scans a summary file and updates qontext for changed files."""
+def run_update_scan(summary_path: Path, qodeyard_path: Path, qontext_path: Path, config: dict):
     print(f"--- Qontextor: Starting update scan based on {summary_path.name} ---", flush=True)
-    
     if not summary_path.exists():
         print("  - Summary file not found. Nothing to update.", flush=True)
         return
-        
+
     with open(summary_path, 'r', encoding='utf-8') as f:
         summary_content = f.read()
-    
-    # This regex finds file paths enclosed in backticks, typical for markdown.
     changed_files = re.findall(r'`([^`]+)`', summary_content)
-    
     if not changed_files:
         print("  - No changed files found in summary. Nothing to update.", flush=True)
         return
 
     processed_files = set()
     for file_str in changed_files:
-        # The summary from construqtor may have absolute paths, make them relative
         file_path = Path(file_str)
         if file_path.is_absolute():
             try:
-                relative_path = file_path.relative_to(qodeyard_path)
-                file_path = qodeyard_path / relative_path
+                file_path = qodeyard_path / file_path.relative_to(qodeyard_path)
             except ValueError:
                 print(f"  - [WARN] Changed file '{file_str}' is outside the qodeyard. Skipping.", flush=True)
                 continue
         else:
              file_path = qodeyard_path / file_str
 
-        # Ensure we don't re-process the same file if mentioned multiple times
-        if file_path in processed_files:
-            continue
+        if file_path in processed_files: continue
         processed_files.add(file_path)
 
         if file_path.exists() and should_process_file(file_path):
-            process_file(qodeyard_path, file_path, qontext_path, provider, model)
+            process_file(qodeyard_path, file_path, qontext_path, config)
         else:
-            print(f"  - [INFO] Changed file '{file_str}' does not exist or is not a processable type. Skipping.", flush=True)
-
+            print(f"  - [INFO] Changed file '{file_str}' does not exist or is not processable. Skipping.", flush=True)
     print("--- Qontextor: Update scan complete ---", flush=True)
 
 def main():
@@ -277,26 +337,20 @@ def main():
         sys.exit(1)
 
     input_path = Path(sys.argv[1])
-    output_path = Path(sys.argv[2]) # This will be qontext.d
-    
-    # The worqspace root is the current working directory set by qrane
+    output_path = Path(sys.argv[2])
     worqspace_root = Path(os.getcwd())
     qodeyard_path = worqspace_root / "qodeyard"
-    
-    provider, model = get_ai_config()
-    
+
+    config = get_qontextor_config()
+
     if not input_path.exists():
         print(f"CRITICAL: Input path does not exist: {input_path}", flush=True)
         sys.exit(1)
 
-    # Mode determination:
-    # If input is a directory, it's an initial scan of qodeyard.
-    # If input is a file, it's an update scan from a summary.
     if input_path.is_dir():
-        # The input path for an initial scan *is* the qodeyard
-        run_initial_scan(qodeyard_path=input_path, qontext_path=output_path, provider=provider, model=model)
+        run_initial_scan(qodeyard_path=input_path, qontext_path=output_path, config=config)
     elif input_path.is_file():
-        run_update_scan(summary_path=input_path, qodeyard_path=qodeyard_path, qontext_path=output_path, provider=provider, model=model)
+        run_update_scan(summary_path=input_path, qodeyard_path=qodeyard_path, qontext_path=output_path, config=config)
     else:
         print(f"CRITICAL: Input path is not a file or directory: {input_path}", flush=True)
         sys.exit(1)
