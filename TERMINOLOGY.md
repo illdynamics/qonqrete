@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `0.6.0` (See `VERSION` file for the canonical version).
+**Version:** `0.6.3` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
