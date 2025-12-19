@@ -42,4 +42,3 @@ agents:
 
 options:
   microsandbox: false
-  auto_cycle_limit: 1

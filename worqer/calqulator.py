@@ -14,17 +14,17 @@ except ImportError:
     print("CRITICAL: Could not import lib_funqtions.py from qrane.", flush=True)
     sys.exit(1)
 
-def load_agent_config(agent_name: str):
-    """Reads config to find the active provider and model for a given agent."""
+def load_config():
+    """Reads config to find the active provider and model for construqtor."""
     try:
         with open('config.yaml', 'r', encoding='utf-8') as f:
             cfg = yaml.safe_load(f)
-        agent_cfg = cfg.get('agents', {}).get(agent_name, {})
-        provider = agent_cfg.get('provider', 'local')
-        model = agent_cfg.get('model', 'unknown')
+        construqtor_cfg = cfg.get('agents', {}).get('construqtor', {})
+        provider = construqtor_cfg.get('provider', 'gemini')
+        model = construqtor_cfg.get('model', 'gemini-2.5-flash')
         return provider, model
     except:
-        return 'local', 'unknown'
+        return 'gemini', 'gemini-2.5-flash'
 
 def get_directory_token_size(path: Path, model: str) -> int:
     """Calculates total tokens for all files in a directory (recursive)."""
@@ -57,8 +57,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
     Finds all relevant briq files, calculates costs, annotates them,
     and prints a detailed ledger to stdout/logs.
     """
-    calq_provider, calq_model = load_agent_config('calqulator')
-    con_provider, con_model = load_agent_config('construqtor')
+    provider, model = load_config()
 
     # --- Pre-calculation and Setup ---
     cycle_num = os.environ.get('CYCLE_NUM', '1')
@@ -73,14 +72,13 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
     col_width = max(max_filename_len, len("Briq File")) + 3  # Add padding
 
     # --- Base Context Cost ---
-    bloq_tokens = get_directory_token_size(bloq_path, con_model)
+    bloq_tokens = get_directory_token_size(bloq_path, model)
     system_prompt_buffer = 2000
     base_context_tokens = bloq_tokens + system_prompt_buffer
 
     # --- Print Header ---
-    header_line = f"--- CalQulator Audit Report (Provider: {calq_provider}, Model: {calq_model}) ---"
+    header_line = f"--- CalQulator Audit Report (Provider: {provider}, Model: {model}) ---"
     print(f"\n{header_line}", flush=True)
-    print(f"Estimating for ConstruQtor model: {con_model}", flush=True)
     print(f"Base Overhead (Skeletons + Sys): {base_context_tokens:,} tokens", flush=True)
     
     # Dynamic separator line
@@ -105,11 +103,11 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
         for fname in set(found_files):
             fpath = qodeyard_path / fname
             if fpath.exists():
-                tokens_for_files += get_file_token_size(fpath, con_model)
+                tokens_for_files += get_file_token_size(fpath, model)
 
-        task_instruction_tokens = lib.estimate_tokens(content, con_model)
+        task_instruction_tokens = lib.estimate_tokens(content, model)
         total_briq_tokens = base_context_tokens + tokens_for_files + task_instruction_tokens
-        cost = lib.calculate_cost(total_briq_tokens, con_model, is_input=True)
+        cost = lib.calculate_cost(total_briq_tokens, model, is_input=True)
         grand_total_tokens += total_briq_tokens
 
         # Annotate File
@@ -127,7 +125,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
         print(f"{briq_file.name:<{col_width}} | {total_briq_tokens:<12,} | {lib.format_cost(cost):<15}", flush=True)
 
     # --- Print Footer ---
-    total_cost_formatted = lib.format_cost(lib.calculate_cost(grand_total_tokens, con_model, is_input=True))
+    total_cost_formatted = lib.format_cost(lib.calculate_cost(grand_total_tokens, model, is_input=True))
     print(separator, flush=True)
     print(f"{'TOTAL CYCLE ESTIMATE':<{col_width}} | {grand_total_tokens:<12,} | {total_cost_formatted:<15}", flush=True)
     print(separator + "\n", flush=True)
