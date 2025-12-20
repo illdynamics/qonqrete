@@ -258,7 +258,12 @@ The following agents can be added to the pipeline in `pipeline_config.yaml` to p
 #### 2. `qontextor` (The Symbol Mapper)
 -   **Purpose**: To generate a detailed, machine-readable map of the codebase's symbols and their relationships.
 -   **Dual-Mode Logic**:
-    -   **Local Mode (`provider: local`)**: This is the default mode. `qontextor` performs a deterministic analysis of Python files using Abstract Syntax Trees (AST). It extracts classes, functions, signatures, and purposes with high accuracy and speed, incurring **zero token cost**.
+    -   **Local Mode (`provider: local`)**: This is the default mode. `qontextor` performs a deterministic analysis of Python files using a sophisticated stack of local tools. It extracts classes, functions, signatures, and purposes with high accuracy and speed, incurring **zero token cost**.
+        -   **Python AST:** Extracts the fundamental structure of the code.
+        -   **Docstrings & Verb Heuristics:** Determines the purpose of functions and classes.
+        -   **Jedi:** Provides type inference and cross-file understanding.
+        -   **PyCG:** Generates a call graph for dependency analysis.
+        -   **Fast vs. Complex Mode:** Can be configured in `worqspace/config.yaml` to run in a `'fast'` (AST, Jedi, Heuristics) or `'complex'` (adds deep semantic analysis with `sentence-transformers`) mode.
     -   **AI Mode (`provider: [ai_provider]`)**: In this legacy mode, it uses the "skeletonized" output from the `qompressor` to analyze each file. It then uses an AI call to generate a YAML file for each source file, detailing its symbols (classes, functions, etc.), their signatures, their purpose, and their dependencies.
 -   **Cost**: Incurs AI token costs only when an AI provider is specified. It's best used for initial scans or when major architectural changes occur.
 

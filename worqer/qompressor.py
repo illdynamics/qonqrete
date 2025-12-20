@@ -116,6 +116,7 @@ def compress_file_content(file_path: str, content: str) -> str:
 
 def process_file(source_path: Path, dest_path: Path):
     """Reads source, compresses if needed, writes to dest."""
+    print(f"     - Processing: {source_path.name}")
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Check strict filenames first (Dockerfile, etc)

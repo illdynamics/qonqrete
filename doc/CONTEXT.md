@@ -21,7 +21,15 @@ QonQrete builds context for its AI agents using several interconnected layers:
 ### 3. `qontext.d/` (Semantic Context / Code Index)
 *   **Source:** `worqer/qontextor.py` populates this directory (`worqspace/qontext.d`).
 *   **Content:** Stores YAML summaries of files. This process is now dual-mode:
-    *   **Local Mode (`provider: local`):** When configured for local execution, `qontextor` performs a deterministic analysis using Abstract Syntax Trees (AST) for Python files. It extracts symbols, signatures, and purposes with high accuracy and speed, at zero token cost. This is the default and recommended mode.
+    *   **Local Mode (`provider: local`):** When configured for local execution, `qontextor` performs a deterministic analysis using a sophisticated stack of local tools. This is the default and recommended mode.
+        *   **Python AST:** Extracts the fundamental structure of the code, including function and class names and their signatures.
+        *   **Docstrings:** Parses docstrings to get a high-confidence understanding of what a function or class does.
+        *   **Verb Heuristics:** When docstrings are missing, it infers the purpose of a function based on its name (e.g., `get_user` implies retrieval).
+        *   **Jedi:** Performs static analysis to understand types and relationships between different parts of the code.
+        *   **PyCG:** Generates a call graph to understand the dependencies and execution flow between functions and modules.
+        *   **Fast vs. Complex Mode:**
+            *   `local_mode: 'fast'`: Uses the first four layers of the stack for a very fast analysis.
+            *   `local_mode: 'complex'`: Adds a fifth layer, using a local `sentence-transformers` model to create deep semantic embeddings of the code's purpose.
     *   **AI Mode (`provider: [ai_provider]`):** In legacy mode, it uses an AI to generate YAML summaries. For code, this includes structured data about symbols (name, type, signature, purpose, dependencies). For documentation and configuration, it includes concise summaries.
 *   **Role in AI interaction:** Offers a higher-level, semantically rich understanding of the codebase. Agents can query this context to find relevant functions, understand their purposes, and identify dependencies without processing raw code. This semantic context is also passed via the `context_files` argument to `worqer/lib_ai.py`, supplementing or replacing direct code examination. The generation of this context can be disabled by setting `use_qontextor: false` in `config.yaml`.
 

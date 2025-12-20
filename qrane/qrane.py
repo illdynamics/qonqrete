@@ -74,9 +74,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
 
     VISIBLE_KEYWORDS = [
         "Handing off", "Processing", "Executed", "Wrote", "reQap",
-        "Checking", "Generating", "Ingesting", "Architect", "Plan",
+        "Checking", "Generating", "Ingesting", "--- Architect", "Plan",
         "Found", "Summary", "Skeletonizing", "CalQulator", "Est. Cost",
-        "Dependencies", "Initial scan", "Update scan", "DISABLED"
+        "--- Dependencies", "Initial scan", "Update scan", "DISABLED"
     ]
 
     event_start_msg = f"Initiating {agent_display_name}..."

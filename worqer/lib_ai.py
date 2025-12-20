@@ -22,8 +22,7 @@ def run_ai_completion(provider: str, model: str, prompt: str, context_files: lis
             return _run_anthropic(model, full_prompt)
         elif provider.lower() == 'deepseek':
             return _run_deepseek(model, full_prompt)
-        elif provider.lower() == 'qwen':
-            return _run_qwen(model, full_prompt)
+
         else:
             raise ValueError(f"Unknown AI Provider: {provider}")
     except Exception as e:
@@ -172,19 +171,3 @@ def _run_deepseek(model, prompt):
     sys.stderr.flush()
     return response
 
-def _run_qwen(model, prompt):
-    # Assuming Qwen CLI is installed and configured
-    # The 'qwen' command with -p flag expects the prompt as the final argument
-    cmd = ["qwen", "-p", "-y", "--model", model, "--auth-type", "openai", "--openai-base-url", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"]
-    api_key = os.environ.get("QWEN_API_KEY")
-    if api_key:
-        cmd.extend(["--openai-api-key", api_key])
-    else:
-        raise ValueError("QWEN_API_KEY environment variable not set.")
-
-    cmd.append(prompt)
-
-    sys.stderr.write(f"[Querying Qwen (model: {model})...]")
-    sys.stderr.flush()
-    # The prompt is now passed as an argument, so stdin is empty.
-    return _run_streaming_cli_process(cmd, "")

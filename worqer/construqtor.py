@@ -136,6 +136,25 @@ def main():
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
 
+**MANDATORY NAMING CONVENTIONS (STRICT):**
+All function and method names MUST follow these verb prefixes for deterministic mapping:
+- `get_`, `fetch_`, `load_`, `read_`, `retrieve_`, `find_`, `lookup_`, `query_`, `select_` → Data retrieval
+- `set_`, `update_`, `modify_`, `patch_`, `change_` → Data modification
+- `is_`, `has_`, `can_`, `should_`, `check_`, `verify_`, `validate_` → Boolean checks
+- `create_`, `make_`, `build_`, `generate_`, `init_`, `initialize_` → Object creation
+- `delete_`, `remove_`, `destroy_`, `drop_`, `clear_`, `purge_` → Data removal
+- `parse_`, `convert_`, `transform_`, `translate_`, `map_`, `encode_`, `decode_` → Data transformation
+- `send_`, `emit_`, `dispatch_`, `publish_`, `broadcast_`, `notify_` → Event emission
+- `handle_`, `process_`, `consume_`, `accept_`, `on_` → Event handling
+- `save_`, `store_`, `persist_`, `write_`, `commit_`, `export_` → Data persistence
+- `render_`, `display_`, `show_`, `draw_`, `present_`, `format_` → Output rendering
+- `start_`, `begin_`, `open_`, `launch_`, `run_`, `execute_` → Process initiation
+- `stop_`, `end_`, `close_`, `terminate_`, `shutdown_` → Process termination
+- `add_`, `append_`, `insert_`, `push_`, `enqueue_`, `register_` → Collection addition
+- `count_`, `measure_`, `calculate_`, `compute_`, `sum_` → Calculations
+
+**DO NOT** use vague names like `do_stuff()`, `process_data()`, or `handle_it()`. Be specific with verbs!
+
 **EXAMPLE:**
 ```python:qodeyard/main.py
 print("Hello, World!")
