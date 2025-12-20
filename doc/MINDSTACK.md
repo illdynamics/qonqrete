@@ -2,15 +2,27 @@
 
 This document outlines suggested changes, potential fixes for discrepancies, and general improvements to enhance the efficiency, performance, reliability, and security of QonQrete's local AI agent brain stack. It also explains how this architectural approach addresses common LLM challenges.
 
+## Implemented Suggestions
+
+### 1. Strict Instruction Following Prompts
+System prompts have been refined to explicitly instruct LLMs on output format and constraints. For example, the `construQtor` agent's prompt now includes a `MANDATORY NAMING CONVENTIONS (STRICT)` section that forces the AI to use specific verb prefixes for function names, making the generated code more deterministic and easier to parse.
+
+### 2. `qontextor` CLI Helpers
+The `qontextor` agent can now be invoked directly from the command line to query the generated context, providing powerful tools for developers to understand the codebase:
+-   `python3 worqer/qontextor.py --query "<search_term>"`: Performs a semantic search for symbols using sentence-transformers.
+-   `python3 worqer/qontextor.py --verb "<verb_pattern>"`: Finds symbols matching a specific verb pattern (e.g., `get_.*`).
+-   `python3 worqer/qontextor.py --ripple "<symbol_name>"`: Analyzes the ripple effect of changing a symbol, showing which parts of the codebase would be affected.
+
+---
+
 ## Suggested Changes & Improvements
 
 ### 1. Enhanced Contextual Retrieval for `lib_ai.py`
 *   **Current:** `lib_ai.py` currently appends all provided `context_files` to the prompt.
 *   **Suggestion:** Implement a more intelligent, semantic retrieval mechanism. Instead of sending *all* `bloq.d` and `qontext.d` files, `lib_ai.py` (or a new `retriever` agent) should:
     *   Analyze the current `base_prompt` and `tasq.md`.
-    *   Query the `qontext.d` (semantic context) to identify files most semantically relevant to the task.
+    *   Query the `qontext.d` (semantic context) to identify files most semantically relevant to the task using the new `--query` functionality.
     *   Only include the top-N most relevant `bloq.d` (structural) and `qontext.d` (semantic) files in the `context_files` list passed to the LLM. This significantly reduces token usage and noise.
-    *   Consider a vector database for `qontext.d` for fast, semantic search.
 
 ### 2. Dynamic Skeletonization Sensitivity
 *   **Current:** `qompressor` applies a fixed stripping logic.
@@ -28,28 +40,21 @@ This document outlines suggested changes, potential fixes for discrepancies, and
 *   **Current:** Errors are printed to `sys.stderr` and also logged to `events_*.log`. `qrane.py` handles some critical exceptions.
 *   **Suggestion:** Implement a centralized error and warning reporting mechanism (e.g., a dedicated `error.log` file or a structured logging system). This would make it easier to aggregate, monitor, and analyze issues across agents and cycles.
 
-### 5. `briq.d` Utilization
-*   **Current:** `briq.d` is defined in `paths.py` but its usage is not immediately clear from `qrane.py`.
-*   **Suggestion:** Clearly define the purpose and lifecycle of `briq.d`. If it's for reusable code "briqs" or modules, `construqtor` should generate into it, and `calqulator` or `inspeqtor` should reference it. Document this flow.
-
 ## Errors/Discrepancies Noted
 
 *   **`lib_ai.py` DeepSeek Streaming:** The `_run_deepseek` function in `lib_ai.py` notes that the DeepSeek provider "currently doesn't support streaming to stderr." This is a discrepancy with the streaming behavior of other providers and leads to a less interactive experience for DeepSeek users.
     *   **Fix:** Investigate if the `DeepSeekProvider` from `sqeleton/deepseek_provider.py` can be updated to support streaming, or if the `openai` library's streaming feature can be leveraged directly for DeepSeek if their API supports it.
-*   **`qontextor.py` Input Path Logic:** In `main()`, the determination of `qodeyard_path` is based on `os.getcwd()` which might be brittle if `qrane.py` doesn't consistently set the CWD to `worqspace`. While `qrane.py` does `cwd=str(get_worqspace())`, explicit path resolution within `qontextor.py` based on `input_path` might be safer.
-    *   **Fix:** Ensure robust path handling by explicitly constructing `qodeyard_path` relative to `input_path` or by passing `worqspace_root` as an explicit argument to `qontextor.py` if necessary.
 
 ## Efficiency & Speed Upgrades
 
-1.  **Parallel Context Generation:** For `qontextor.py`'s initial scan, processing files sequentially can be slow. Implement parallel processing (e.g., using `multiprocessing` or `ThreadPoolExecutor`) for `generate_qontext_for_file` calls.
+1.  **Parallel Context Generation:** For `qontextor.py`'s initial scan, processing files sequentially can be slow. Implement parallel processing (e.g., using `multiprocessing` or `ThreadPoolExecutor`) for `generate_context_local` calls.
 2.  **Cached AI Responses:** For `qontextor.py`, consider caching AI-generated context for files that haven't changed. This would reduce redundant LLM calls and speed up subsequent scans.
 3.  **Selective `qompressor` Runs:** If only a subset of `qodeyard` files have changed, `qompressor` could be optimized to only re-process those specific files, rather than always clearing and rebuilding `bloq.d` entirely. This requires change detection.
 
 ## Tricks to Hallucinate Less, Stay More on Track
 
-1.  **Strict Instruction Following Prompts:** Continuously refine system prompts to explicitly instruct LLMs on output format, constraints, and the importance of adhering to provided context.
-2.  **Chain-of-Thought (CoT) Integration:** Encourage agents to output their reasoning steps (CoT) within `reQap.md`. This makes their internal logic transparent and helps identify where reasoning might have gone astray.
-3.  **Critic/Reviewer Agent:** Introduce a dedicated `inspeqtor` (or similar) agent whose sole job is to critically review the output of other agents against the current `tasq.md` and provided `bloq.d`/`qontext.d`. This agent would then generate a `reQap` that is more robust and actionable.
+1.  **Chain-of-Thought (CoT) Integration:** Encourage agents to output their reasoning steps (CoT) within `reQap.md`. This makes their internal logic transparent and helps identify where reasoning might have gone astray.
+2.  **Critic/Reviewer Agent:** Introduce a dedicated `inspeqtor` (or similar) agent whose sole job is to critically review the output of other agents against the current `tasq.md` and provided `bloq.d`/`qontext.d`. This agent would then generate a `reQap` that is more robust and actionable.
 
 ## Security Enhancements
 
