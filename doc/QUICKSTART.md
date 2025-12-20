@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.6.3-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.7.0-beta` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -51,9 +51,11 @@ To begin a `cyQle` with a pre-existing codebase:
 ## 5. Configuration
 Advanced options can be set in `worqspace/`.
 -   **`config.yaml`**:
+    -   `use_qompressor`: `true` to generate token-efficient code skeletons (default), `false` to use full code.
+    -   `use_qontextor`: `true` to generate a semantic index of the code (default), `false` to disable.
     -   `cheqpoint`: Sets the default behavior. `true` for user-gated mode, `false` for autonomous. Can be overridden with `--user` or `--auto`.
     -   `auto_cycle_limit`: Set the maximum number of cycles for auto-mode.
-    -   `agents`: Change the AI models for each agent. You can also set the provider to `local` for agents that do not use AI.
+    -   `agents`: Change the AI models for each agent. For `qontextor`, set `provider: local` to use the new high-speed, zero-cost analysis mode.
     -   `mode`: Set the default operational mode for agent personas (e.g., `program`, `enterprise`, `security`, `performance`, `innovative`).
     -   `briq_sensitivity`: Set the default task breakdown granularity (0=atomic, 9=monolithic).
 -   **`pipeline_config.yaml`**:

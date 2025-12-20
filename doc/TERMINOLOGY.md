@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `0.6.3` (See `VERSION` file for the canonical version).
+**Version:** `v0.7.0-beta` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -9,7 +9,7 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **worQer**: An AI agent that performs a specific role (`instruQtor`, `construQtor`, `inspeQtor`).
 - **Qrew**: The collection of agents that work together inside the `Qage`.
 - **qompressor**: A specialized agent that "skeletonizes" the codebase to create a low-token, high-context representation.
-- **qontextor**: A specialized agent that uses AI to analyze the "skeletonized" code and generate a machine-readable symbol map of the codebase.
+- **qontextor**: A specialized agent that generates a machine-readable symbol map of the codebase. It can run in a fully local mode (using AST, Jedi, and PyCG) or use AI to analyze the "skeletonized" code.
 - **calqulator**: A specialized agent that provides a token and cost estimate for an upcoming cycle.
 - **Local Provider**: A provider type for agents that do not use AI and run completely locally (e.g., `calqulator`, `qompressor`).
 

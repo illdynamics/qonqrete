@@ -17,21 +17,22 @@ RUN apt-get update && apt-get install -y \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
-# Setup NodeSource repository for Node.js 20.x
-RUN mkdir -p /etc/apt/keyrings
-RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-RUN NODE_MAJOR=20 && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-
-# Install Node.js from the new repository
-RUN apt-get update && apt-get install -y nodejs
-
-# Install Qwen CLI
-RUN npm install -g @qwen-code/qwen-code@latest
 
 # 2. Install Python packages for agents
-RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir pyyaml openai anthropic google-generativeai
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir \
+    pyyaml \
+    openai \
+    anthropic \
+    google-generativeai \
+    jedi \
+    docstring-parser \
+    pycg \
+    numpy \
+    sentence-transformers \
+    && rm -rf /root/.cache/pip
 
+# =============================================================================
 # 3. Create a working directory for the project
 WORKDIR /qonqrete
 

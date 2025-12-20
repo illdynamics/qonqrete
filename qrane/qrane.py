@@ -74,8 +74,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
 
     VISIBLE_KEYWORDS = [
         "Handing off", "Processing", "Executed", "Wrote", "reQap",
-        "Checking", "Generating", "Ingesting", "Architect", "Plan",
-        "Found", "Summary", "Skeletonizing", "CalQulator", "Est. Cost"
+        "Checking", "Generating", "Ingesting", "--- Architect", "Plan",
+        "Found", "Summary", "Skeletonizing", "CalQulator", "Est. Cost",
+        "--- Dependencies", "Initial scan", "Update scan", "DISABLED"
     ]
 
     event_start_msg = f"Initiating {agent_display_name}..."
@@ -390,11 +391,20 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     qrane_padding = " " * (target_width - 5)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
 
+    # Get agent enable/disable settings
+    use_qompressor = config.get('options', {}).get('use_qompressor', True)
+    use_qontextor = config.get('options', {}).get('use_qontextor', True)
+
     if not ui:
         print(f"{qrane_prefix}Seeding worQspace in Qage at: {worqspace}\r")
         print(f"{qrane_prefix}Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
         print(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode}, Sens: {final_sens})\r")
+        
+        # Show agent status
+        qomp_status = f"{Colors.GREEN}ON{Colors.R}" if use_qompressor else f"{Colors.RED}OFF{Colors.R}"
+        qont_status = f"{Colors.GREEN}ON{Colors.R}" if use_qontextor else f"{Colors.RED}OFF{Colors.R}"
+        print(f"{qrane_prefix}Agents: Qompressor={qomp_status}, Qontextor={qont_status}\r")
         time.sleep(0.3)
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
@@ -405,41 +415,49 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     # Checks if qodeyard was seeded. If so, generate Skeletons (Fast) and Context (Smart).
     if any(path_manager.qodeyard_dir.iterdir()):
 
-        # 1. Run Qompressor (FAST - Structural Warmup)
-        # We need bloq.d populated so Calqulator and Construqtor have skeletons immediately.
-        msg = "Seeded qodeyard detected. Warming up Qompressor (Skeleton Cache)..."
-        if ui: ui.log_main(f"{qrane_prefix}{msg}")
-        else: print(f"{qrane_prefix}{msg}\r")
-
         # Use a temporary env for initial runs
         initial_env = os.environ.copy()
         initial_env["CYCLE_NUM"] = "0"
 
-        qompressor_cmd = ["python3", str(AGENT_MODULE_DIR / "qompressor.py"), str(path_manager.qodeyard_dir), str(path_manager.bloq_dir)]
-        qonsole_log_path = path_manager.get_qonsole_log_path("qompressor_warmup")
-        events_log_path = path_manager.get_events_log_path("qompressor_warmup")
+        # 1. Run Qompressor (FAST - Structural Warmup) - if enabled
+        if use_qompressor:
+            msg = "Seeded qodeyard detected. Warming up Qompressor (Skeleton Cache)..."
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{msg}\r")
 
-        if not run_agent("qompressor", qompressor_cmd, prefix, AGENT_COLORS.get("qompressor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
-             if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}")
-             else: print(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}\r")
-             # We don't abort for this, but warn.
+            qompressor_cmd = ["python3", str(AGENT_MODULE_DIR / "qompressor.py"), str(path_manager.qodeyard_dir), str(path_manager.bloq_dir)]
+            qonsole_log_path = path_manager.get_qonsole_log_path("qompressor_warmup")
+            events_log_path = path_manager.get_events_log_path("qompressor_warmup")
 
-        # 2. Run Qontextor (SLOW/SMART - Semantic Warmup)
-        msg = "Running initial Qontextor scan (Semantic Indexing)..."
-        if ui: ui.log_main(f"{qrane_prefix}{msg}")
-        else: print(f"{qrane_prefix}{msg}\r")
-
-        qontextor_cmd = ["python3", str(AGENT_MODULE_DIR / "qontextor.py"), str(path_manager.qodeyard_dir), str(path_manager.qontext_dir)]
-        qonsole_log_path = path_manager.get_qonsole_log_path("qontextor_initial")
-        events_log_path = path_manager.get_events_log_path("qontextor_initial")
-
-        if not run_agent("qontextor", qontextor_cmd, prefix, AGENT_COLORS.get("qontextor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
-            if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}")
-            else: print(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}\r")
-            return
+            if not run_agent("qompressor", qompressor_cmd, prefix, AGENT_COLORS.get("qompressor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
+                 if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}")
+                 else: print(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}\r")
         else:
-            if ui: ui.log_main(f"{qrane_prefix}Dual-Core Memory Primed.")
-            else: print(f"{qrane_prefix}Dual-Core Memory Primed.\r")
+            msg = "Qompressor DISABLED - skipping skeleton generation."
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{Colors.YELLOW}{msg}{Colors.R}\r")
+
+        # 2. Run Qontextor (SLOW/SMART - Semantic Warmup) - if enabled
+        if use_qontextor:
+            msg = "Running initial Qontextor scan (Semantic Indexing)..."
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{msg}\r")
+
+            qontextor_cmd = ["python3", str(AGENT_MODULE_DIR / "qontextor.py"), str(path_manager.qodeyard_dir), str(path_manager.qontext_dir)]
+            qonsole_log_path = path_manager.get_qonsole_log_path("qontextor_initial")
+            events_log_path = path_manager.get_events_log_path("qontextor_initial")
+
+            if not run_agent("qontextor", qontextor_cmd, prefix, AGENT_COLORS.get("qontextor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
+                if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}")
+                else: print(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}\r")
+                return
+            else:
+                if ui: ui.log_main(f"{qrane_prefix}Dual-Core Memory Primed.")
+                else: print(f"{qrane_prefix}Dual-Core Memory Primed.\r")
+        else:
+            msg = "Qontextor DISABLED - skipping context generation."
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{Colors.YELLOW}{msg}{Colors.R}\r")
 
     cycle = 1
     session_failed = False
@@ -475,6 +493,12 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 name = agent_def['name']
                 agent_config = agent_configs.get(name, {})
                 provider = agent_config.get('provider', None)
+
+                # Skip disabled agents
+                if name == 'qompressor' and not use_qompressor:
+                    continue
+                if name == 'qontextor' and not use_qontextor:
+                    continue
 
                 # --- DYNAMIC LOCAL AGENT LOADER ---
                 if provider == 'local':
