@@ -12,7 +12,23 @@ QonQrete is a multi-agent orchestration system designed for secure, observable, 
 This architecture ensures that AI-generated code and processes cannot affect the host system, providing a robust framework for autonomous and semi-autonomous development.
 
 ### Major Improvements: The Dual-Core Memory System with Local Qontextor
-This release enhances the **Dual-Core Memory System** by making the `qontextor` agent capable of running in a fully **local mode**. It now performs deterministic analysis of Python code using Abstract Syntax Trees (AST) to generate structural context at high speed with **zero token cost**.
+This release enhances the **Dual-Core Memory System** by making the `qontextor` agent capable of running in a fully **local mode**. It now performs deterministic analysis of Python code using a sophisticated stack of local tools to generate structural and semantic context at high speed with **zero token cost**.
+
+#### The Local Qontextor Stack
+The local `qontextor` now uses a multi-layered approach to understand your code without sending it to an AI:
+
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **1. Structure** | Python AST | Extracts the fundamental structure of the code, including function and class names and their signatures. |
+| **2. High-Level Purpose**| Docstrings | Parses docstrings to get a high-confidence understanding of what a function or class does. |
+| **3. Inferred Purpose** | Verb Heuristics | When docstrings are missing, it infers the purpose of a function based on its name (e.g., `get_user` implies retrieval). |
+| **4. Type Inference** | Jedi | Performs static analysis to understand types and relationships between different parts of the code. |
+| **5. Call Graph**| PyCG | Generates a call graph to understand the dependencies and execution flow between functions and modules. |
+
+#### Fast vs. Complex Local Mode
+The local `qontextor` can be configured in `worqspace/config.yaml`:
+- **`local_mode: 'fast'`**: Uses the first four layers of the stack (AST, Docstrings, Heuristics, Jedi) for a very fast analysis.
+- **`local_mode: 'complex'`**: Adds a fifth layer, using a local `sentence-transformers` model to create deep semantic embeddings of the code's purpose. This allows for more advanced queries and a deeper understanding of the code, at the cost of a slightly slower analysis.
 
 **The Scenario:** A medium-sized project (50 files, ~10,000 lines of code).
 - **Raw Size:** ~100,000 Tokens.
@@ -20,7 +36,7 @@ This release enhances the **Dual-Core Memory System** by making the `qontextor` 
 | Metric | Old Approach (Send Full Code) | New Approach (Dual-Core) | Improvement |
 | :--- | :--- | :--- | :--- |
 | **Context Sent** | 100,000 Tokens (Full Repo) | ~4,000 Tokens (Skeletons) | **~96% Reduction** |
-| **Indexing Cost** | High (AI-based) | **Zero** (Local AST analysis) | **Infinitely Cheaper** |
+| **Indexing Cost** | High (AI-based) | **Zero** (Local analysis) | **Infinitely Cheaper** |
 | **Cost per Run** | ~$0.25 (GPT-4o) | ~$0.01 (GPT-4o) | **25x Cheaper** |
 | **Speed** | Slow (Huge prompt processing) | Fast (Tiny prompt) | **~3x Faster** |
 | **Memory** | Persistent | Persistent & Infinite Context | **Upgraded** |

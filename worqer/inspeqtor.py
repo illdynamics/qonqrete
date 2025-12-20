@@ -116,7 +116,7 @@ Your goal is to determine if the recent code changes are complete, correct, and 
 """
 
     try:
-        content = lib_ai.run_ai_completion(ai_provider, ai_model, reviewer_prompt, context_files=all_qontext_files)
+        content = lib_ai.run_ai_completion(ai_provider, ai_model, reviewer_prompt, context_files=all_context_files)
 
         os.makedirs(reqap_path.parent, exist_ok=True)
         with open(reqap_path, 'w', encoding='utf-8') as f: f.write(content)
