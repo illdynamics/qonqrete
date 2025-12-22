@@ -1,8 +1,15 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.7.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.8.0-beta` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
+
+## What's New in v0.8.0
+
+- **Qontrabender**: Policy-driven hybrid caching with Variable Fidelity
+- **caching_policy.yaml**: Comprehensive configuration for cache behavior
+- **6 Operational Modes**: From `local_fast` to `debug_repro`
+- **Schema Validation**: Bad YAML can't brick your flow
 
 ## Prerequisites
 - **Docker:** Ensure the Docker daemon is running (or see ../README.md for Microsandbox setup).
@@ -53,15 +60,46 @@ Advanced options can be set in `worqspace/`.
 -   **`config.yaml`**:
     -   `use_qompressor`: `true` to generate token-efficient code skeletons (default), `false` to use full code.
     -   `use_qontextor`: `true` to generate a semantic index of the code (default), `false` to disable.
+    -   `use_qontrabender`: `true` to enable policy-driven hybrid caching (default), `false` to disable.
     -   `cheqpoint`: Sets the default behavior. `true` for user-gated mode, `false` for autonomous. Can be overridden with `--user` or `--auto`.
     -   `auto_cycle_limit`: Set the maximum number of cycles for auto-mode.
     -   `agents`: Change the AI models for each agent. For `qontextor`, set `provider: local` to use the new high-speed, zero-cost analysis mode.
     -   `mode`: Set the default operational mode for agent personas (e.g., `program`, `enterprise`, `security`, `performance`, `innovative`).
     -   `briq_sensitivity`: Set the default task breakdown granularity (0=atomic, 9=monolithic).
+-   **`caching_policy.yaml`** (NEW in v0.8.0):
+    -   Defines Qontrabender behavior and operational modes
+    -   Available modes: `local_fast`, `local_smart`, `cyber_bedrock`, `cyber_aggressive`, `paranoid_mincloud`, `debug_repro`
+    -   See [QONTRABENDER.md](./QONTRABENDER.md) for full documentation
 -   **`pipeline_config.yaml`**:
     -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime.
 
-## 6. Cleaning the Workspace
+## 6. Qontrabender Quick Setup
+To configure the cache bender:
+
+1. Edit `worqspace/config.yaml` to select your mode:
+```yaml
+agents:
+  qontrabender:
+    policy_file: "./caching_policy.yaml"
+    mode: local_smart  # Options: local_fast, local_smart, cyber_bedrock, etc.
+```
+
+2. Run Qontrabender commands:
+```bash
+# Check status
+python worqer/qontrabender.py --status
+
+# Analyze file fidelity decisions
+python worqer/qontrabender.py --analyze
+
+# Validate policy file
+python worqer/qontrabender.py --validate
+
+# List available modes
+python worqer/qontrabender.py --modes
+```
+
+## 7. Cleaning the Workspace
 To remove all `qage_<timestamp>` run directories, use the `clean` command.
 ```bash
 ./qonqrete.sh clean

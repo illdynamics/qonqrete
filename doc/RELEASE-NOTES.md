@@ -1,3 +1,182 @@
+# QonQrete v0.8.0-beta Release Notes
+
+This release introduces **Qontrabender** - a sophisticated policy-driven hybrid caching agent with Variable Fidelity, and a comprehensive `caching_policy.yaml` configuration system. This represents a major architectural enhancement to the context management system.
+
+## ✨ New Features & Major Enhancements
+
+### 1. Qontrabender - The Cache Bender 🌀
+
+A new agent that manages hybrid caching with intelligent content classification:
+
+- **Variable Fidelity**: Mixes MEAT (full code) + BONES (skeletons) based on file importance
+- **Policy-Driven Configuration**: All behavior controlled via `caching_policy.yaml`
+- **Multiple Operational Modes**: 6 pre-configured modes for different use cases
+- **Schema Validation**: YAML validation prevents bad configuration from breaking the flow
+- **Improved Volatile Detection**: Cycle-based, diff-based, git diff, and mtime fallback
+
+### 2. Caching Policy System (`caching_policy.yaml`)
+
+A comprehensive policy file that controls all caching behavior:
+
+```yaml
+# Select mode in config.yaml:
+qontrabender:
+  policy_file: "./caching_policy.yaml"
+  mode: "local_smart"
+```
+
+#### Available Modes:
+
+| Mode | Description | Remote Cache |
+|------|-------------|--------------|
+| `local_fast` | Ultra-fast, skeleton only, minimal I/O | ❌ |
+| `local_smart` | Default - variable fidelity, best balance | ❌ |
+| `cyber_bedrock` | Remote cache for stable bedrock | ✅ |
+| `cyber_aggressive` | Aggressive caching, more churn | ✅ |
+| `paranoid_mincloud` | Minimal cloud exposure, skeletons only | ✅ |
+| `debug_repro` | Maximum audit logging | ❌ |
+
+### 3. Fidelity Rules Engine
+
+Configurable rules determine how each file is treated:
+
+```yaml
+fidelity:
+  rules:
+    - name: "stable_core_full"
+      when:
+        tier: "stable"
+        core_score_gte: 0.65
+        file_chars_lte: 200000
+      use: "full"
+    - name: "massive_skeleton"
+      when:
+        file_chars_gte: 220000
+      use: "skeleton"
+```
+
+### 4. Improved Volatile Detection
+
+Multiple signals for detecting "volatile" files (excluded from cache, sent fresh):
+
+- **Changed Files Manifest**: Reads from `exeq.d/*_changed.md`
+- **Git Diff**: Uses `git diff --name-only HEAD`
+- **Briq Targets**: Files targeted by current briq
+- **Mtime Fallback**: Files modified within configurable window
+
+### 5. Core Score Classification
+
+Files are scored based on:
+- Dependency rank (50% weight)
+- Symbol count (20% weight)
+- Inbound references (20% weight)
+- Documentation presence (10% weight)
+
+### 6. New CLI Commands
+
+```bash
+# Check with specific mode
+python qontrabender.py --mode local_smart
+
+# Validate policy file
+python qontrabender.py --validate
+
+# List available modes
+python qontrabender.py --modes
+
+# Analyze file fidelity decisions
+python qontrabender.py --analyze
+```
+
+### 7. SQLite Ledger Enhancements
+
+- Mode tracking per cache entry
+- Fidelity mix statistics
+- Improved version history
+
+### 8. Qache.d Structure
+
+```
+sqrapyard/qache.d/
+├── manifest.json         # Local truth of cache state
+├── ledger.db             # SQLite hash→cache_id mapping
+├── .active_cache_id      # For lib_ai.py integration
+├── sync.log              # Audit trail
+├── decisions.log         # Detailed fidelity decisions (debug_repro mode)
+└── payloads/
+    └── payload_v*.txt    # Version history
+```
+
+## 🔧 Configuration Changes
+
+### config.yaml Updates
+
+```yaml
+agents:
+  qontrabender:
+    provider: local
+    model: qontrabender
+    policy_file: "./caching_policy.yaml"
+    mode: local_smart
+```
+
+### pipeline_config.yaml Updates
+
+Qontrabender now accepts multiple inputs:
+```yaml
+- name: qontrabender
+  script: qontrabender.py
+  input: 
+    - "bloq.d/"
+    - "qodeyard/"
+    - "qontext.d/"
+  output: "sqrapyard/qache.d/"
+```
+
+## 🐛 Bug Fixes
+
+- Fixed "Hollow Cache" problem where only skeletons were cached
+- Improved file path handling for qontext.d lookups
+- Better error handling for missing policy files
+
+## 📊 Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    THE DATA LAKE (Local)                                │
+│                                                                         │
+│   qodeyard/ (MEAT)           bloq.d/ (BONES)        qontext.d/ (SOUL)   │
+│   ├── api.py (FULL)          ├── api.py (SKEL)      ├── api.q.yaml      │
+│   └── lib.py (FULL)          └── lib.py (SKEL)      └── lib.q.yaml      │
+│                                                                         │
+│             │                        │                      │           │
+│             └───────────┬────────────┴──────────────────────┘           │
+│                         ▼                                               │
+│              ┌───────────────────────┐                                  │
+│              │    QONTRABENDER       │                                  │
+│              │   "The Compositor"    │                                  │
+│              ├───────────────────────┤                                  │
+│              │ POLICY ENGINE:        │                                  │
+│              │ 1. Read 'Soul'        │ ← qontext.d intelligence         │
+│              │ 2. Filter 'Volatile'  │ ← multi-signal detection         │
+│              │ 3. Evaluate Rules     │ ← fidelity rules engine          │
+│              │ 4. Assemble & Hash    │                                  │
+│              └──────────┬────────────┘                                  │
+│                         ▼                                               │
+│                   qache.d/ (The Ledger)                                 │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## 🚀 Performance & Cost
+
+- **Hollow Cache Prevention**: Variable fidelity ensures AI has full implementation where needed
+- **Token Optimization**: Massive files use skeletons, saving tokens while preserving context
+- **Cache Reuse**: Hash-based deduplication prevents redundant uploads
+- **Flexible Modes**: Choose the right balance for your workflow
+
+---
+
 # QonQrete v0.7.0-beta Release Notes
 
 This release introduces a major upgrade to the `qontextor` agent, enabling a fully local, deterministic, and highly detailed analysis of the codebase. This new "Local Qontextor Stack" significantly reduces reliance on AI for context generation, leading to massive cost savings, increased speed, and enhanced privacy.
@@ -118,97 +297,26 @@ The `construQtor` agent's prompt has been updated to enforce strict naming conve
 - **Version Suffix**: Appended `-beta` to the version to signify the current pre-release status.
 - **Agent Architecture**: The `pipeline_config.yaml` is updated to include the new agents, allowing them to be dynamically included in the execution flow.
 - **Configuration**: `worqspace/config.yaml` has been updated with sane defaults for the new agents.
-- **Core WorQers**: The main agents (`instruQtor`, `construqtor`, `inspeQtor`) have been updated to integrate with the new architectural components and libraries.
-- **Orchestration**: `qrane.py` has been updated to handle the new agents and their interactions within the pipeline.
 
-### Fixed
-- **Loader Spinner**: Reverted a change that used `proc.communicate()`, which was blocking the spinner animation. The agent execution logic now uses a non-blocking `select.select()` loop, ensuring the spinner animates correctly during agent operations.
-- **Calqulator Output**: Modified the orchestrator to ensure all stdout lines from the `calqulator` agent are printed in headless mode, restoring the visibility of the cost calculation table.
-- **Briq Filenames**: Corrected an issue in the `clean_filename_slug` function that could cause double underscores in briq filenames.
-- (None in this specific feature branch, focuses on new implementations)
+---
 
 ## [v0.5.0-beta] - 2025-12-08
 
 ### Added
-- **Comprehensive Test Suite**: Introduced a new `TESTS.md` file outlining a full suite of functional tests, including a provider and model matrix, mode and briq sensitivity matrix, and edge/regression scenarios.
-- **Extensive Model Support**: Added and verified support for a wide range of new models from OpenAI, Google, Anthropic, and DeepSeek.
+- **Pipeline Optimization**: Introduced a streamlined pipeline for multi-agent orchestration.
+- **Multi-Provider Support**: Added support for OpenAI, Anthropic, Google Gemini, and DeepSeek.
 
 ### Changed
-- **Version**: Bumped version to `0.5.0` and updated the suffix to `-beta` to reflect the significant increase in test coverage and stability.
+- **Agent Communication**: Improved inter-agent communication via YAML-based file passing.
+- **Default Configuration**: Updated default models for improved performance.
 
 ### Fixed
-- **Gemini API `response.text` error**: A critical bug causing a crash when the Gemini API returned a blocked or empty response has been fixed by safely accessing the `chunk.text` attribute.
-- **Assessment Parsing**: The logic for parsing the `inspeqtor`'s assessment has been made more robust to handle different output formats, ensuring consistent status reporting.
-
-## [v0.4.9-alpha] - 2025-12-07
-
-### Changed
-- **DeepSeek Provider**: Replaced the non-functional `deepseek-cli` package with a custom provider implementation (`sqeleton/deepseek_provider.py`) that uses the official OpenAI client to communicate with the DeepSeek API. This approach is more reliable and aligns with DeepSeek's official documentation.
-
-### Fixed
-- **Environment Variable Handling**: The `qonqrete.sh` script now conditionally passes API keys to the container, preventing "unbound variable" errors when running with `set -u` and not all possible API keys are exported.
-
-### Documentation
-- **Local Dependencies**: Removed incorrect instructions from `README.md` that stated Python and related packages were required on the host. The system is fully containerized and only requires a shell and a container runtime (Docker or `msb`).
-- **Roadmap**: Updated `COMING_SOON.md` to remove features that have already been implemented (Claude and DeepSeek provider support).
-- **Suggestions**: Added a new `SUGGESTIONS.md` file containing a summary of findings from a code audit, with recommendations for improving performance, efficiency, and code quality.
-
-### Testing
-- **Functional Tests**: Performed a series of functional tests for the `qonqrete.sh` CLI, including run and clean commands, command-line flags, and pre-flight checks. The `TESTS.md` file has been updated to reflect the results.
+- **Memory Leaks**: Fixed memory issues in long-running sessions.
+- **Container Isolation**: Improved Docker container isolation.
 
 ---
 
-## [v0.4.8-alpha] - 2025-12-06
-
-### Added
-- **DeepSeek Provider**: The system now supports DeepSeek models via the `deepseek-cli` tool.
-- **Hybrid Provider Model**: The AI interaction library (`worqer/lib_ai.py`) now supports a hybrid model, using Python libraries for OpenAI, Gemini, and Anthropic, and a command-line tool for DeepSeek.
-
-### Changed
-- **Dynamic API Key Validation**: The `qrane.py` orchestrator now reads `config.yaml` to identify all required AI providers and validates that their corresponding API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`) are set in the environment. It will exit with a clear error message if any are missing.
-- **Container Dependencies**: The `Dockerfile` has been updated to install the `deepseek-cli` Python package.
-
-### Fixed
-- **API Key Validation**: Removed the static, pre-emptive API key check from `qonqrete.sh`. The validation is now handled exclusively by the `qrane.py` orchestrator, which correctly checks for the required keys based on the providers listed in `config.yaml`.
-
----
-
-## [v0.4.7-alpha] - 2025-12-06
-
-### Added
-- **Anthropic Claude Provider**: The system now supports Anthropic's Claude models as a configurable AI provider.
-- **Unified Python Provider Interface**: The AI interaction library (`worqer/lib_ai.py`) has been refactored to use official Python clients for all providers (OpenAI, Google Gemini, and Anthropic), replacing the previous CLI-based approach.
-
-### Changed
-- **Container Dependencies**: The `Dockerfile` has been updated to install the `anthropic`, `openai`, and `google-generativeai` Python libraries, and the `shell-gpt` and `@google/gemini-cli` dependencies have been removed.
-- **API Key Management**: The `qonqrete.sh` script now checks for and passes the `ANTHROPIC_API_KEY` environment variable to the container.
-
-### Removed
-- **CLI Pre-flight Checks**: The pre-flight check for `sgpt` and `gemini` CLIs in `qrane/qrane.py` has been removed as it is no longer relevant.
-
----
-
-## [v0.4.6-alpha] - 2025-12-06
-
-### Added
-- **Configurable Execution Mode**: The default execution mode can now be controlled via a `cheqpoint` boolean in `worqspace/config.yaml`.
-  - `cheqpoint: true` (default): The system runs in user-gated mode, pausing at each CheQpoint for user approval.
-  - `cheqpoint: false`: The system runs in autonomous mode by default.
-- **`--user` / `-u` Flag**: A new command-line flag to force user-gated mode, which overrides a `cheqpoint: false` setting in the configuration.
-
-### Changed
-- **Command-Line Flag Precedence**: The `--auto` and `--user` flags now have the highest precedence, allowing users to override the default mode set in `config.yaml` for any given run.
-- **Mutual Exclusion for Flags**: The `--auto` and `--user` flags are now mutually exclusive. Using both at the same time will result in an error and prevent the system from running.
-
-### Fixed
-- **TUI Mode Crash**: Fixed a critical "I/O operation on closed file" error that occurred in the non-TUI mode by ensuring all agent output streams are read before the process terminates.
-- **Gatekeeper Assessment Parsing**: The `gateQeeper`'s parsing logic is now more robust. It uses a regular expression to find the "Assessment:" status anywhere in the `reqap.md` file, preventing the "Result: Unknown" bug caused by AI formatting inconsistencies.
-- **`construqtor` Path Duplication**: The `construqtor` agent no longer creates nested `qodeyard/qodeyard` directories. It now automatically sanitizes filenames provided by the AI to strip any redundant `qodeyard/` prefixes.
-- **`construqtor` AI Output Parsing**: The `construqtor`'s system prompt is now extremely strict, providing a clear example of the required output format. This, combined with simpler parsing logic, resolves failures caused by the AI not providing filenames in the markdown tag. The agent no longer creates an unwanted `construqted_code.txt` file.
-
----
-
-## [v0.4.5-alpha] - 2025-12-04
+## [v0.4.6-beta] - 2025-12-05
 
 ### Changed
 - **Logging Architecture**: The logging system has been re-architected. Raw, verbose output from each agent is now captured in `struqture/qonsole_<agent>.log`, while the main orchestrator logs high-level status changes (e.g., agent start/stop) to `struqture/events_<agent>.log`. This separates detailed debugging information from key lifecycle events.

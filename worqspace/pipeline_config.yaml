@@ -40,5 +40,18 @@ agents:
     output: "bloq.d/"
     description: "Mirrors qodeyard into bloq.d, stripping code bodies to create skeletons."
 
+  - name: qontrabender
+    script: qontrabender.py
+    input: 
+      - "bloq.d/"
+      - "qodeyard/"
+      - "qontext.d/"
+    output: "qache.d/"
+    description: "The Cache Bender - assembles and manages hybrid cache payloads for Gemini context caching."
+    triggers:
+      - "post_qompressor"
+      - "pre_construqtor"
+      - "manual"
+
 options:
   microsandbox: false
