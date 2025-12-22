@@ -11,41 +11,9 @@ QonQrete is a multi-agent orchestration system designed for secure, observable, 
 
 This architecture ensures that AI-generated code and processes cannot affect the host system, providing a robust framework for autonomous and semi-autonomous development.
 
-### Major Improvements: The Dual-Core Memory System with Local Qontextor
-This release enhances the **Dual-Core Memory System** by making the `qontextor` agent capable of running in a fully **local mode**. It now performs deterministic analysis of Python code using a sophisticated stack of local tools to generate structural and semantic context at high speed with **zero token cost**.
-
-#### The Local Qontextor Stack
-The local `qontextor` now uses a multi-layered approach to understand your code without sending it to an AI:
-
-| Layer | Technology | Purpose |
-| :--- | :--- | :--- |
-| **1. Structure** | Python AST | Extracts the fundamental structure of the code, including function and class names and their signatures. |
-| **2. High-Level Purpose**| Docstrings | Parses docstrings to get a high-confidence understanding of what a function or class does. |
-| **3. Inferred Purpose** | Verb Heuristics | When docstrings are missing, it infers the purpose of a function based on its name (e.g., `get_user` implies retrieval). |
-| **4. Type Inference** | Jedi | Performs static analysis to understand types and relationships between different parts of the code. |
-| **5. Call Graph**| PyCG | Generates a call graph to understand the dependencies and execution flow between functions and modules. |
-
-#### Fast vs. Complex Local Mode
-The local `qontextor` can be configured in `worqspace/config.yaml`:
-- **`local_mode: 'fast'`**: Uses the first four layers of the stack (AST, Docstrings, Heuristics, Jedi) for a very fast analysis.
-- **`local_mode: 'complex'`**: Adds a fifth layer, using a local `sentence-transformers` model to create deep semantic embeddings of the code's purpose. This allows for more advanced queries and a deeper understanding of the code, at the cost of a slightly slower analysis.
-
-**The Scenario:** A medium-sized project (50 files, ~10,000 lines of code).
-- **Raw Size:** ~100,000 Tokens.
-
-| Metric | Old Approach (Send Full Code) | New Approach (Dual-Core) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Context Sent** | 100,000 Tokens (Full Repo) | ~4,000 Tokens (Skeletons) | **~96% Reduction** |
-| **Indexing Cost** | High (AI-based) | **Zero** (Local analysis) | **Infinitely Cheaper** |
-| **Cost per Run** | ~$0.25 (GPT-4o) | ~$0.01 (GPT-4o) | **25x Cheaper** |
-| **Speed** | Slow (Huge prompt processing) | Fast (Tiny prompt) | **~3x Faster** |
-| **Memory** | Persistent | Persistent & Infinite Context | **Upgraded** |
-
-**Summary: You are paying 4% of the cost for 100% of the intelligence, with zero cost for indexing.**
-
 ## Version
 
-**Version:** `v0.7.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.8.0-beta` (See `VERSION` file for the canonical version).
 
 > **Note on TUI Mode and Agent Testing:**
 >
@@ -53,132 +21,229 @@ The local `qontextor` can be configured in `worqspace/config.yaml`:
 >
 > We welcome community contributions! If you encounter any issues or have suggestions, please report them. Your feedback is invaluable in helping us improve the system.
 
+---
+
+## What's New in v0.8.0-beta
+
+### 🌀 Qontrabender - The Cache Bender
+
+A new policy-driven hybrid caching agent with Variable Fidelity:
+
+- **Policy-Based Configuration**: All behavior controlled via `caching_policy.yaml`
+- **6 Operational Modes**: `local_fast`, `local_smart`, `cyber_bedrock`, `cyber_aggressive`, `paranoid_mincloud`, `debug_repro`
+- **Variable Fidelity**: Intelligently mixes full code (MEAT) + skeletons (BONES)
+- **Schema Validation**: Bad YAML can't brick your flow
+- **Improved Volatile Detection**: Cycle-based, diff-based, git diff, mtime fallback
+
+```yaml
+# Select mode in config.yaml
+agents:
+  qontrabender:
+    policy_file: "./caching_policy.yaml"
+    mode: "local_smart"
+```
+
+See [QONTRABENDER.md](./doc/QONTRABENDER.md) for full documentation.
+
+---
+
+## The Triple-Core Memory System
+
+QonQrete now features a **Triple-Core Memory System**:
+
+| Agent | Role | Output |
+|-------|------|--------|
+| **Qompressor** | Skeletonizer | `bloq.d/` - AST-stripped code structures |
+| **Qontextor** | Symbol Mapper | `qontext.d/` - Semantic YAML maps |
+| **Qontrabender** | Cache Bender | `qache.d/` - Policy-driven cache payloads |
+
+### The Data Lake Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    THE DATA LAKE (Local)                                │
+│                                                                         │
+│   qodeyard/ (MEAT)           bloq.d/ (BONES)        qontext.d/ (SOUL)   │
+│   Full source code           AST skeletons          Semantic maps       │
+│                                                                         │
+│             │                        │                      │           │
+│             └───────────┬────────────┴──────────────────────┘           │
+│                         ▼                                               │
+│              ┌───────────────────────┐                                  │
+│              │    QONTRABENDER       │ ← Policy-driven compositor       │
+│              │   caching_policy.yaml │                                  │
+│              └──────────┬────────────┘                                  │
+│                         ▼                                               │
+│                   qache.d/ (Cache Ledger)                               │
+│                   └─ Variable fidelity payloads                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Performance Metrics
+
+**Scenario:** Medium-sized project (50 files, ~10,000 lines of code)
+
+| Metric | Old Approach | Triple-Core | Improvement |
+|--------|--------------|-------------|-------------|
+| **Context Sent** | 100,000 Tokens | ~4,000 Tokens | **96% Reduction** |
+| **Indexing Cost** | High (AI-based) | **Zero** (Local) | **∞ Cheaper** |
+| **Cost per Run** | ~$0.25 (GPT-4o) | ~$0.01 (GPT-4o) | **25x Cheaper** |
+| **Cache Reuse** | None | Hash-based dedup | **Near-zero churn** |
+
+---
 
 ## Core Principles
 
-1.  **Isolation by Design**: All agent execution occurs within the `Qage`, a Docker container that acts as a secure sandbox. The `Qrane`, running on the host, manages the workflow.
-2.  **Configuration-Driven**: The agent models and cycle limits are defined declaratively in `worqspace/config.yaml`.
-3.  **File-Based Communication**: Agents communicate by reading and writing markdown files to a shared `worqspace/` volume, creating a transparent and auditable "chat history".
-4.  **Human-in-the-Loop Control**: By default, a non-negotiable **CheQpoint** pauses the system after each `cyQle`. The user, acting as the `gateQeeper`, must review the results and provide explicit instructions to **[Q]ontinue**, **[T]weaQ**, or **[X]Quit**. This behavior can be configured to be autonomous by default.
+1.  **Isolation by Design**: All agent execution occurs within the `Qage`, a Docker container that acts as a secure sandbox.
+2.  **Configuration-Driven**: Agent models, modes, and policies defined in YAML.
+3.  **File-Based Communication**: Agents communicate via markdown files, creating transparent audit trails.
+4.  **Human-in-the-Loop Control**: CheQpoints pause for user review. Can be configured for autonomous mode.
+5.  **Local Sovereignty**: Keep intelligence local with policy-driven caching.
 
+---
 
 ## Architecture Overview
 
--   `qrane/`: Contains the Python-based **Qrane** orchestrator and its command-line interface.
--   `worqer/`: Contains the individual AI agent scripts (`instruQtor`, `construQtor`, `inspeQtor`). It also includes specialized agents like `qompressor` for creating low-token context, `qontextor` for mapping the codebase, and `calqulator` for cost estimation.
--   `worqspace/`: The shared data plane. It contains all configuration, the initial `tasQ`, and all generated plans (`briQ`), summaries (`exeQ`), and reviews (`reQap`).
+-   `qrane/`: The **Qrane** orchestrator and CLI
+-   `worqer/`: AI agent scripts (`instruQtor`, `construQtor`, `inspeQtor`, `qompressor`, `qontextor`, `qontrabender`)
+-   `worqspace/`: Shared data plane with configuration and generated artifacts
 
+---
 
 ## The Workflow CyQle
 
-A `cyQle` consists of three main phases, orchestrated by the `Qrane`:
+1.  **Plan (`instruQtor`)**: Reads the `tasQ` and creates `briQ` files with detailed plans
+2.  **Execute (`construQtor`)**: Processes each `briQ` and generates code in `qodeyard/`
+3.  **Review (`inspeQtor`)**: Reviews generated code and produces `reQap` with assessment
+4.  **CheQpoint (`gateQeeper`)**: Pauses for user command to proceed
 
-1.  **Plan (`instruQtor`)**: A `qwen-max` agent reads the high-level `tasQ` and creates a series of markdown `briQ` files, which contain a detailed, high-level plan for the executor agent.
-2.  **Execute (`construQtor`)**: A `qwen-max` agent is invoked for each `briQ`. It reads the high-level plan and uses its own powerful agency and tools to generate all necessary files and code in the `qodeyard/` directory.
-3.  **Review (`inspeQtor`)**: A `qwen-max` agent reviews the code generated by the `construQtor`, assesses its quality, and produces a final `reQap` (review) with an assessment and suggestions for the next cycle.
-4.  **CheQpoint (`gateQeeper`)**: The `Qrane` pauses the system and displays the `reQap`, waiting for the user's command to proceed.
-
+---
 
 ## System Requirements
 
-The `Qrane` orchestrator runs directly on the host, while the `Qrew` of AI agents runs inside a sandboxed container.
+### Docker (Required)
 
-### 1. Docker
+-   **macOS**: [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
+-   **Linux**: `sudo apt-get install docker-ce docker-ce-cli containerd.io`
+-   **Windows**: [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
 
-Docker is the default, essential runtime for the secure `Qage` environment.
--   **macOS**: Install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/).
--   **Linux**:
-    -   **Debian/Ubuntu**: `sudo apt-get update && sudo apt-get install docker-ce docker-ce-cli containerd.io`
-    -   **Fedora/CentOS**: `sudo dnf install dnf-plugins-core && sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo && sudo dnf install docker-ce docker-ce-cli containerd.io`
--   **Windows**: Install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/).
+> **Docker Desktop Users:** Grant Docker permission to access the project directory via **Settings > Resources > File Sharing**.
 
-> **Note for Docker Desktop (macOS & Windows) Users:**
-> You MUST grant Docker permission to access the project directory. Go to **Settings > Resources > File Sharing** and add the path to your `qonqrete` project folder. This allows the `worqspace` volume to be mounted correctly.
+### Microsandbox (Optional)
 
-### 2. Microsandbox (Optional)
+Lightweight alternative to Docker. See [Microsandbox repository](https://github.com/a-i-s-r/microsandbox).
 
-As a lightweight alternative to Docker, you can use `msb`.
-
--   **Installation**: Follow the instructions at the [official Microsandbox repository](https://github.com/a-i-s-r/microsandbox).
--   You can set `msb` as the default runtime in `worqspace/pipeline_config.yaml`.
-
+---
 
 ## Getting Started
 
-For a full guide on setting up the environment and running your first `cyQle`, please see **[QUICKSTART.md](./doc/QUICKSTART.md)**.
+See **[QUICKSTART.md](./doc/QUICKSTART.md)** for the full guide.
 
-**API Key Configuration**: Before running, you must export the API keys for the AI providers you intend to use. The system will automatically check for the necessary keys based on your `worqspace/config.yaml`.
+### API Keys
 
--   `export OPENAI_API_KEY='your-key'`
--   `export GOOGLE_API_KEY='your-key'` (or `GEMINI_API_KEY`)
--   `export ANTHROPIC_API_KEY='your-key'`
--   `export DEEPSEEK_API_KEY='your-key'`
-
-First, initialize the system. This builds the secure container environment.
+Export keys for your AI providers:
 
 ```bash
-# For Docker (default)
+export OPENAI_API_KEY='your-key'
+export GOOGLE_API_KEY='your-key'
+export ANTHROPIC_API_KEY='your-key'
+export DEEPSEEK_API_KEY='your-key'
+```
+
+### Initialize
+
+```bash
 ./qonqrete.sh init
 ```
 
-```bash
-# If you use Microsandbox
-./qonqrete.sh init --msb
-```
-
-To run the system with the Text-based User Interface (TUI) and set an operational mode:
+### Run
 
 ```bash
+# With TUI
 ./qonqrete.sh run --tui --mode security
-```
 
-To run in autonomous mode with a specific task granularity:
-
-```bash
+# Autonomous mode
 ./qonqrete.sh run --auto --briq-sensitivity 2
-```
 
-To force user-gated mode (overriding a config file set to auto):
-
-```bash
+# User-gated mode
 ./qonqrete.sh run --user
 ```
 
-You can override the configured runtime using flags:
-
-```bash
-# Force run with Microsandbox
-./qonqrete.sh run --msb
-```
-
-```bash
-# Force run with Docker
-./qonqrete.sh run --docker
-```
-
-To clean up the workspace and remove all previous run data:
-
-```bash
-# Force run with Microsandbox
-./qonqrete.sh run --msb
-```
-
-```bash
-# Force run with Docker
-./qonqrete.sh run --docker
-```
-
-To clean up the workspace and remove all previous run data:
+### Clean
 
 ```bash
 ./qonqrete.sh clean
 ```
 
+---
+
+## Configuration
+
+### config.yaml
+
+```yaml
+agents:
+  instruqtor:
+    provider: openai
+    model: gpt-4.1-mini
+
+  construqtor:
+    provider: gemini
+    model: gemini-2.5-pro
+
+  inspeqtor:
+    provider: openai
+    model: gpt-4.1
+
+  qontextor:
+    provider: local
+    model: qontextor
+    local_mode: complex
+
+  qompressor:
+    provider: local
+    model: qompressor
+
+  qontrabender:
+    provider: local
+    model: qontrabender
+    policy_file: "./caching_policy.yaml"
+    mode: local_smart
+
+options:
+  use_qompressor: true
+  use_qontextor: true
+  use_qontrabender: true
+  cheqpoint: false
+  auto_cycle_limit: 4
+```
+
+### Qontrabender Modes
+
+| Mode | Description |
+|------|-------------|
+| `local_fast` | Ultra-fast, skeleton only |
+| `local_smart` | Variable fidelity, balanced (default) |
+| `cyber_bedrock` | Remote cache for stable bedrock |
+| `cyber_aggressive` | Aggressive remote caching |
+| `paranoid_mincloud` | Minimal cloud exposure |
+| `debug_repro` | Maximum audit logging |
+
+---
+
+## Documentation
+
+- [QUICKSTART.md](./doc/QUICKSTART.md) - Getting started guide
+- [DOCUMENTATION.md](./doc/DOCUMENTATION.md) - Full system documentation
+- [QONTRABENDER.md](./doc/QONTRABENDER.md) - Cache bender documentation
+- [RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) - Version history
+- [TERMINOLOGY.md](./doc/TERMINOLOGY.md) - QonQrete terminology
+
+---
+
 ## License
 
 QonQrete is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-This ensures that any modifications or derivative works deployed as a service
-must also be released as open source under the same license.
-See the LICENSE file for full text.
+See the [LICENSE](LICENSE) file for full text.
 
 ![Scarf](https://static.scarf.sh/a.png?x-pxid=242de794-2b10-4e34-a6cd-eab9e46cc793)
