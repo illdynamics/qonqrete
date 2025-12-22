@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.7.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.8.0-beta` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -45,6 +45,10 @@ graph TD
 
             subgraph "Context"
                 qontextor;
+            end
+
+            subgraph "Cache"
+                qontrabender;
             end
 
             subgraph "Memory"

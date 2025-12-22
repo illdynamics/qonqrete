@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v0.7.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.8.0-beta` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -10,13 +10,15 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **Qrew**: The collection of agents that work together inside the `Qage`.
 - **qompressor**: A specialized agent that "skeletonizes" the codebase to create a low-token, high-context representation.
 - **qontextor**: A specialized agent that generates a machine-readable symbol map of the codebase. It can run in a fully local mode (using AST, Jedi, and PyCG) or use AI to analyze the "skeletonized" code.
+- **qontrabender**: A policy-driven hybrid caching agent that assembles variable fidelity payloads. It mixes full code (MEAT) and skeletons (BONES) based on configurable rules.
 - **calqulator**: A specialized agent that provides a token and cost estimate for an upcoming cycle.
-- **Local Provider**: A provider type for agents that do not use AI and run completely locally (e.g., `calqulator`, `qompressor`).
+- **Local Provider**: A provider type for agents that do not use AI and run completely locally (e.g., `calqulator`, `qompressor`, `qontrabender`).
 
 ### Environment & Structure
 - **Qage**: The secure Docker container or Microsandbox that contains the `Qrew`.
 - **Qodeyard**: The output directory (`.../qodeyard/`) where all code is generated.
 - **worQspace**: The shared volume (`worqspace/`) for configuration and agent communication.
+- **qache.d**: The cache ledger directory managed by `qontrabender`.
 
 ### Workflow & Data
 - **cyQle**: A full Plan -> Execute -> Review loop.
@@ -25,6 +27,15 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **Operational Mode**: A setting (`--mode` or in `config.yaml`) that defines the "persona" or priority for the agents (e.g., `security`, `performance`).
 - **Briq Sensitivity**: A numeric setting (0-9) that controls the granularity of the `instruQtor`'s task breakdown.
 - **Cheqpoint (Configuration)**: A boolean setting (`cheqpoint`) in `config.yaml` that determines the default execution mode. `true` for user-gated, `false` for autonomous.
+
+### Caching & Memory (v0.8.0)
+- **Variable Fidelity**: The practice of mixing full code (MEAT) and skeletons (BONES) in cache payloads.
+- **MEAT**: Full source code from `qodeyard/`, used for core/high-utility files.
+- **BONES**: Skeleton code from `bloq.d/`, used for massive/reference files.
+- **Volatile**: Files that change frequently and are excluded from cache, sent fresh via stdin.
+- **Caching Policy**: Configuration file (`caching_policy.yaml`) that defines Qontrabender behavior and modes.
+- **Fidelity Rules**: Configurable rules that determine whether a file gets full, skeleton, or omit treatment.
+- **Core Score**: A computed value (0.0-1.0) indicating how "core" a file is based on dependencies, symbols, and references.
 
 ### User Interaction
 - **gateQeeper**: The human user responsible for making decisions at the `CheQpoint`.

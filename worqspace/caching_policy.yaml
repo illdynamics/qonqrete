@@ -1,0 +1,475 @@
+# caching_policy.yaml
+# ═══════════════════════════════════════════════════════════════════════════════
+# Qontrabender Policy Configuration v1.0
+# ═══════════════════════════════════════════════════════════════════════════════
+# Determines what gets compiled into cache payloads (local) and optionally remote cache.
+# Place in workspace root and reference from config.yaml.
+#
+# Select mode in config.yaml:
+#   qontrabender:
+#     policy_file: "./caching_policy.yaml"
+#     mode: "local_smart"
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version: 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEFAULTS - Applied unless overridden by specific mode
+# ═══════════════════════════════════════════════════════════════════════════════
+defaults:
+  # Where Qontrabender writes its own artifacts
+  qache_dir: "qache.d"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # VOLATILE DETECTION
+  # How to detect "volatile" files (exclude from cache; will be sent fresh via stdin)
+  # ─────────────────────────────────────────────────────────────────────────────
+  # NOTE: For local_smart mode, volatile detection should be CONSERVATIVE.
+  # Files just built are STABLE (not volatile). Only files ABOUT TO change are volatile.
+  volatile_detection:
+    # Changed files manifest = files that WERE changed (now stable, not volatile!)
+    # Disable by default - this causes empty caches after build cycles
+    use_changed_files_manifest: false
+    changed_files_pattern: "exeq.d/*_changed.md"
+    
+    # Git diff = uncommitted changes (useful for interactive editing sessions)
+    use_git_diff_if_available: false   # Enable for cyber_* modes
+    git_diff_base: "HEAD"
+    
+    # Mtime fallback = recently modified files
+    # Disable by default - causes problems when running right after construQtor
+    use_mtime_fallback: false
+    mtime_minutes: 5                   # Shorter window if enabled
+    
+    # Briq targets = files that WILL be edited in the NEXT cycle
+    # This is the CORRECT signal for volatility!
+    use_briq_targets: true
+    briq_pattern: "briq.d/*.md"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # BUDGETS - Global size/token caps
+  # ─────────────────────────────────────────────────────────────────────────────
+  budgets:
+    # "cached" = the stable payload (optionally uploaded to provider cache)
+    cached_max_chars: 1800000           # ~1.8MB text safety cap
+    cached_target_chars: 1200000        # target packing size
+    
+    # "hotset" = per-run stdin payload (volatile + targeted)
+    hotset_max_chars: 350000
+    hotset_target_chars: 220000
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # FILE LIMITS - Per-file size constraints
+  # ─────────────────────────────────────────────────────────────────────────────
+  file_limits:
+    full_max_chars_per_file: 200000     # over this, prefer diff/summary/skeleton
+    skeleton_max_chars_per_file: 120000 # skeleton may also be huge; allow truncation
+    diff_max_chars_per_file: 120000
+    max_files_in_cached: 250
+    max_files_in_hotset: 80
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # TRUNCATION - How to handle oversized content
+  # ─────────────────────────────────────────────────────────────────────────────
+  truncation:
+    strategy: "tail"                    # head|tail|middle (tail best for logs/diffs)
+    annotate_truncation: true           # insert markers into payload
+    include_reason: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # RENDER FORMAT - How to structure the payload
+  # ─────────────────────────────────────────────────────────────────────────────
+  render:
+    file_wrapper: "xml"                 # xml|markdown
+    xml:
+      full_tag: "file"
+      skeleton_tag: "skeleton"
+      diff_tag: "diff"
+      attrs:
+        - "path"
+        - "hash"
+        - "tier"
+        - "fidelity"
+    markdown:
+      show_headers: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CLASSIFICATION - How to decide "core", "massive", etc.
+  # ─────────────────────────────────────────────────────────────────────────────
+  classification:
+    # Weighting for "core utility" / centrality score
+    signals:
+      dependency_rank_weight: 0.50      # from qontext.d dependency analysis
+      symbol_count_weight: 0.20         # number of symbols in file
+      inbound_refs_weight: 0.20         # how many other files reference this
+      doc_presence_weight: 0.10         # has docstrings/comments
+    
+    thresholds:
+      core_score_min: 0.65              # >= this = "core" file
+      massive_chars_min: 220000         # >= this = "massive" file
+      generated_score_min: 0.70         # >= this = likely generated
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PATH PATTERNS - Include/exclude globs
+  # ─────────────────────────────────────────────────────────────────────────────
+  paths:
+    # Always ignore noise
+    exclude_globs:
+      - "**/.git/**"
+      - "**/.venv/**"
+      - "**/venv/**"
+      - "**/node_modules/**"
+      - "**/__pycache__/**"
+      - "**/.pytest_cache/**"
+      - "**/dist/**"
+      - "**/build/**"
+      - "**/*.lock"
+      - "**/*.min.js"
+      - "**/*.map"
+      - "**/*.png"
+      - "**/*.jpg"
+      - "**/*.jpeg"
+      - "**/*.gif"
+      - "**/*.webp"
+      - "**/*.mp4"
+      - "**/*.mov"
+      - "**/*.zip"
+      - "**/*.pyc"
+      - "**/*.pyo"
+      - "**/*.so"
+      - "**/*.dll"
+      - "**/*.exe"
+
+    # Docs/schemas that are usually high ROI
+    prefer_docs_globs:
+      - "README*"
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.rst"
+      - "**/*.txt"
+      - "**/*.adoc"
+      - "**/openapi*.yml"
+      - "**/openapi*.yaml"
+      - "**/*.proto"
+      - "**/schema*.sql"
+      - "**/migrations/**"
+      - "**/*.toml"
+      - "**/*.ini"
+      - "**/*.env.example"
+
+    # Treat these as likely generated/vendor (low ROI, prefer skeleton/omit)
+    generated_globs:
+      - "**/vendor/**"
+      - "**/third_party/**"
+      - "**/generated/**"
+      - "**/*.gen.*"
+      - "**/*_pb2.py"
+      - "**/*_pb2_grpc.py"
+      - "**/*.swagger.json"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # LOGGING - Audit and debug settings
+  # ─────────────────────────────────────────────────────────────────────────────
+  logging:
+    verbose_decisions: false
+    write_full_payload_artifacts: false
+    write_inputs_refs: false
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODES - Predefined operational modes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+modes:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # LOCAL_FAST - Ultra-fast local-only mode
+  # ─────────────────────────────────────────────────────────────────────────────
+  local_fast:
+    description: "Ultra-fast local-only. Mostly skeleton + tiny hotset. Minimal disk I/O. No remote cache."
+    
+    remote_cache:
+      enabled: false
+
+    assembly:
+      cached_payload:
+        enabled: false
+      hotset_payload:
+        include:
+          - "briq"
+          - "recent_errors"
+          - "changed_diffs"
+          - "touched_files_full_if_small"
+
+    fidelity:
+      rules:
+        - name: "touched_small_full"
+          when:
+            volatile: true
+            file_chars_lte: 60000
+          use: "full"
+        - name: "default_skeleton"
+          when: {}
+          use: "skeleton"
+
+    budgets:
+      cached_max_chars: 0
+      hotset_max_chars: 200000
+      hotset_target_chars: 150000
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # LOCAL_SMART - Best default mode
+  # ─────────────────────────────────────────────────────────────────────────────
+  local_smart:
+    description: "Best default. Variable fidelity locally; strong reproducibility; no provider dependency."
+    
+    remote_cache:
+      enabled: false
+
+    assembly:
+      cached_payload:
+        enabled: true
+        include:
+          - "project_map"
+          - "bedrock_docs"
+          - "stable_core_files_variable_fidelity"
+          - "semantic_summaries"
+          - "public_api_surface"
+      hotset_payload:
+        include:
+          - "briq"
+          - "recent_errors"
+          - "changed_diffs"
+          - "touched_files_full_or_targeted_symbols"
+
+    fidelity:
+      rules:
+        - name: "stable_core_full"
+          when:
+            tier: "stable"
+            core_score_gte: 0.65
+            volatile: false
+            file_chars_lte: 200000
+          use: "full"
+        - name: "massive_reference_skeleton"
+          when:
+            volatile: false
+            file_chars_gte: 220000
+          use: "skeleton"
+        - name: "default_skeleton"
+          when: {}
+          use: "skeleton"
+
+    hotset:
+      include_targeted_symbol_bodies: true
+      targeted_symbol_body_max_chars: 90000
+      include_full_for_touched_if_small: true
+      full_for_touched_max_chars: 120000
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CYBER_BEDROCK - Remote cache for stable bedrock
+  # ─────────────────────────────────────────────────────────────────────────────
+  cyber_bedrock:
+    description: "Remote cache holds stable bedrock (full for stable core + key docs). Hotset always stdin."
+    
+    remote_cache:
+      enabled: true
+      provider: "gemini"
+      ttl_minutes: 60
+      keepalive:
+        enabled: true
+        refresh_when_remaining_minutes_lte: 12
+      upload:
+        upload_cached_payload: true
+        sanitize:
+          enabled: false
+          redact_patterns: []
+
+    assembly:
+      cached_payload:
+        enabled: true
+        include:
+          - "project_map"
+          - "bedrock_docs"
+          - "stable_core_files_variable_fidelity"
+          - "semantic_summaries"
+          - "schemas_and_interfaces"
+      hotset_payload:
+        include:
+          - "briq"
+          - "recent_errors"
+          - "changed_diffs"
+          - "touched_files_full_or_targeted_symbols"
+
+    fidelity:
+      rules:
+        - name: "stable_core_full"
+          when:
+            tier: "stable"
+            core_score_gte: 0.70
+            volatile: false
+            file_chars_lte: 220000
+          use: "full"
+        - name: "stable_large_skeleton"
+          when:
+            volatile: false
+            file_chars_gte: 220000
+          use: "skeleton"
+        - name: "default_skeleton"
+          when: {}
+          use: "skeleton"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CYBER_AGGRESSIVE - Aggressive remote caching
+  # ─────────────────────────────────────────────────────────────────────────────
+  cyber_aggressive:
+    description: "Remote cache is used aggressively. More full files go into cached payload; more churn."
+    
+    remote_cache:
+      enabled: true
+      provider: "gemini"
+      ttl_minutes: 60
+      keepalive:
+        enabled: true
+        refresh_when_remaining_minutes_lte: 15
+      upload:
+        upload_cached_payload: true
+        sanitize:
+          enabled: false
+          redact_patterns: []
+
+    budgets:
+      cached_max_chars: 2600000
+      cached_target_chars: 1900000
+
+    fidelity:
+      rules:
+        - name: "stable_core_full_even_if_large"
+          when:
+            volatile: false
+            core_score_gte: 0.60
+            file_chars_lte: 400000
+          use: "full"
+        - name: "massive_reference_skeleton"
+          when:
+            volatile: false
+            file_chars_gte: 400000
+          use: "skeleton"
+        - name: "default_skeleton"
+          when: {}
+          use: "skeleton"
+
+    hotset:
+      include_targeted_symbol_bodies: true
+      targeted_symbol_body_max_chars: 140000
+      include_full_for_touched_if_small: true
+      full_for_touched_max_chars: 180000
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PARANOID_MINCLOUD - Minimal cloud exposure
+  # ─────────────────────────────────────────────────────────────────────────────
+  paranoid_mincloud:
+    description: "Minimize cloud exposure. If remote cache used, upload docs/schemas + skeletons only (no full code)."
+    
+    remote_cache:
+      enabled: true
+      provider: "gemini"
+      ttl_minutes: 45
+      keepalive:
+        enabled: false
+      upload:
+        upload_cached_payload: true
+        sanitize:
+          enabled: true
+          redact_patterns:
+            - "(?i)api[_-]?key\\s*[:=]\\s*\\S+"
+            - "(?i)secret\\s*[:=]\\s*\\S+"
+            - "(?i)password\\s*[:=]\\s*\\S+"
+            - "(?i)token\\s*[:=]\\s*\\S+"
+            - "(?i)credential\\s*[:=]\\s*\\S+"
+
+    assembly:
+      cached_payload:
+        enabled: true
+        include:
+          - "project_map"
+          - "bedrock_docs"
+          - "schemas_and_interfaces"
+          - "semantic_summaries"
+          - "skeletons_only"
+      hotset_payload:
+        include:
+          - "briq"
+          - "changed_diffs"
+          - "touched_files_full_if_small"
+
+    fidelity:
+      rules:
+        - name: "force_skeleton_everything"
+          when: {}
+          use: "skeleton"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DEBUG_REPRO - Maximum audit and reproducibility
+  # ─────────────────────────────────────────────────────────────────────────────
+  debug_repro:
+    description: "Reproducibility + maximum audit. Writes full payload artifacts and detailed decision logs."
+    
+    remote_cache:
+      enabled: false
+
+    logging:
+      verbose_decisions: true
+      write_full_payload_artifacts: true
+      write_inputs_refs: true
+
+    assembly:
+      cached_payload:
+        enabled: true
+        include:
+          - "project_map"
+          - "bedrock_docs"
+          - "stable_core_files_variable_fidelity"
+          - "semantic_summaries"
+          - "public_api_surface"
+      hotset_payload:
+        include:
+          - "briq"
+          - "recent_errors"
+          - "changed_diffs"
+          - "touched_files_full_or_targeted_symbols"
+
+    truncation:
+      annotate_truncation: true
+      include_reason: true
+
+    fidelity:
+      rules:
+        - name: "stable_core_full"
+          when:
+            tier: "stable"
+            core_score_gte: 0.65
+            volatile: false
+            file_chars_lte: 200000
+          use: "full"
+        - name: "massive_reference_skeleton"
+          when:
+            volatile: false
+            file_chars_gte: 220000
+          use: "skeleton"
+        - name: "default_skeleton"
+          when: {}
+          use: "skeleton"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# QONTEXT SCHEMA MAPPING
+# ═══════════════════════════════════════════════════════════════════════════════
+# Maps Qontextor-produced file metadata keys to what Qontrabender expects
+qontext_schema:
+  file_path_key: "file_path"
+  symbols_key: "symbols"
+  deps_key: "dependencies"
+  embeddings_key: "embedding"
+  inbound_refs_key: "inbound_refs"
+  purpose_key: "purpose"
+  last_changed_key: "last_changed"
