@@ -1,5 +1,5 @@
-# QonQrete Configuration
-# ========================
+# QonQrete Configuration v0.8.0
+# ═══════════════════════════════════════════════════════════════════════════════
 
 agents:
   instruqtor:
@@ -22,52 +22,65 @@ agents:
     provider: local
     model: qontextor
     # local_mode: 'fast' = AST-only analysis
-    #             'complex' = AST + deep semantic analysis (requires sentence-transformers)
+    #             'complex' = AST + deep semantic analysis
     local_mode: complex
-    # To use an AI provider for qontextor, change provider and model, e.g.:
-    # provider: gemini
-    # model: gemini-2.5-flash-lite
 
   qompressor:
     provider: local
     model: qompressor
 
+  qontrabender:
+    provider: local
+    model: qontrabender
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # POLICY-DRIVEN CONFIGURATION (v0.8.0)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    # Path to caching policy file (relative to worqspace)
+    policy_file: "./caching_policy.yaml"
+    
+    # Select operational mode from caching_policy.yaml
+    # Available modes:
+    #   - local_fast:       Ultra-fast, skeleton only, no remote cache
+    #   - local_smart:      Default - variable fidelity, local only (RECOMMENDED)
+    #   - cyber_bedrock:    Remote cache for stable bedrock
+    #   - cyber_aggressive: Aggressive remote caching, more churn
+    #   - paranoid_mincloud: Minimal cloud exposure, skeletons only
+    #   - debug_repro:      Maximum audit logging for debugging
+    mode: local_smart
+
 options:
-  # ========================
+  # ═══════════════════════════════════════════════════════════════════════════
   # Agent Enable/Disable
-  # ========================
+  # ═══════════════════════════════════════════════════════════════════════════
   
   # Enable/disable Qompressor (skeleton generation)
-  # true = Generate bloq.d skeletons for AI context (default)
-  # false = Send full codebase to AI agents (more tokens, better context)
   use_qompressor: true
   
   # Enable/disable Qontextor (context indexing)
-  # true = Generate qontext.d semantic maps (default)
-  # false = Skip context generation entirely
   use_qontextor: true
 
-  # ========================
+  # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
+  use_qontrabender: true
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Cheqpoint Configuration
-  # ========================
+  # ═══════════════════════════════════════════════════════════════════════════
   
-  # true = User-gated mode by default (cheqpoints enabled).
-  # false = Autonomous mode by default (cheqpoints disabled).
+  # true = User-gated mode (cheqpoints enabled)
+  # false = Autonomous mode (cheqpoints disabled)
   cheqpoint: false
 
-  # Max number of cycles to run in auto-mode.
+  # Max cycles in auto-mode
   auto_cycle_limit: 4
 
-  # ========================
+  # ═══════════════════════════════════════════════════════════════════════════
   # Generation Settings
-  # ========================
+  # ═══════════════════════════════════════════════════════════════════════════
   
   # Briq Granularity Control (0-9)
-  # 0 = Atomic (Every bullet is a file)
-  # 5 = Balanced
-  # 9 = Monolithic (Whole task is one file)
   briq_sensitivity: 6
 
   # Operational Mode
-  # Options: program, enterprise, performance, security, innovative, balanced
   mode: program

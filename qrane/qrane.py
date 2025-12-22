@@ -76,8 +76,68 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         "Handing off", "Processing", "Executed", "Wrote", "reQap",
         "Checking", "Generating", "Ingesting", "--- Architect", "Plan",
         "Found", "Summary", "Skeletonizing", "CalQulator", "Est. Cost",
-        "--- Dependencies", "Initial scan", "Update scan", "DISABLED"
+        "--- Dependencies", "Initial scan", "Update scan", "DISABLED",
+        "--- Qontrabender", "Pipeline mode", "Payload", "Qache", "Fidelity"
     ]
+    
+    # Patterns that indicate code/content output (should be filtered out)
+    # These take precedence over VISIBLE_KEYWORDS to prevent file content from leaking
+    CONTENT_FILTER_PATTERNS = [
+        # Code constructs
+        "let ", "var ", "const ", "def ", "function ", "class ", "import ",
+        "from ", "return ", "if ", "else ", "elif ", "for ", "while ",
+        "async ", "await ", "export ", "module ", "require(", "include ",
+        "struct ", "enum ", "impl ", "fn ", "pub ", "use ", "mod ",
+        # Method calls (Python/JS/etc)
+        "self.", "this.", "super.", "super(",
+        # HTML/XML
+        "<html", "<head", "<body", "<div", "<span", "<script", "<style",
+        "<!DOCTYPE", "<?xml", "<template", "<component",
+        # JSON/YAML content (not file names)
+        '{"', "{'", '": ', "': ",
+        # String literals / escape sequences indicating file content
+        '\\n', '\\t', '\\r', '\\"', "\\'",
+        # Common code symbols in sequence
+        "});", ");", "};", "});",  "=> {", "-> {",
+        # Assignment patterns
+        " = {", " = [", " = (", " = '", ' = "',
+        # Function calls with multiple args (catches things like send_error(404, "..."))
+        ", \"", ", '", '("', "('",
+        # Common programming patterns
+        "print(", "console.", "logger.", "log(", "fmt.", "println",
+        "raise ", "throw ", "catch ", "try:", "except:",
+        "None", "null", "undefined", "True", "False", "true", "false",
+    ]
+    
+    def is_content_line(line: str) -> bool:
+        """Check if a line looks like code/file content rather than a status message."""
+        # Very long lines are likely content dumps
+        if len(line) > 200:
+            return True
+        # Check for content patterns
+        line_lower = line.lower()
+        for pattern in CONTENT_FILTER_PATTERNS:
+            if pattern.lower() in line_lower:
+                return True
+        # Lines starting with common code starters
+        stripped = line.lstrip()
+        code_starters = ('let ', 'var ', 'const ', 'def ', 'class ', 'function ', 
+                         'import ', 'from ', 'return ', 'if ', 'for ', 'while ',
+                         'async ', 'await ', 'pub ', 'fn ', 'use ', 'mod ', 
+                         'struct ', 'enum ', 'impl ', '#include', '#define',
+                         '//', '/*', '#!', '<?', '<!', '<html', '<body',
+                         'self.', 'this.', 'super.', 'super(')
+        if any(stripped.lower().startswith(s.lower()) for s in code_starters):
+            return True
+        return False
+    
+    def should_display(line: str) -> bool:
+        """Determine if a line should be displayed in the event log."""
+        # First check if it's content - filter it out
+        if is_content_line(line):
+            return False
+        # Then check if it has visible keywords
+        return any(kw in line for kw in VISIBLE_KEYWORDS)
 
     event_start_msg = f"Initiating {agent_display_name}..."
     with open(events_log_path, 'a', encoding='utf-8') as f:
@@ -101,7 +161,7 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
 
                         clean = line.strip()
                         if r == proc.stdout:
-                            if any(x in clean for x in VISIBLE_KEYWORDS):
+                            if should_display(clean):
                                 ui.log_main(f"{agent_prefix} {clean}")
                             ui.log_agent(f"[{agent_display_name}] {clean}")
                         elif r == proc.stderr:
@@ -150,8 +210,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
 
                         clean = line.strip()
                         # For the calqulator, print all output to show the table.
-                        # For other agents, only print lines with important keywords.
-                        if agent_name == "calqulator" or any(x in clean for x in VISIBLE_KEYWORDS):
+                        # For other agents, only print lines with important keywords (excluding content).
+                        if agent_name == "calqulator" or should_display(clean):
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
@@ -394,6 +454,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     # Get agent enable/disable settings
     use_qompressor = config.get('options', {}).get('use_qompressor', True)
     use_qontextor = config.get('options', {}).get('use_qontextor', True)
+    use_qontrabender = config.get('options', {}).get('use_qontrabender', True)
 
     if not ui:
         print(f"{qrane_prefix}Seeding worQspace in Qage at: {worqspace}\r")
@@ -404,12 +465,13 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
         # Show agent status
         qomp_status = f"{Colors.GREEN}ON{Colors.R}" if use_qompressor else f"{Colors.RED}OFF{Colors.R}"
         qont_status = f"{Colors.GREEN}ON{Colors.R}" if use_qontextor else f"{Colors.RED}OFF{Colors.R}"
-        print(f"{qrane_prefix}Agents: Qompressor={qomp_status}, Qontextor={qont_status}\r")
+        qonb_status = f"{Colors.GREEN}ON{Colors.R}" if use_qontrabender else f"{Colors.RED}OFF{Colors.R}"
+        print(f"{qrane_prefix}Agents: Qompressor={qomp_status}, Qontextor={qont_status}, Qontrabender={qonb_status}\r")
         time.sleep(0.3)
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
-    AGENT_COLORS = {"instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B}
+    AGENT_COLORS = {"instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B, "qontrabender": Colors.MAGENTA}
 
     # --- Initial Dual-Core Warmup (Sqrapyard Detection) ---
     # Checks if qodeyard was seeded. If so, generate Skeletons (Fast) and Context (Smart).
@@ -459,6 +521,27 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if ui: ui.log_main(f"{qrane_prefix}{msg}")
             else: print(f"{qrane_prefix}{Colors.YELLOW}{msg}{Colors.R}\r")
 
+        # 3. Run Qontrabender (Cache Management) - if enabled
+        if use_qontrabender:
+            msg = "Running Qontrabender (Hybrid Cache Assembly)..."
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{msg}\r")
+
+            qontrabender_cmd = ["python3", str(AGENT_MODULE_DIR / "qontrabender.py"), "--check"]
+            qonsole_log_path = path_manager.get_qonsole_log_path("qontrabender_warmup")
+            events_log_path = path_manager.get_events_log_path("qontrabender_warmup")
+
+            if not run_agent("qontrabender", qontrabender_cmd, prefix, AGENT_COLORS.get("qontrabender"), logger, qonsole_log_path, events_log_path, initial_env, ui):
+                if ui: ui.log_main(f"{qrane_prefix}{Colors.YELLOW}Qontrabender warmup had issues (non-critical).{Colors.R}")
+                else: print(f"{qrane_prefix}{Colors.YELLOW}Qontrabender warmup had issues (non-critical).{Colors.R}\r")
+            else:
+                if ui: ui.log_main(f"{qrane_prefix}Qache Ready.")
+                else: print(f"{qrane_prefix}Qache Ready.\r")
+        else:
+            msg = "Qontrabender DISABLED - skipping cache management."
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{Colors.YELLOW}{msg}{Colors.R}\r")
+
     cycle = 1
     session_failed = False
     user_aborted = False
@@ -498,6 +581,8 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 if name == 'qompressor' and not use_qompressor:
                     continue
                 if name == 'qontextor' and not use_qontextor:
+                    continue
+                if name == 'qontrabender' and not use_qontrabender:
                     continue
 
                 # --- DYNAMIC LOCAL AGENT LOADER ---
