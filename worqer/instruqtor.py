@@ -1,9 +1,23 @@
 #!/usr/bin/env python3
 # worqer/instruqtor.py
+# ═══════════════════════════════════════════════════════════════════════════════
+# InstruQtor Agent - Task Decomposition & Planning
+# v0.8.9 - Universal File Rule (s00permode)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# v0.8.9 FIX: Removed artificial "refinement modes". Instead uses one simple
+# universal rule that applies to ALL cycles:
+#
+#   📁 File EXISTS in qodeyard? → MODIFY/EXTEND it (never recreate)
+#   📄 File DOESN'T EXIST? → CREATE it (new modules welcome!)
+#
+# This prevents the rebuild-from-scratch bug while keeping full creative freedom.
+# ═══════════════════════════════════════════════════════════════════════════════
 import os
 import sys
 import yaml
 import re
+import math
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -11,6 +25,16 @@ try: import lib_ai
 except ImportError as e:
     sys.stderr.write(f"CRITICAL: Could not import lib_ai.py: {e}\n")
     sys.exit(1)
+
+# Import cost estimation
+sys.path.insert(0, str(Path(__file__).parent.parent / 'qrane'))
+try:
+    from lib_funqtions import estimate_tokens, calculate_cost, format_cost
+except ImportError:
+    # Fallback if lib_funqtions not available
+    def estimate_tokens(text, model="gpt-4.1-mini"): return len(text) // 4
+    def calculate_cost(tokens, model, is_input=True): return (tokens / 1_000_000) * (0.4 if is_input else 1.6)
+    def format_cost(cost): return f"${cost:.5f}" if cost < 0.01 else f"${cost:.2f}"
 
 def clean_input_content(text: str) -> str:
     text = text.replace('\u200b', '').replace('\ufeff', '')
@@ -96,6 +120,7 @@ def main() -> None:
     # Gather Qodeyard Context
     qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
     qodeyard_tree = ""
+    qodeyard_file_count = 0
     if qodeyard_path.exists() and any(qodeyard_path.iterdir()):
         tree_lines = []
         # Start with the root directory name
@@ -103,6 +128,7 @@ def main() -> None:
         
         # Use a recursive helper function for clarity
         def build_tree(dir_path: Path, prefix: str):
+            nonlocal qodeyard_file_count
             # List items and sort them (directories first, then files)
             items = sorted(list(dir_path.iterdir()), key=lambda p: (p.is_file(), p.name))
             for i, path in enumerate(items):
@@ -114,25 +140,60 @@ def main() -> None:
                     new_prefix = prefix + ('    ' if is_last else '│   ')
                     build_tree(path, new_prefix)
                 else:
+                    qodeyard_file_count += 1
                     tree_lines.append(f"{prefix}{connector}{path.name}")
 
         build_tree(qodeyard_path, "")
         qodeyard_tree = "\n".join(tree_lines)
     else:
-        qodeyard_tree = "[qodeyard is empty or does not exist]"
+        qodeyard_tree = "[qodeyard is empty - this is a fresh build]"
 
+    # Build the universal file rule (applies to ALL cycles)
+    universal_file_rule = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 UNIVERSAL FILE RULE (STRICTLY ENFORCED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before creating ANY briq, check the file tree below:
+
+  📁 FILE EXISTS in qodeyard?
+     → Create a briq to MODIFY it (fix bugs, improve implementation)
+     → Create a briq to EXTEND it (add new functions, classes, features)
+     → NEVER create a briq to recreate it from scratch
+     
+  📄 FILE DOESN'T EXIST yet?
+     → Create a briq to CREATE it (new modules are welcome!)
+
+EXAMPLES:
+  ✅ "Implement HavocClient RPC methods in src/c2/havoc_client.py" (MODIFY existing)
+  ✅ "Add geofencing module at src/safety/geofencing.py" (CREATE new)
+  ✅ "Fix syntax error in src/traffic/dga.py" (MODIFY existing)
+  ❌ "Setup project root and create main.py" (main.py EXISTS - don't recreate!)
+  ❌ "Create the configuration system" (config.yaml EXISTS - modify if needed!)
+
+This rule applies to ALL cycles. The qodeyard is your source of truth.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+    # Context awareness message
+    if qodeyard_file_count > 0:
+        context_msg = f"\n📊 QODEYARD STATUS: {qodeyard_file_count} files exist. Build on this foundation.\n"
+    else:
+        context_msg = "\n📊 QODEYARD STATUS: Empty. This is cycle 1 - build from scratch.\n"
 
     planner_prompt = f"""
 You are the **Principal Software Architect** and your only purpose is to break down a technical specification into a precise number of tasks, called 'briqs'. You must follow the rules exactly as specified.
 
 {sens_prompt}
+{universal_file_rule}
+{context_msg}
 
 **ARCHITECTURAL DIRECTIVES:**
-1.  **ADHERE TO THE BRIQ COUNT:** This is not a suggestion, it is a strict requirement. The number of briqs you generate must be within the range specified in the CRITICAL RULE.
-2.  **INFER THE STRUCTURE:** From the input document, deduce every necessary class, utility, configuration file, and boilerplate code.
-3.  **SETUP FIRST:** The first few briqs should always be the project setup: creating the root directory, gitignore, requirements files, configuration, and loggers.
-4.  **LOGICAL BREAKDOWN:** After the setup, break down the implementation logically based on the required briq count.
-5.  **CONSIDER EXISTING STRUCTURE:** Do not redefine files that already exist. Use the file tree below as a reference for the current state of the codebase.
+1.  **ADHERE TO THE BRIQ COUNT:** This is a strict requirement. The number of briqs must be within the range specified in the CRITICAL RULE.
+2.  **RESPECT EXISTING FILES:** Check the file tree. Don't recreate what exists - modify or extend it.
+3.  **ADDRESS THE INPUT:** If the input contains a review with issues, create briqs to fix those issues.
+4.  **ADD MISSING PIECES:** Create briqs for genuinely missing functionality.
+5.  **LOGICAL ORDERING:** Order briqs logically - foundations before features that depend on them.
 
 **OUTPUT FORMAT (STRICT XML):**
 You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` tags. The title should be short and descriptive. Do not include any other text or formatting outside of the `<briq>` tags.
@@ -145,8 +206,16 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 **INPUT DOCUMENT:**
 {task_content}
 
-**BEGIN ATOMIC BREAKDOWN (Adhering to the CRITICAL RULE):**
+**BEGIN ATOMIC BREAKDOWN (Adhering to the CRITICAL RULE and UNIVERSAL FILE RULE):**
 """
+
+    # Estimate cost for this AI call
+    input_tokens = estimate_tokens(planner_prompt, ai_model)
+    estimated_output_tokens = 2000  # Typical briq breakdown output
+    input_cost = calculate_cost(input_tokens, ai_model, is_input=True)
+    output_cost = calculate_cost(estimated_output_tokens, ai_model, is_input=False)
+    total_cost = input_cost + output_cost
+    print(f"Estimated cost: {format_cost(total_cost)} ({input_tokens:,} in + ~{estimated_output_tokens:,} out tokens @ {ai_model})", flush=True)
 
     master_plan = ""
     try:

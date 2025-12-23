@@ -26,7 +26,54 @@ agents:
       - "exeq.d/cyqle{N}_summary.md"
       - "exeq.d/cyqle{N}_changed.md"
     output: "reqap.d/cyqle{N}_reqap.md"
-    description: "Reviews the main execution summary and qodeyard artifacts to produce a markdown reqap."
+    description: |
+      Multi-Stage Code Review System (v0.8.2):
+      
+      STAGE 1 - Per-Briq Tactical Reviews:
+      - Reviews each briq individually with filtered context
+      - Only includes .q.yaml files relevant to changed files
+      - Enforces strict budget limits to prevent 400 errors
+      - Outputs: reqap.d/cyqle{N}/briq*_reqap.md
+      
+      STAGE 2 - Global Meta-Review:
+      - Aggregates all briq reviews into single assessment
+      - Uses NO raw code - only summaries and reqaps
+      - Produces final reQap with consolidated suggestions
+      - Outputs: reqap.d/cyqle{N}_reqap.md
+      
+      STAGE 3 - LoQal Verification (NEW in v0.8.2):
+      - Deterministic syntax validation (Python compile())
+      - Import resolution checking
+      - Skeleton signature comparison
+      - Results APPENDED to reqap for next cycle
+      - Outputs: reqap.d/cyqle{N}_verification.md
+      
+      The reqap is then promoted to cyqle{N+1}_tasq.md by Qrane's
+      promote_reqap() function, carrying all fix info forward.
+    
+    budget_controlled: true
+    stages:
+      - name: per_briq
+        parallel: false
+      - name: meta_review
+        requires: per_briq
+      - name: loqal_verification
+        requires: meta_review
+
+  - name: loqal_verifier
+    script: loqal_verifier.py
+    input: "qodeyard/"
+    output: "reqap.d/cyqle{N}_verification.md"
+    description: |
+      LoQal Verifier (v0.8.2):
+      - Deterministic (no AI, no tokens)
+      - Python syntax validation via compile()
+      - Import resolution checking
+      - Skeleton signature comparison with qontext.d
+      - Integrated into InspeQtor pipeline (Stage 3)
+      - Can also be run standalone
+    provider: local
+    model: loqal_verifier
 
   - name: qontextor
     script: qontextor.py
