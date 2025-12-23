@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.8.9-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.0-beta` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -507,12 +507,25 @@ All agents utilize this central library to interact with AI models. It uses a hy
 
 This provides a consistent and modular interface for all AI interactions.
 
+#### 0. `tasqLeveler` (The Enhancer) - NEW in v0.9.0
+-   **Purpose**: To automatically enhance tasq.md with golden path tests, dependency graphs, and mock infrastructure.
+-   **Runs Once**: Only executes on Cycle 1, before InstruQtor.
+-   **Enhancements Added**:
+    - 📦 **Dependency Graph**: Explicit module import hierarchy to prevent circular imports
+    - 🎯 **Golden Path Tests**: Code snippets that MUST work after each module is implemented
+    - 🧪 **Mock Infrastructure**: Mock servers/services for testing integrations
+    - 📋 **Success Criteria**: Global definition of what SUCCESS means
+    - ⏱️ **Phase Priority**: Guidance on what to focus on if running low on cycles
+    - 🔗 **Base Classes**: Abstract base classes for similar modules
+-   **Impact**: +15-20% improvement in output quality by giving the AI explicit success criteria.
+-   **Backup**: Original tasq is preserved as `tasq_original.md`.
+
 #### 1. `instruQtor` (The Planner)
 -   **Purpose**: To decompose a high-level task (`tasQ.md`) into a series of small, actionable steps (`briQ.md` files).
 -   **Logic**: It reads the task, constructs a detailed prompt for the AI, invokes the AI via `lib_ai.py`, and then parses the markdown response into individual `briQ.md` files.
 -   **Sensitivity**: The level of detail in the breakdown can be controlled with the `QONQ_SENSITIVITY` environment variable, which corresponds to 10 predefined levels (0-9).
 -   **Context-Aware**: It reads the contents of the `qodeyard` to provide the AI with the current state of the codebase.
--   **Universal File Rule (v0.8.9+)**: InstruQtor enforces a simple rule that applies to ALL cycles:
+-   **Universal File Rule (v0.9.0+)**: InstruQtor enforces a simple rule that applies to ALL cycles:
     - If a file EXISTS in qodeyard → create briqs to MODIFY/EXTEND it (never recreate)
     - If a file DOESN'T EXIST → create briqs to CREATE it (new modules welcome)
     

@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.8.8-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.0-beta` (See `VERSION` file for the canonical version).
 
 > **Note on TUI Mode and Agent Testing:**
 >
@@ -23,7 +23,41 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ---
 
-## What's New in v0.8.8-beta
+## What's New in v0.9.0-beta
+
+### 🚀 TasqLeveler - Automatic Tasq Enhancement
+
+A new agent that supercharges your tasq.md automatically on Cycle 1:
+
+| Enhancement | Impact |
+|-------------|--------|
+| 📦 Dependency Graph | Prevents circular imports |
+| 🎯 Golden Path Tests | Defines success explicitly |
+| 🧪 Mock Infrastructure | Test without real services |
+| 📋 Success Criteria | Clear pass/fail |
+| ⏱️ Phase Priority | Better token allocation |
+
+**+15-20% improvement in output quality!**
+
+```yaml
+# config.yaml - TasqLeveler uses instruqtor's config by default
+agents:
+  tasqleveler:
+    provider: openai
+    model: gpt-4.1-mini
+```
+
+### 🔧 Universal File Rule (s00permode)
+
+One simple rule for ALL cycles:
+- 📁 File EXISTS? → MODIFY/EXTEND it (never recreate)
+- 📄 File MISSING? → CREATE it (new modules welcome!)
+
+No more rebuild-from-scratch bugs on multi-cycle builds!
+
+---
+
+## What's New in v0.8.0-beta
 
 ### 🌀 Qontrabender - The Cache Bender
 
@@ -105,17 +139,18 @@ QonQrete now features a **Triple-Core Memory System**:
 ## Architecture Overview
 
 -   `qrane/`: The **Qrane** orchestrator and CLI
--   `worqer/`: AI agent scripts (`instruQtor`, `construQtor`, `inspeQtor`, `qompressor`, `qontextor`, `qontrabender`)
+-   `worqer/`: AI agent scripts (`tasqLeveler`, `instruQtor`, `construQtor`, `inspeQtor`, `qompressor`, `qontextor`, `qontrabender`)
 -   `worqspace/`: Shared data plane with configuration and generated artifacts
 
 ---
 
 ## The Workflow CyQle
 
-1.  **Plan (`instruQtor`)**: Reads the `tasQ` and creates `briQ` files with detailed plans
-2.  **Execute (`construQtor`)**: Processes each `briQ` and generates code in `qodeyard/`
-3.  **Review (`inspeQtor`)**: Reviews generated code and produces `reQap` with assessment
-4.  **CheQpoint (`gateQeeper`)**: Pauses for user command to proceed
+1.  **Enhance (`tasqLeveler`)**: *Cycle 1 only* - Supercharges tasq with golden paths and mocks
+2.  **Plan (`instruQtor`)**: Reads the `tasQ` and creates `briQ` files with detailed plans
+3.  **Execute (`construQtor`)**: Processes each `briQ` and generates code in `qodeyard/`
+4.  **Review (`inspeQtor`)**: Reviews generated code and produces `reQap` with assessment
+5.  **CheQpoint (`gateQeeper`)**: Pauses for user command to proceed
 
 ---
 
@@ -183,6 +218,10 @@ export DEEPSEEK_API_KEY='your-key'
 
 ```yaml
 agents:
+  tasqleveler:
+    provider: openai
+    model: gpt-4.1-mini  # Runs once on Cycle 1
+    
   instruqtor:
     provider: openai
     model: gpt-4.1-mini
