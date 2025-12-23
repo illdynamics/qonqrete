@@ -88,6 +88,10 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     # Keywords that SHOULD be displayed (high-level status only)
     # These are checked FIRST - if a line contains ANY of these, it displays
     VISIBLE_KEYWORDS = [
+        # TasqLeveler status (v0.9.0+)
+        "[TasqLeveler]", "🚀 TasqLeveler", "Supercharging", "Enhanced tasq:",
+        "Enhancements added:", "📦", "🎯", "🧪", "📋", "⏱️",
+        
         # ConstruQtor status - explicit patterns
         "--- ConstruQtor", "-- Processing Briq:", "- Wrote [Code]", "- Wrote [Plan]",
         "-- Briq Complete:", "Wrote exeQ:", "Per-briq exeQ",
@@ -519,7 +523,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
-    AGENT_COLORS = {"instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B, "qontrabender": Colors.MAGENTA}
+    AGENT_COLORS = {"tasqleveler": Colors.YELLOW, "instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B, "qontrabender": Colors.MAGENTA}
 
     # --- Initial Dual-Core Warmup (Sqrapyard Detection) ---
     # Checks if qodeyard was seeded. If so, generate Skeletons (Fast) and Context (Smart).
@@ -624,6 +628,10 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 name = agent_def['name']
                 agent_config = agent_configs.get(name, {})
                 provider = agent_config.get('provider', None)
+
+                # Skip agents that only run on cycle 1 (e.g., TasqLeveler)
+                if agent_def.get('cycle_1_only', False) and cycle > 1:
+                    continue
 
                 # Skip disabled agents
                 if name == 'qompressor' and not use_qompressor:

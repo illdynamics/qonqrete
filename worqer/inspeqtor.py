@@ -2,13 +2,13 @@
 # worqer/inspeqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InspeQtor Agent - Multi-Stage Code Review System
-# v0.8.9 - Batched Reviews + Cost Efficiency + Gemini Flash-Lite
+# v0.9.0 - Batched Reviews + Cost Efficiency + Gemini Flash-Lite
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # STAGE 1 (This File): Per-briq tactical reviews (batched or individual)
 # STAGE 2 (inspeqtor_meta.py): Global meta-review aggregating all briq reqaps
 #
-# v0.8.9 IMPROVEMENTS:
+# v0.9.0 IMPROVEMENTS:
 # - Batched reviews: Groups briqs into batches for 90% fewer API calls
 # - Default model: gemini-2.5-flash-lite ($0.10/$0.40 per 1M tokens)
 # - Cost estimation before each batch
@@ -49,7 +49,7 @@ DEFAULT_INSPEQTOR_CONFIG = {
     'use_filtered_context': True,             # Only include relevant context files
     'include_neighbor_depth': 1,              # How many hops of dependencies to include
     
-    # BATCHED REVIEW CONFIG (v0.8.9+)
+    # BATCHED REVIEW CONFIG (v0.9.0+)
     'batch_mode': True,                       # Enable batched reviews (recommended)
     'batch_token_roof': 60000,                # Max input tokens per batch (~240KB)
     'batch_max_briqs': 12,                    # Max briqs per batch (safety cap)
@@ -107,7 +107,7 @@ def extract_changed_files(changed_files_content: str, qodeyard_path: Path) -> li
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# BATCHED REVIEW SYSTEM (v0.8.9)
+# BATCHED REVIEW SYSTEM (v0.9.0)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def estimate_briq_tokens(briq_file: Path, all_changed: list[tuple[str, str]]) -> int:
@@ -460,7 +460,7 @@ def run_per_briq_reviews(
     
     if batch_mode:
         # ═══════════════════════════════════════════════════════════════════════════
-        # BATCHED REVIEW MODE (v0.8.9+)
+        # BATCHED REVIEW MODE (v0.9.0+)
         # ═══════════════════════════════════════════════════════════════════════════
         token_roof = config.get('batch_token_roof', 60000)
         max_briqs = config.get('batch_max_briqs', 12)
@@ -1105,7 +1105,7 @@ Per-briq results:
         except Exception as e:
             print(f"[WARN] Could not append verification to reqap: {e}", flush=True)
     
-    print(f"\n=== InspeQtor v0.8.9 Complete: {overall_assessment} ===", flush=True)
+    print(f"\n=== InspeQtor v0.9.0 Complete: {overall_assessment} ===", flush=True)
 
 
 if __name__ == '__main__':
