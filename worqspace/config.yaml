@@ -1,22 +1,94 @@
-# QonQrete Configuration v0.8.0
+# QonQrete Configuration v0.8.8
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# RETRY CONFIGURATION (v0.8.2+)
+# ═══════════════════════════════════════════════════════════════════════════════
+retry:
+  # Enable/disable retry mechanism
+  enabled: true
+  
+  # Maximum attempts per briq (1 = no retry, 3 = 2 retries)
+  max_attempts: 3
+  
+  # Stop entire cycle if a briq fails after all retries?
+  # true = stop immediately on briq failure (fail-fast)
+  # false = continue to next briq, collect all failures (fail-tolerant)
+  stop_on_briq_fail: false
+  
+  # Delay between retries (seconds)
+  retry_delay: 2
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTERLEAVED PIPELINE (NEW in v0.8.3)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Build → Review → Build → Review (per briq)
+interleaved:
+  # Enable interleaved build + review per briq
+  enabled: true
+  
+  # Run local validation after each briq (syntax, imports) - NO AI
+  local_validation: true
+  
+  # Run lightweight AI review after each briq
+  # Set to false for faster builds, true for better quality assurance
+  ai_quick_review: false
+  
+  # Retry briq build if AI review fails
+  retry_on_review_fail: true
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOCAL VERIFICATION (v0.8.2+)
+# ═══════════════════════════════════════════════════════════════════════════════
+verification:
+  # Enable local verification after all briqs complete
+  enabled: true
+  
+  # What to check
+  checks:
+    syntax: true              # Python syntax validation (compile())
+    imports: true             # Check if imports resolve to files
+    skeleton_match: true      # Compare expected vs actual function signatures
+
 agents:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INSTRUQTOR - Briq Planning
+  # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
     provider: openai
-    model: gpt-4.1-mini
+    model: gpt-4.1-nano    # $0.10/$0.40 per 1M - cheap & smart enough
 
   calqulator:
     provider: local
     model: calqulator
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CONSTRUQTOR - Code Generation (needs smarter model)
+  # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
     provider: gemini
-    model: gemini-2.5-pro
+    model: gemini-2.5-flash           # $1.25/$10.00 per 1M - best for code generation
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
+  # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
     provider: openai
-    model: gpt-4.1
+    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    
+    # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
+    batch_mode: true                 # Group briqs into batches
+    batch_token_roof: 60000          # Max input tokens per batch (~240KB)
+    batch_max_briqs: 12              # Max briqs per batch (safety cap)
+    
+    # Legacy per-briq limits (used when batch_mode=false)
+    max_prompt_chars_per_briq: 500000
+    max_context_files_per_briq: 40
+    max_chars_per_context_file: 80000
+    
+    # Context filtering
+    use_filtered_context: true
+    include_neighbor_depth: 1
 
   qontextor:
     provider: local
@@ -73,14 +145,14 @@ options:
   cheqpoint: false
 
   # Max cycles in auto-mode
-  auto_cycle_limit: 4
+  auto_cycle_limit: 7
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Generation Settings
   # ═══════════════════════════════════════════════════════════════════════════
   
   # Briq Granularity Control (0-9)
-  briq_sensitivity: 6
+  briq_sensitivity: 3
 
   # Operational Mode
   mode: program

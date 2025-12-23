@@ -6,17 +6,31 @@ import os
 import math
 
 # --- Token Constants ---
-# Costs are per 1M tokens (Input / Output) as of late 2024/2025 estimates
+# Costs are per 1M tokens (Input / Output) as of late 2025 estimates
 PRICING = {
-    "gemini-2.5-flash": {"input": 0.075, "output": 0.30, "char_per_token": 4.0},
-    "gemini-1.5-pro":   {"input": 3.50,  "output": 10.50, "char_per_token": 4.0},
-    "gpt-4o":           {"input": 2.50,  "output": 10.00, "char_per_token": 4.0},
-    "gpt-4o-mini":      {"input": 0.15,  "output": 0.60,  "char_per_token": 4.0},
-    "claude-3-5-sonnet":{"input": 3.00,  "output": 15.00, "char_per_token": 3.5},
-    "deepseek-chat":    {"input": 0.14,  "output": 0.28,  "char_per_token": 4.0}, # Example pricing
+    # Gemini - RECOMMENDED FOR COST EFFICIENCY
+    "gemini-2.5-flash-lite": {"input": 0.10,  "output": 0.40, "char_per_token": 4.0},  # CHEAPEST
+    "gemini-2.5-flash":      {"input": 0.30,  "output": 2.50, "char_per_token": 4.0},
+    "gemini-2.5-pro":        {"input": 1.25,  "output": 10.00, "char_per_token": 4.0},
+    "gemini-2.0-flash":      {"input": 0.10,  "output": 0.40, "char_per_token": 4.0},
+    "gemini-1.5-pro":        {"input": 3.50,  "output": 10.50, "char_per_token": 4.0},
+    # OpenAI GPT-4.1 series
+    "gpt-4.1":               {"input": 2.00,  "output": 8.00,  "char_per_token": 4.0},
+    "gpt-4.1-mini":          {"input": 0.40,  "output": 1.60,  "char_per_token": 4.0},
+    "gpt-4.1-nano":          {"input": 0.10,  "output": 0.40,  "char_per_token": 4.0},
+    # OpenAI GPT-4o series
+    "gpt-4o":                {"input": 2.50,  "output": 10.00, "char_per_token": 4.0},
+    "gpt-4o-mini":           {"input": 0.15,  "output": 0.60,  "char_per_token": 4.0},
+    # Claude
+    "claude-3-5-sonnet":     {"input": 3.00,  "output": 15.00, "char_per_token": 3.5},
+    "claude-sonnet-4":       {"input": 3.00,  "output": 15.00, "char_per_token": 3.5},
+    "claude-opus-4":         {"input": 15.00, "output": 75.00, "char_per_token": 3.5},
+    # DeepSeek - VERY CHEAP
+    "deepseek-chat":         {"input": 0.14,  "output": 0.28,  "char_per_token": 4.0},
+    "deepseek-coder":        {"input": 0.14,  "output": 0.28,  "char_per_token": 4.0},
 }
 
-def estimate_tokens(text: str, model: str = "gemini-2.5-flash") -> int:
+def estimate_tokens(text: str, model: str = "gemini-2.5-flash-lite") -> int:
     """
     Returns an estimated token count based on character length.
     Fast, local, and accurate enough for estimations.
@@ -30,11 +44,23 @@ def estimate_tokens(text: str, model: str = "gemini-2.5-flash") -> int:
     
     return math.ceil(len(text) / ratio)
 
-def calculate_cost(tokens: int, model: str = "gemini-2.5-flash", is_input: bool = True) -> float:
+def calculate_cost(tokens: int, model: str = "gemini-2.5-flash-lite", is_input: bool = True) -> float:
     """Calculates USD cost for a given token count."""
-    specs = PRICING.get(model, PRICING["gemini-2.5-flash"])
+    specs = PRICING.get(model, PRICING["gemini-2.5-flash-lite"])
     price_per_million = specs["input"] if is_input else specs["output"]
     return (tokens / 1_000_000) * price_per_million
+
+def estimate_call_cost(input_text: str, estimated_output_tokens: int, model: str) -> tuple[float, int, int]:
+    """
+    Estimate cost for an AI call.
+    
+    Returns:
+        (total_cost, input_tokens, output_tokens)
+    """
+    input_tokens = estimate_tokens(input_text, model)
+    input_cost = calculate_cost(input_tokens, model, is_input=True)
+    output_cost = calculate_cost(estimated_output_tokens, model, is_input=False)
+    return (input_cost + output_cost, input_tokens, estimated_output_tokens)
 
 def format_cost(cost: float) -> str:
     """Formats tiny costs readably (e.g., $0.0004)"""
