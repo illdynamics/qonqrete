@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v0.8.9-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.0-beta` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -8,11 +8,13 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **Qrane**: The host‑layer orchestrator (`qrane/qrane.py`) that runs outside the sandbox.
 - **worQer**: An AI agent that performs a specific role (`instruQtor`, `construQtor`, `inspeQtor`).
 - **Qrew**: The collection of agents that work together inside the `Qage`.
+- **tasqLeveler**: A specialized agent (v0.9.0+) that runs ONCE on Cycle 1 to enhance tasq.md with golden path tests, dependency graphs, mock infrastructure specs, and success criteria.
 - **qompressor**: A specialized agent that "skeletonizes" the codebase to create a low-token, high-context representation.
 - **qontextor**: A specialized agent that generates a machine-readable symbol map of the codebase. It can run in a fully local mode (using AST, Jedi, and PyCG) or use AI to analyze the "skeletonized" code.
 - **qontrabender**: A policy-driven hybrid caching agent that assembles variable fidelity payloads. It mixes full code (MEAT) and skeletons (BONES) based on configurable rules.
 - **calqulator**: A specialized agent that provides a token and cost estimate for an upcoming cycle.
 - **Local Provider**: A provider type for agents that do not use AI and run completely locally (e.g., `calqulator`, `qompressor`, `qontrabender`).
+- **LoQal Verifier**: A deterministic local verification agent that checks syntax and imports without AI.
 
 ### Environment & Structure
 - **Qage**: The secure Docker container or Microsandbox that contains the `Qrew`.
@@ -36,6 +38,14 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **Caching Policy**: Configuration file (`caching_policy.yaml`) that defines Qontrabender behavior and modes.
 - **Fidelity Rules**: Configurable rules that determine whether a file gets full, skeleton, or omit treatment.
 - **Core Score**: A computed value (0.0-1.0) indicating how "core" a file is based on dependencies, symbols, and references.
+
+### Build Quality (v0.9.0)
+- **Universal File Rule**: The foundational rule for multi-cycle builds: if a file EXISTS, modify/extend it; if MISSING, create it. Prevents rebuild-from-scratch bugs.
+- **s00permode**: Nickname for the Universal File Rule approach that removes artificial "refinement modes".
+- **Golden Path Tests**: Inline code blocks in enhanced tasq.md that define what MUST work for each module.
+- **Batched Reviews**: InspeQtor groups multiple briqs into single API calls for massive cost savings.
+- **exeQ**: Per-briq execution summary written by ConstruQtor.
+- **reQap**: Review/recap summary written by InspeQtor.
 
 ### User Interaction
 - **gateQeeper**: The human user responsible for making decisions at the `CheQpoint`.

@@ -2,7 +2,7 @@
 # worqer/loqal_verifier.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # LoQal Verifier - Deterministic Post-Cycle Validation
-# v0.8.9 - Improved Import Resolution + Better Skeleton Matching
+# v0.9.0 - Improved Import Resolution + Better Skeleton Matching
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # This module performs LOCAL (no AI) verification of generated code:
