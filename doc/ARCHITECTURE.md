@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.8.9-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.8.8-beta` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -512,11 +512,6 @@ This provides a consistent and modular interface for all AI interactions.
 -   **Logic**: It reads the task, constructs a detailed prompt for the AI, invokes the AI via `lib_ai.py`, and then parses the markdown response into individual `briQ.md` files.
 -   **Sensitivity**: The level of detail in the breakdown can be controlled with the `QONQ_SENSITIVITY` environment variable, which corresponds to 10 predefined levels (0-9).
 -   **Context-Aware**: It reads the contents of the `qodeyard` to provide the AI with the current state of the codebase.
--   **Universal File Rule (v0.8.9+)**: InstruQtor enforces a simple rule that applies to ALL cycles:
-    - If a file EXISTS in qodeyard → create briqs to MODIFY/EXTEND it (never recreate)
-    - If a file DOESN'T EXIST → create briqs to CREATE it (new modules welcome)
-    
-    This prevents the rebuild-from-scratch bug while maintaining full creative freedom.
 
 #### 2. `construQtor` (The Executor)
 -   **Purpose**: To execute the steps from the `briQ.md` files and generate code.

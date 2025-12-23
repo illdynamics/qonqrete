@@ -473,3 +473,67 @@ qontext_schema:
   inbound_refs_key: "inbound_refs"
   purpose_key: "purpose"
   last_changed_key: "last_changed"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INSPEQTOR POLICY (v0.9.0 - Two-Stage Review)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Controls how InspeQtor manages context during code reviews to prevent
+# context explosion errors (400 - context_length_exceeded)
+inspeqtor:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # STAGE 1: Per-Briq Tactical Reviews
+  # ─────────────────────────────────────────────────────────────────────────────
+  per_briq:
+    # Budget limits per individual briq review
+    max_prompt_chars: 500000              # ~500KB safety cap per briq
+    max_context_files: 40                 # Max .q.yaml files to include
+    max_chars_per_file: 80000             # Truncate large context files
+    
+    # Context filtering strategy
+    context_filter:
+      enabled: true                       # Filter context to relevant files only
+      neighbor_depth: 1                   # Include direct dependencies (1-hop)
+      include_inbound_refs: true          # Include files that reference changed files
+      fallback_limit: 10                  # If filtering fails, limit to N random files
+    
+    # Prompt optimization
+    prompt:
+      max_code_chars_per_file: 50000      # Truncate very large code files in prompt
+      include_briq_content: true          # Include the briq specification
+      include_cycle_goal: false           # Defer cycle goal to meta-review
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # STAGE 2: Global Meta-Review
+  # ─────────────────────────────────────────────────────────────────────────────
+  meta_review:
+    # Budget limits for aggregation pass
+    max_prompt_chars: 100000              # Meta-review is text-only, much smaller
+    max_chars_per_briq_summary: 1500      # Truncate individual briq reqaps
+    
+    # Content inclusion
+    include:
+      - cycle_goal                        # Original tasq.md
+      - construqtor_summary               # What was built
+      - per_briq_assessments              # Individual briq verdicts
+      - per_briq_suggestions              # Suggestions from tactical reviews
+    
+    # Content exclusion (keep it light!)
+    exclude:
+      - raw_code                          # NO code in meta-review
+      - full_architectural_context        # NO .q.yaml files
+      - previous_logs                     # NO log context
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # OUTPUT CONFIGURATION
+  # ─────────────────────────────────────────────────────────────────────────────
+  output:
+    # Per-briq reqaps
+    briq_reqap_dir: "reqap.d/cyqle{N}"    # Directory for briq-level reqaps
+    briq_reqap_pattern: "{briq_name}_reqap.md"
+    
+    # Final aggregated reqap
+    final_reqap: "reqap.d/cyqle{N}_reqap.md"
+    
+    # Include individual briq reqaps in final?
+    embed_briq_reqaps_in_final: true

@@ -1,4 +1,480 @@
-# QonQrete v0.8.0-beta Release Notes
+# QonQrete Release Notes
+
+---
+
+## [v0.8.9-beta] - 2025-12-23
+
+### 🚀 Universal File Rule (s00permode)
+
+**The Problem:** Previous "refinement mode" approach was too restrictive - it artificially limited what cycles 2+ could do, potentially blocking legitimate new file creation.
+
+**The Solution:** Removed all mode-based logic. Replaced with ONE simple universal rule that applies to ALL cycles:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 UNIVERSAL FILE RULE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 File EXISTS in qodeyard?
+   → MODIFY it (fix bugs, improve implementation)
+   → EXTEND it (add new functions, classes, features)
+   → NEVER recreate it from scratch
+
+📄 File DOESN'T EXIST yet?
+   → CREATE it (new modules are welcome!)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**Why This is Better:**
+- ✅ No artificial "modes" that restrict creativity
+- ✅ Full freedom to create new files on ANY cycle
+- ✅ Prevents rebuild-from-scratch bug (the actual problem)
+- ✅ Simple rule that's easy for AI to follow
+- ✅ Works naturally for complex multi-cycle builds
+
+**What Changed:**
+- Removed `is_refinement_cycle` logic entirely
+- Removed mode-based directive switching
+- Added Universal File Rule to ALL InstruQtor prompts
+- Added qodeyard file count display for context
+
+**Examples of Valid Briqs (any cycle):**
+```
+✅ "Implement HavocClient RPC methods in src/c2/havoc_client.py" (MODIFY)
+✅ "Add geofencing module at src/safety/geofencing.py" (CREATE new)
+✅ "Fix syntax error in src/traffic/dga.py" (MODIFY)
+✅ "Add unit tests for orchestration" (CREATE new test files)
+```
+
+**Examples of Invalid Briqs (any cycle, if file exists):**
+```
+❌ "Setup project root and create main.py" (main.py EXISTS)
+❌ "Create the configuration system" (config.yaml EXISTS)
+❌ "Initialize the C2 client base class" (base_client.py EXISTS)
+```
+
+---
+
+### 🐛 Original Fix: Prevent Rebuild-from-Scratch Bug
+
+**The Bug:** When a cycle was marked `[FAILURE]` or `[PARTIAL]`, InstruQtor would interpret this as "start from scratch" instead of "iterate on existing code". This caused cycle 3+ to recreate the entire project scaffolding.
+
+**Evidence from AutoWonqNet build:**
+```
+CyQle 1: briq000_setup_project_root_and_gitignore  ← Initial build ✅
+CyQle 2: briq000_implement_havoc_client_rpc_logic  ← Refinement ✅
+CyQle 3: briq000_setup_project_directory_and_core  ← REBUILDING! ❌
+```
+
+**Impact:** Multi-cycle builds now properly iterate while maintaining full creative freedom.
+
+---
+
+## [v0.8.8-beta] - 2025-12-23
+
+### ✅ Confirmed: Batched Reviews Working Perfectly!
+
+Deep analysis of v0.8.7 production run (28 briqs, 7 cyQles) confirmed:
+- **Zero `[UNKNOWN]` assessments** - batch parsing working correctly
+- **All `[FAILURE]` results are real AI assessments**, not parse failures
+- **Retry mechanism working** - briq027 failed once (Gemini API error), succeeded on attempt 2
+- **Cost efficiency achieved** - 28 briqs reviewed in 3 batches for ~$0.01 total
+
+### 🔧 LoQal Verifier Display Fix
+
+**Problem:** "Running local validation..." was showing under `construQtor` in the event log, but it's conceptually part of `inspeQtor`'s LoQal Verification stage.
+
+**Fix:** Changed display to use `[LoQal]` prefix for clearer attribution:
+```
+# Before (v0.8.7):
+〘aQQ〙『construQtor』⸎ - Running local validation...
+
+# After (v0.8.8):
+〘aQQ〙『construQtor』⸎      [LoQal] Running validation...
+〘aQQ〙『construQtor』⸎      [LoQal] ✅ Passed
+```
+
+Also shows clear status indicators:
+- `[LoQal] ✅ Passed` - validation succeeded
+- `[LoQal] ⚠️ Import warnings: N` - warnings found
+- `[LoQal] ❌ Syntax errors found:` - errors found
+
+### 🎯 Default Config Updates
+
+Updated `config.yaml` with production-ready defaults:
+
+```yaml
+agents:
+  instruqtor:
+    provider: gemini
+    model: gemini-2.5-flash-lite    # $0.10/$0.40 - planning
+  
+  construqtor:
+    provider: gemini
+    model: gemini-2.5-pro           # $1.25/$10.00 - code generation (UPGRADED)
+  
+  inspeqtor:
+    provider: gemini
+    model: gemini-2.5-flash-lite    # $0.10/$0.40 - batched reviews
+
+options:
+  briq_sensitivity: 3
+  auto_cycle_limit: 7
+  mode: program
+  cheqpoint: false
+```
+
+### 📊 Understanding Batch Results
+
+The batch results show **real AI assessments**, not system errors:
+```
+Batch 1/3: 12 briqs → ✅0 ⚠️1 ❌11   # AI found 11 incomplete briqs
+Batch 2/3: 12 briqs → ✅0 ⚠️0 ❌12   # AI found 12 incomplete briqs
+Batch 3/3: 4 briqs  → ✅3 ⚠️1 ❌0    # 3 complete, 1 partial
+```
+
+This is **expected behavior** for cycle 1 of a multi-cycle build - the AI is correctly identifying that most code is incomplete. Subsequent cycles will fill in the gaps.
+
+### 🔧 Changes
+
+- `construqtor.py`: Changed "Running local validation..." to "[LoQal] Running validation..." with status indicators
+- `qrane.py`: Added `[LoQal]` to VISIBLE_KEYWORDS for display filter
+- `config.yaml`: Updated construQtor to gemini-2.5-pro, added production defaults
+- All agents now use Gemini provider for consistency
+
+### 💰 Expected Costs (7 cyQles × ~20 briqs each)
+
+| Agent | Model | Est. Cost |
+|-------|-------|-----------|
+| InstruQtor | flash-lite | ~$0.10 |
+| ConstruQtor | pro | ~$3.50 |
+| InspeQtor | flash-lite (batched) | ~$0.15 |
+| **TOTAL** | | **~$4.00** |
+
+Compare to v0.8.5 unbatched with GPT-4.1: **$100+** 💸
+
+---
+
+## [v0.8.7-beta] - 2025-12-23
+
+### 🐛 Bug Fix: Display Filter Was Completely Broken
+
+**Problem:** ConstruQtor and InspeQtor status messages weren't showing in the event log at all:
+```
+# What v0.8.6 showed (missing everything!):
+〘aQQ〙『construQtor』⸎ Per-briq exeQ summaries written to: exeq.d/cyqle1/
+
+# What was missing:
+--- ConstruQtor v0.8.7: Processing 1 Briqs (Interleaved) ---
+-- Processing Briq: cyqle1_tasq1_briq000_setup_project.md --
+     - Wrote [Code] main.py
+-- Briq Complete: ... [✅ SUCCESS] (attempts: 1) --
+```
+
+**Root Cause:** The `is_content_line()` function was being called BEFORE checking `VISIBLE_KEYWORDS`, and it was matching patterns in legitimate status lines.
+
+**Fix:** Complete rewrite of display filter logic:
+1. Check `VISIBLE_KEYWORDS` FIRST - if found, display immediately (unless blocked)
+2. Only apply content filtering to lines WITHOUT visible keywords
+3. Removed `is_content_line()` from the visible keyword path entirely
+4. Added more explicit patterns to match all status message formats
+
+### ✨ Expected Output Now
+
+```
+〘aQQ〙『construQtor』⸎ --- ConstruQtor v0.8.7: Processing 5 Briqs (Interleaved) ---
+〘aQQ〙『construQtor』⸎ -- Processing Briq: cyqle1_tasq1_briq000_setup.md --
+〘aQQ〙『construQtor』⸎ - Wrote [Code] main.py
+〘aQQ〙『construQtor』⸎ - Wrote [Code] config.yaml
+〘aQQ〙『construQtor』⸎ -- Briq Complete: ... [✅ SUCCESS] (attempts: 1) --
+〘aQQ〙『construQtor』⸎ -- Processing Briq: cyqle1_tasq1_briq001_logging.md --
+...
+〘aQQ〙『inspeQtor』  ⸎ --- InspeQtor: Reviewing 5 briqs in 1 batches ---
+〘aQQ〙『inspeQtor』  ⸎ -- Batch 1/1: 5 briqs --
+〘aQQ〙『inspeQtor』  ⸎    Estimated batch cost: $0.00024
+〘aQQ〙『inspeQtor』  ⸎    Batch results: ✅5 ⚠️0 ❌0
+〘aQQ〙『inspeQtor』  ⸎ --- Reviews complete: 5 briqs, estimated $0.00024 total ---
+〘aQQ〙『inspeQtor』  ⸎ === Final Assessment: [SUCCESS] ===
+```
+
+### 🔧 Changes
+
+- `qrane/qrane.py`: Rewrote `should_display()` with simpler priority logic
+- Removed `is_content_line()` from display path for visible keyword lines
+- Added explicit `VISIBLE_KEYWORDS` patterns for ALL status message formats:
+  - `"--- ConstruQtor"`, `"-- Processing Briq:"`, `"- Wrote [Code]"`, `"-- Briq Complete:"`
+  - `"--- InspeQtor:"`, `"-- Batch "`, `"Batch results:"`, `"--- Reviews complete:"`
+  - `"[SUCCESS]"`, `"[FAILURE]"`, `"[PARTIAL]"`, `"attempts:"`
+- Reduced `BLOCKED_KEYWORDS` to only AI review content noise
+
+---
+
+## [v0.8.6-beta] - 2025-12-23
+
+### 🚀 Major: Batched Reviews (90% Fewer API Calls!)
+
+**The Problem:** v0.8.5 with per-briq reviews made 77+ API calls per cycle, burning $16+ with GPT-4.1.
+
+**The Solution:** Batched reviews group multiple briqs into single API calls.
+
+| Briqs | Old API Calls | New API Calls | Savings |
+|-------|---------------|---------------|---------|
+| 20 | 20 | ~3 | 85% |
+| 50 | 50 | ~6 | 88% |
+| 77 | 77 | ~8 | **90%** |
+
+### 💰 New Default: Gemini 2.5 Flash-Lite
+
+All agents now default to **gemini-2.5-flash-lite** ($0.10/$0.40 per 1M tokens):
+
+| Agent | Old Model | New Model | Cost Reduction |
+|-------|-----------|-----------|----------------|
+| InstruQtor | gpt-4.1-mini | gemini-2.5-flash-lite | **75%** |
+| InspeQtor | gpt-4.1 | gemini-2.5-flash-lite | **95%** |
+| ConstruQtor | gemini-2.5-pro | gemini-2.5-flash | *unchanged* |
+
+**Why Flash-Lite?**
+- Same price as GPT-4.1-nano ($0.10/$0.40)
+- Newer model (2.5 series) with better quality
+- 1M token context window (perfect for batched reviews!)
+- More than smart enough for planning and reviewing
+
+### ✨ New Configuration Options
+
+```yaml
+agents:
+  inspeqtor:
+    # BATCHED REVIEW MODE (v0.8.6+)
+    batch_mode: true           # Enable batched reviews (default: true)
+    batch_token_roof: 60000    # Max input tokens per batch
+    batch_max_briqs: 12        # Max briqs per batch
+```
+
+### 📊 Cost Comparison (77 briqs)
+
+| Configuration | Est. Cost/Cycle |
+|---------------|-----------------|
+| v0.8.5 + gpt-4.1 | **$16.00** |
+| v0.8.5 + gpt-4.1-mini | $3.20 |
+| v0.8.6 + batched + flash-lite | **$0.15** |
+
+That's a **99% cost reduction** from the default v0.8.5 config!
+
+### 🔧 Changes
+
+- `inspeqtor.py`: Added batched review system with `group_briqs_into_batches()`, `build_batched_review_prompt()`, `parse_batched_response()`
+- `lib_funqtions.py`: Updated pricing table with correct Gemini rates
+- `config.yaml`: New defaults for all agents, added `batch_mode`, `batch_token_roof`, `batch_max_briqs`
+- Display filter: Continues to suppress per-briq noise (from v0.8.5)
+
+### 📋 Expected Output
+
+```
+inspeQtor  ⸎ --- InspeQtor: Reviewing 77 briqs in 8 batches (cyQle 1) ---
+inspeQtor  ⸎ -- Batch 1/8: 12 briqs --
+inspeQtor  ⸎    Estimated batch cost: $0.00234
+inspeQtor  ⸎    Batch results: ✅10 ⚠️2 ❌0
+inspeQtor  ⸎ -- Batch 2/8: 12 briqs --
+...
+inspeQtor  ⸎ --- Reviews complete: 77 briqs, estimated $0.15 total ---
+```
+
+### ⚙️ Disabling Batch Mode
+
+If you prefer per-briq reviews (legacy mode):
+
+```yaml
+agents:
+  inspeqtor:
+    batch_mode: false
+```
+
+---
+
+## [v0.8.5-beta] - 2025-12-23
+
+### 🚨 TOKEN BURN FIX - CRITICAL
+
+**Problem Identified:** Running InspeQtor with `gpt-4.1` (not mini) on 77 briqs × 2 stages = ~154 AI calls burned ~$25 in a single run.
+
+**Root Cause:** InspeQtor was configured with `gpt-4.1` ($2.00/$8.00 per 1M tokens) instead of `gpt-4.1-mini` ($0.40/$1.60 per 1M tokens).
+
+**Recommendation:** For development/testing, use:
+```yaml
+agents:
+  inspeqtor:
+    provider: openai
+    model: gpt-4.1-mini  # or gpt-4.1-nano for even cheaper
+```
+
+### ✨ New Features
+
+#### 1. Cost Estimation Display
+
+InstruQtor and InspeQtor now show estimated costs before AI calls:
+```
+instruQtor ⸎ Estimated cost: $0.00234 (1,234 in + ~2,000 out tokens @ gpt-4.1-mini)
+inspeQtor  ⸎ --- Per-briq reviews complete: 77 briqs, estimated $3.45 total ---
+inspeQtor  ⸎ Estimated cost: $0.00456 (meta-review @ gpt-4.1)
+```
+
+#### 2. Cleaner Display Filter System
+
+Completely overhauled the display filter to suppress noise:
+- **Blocked:** Per-briq `Assessment: SUCCESS/PARTIAL/FAILURE` lines (only Final shown)
+- **Blocked:** `## Summary`, `## Issues Found`, markdown headers
+- **Blocked:** Code snippets (`except FileNotFoundError:`, `with pytest`, etc.)
+- **Blocked:** Table rows from AI reviews
+- **Kept:** High-level status (`Briq Complete`, `Processing Briq:`, `Wrote exeQ`)
+- **Kept:** `=== Final Assessment:` and `=== InspeQtor v0.8.5 Complete:` 
+
+#### 3. LoQal Verifier Renamed to InspeQtor
+
+Display name `loQal_verifier` now shows as `inspeQtor` since it's part of the InspeQtor pipeline.
+
+### 🔧 Changes
+
+- Added `lib_funqtions.py` pricing for GPT-4.1 series and Claude models
+- Display filter now has `BLOCKED_KEYWORDS` list for aggressive noise suppression
+- `total_review_cost` tracking across all per-briq reviews
+- Cost estimation added to InstruQtor briq planning
+- Cost estimation added to InspeQtor per-briq and meta reviews
+
+### 📋 Clean Display Example
+
+With v0.8.5, your event log should look like:
+```
+construQtor ⸎ -- Processing Briq: cyqle1_tasq1_briq000_setup_project.md --
+construQtor ⸎ - Wrote [Code] main.py
+construQtor ⸎ - Running local validation...
+construQtor ⸎ - Wrote exeQ: cyqle1_tasq1_briq000_setup_project_exeq.md
+construQtor ⸎ -- Briq Complete: ... [✅ SUCCESS] (attempts: 1) --
+...
+inspeQtor  ⸎ --- Per-briq reviews complete: 20 briqs, estimated $0.89 total ---
+inspeQtor  ⸎ === Final Assessment: [SUCCESS] ===
+inspeQtor  ⸎ === InspeQtor v0.8.5 Complete: [SUCCESS] ===
+```
+
+No more `## Summary`, `## Issues Found`, per-briq `Assessment:` spam!
+
+---
+
+## [v0.8.4-beta] - 2025-12-23
+
+### 🐛 Bug Fixes
+
+#### 1. Fixed Empty/Invalid `__init__.py` Files Being Written
+
+**Problem:** AI sometimes outputs empty code blocks like:
+```
+```python:qodeyard/src/__init__.py
+```
+```
+
+This resulted in files containing just ``` (markdown fence) instead of valid Python.
+
+**Fix:** Improved code block regex parser to:
+- Prevent matching across code blocks (using `[^`]` pattern)
+- Skip files with empty content
+- Skip files where content starts with ``` 
+- Skip files with content shorter than 3 characters
+- Added `[SKIP]` log messages for transparency
+
+#### 2. Improved Import Resolution in LoQal Verifier
+
+**Problem:** Import checker was flagging `src.utils.logger` as missing even when `src/utils/logger.py` existed.
+
+**Fix:** Enhanced import resolution to:
+- Search recursively for the final module name
+- Check paths with and without the first component (e.g., `src.utils.logger` → also check `utils/logger.py`)
+- Only flag imports that start with known local prefixes (`src.`, `lib.`, `app.`, `core.`, `utils.`, `tests.`)
+- Added more third-party packages to skip list (`cryptography`, `grpc`, `pydantic`, etc.)
+
+#### 3. Fixed Skeleton Signature False Positives (from v0.8.3)
+
+**Note:** v0.8.3 already included the fix for `argparse`, `logging`, `sys`, `Path` false positives. If you're still seeing these, ensure you're running v0.8.4.
+
+### 🔧 Changes
+
+- ConstruQtor version header updated to v0.8.4
+- LoQal Verifier version header updated to v0.8.4
+- Improved logging for skipped files during code block parsing
+
+### 📋 What to Expect
+
+With v0.8.4, you should see:
+```
+     [SKIP] Empty file: src/__init__.py
+     [SKIP] Invalid content (markdown fence): src/evasion/__init__.py
+     - Wrote [Code] src/utils/logger.py
+     - Wrote [Code] src/agent/factory.py
+```
+
+And verification reports should have fewer false positives.
+
+---
+
+## [v0.8.3-beta] - 2025-12-23
+
+### ✨ New Features & Enhancements
+
+#### 1. Interleaved Pipeline (Build → Validate → Build → Validate)
+
+ConstruQtor now processes each briq with interleaved validation:
+
+```
+FOR EACH briq:
+  1. BUILD     - AI generates code
+  2. VALIDATE  - Local syntax/import check (NO AI)
+  3. REVIEW    - Optional AI quick review
+  4. RETRY     - If failed, retry up to 3x
+  5. EXEQ      - Write per-briq exeQ summary
+```
+
+#### 2. Per-Briq ExeQ Summaries
+
+ConstruQtor now writes execution summaries to `exeq.d/cyqle{N}/`:
+- `briq000_exeq.md` - Status, files written, validation results
+- `briq001_exeq.md` - etc.
+
+**Note:** ConstruQtor writes **exeQ** summaries (execution results). InspeQtor writes **reQap** summaries (review/recap). This distinction keeps the terminology consistent.
+
+#### 3. Smarter LoQal Verifier Skeleton Matching
+
+Fixed false positive warnings for standard library imports and typing constructs:
+- Filters out: `argparse`, `sys`, `os`, `re`, `json`, etc.
+- Filters out: `List`, `Dict`, `Any`, `Optional`, `Union`, etc.
+- Filters out: Uppercase names (likely classes, not functions)
+- Filters out: Single-letter names (likely type vars)
+
+#### 4. Improved Qrane Display Keywords
+
+Added new keywords to visible output filter:
+- `exeQ` - Per-briq execution summaries
+- `Running local validation` - Validation status
+- `Briq Complete` - Per-briq completion
+- `SUCCESS`, `FAILURE`, `PARTIAL` - Status indicators
+
+### 🔧 Configuration
+
+```yaml
+# Interleaved Pipeline (NEW in v0.8.3)
+interleaved:
+  enabled: true              # Enable build→review per briq
+  local_validation: true     # Syntax/import checks (no AI)
+  ai_quick_review: false     # Set true for AI review per briq
+  retry_on_review_fail: true # Retry if AI review fails
+```
+
+### 🐛 Bug Fixes
+
+- Fixed `NameError: name 'e' is not defined` in inspeqtor.py line 785
+- Fixed LoQal Verifier false positives for stdlib/typing symbols
+- Fixed terminology: ConstruQtor → exeQ, InspeQtor → reQap
+
+---
+
+# QonQrete v0.8.9-beta Release Notes
 
 This release introduces **Qontrabender** - a sophisticated policy-driven hybrid caching agent with Variable Fidelity, and a comprehensive `caching_policy.yaml` configuration system. This represents a major architectural enhancement to the context management system.
 

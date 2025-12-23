@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.8.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.8.8-beta` (See `VERSION` file for the canonical version).
 
 > **Note on TUI Mode and Agent Testing:**
 >
@@ -23,7 +23,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ---
 
-## What's New in v0.8.0-beta
+## What's New in v0.8.8-beta
 
 ### 🌀 Qontrabender - The Cache Bender
 

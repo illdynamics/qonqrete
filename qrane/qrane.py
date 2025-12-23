@@ -64,7 +64,16 @@ def check_tui_keys(ui, proc=None):
         raise KillSignal
 
 def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logger: logging.Logger, qonsole_log_path: Path, events_log_path: Path, env: dict, ui=None) -> bool:
-    agent_display_name = agent_name.replace('q', 'Q')
+    # Display name overrides
+    DISPLAY_NAME_OVERRIDES = {
+        'loqal_verifier': 'inspeQtor',  # LoQal verifier is part of InspeQtor pipeline
+    }
+    
+    if agent_name in DISPLAY_NAME_OVERRIDES:
+        agent_display_name = DISPLAY_NAME_OVERRIDES[agent_name]
+    else:
+        agent_display_name = agent_name.replace('q', 'Q')
+    
     target_width = 11
     padding = " " * (target_width - len(agent_display_name))
     qrane_padding = " " * (target_width - 5)
@@ -72,72 +81,111 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
     agent_prefix = f"{Colors.B}〘{prefix}〙『{color}{agent_display_name}{Colors.B}』{padding}⸎ {Colors.R}"
 
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # DISPLAY FILTER SYSTEM v0.8.8 - Fixed to show all status messages
+    # ═══════════════════════════════════════════════════════════════════════════════
+    
+    # Keywords that SHOULD be displayed (high-level status only)
+    # These are checked FIRST - if a line contains ANY of these, it displays
     VISIBLE_KEYWORDS = [
-        "Handing off", "Processing", "Executed", "Wrote", "reQap",
-        "Checking", "Generating", "Ingesting", "--- Architect", "Plan",
-        "Found", "Summary", "Skeletonizing", "CalQulator", "Est. Cost",
-        "--- Dependencies", "Initial scan", "Update scan", "DISABLED",
-        "--- Qontrabender", "Pipeline mode", "Payload", "Qache", "Fidelity"
+        # ConstruQtor status - explicit patterns
+        "--- ConstruQtor", "-- Processing Briq:", "- Wrote [Code]", "- Wrote [Plan]",
+        "-- Briq Complete:", "Wrote exeQ:", "Per-briq exeQ",
+        "attempts:", "[SUCCESS]", "[FAILURE]", "[PARTIAL]",
+        "[SKIP]", "[WARN]", "[ERROR]",
+        
+        # LoQal Verifier (runs during build AND inspeQtor)
+        "[LoQal]",
+        
+        # InstruQtor status
+        "--- Architect", "Generating", "Ingesting", "Estimated cost:",
+        
+        # InspeQtor status (batched mode v0.8.6+)
+        "--- InspeQtor:", "=== InspeQtor", "-- Batch ", "Batch results:", 
+        "--- Reviews complete:", "=== Final Assessment:",
+        "Estimated batch cost:",
+        
+        # CalQulator status
+        "CalQulator", "Est. Cost", "TOTAL CYCLE", "-----------------------------------",
+        
+        # Qontextor/Qompressor/Qontrabender
+        "--- Qontrabender", "Pipeline mode", "Payload", "Qache", "Fidelity",
+        "Skeletonizing", "--- Dependencies", "Initial scan", "Update scan", "DISABLED",
+        
+        # Generic status
+        "Handing off", "Executed", "Complete:", "reQap", "exeQ",
     ]
     
-    # Patterns that indicate code/content output (should be filtered out)
-    # These take precedence over VISIBLE_KEYWORDS to prevent file content from leaking
+    # Keywords that should NEVER be displayed (suppress AI output noise)
+    BLOCKED_KEYWORDS = [
+        # InspeQtor verbose review content
+        "## Summary", "## Issues Found", "## Suggestions", "## Executive",
+        "## Critical Issues", "## Integration", "## Per-Briq", "## Warning",
+        "## Consolidated", "## Patterns", "| Briq |", "| briq",
+        "-- Reviewing:",  # Individual briq review headers
+        "Assessment: SUCCESS", "Assessment: PARTIAL", "Assessment: FAILURE",
+        "Assessment: [SUCCESS]", "Assessment: [PARTIAL]", "Assessment: [FAILURE]",
+        
+        # Code snippets
+        "except ", "try:", "raise ", "return ", "import ", "from ",
+        "def ", "class ", "elif ", "else:", "while ",
+        "async ", "await ", "as e:", "lambda ", "yield ",
+        "self.", "logger.", "print(", "logging.", "pytest.",
+        
+        # Code exceptions
+        "FileNotFoundError", "TypeError", "ValueError",
+        "KeyError", "AttributeError", "IndexError", "RuntimeError",
+        
+        # Markdown noise
+        "```", "- **", "* **", "### ",
+        
+        # Cross-briq noise
+        "[CROSS-BRIQ]",
+    ]
+    
+    # Patterns that indicate code content (for lines WITHOUT visible keywords)
     CONTENT_FILTER_PATTERNS = [
-        # Code constructs
-        "let ", "var ", "const ", "def ", "function ", "class ", "import ",
-        "from ", "return ", "if ", "else ", "elif ", "for ", "while ",
-        "async ", "await ", "export ", "module ", "require(", "include ",
-        "struct ", "enum ", "impl ", "fn ", "pub ", "use ", "mod ",
-        # Method calls (Python/JS/etc)
-        "self.", "this.", "super.", "super(",
-        # HTML/XML
-        "<html", "<head", "<body", "<div", "<span", "<script", "<style",
-        "<!DOCTYPE", "<?xml", "<template", "<component",
-        # JSON/YAML content (not file names)
-        '{"', "{'", '": ', "': ",
-        # String literals / escape sequences indicating file content
-        '\\n', '\\t', '\\r', '\\"', "\\'",
-        # Common code symbols in sequence
-        "});", ");", "};", "});",  "=> {", "-> {",
-        # Assignment patterns
-        " = {", " = [", " = (", " = '", ' = "',
-        # Function calls with multiple args (catches things like send_error(404, "..."))
-        ", \"", ", '", '("', "('",
-        # Common programming patterns
-        "print(", "console.", "logger.", "log(", "fmt.", "println",
-        "raise ", "throw ", "catch ", "try:", "except:",
-        "None", "null", "undefined", "True", "False", "true", "false",
+        "let ", "var ", "const ", "function ", "module.exports",
+        "require(", "struct ", "enum ", "impl ", "fn ", "pub ",
+        "self.", "this.", "super.",
+        "<html", "<head", "<body", "<div", "<script",
+        '{"', "{'", '": {',
+        "});", ");", "};", "=> {",
+        "console.", "fmt.", "println",
     ]
-    
-    def is_content_line(line: str) -> bool:
-        """Check if a line looks like code/file content rather than a status message."""
-        # Very long lines are likely content dumps
-        if len(line) > 200:
-            return True
-        # Check for content patterns
-        line_lower = line.lower()
-        for pattern in CONTENT_FILTER_PATTERNS:
-            if pattern.lower() in line_lower:
-                return True
-        # Lines starting with common code starters
-        stripped = line.lstrip()
-        code_starters = ('let ', 'var ', 'const ', 'def ', 'class ', 'function ', 
-                         'import ', 'from ', 'return ', 'if ', 'for ', 'while ',
-                         'async ', 'await ', 'pub ', 'fn ', 'use ', 'mod ', 
-                         'struct ', 'enum ', 'impl ', '#include', '#define',
-                         '//', '/*', '#!', '<?', '<!', '<html', '<body',
-                         'self.', 'this.', 'super.', 'super(')
-        if any(stripped.lower().startswith(s.lower()) for s in code_starters):
-            return True
-        return False
     
     def should_display(line: str) -> bool:
         """Determine if a line should be displayed in the event log."""
-        # First check if it's content - filter it out
-        if is_content_line(line):
+        # PRIORITY 1: Check for visible keywords FIRST - these always display
+        for kw in VISIBLE_KEYWORDS:
+            if kw in line:
+                # But still block if it's clearly AI review noise
+                if any(blocked in line for blocked in BLOCKED_KEYWORDS):
+                    return False
+                return True
+        
+        # PRIORITY 2: No visible keyword - filter out code/content
+        # Very long lines are content
+        if len(line) > 300:
             return False
-        # Then check if it has visible keywords
-        return any(kw in line for kw in VISIBLE_KEYWORDS)
+        
+        # Check for content patterns
+        for pattern in CONTENT_FILTER_PATTERNS:
+            if pattern in line:
+                return False
+        
+        # Lines starting with code constructs
+        stripped = line.lstrip()
+        code_starters = ('let ', 'var ', 'const ', 'def ', 'class ', 'function ', 
+                         'import ', 'from ', 'return ', 'if ', 'for ', 'while ',
+                         'pub ', 'fn ', 'use ', 'mod ', 'struct ', 'enum ', 
+                         '//', '/*', '#!', '<?', '<!', '<html',
+                         'self.', 'this.', 'super.', 'except ', 'try:', 'raise ')
+        if any(stripped.lower().startswith(s.lower()) for s in code_starters):
+            return False
+        
+        # Default: don't display unrecognized lines
+        return False
 
     event_start_msg = f"Initiating {agent_display_name}..."
     with open(events_log_path, 'a', encoding='utf-8') as f:
