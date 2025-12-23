@@ -2,10 +2,10 @@
 # worqer/instruqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InstruQtor Agent - Task Decomposition & Planning
-# v0.8.9 - Universal File Rule (s00permode)
+# v0.9.0 - Universal File Rule (s00permode)
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# v0.8.9 FIX: Removed artificial "refinement modes". Instead uses one simple
+# v0.9.0 FIX: Removed artificial "refinement modes". Instead uses one simple
 # universal rule that applies to ALL cycles:
 #
 #   📁 File EXISTS in qodeyard? → MODIFY/EXTEND it (never recreate)
