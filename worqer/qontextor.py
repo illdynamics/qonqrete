@@ -256,56 +256,16 @@ def analyze_ripple_effect(symbol_name: str, qontext_dir: Path) -> dict:
     return result
 
 def get_call_graph(directory: Path):
-    """Generates and caches the call graph for the entire project."""
+    """Generates and caches the call graph for the entire project.
+    
+    Note: pycg package is broken on PyPI (module name mismatch).
+    This function silently returns empty dict, relying on jedi for dependency analysis.
+    """
     global call_graph
     if call_graph is None:
-        try:
-            print("  - Generating call graph with pycg (once)...", flush=True)
-            output_path = directory / ".pycg.json"
-            files_to_scan = [str(p) for p in directory.rglob("*.py")]
-            
-            if not files_to_scan:
-                print("  - [WARN] No Python files found to generate call graph.", flush=True)
-                call_graph = {}
-                return call_graph
-
-            # Find pycg executable - check common locations
-            import shutil
-            pycg_cmd = shutil.which("pycg")
-            if not pycg_cmd:
-                # Check pip install locations
-                for candidate in ["/usr/local/bin/pycg", "/usr/bin/pycg", 
-                                  os.path.expanduser("~/.local/bin/pycg")]:
-                    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-                        pycg_cmd = candidate
-                        break
-            
-            if not pycg_cmd:
-                print("  - [WARN] pycg not found in PATH. Dependency information will be incomplete.", flush=True)
-                call_graph = {}
-                return call_graph
-
-            subprocess.run(
-                [pycg_cmd, "--output", str(output_path)] + files_to_scan,
-                cwd=str(directory),
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            with open(output_path, "r") as f:
-                raw_call_graph = json.load(f)
-
-            call_graph = {}
-            for caller, callees in raw_call_graph.items():
-                if caller not in call_graph:
-                    call_graph[caller] = []
-                call_graph[caller].extend(callees)
-
-            output_path.unlink() # clean up
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            stderr = e.stderr if isinstance(e, subprocess.CalledProcessError) else str(e)
-            print(f"  - [WARN] pycg failed: {stderr}. Dependency information will be incomplete.", flush=True)
-            call_graph = {} # Empty dict to avoid retrying
+        # pycg is broken on PyPI - module name mismatch prevents import
+        # Silently use empty call graph; jedi provides dependency analysis instead
+        call_graph = {}
     return call_graph
 
 

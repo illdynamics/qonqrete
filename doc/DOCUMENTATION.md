@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.9.6-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.9-beta` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -19,7 +19,7 @@ This document provides a comprehensive overview of the QonQrete Secure AI Constr
 
 ## Architecture
 
-This section contains Mermaid diagrams illustrating the complete architecture of the QonQrete system v0.8.8.
+This section contains Mermaid diagrams illustrating the complete architecture of the QonQrete system v0.9.9.
 
 ### High-Level System Overview
 

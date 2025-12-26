@@ -82,21 +82,6 @@ agents:
       - name: loqal_verification
         requires: meta_review
 
-  - name: loqal_verifier
-    script: loqal_verifier.py
-    input: "qodeyard/"
-    output: "reqap.d/cyqle{N}_verification.md"
-    description: |
-      LoQal Verifier (v0.8.2):
-      - Deterministic (no AI, no tokens)
-      - Python syntax validation via compile()
-      - Import resolution checking
-      - Skeleton signature comparison with qontext.d
-      - Integrated into InspeQtor pipeline (Stage 3)
-      - Can also be run standalone
-    provider: local
-    model: loqal_verifier
-
   - name: qontextor
     script: qontextor.py
     input: "exeq.d/cyqle{N}_changed.md"

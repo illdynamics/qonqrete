@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.9.6-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.9-beta` (See `VERSION` file for the canonical version).
 
 > **Note on Experimental Features:**
 >
@@ -22,6 +22,63 @@ This architecture ensures that AI-generated code and processes cannot affect the
 > - **Microsandbox** (`-M/--msb`): Alternative to Docker runtime
 >
 > We welcome community contributions! If you encounter any issues or have suggestions, please report them.
+
+---
+
+## What's New in v0.9.9-beta
+
+### 🎨 Cleaner Console Output
+
+Less noise, more signal:
+
+| Component | Change |
+|-----------|--------|
+| **TasqLeveler** | Only `[TasqLeveler]` status lines shown |
+| **InspeQtor** | Only final assessment displayed |
+| **Table dividers** | Hidden from output |
+| **pycg warnings** | Removed (package broken, using jedi instead) |
+
+---
+
+## What's New in v0.9.8-beta
+
+### 🐛 Critical Bug Fixes
+
+Two critical bugs discovered during multi-cycle builds:
+
+| Issue | Fix |
+|-------|-----|
+| **Skeleton overwrites code** | ConstruQtor now detects and skips Qompressor skeleton markers |
+| **Exit code 1 after inspeqtor** | Removed duplicate loqal_verifier from pipeline |
+
+### 🔧 Technical Details
+
+The skeleton bug occurred when AI copied `bloq.d/` skeletons from context back to `qodeyard/`, overwriting working code with broken `# ... (body stripped by Qompressor) ...` stubs.
+
+---
+
+## What's New in v0.9.7-beta
+
+### 🔧 Reliability Fixes
+
+Fixes discovered during real-world multi-cycle builds:
+
+| Issue | Fix |
+|-------|-----|
+| **Cache write errors** | Added `--tmpfs /home/qrane/.cache:rw,size=500m` for model caching |
+| **PATH issues** | Added `ENV PATH="/usr/local/bin:${PATH}"` to Dockerfile |
+
+### 📦 Default Configuration Updates
+
+| Setting | New Default | Previous |
+|---------|-------------|----------|
+| `briq_sensitivity` | 6 (fine-grained) | 3 |
+| `auto_cycle_limit` | 3 cycles | 7 |
+
+### 🗂️ Ignore File Updates
+
+- Added `worqspace/qonstructions/*` to `.gitignore` and `.dockerignore`
+- Qonstructions are now excluded from version control (user-specific outputs)
 
 ---
 
@@ -40,7 +97,7 @@ No more losing your work! QonQrete now supports resuming from previous runs and 
 | **Clean (Specific)** | `./qonqrete.sh clean -q qage_20251226` | Delete specific Qage |
 | **Clean (All)** | `./qonqrete.sh clean -A` | Delete all Qages |
 
-### 🛡️ Security Hardening (v0.9.6)
+### 🛡️ Security Hardening
 
 QonQrete implements defense-in-depth security:
 
@@ -52,6 +109,7 @@ QonQrete implements defense-in-depth security:
 | **Capability dropping** | `--cap-drop=ALL` then adds only required caps |
 | **Resource limits** | Memory (4GB), CPU (2 cores), PIDs (100) |
 | **Secure /tmp** | `--tmpfs /tmp:rw,noexec,nosuid,size=100m` |
+| **Writable cache** | `--tmpfs /home/qrane/.cache:rw,size=500m` |
 
 **Required Capabilities:** SETUID, SETGID, CHOWN, FOWNER, DAC_OVERRIDE
 
@@ -104,7 +162,7 @@ No `tasq.md`? No problem! QonQrete opens your `$EDITOR` automatically:
 
 ---
 
-## What's New in v0.9.6-beta
+## What's New in v0.9.0-beta
 
 ### 🚀 TasqLeveler - Automatic Tasq Enhancement
 

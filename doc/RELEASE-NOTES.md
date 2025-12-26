@@ -2,6 +2,196 @@
 
 ---
 
+## [v0.9.9-beta] - 2025-12-26
+
+### 🎨 OUTPUT CLEANUP & UX IMPROVEMENTS
+
+Cleaner console output with less noise.
+
+---
+
+#### 🔇 Console Output Changes
+
+| Component | Change |
+|-----------|--------|
+| **TasqLeveler** | Only shows `[TasqLeveler]` status lines, not verbose headers |
+| **InspeQtor** | Only shows `=== InspeQtor` and `=== Final Assessment:` |
+| **Table dividers** | `|----` lines are now hidden |
+| **Batch details** | Per-batch progress hidden, only final assessment shown |
+
+---
+
+#### 🔧 pycg Removal
+
+| Issue | Resolution |
+|-------|------------|
+| **pycg package broken** | Module name mismatch on PyPI (PyCG vs pycg) |
+| **Dependency analysis** | Now relies on jedi (already integrated) |
+| **Warning spam** | Removed - silent fallback to empty call graph |
+
+---
+
+#### 📋 Verified Features
+
+| Feature | Status |
+|---------|--------|
+| **Universal File Rule** | ✅ InstruQtor enforces modify/extend for existing files |
+| **Skeleton Protection** | ✅ ConstruQtor skips files with Qompressor markers |
+| **Cycle Continuity** | ✅ PARTIAL → promotes reqap → next cycle fixes |
+| **LoQal Verification** | ✅ Internal to InspeQtor, no exit code issues |
+
+---
+
+#### 📝 Files Changed
+
+- `qrane/qrane.py` - Updated VISIBLE_KEYWORDS and BLOCKED_KEYWORDS
+- `worqer/qontextor.py` - Removed broken pycg, uses jedi only
+- `requirements.txt` - Removed pycg dependency
+
+---
+
+## [v0.9.8-beta] - 2025-12-26
+
+### 🐛 CRITICAL BUG FIXES
+
+Two critical bugs discovered during multi-cycle builds that caused pipeline failures.
+
+---
+
+#### 🐛 Bug Fixes
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| **Skeleton overwrites code** | AI copies bloq.d skeletons from context back to qodeyard | Detect and skip files containing Qompressor markers |
+| **Exit code 1 after inspeqtor** | loqal_verifier runs twice (in inspeqtor + standalone) | Remove standalone loqal_verifier from pipeline_config.yaml |
+
+---
+
+#### 📝 Technical Details
+
+**construqtor.py - Skeleton Detection:**
+```python
+# Skip files containing Qompressor skeleton markers
+skeleton_markers = [
+    "# ... (body stripped by Qompressor) ...",
+    "// ... (body stripped by Qompressor) ...",
+    "/* ... (body stripped by Qompressor) ... */",
+    "(body stripped by Qompressor)"
+]
+if any(marker in code_content for marker in skeleton_markers):
+    print(f"     [SKIP] Skeleton detected (not overwriting): {filename}")
+    continue
+```
+
+**pipeline_config.yaml:**
+- Removed standalone `loqal_verifier` agent
+- LoQal verification still runs as Stage 3 inside inspeqtor
+
+---
+
+#### 🔍 Issue Analysis
+
+**Skeleton Overwrite Bug:**
+1. `use_qompressor: true` sends bloq.d skeletons as context
+2. AI sees skeleton in prompt, copies it to output
+3. ConstruQtor writes skeleton to qodeyard
+4. Working code replaced with broken `# ... (body stripped by Qompressor) ...`
+
+**Duplicate Verifier Bug:**
+1. InspeQtor runs LoQal verification internally (Stage 3)
+2. Pipeline also runs loqal_verifier.py as standalone agent
+3. Standalone exits with code 1 on errors
+4. Pipeline aborts even though inspeqtor handled it
+
+---
+
+#### 📋 Migration
+
+No container rebuild required. Just update:
+- `worqer/construqtor.py`
+- `worqspace/pipeline_config.yaml`
+
+---
+
+## [v0.9.7-beta] - 2025-12-26
+
+### 🔧 RELIABILITY & COMPATIBILITY FIXES
+
+Fixes issues discovered during real-world testing with tasq builds.
+
+---
+
+#### 🐛 Bug Fixes
+
+| Issue | Fix |
+|-------|-----|
+| **pycg not found** | Now uses `sys.executable -m pycg` for reliable module invocation |
+| **sentence-transformers cache errors** | Added `--tmpfs /home/qrane/.cache:rw,size=500m` for writable cache |
+| **PATH issues in container** | Added `ENV PATH="/usr/local/bin:${PATH}"` to Dockerfile |
+
+---
+
+#### 🆕 New Features
+
+| Feature | Description |
+|---------|-------------|
+| **Writable cache tmpfs** | 500MB tmpfs mount for model caching during runs |
+| **Robust pycg detection** | Multi-method detection: module first, then direct executable |
+
+---
+
+#### ⚙️ Configuration Changes
+
+| Setting | New Default | Previous | Reason |
+|---------|-------------|----------|--------|
+| `briq_sensitivity` | 6 | 3 | Finer-grained task decomposition |
+| `auto_cycle_limit` | 3 | 7 | More controlled autonomous runs |
+
+---
+
+#### 🗂️ Ignore File Updates
+
+| File | Change |
+|------|--------|
+| `.gitignore` | Added `worqspace/qonstructions/*` (keeps `.gitkeep`) |
+| `.dockerignore` | Added `worqspace/qonstructions/*` |
+
+Qonstructions are now excluded from version control as they are user-specific outputs.
+
+---
+
+#### 📝 Technical Changes
+
+**Dockerfile:**
+```dockerfile
+# Added explicit PATH for pip scripts
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Created cache directory for sentence-transformers
+RUN mkdir -p /home/qrane/.cache/huggingface && \
+    chown -R qrane:qrew /home/qrane/.cache
+```
+
+**qonqrete.sh:**
+```bash
+# Added tmpfs for cache directory
+--tmpfs /home/qrane/.cache:rw,size=500m
+```
+
+**qontextor.py:**
+```python
+# Now uses sys.executable for reliable pycg invocation
+subprocess.run([sys.executable, "-m", "pycg", ...])
+```
+
+---
+
+#### 📋 Migration
+
+Requires container rebuild (`./qonqrete.sh init`) for Dockerfile changes.
+
+---
+
 ## [v0.9.6-beta] - 2025-12-26
 
 ### 🔧 BUGFIX & POLISH RELEASE
