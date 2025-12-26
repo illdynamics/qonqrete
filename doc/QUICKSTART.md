@@ -1,10 +1,17 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.9.3-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.9-beta` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
-## What's New in v0.9.1
+## What's New in v0.9.8
+
+- **pycg Reliability**: Fixed module invocation using `sys.executable -m pycg`
+- **Cache Support**: Added writable tmpfs for sentence-transformers caching
+- **Default Tuning**: `briq_sensitivity: 6`, `auto_cycle_limit: 3`
+- **Ignore Updates**: Qonstructions now excluded from git/docker
+
+## What's New in v0.9.6
 
 - **Resume Command**: Continue work from previous Qages with `./qonqrete.sh resume`
 - **Qonstructions**: Save completed runs as persistent projects

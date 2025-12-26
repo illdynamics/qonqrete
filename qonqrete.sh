@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v0.9.1-beta - Resume, Qonstructions, Interactive Clean, Security Hardening
+# v0.9.5-beta - Full Security Hardening Release
 
 set -euo pipefail
 
@@ -20,6 +20,31 @@ WORKSPACE_DIR="${SCRIPT_DIR}/worqspace"
 CONFIG_FILE="${WORKSPACE_DIR}/pipeline_config.yaml"
 CONTAINER_WORKSPACE="/qonq"
 QONSTRUCTIONS_DIR="${WORKSPACE_DIR}/qonstructions"
+
+# --- DOCKER SECURITY FLAGS ---
+# These flags harden the container runtime:
+#   --read-only         : Root filesystem is read-only (only /qonq is writable)
+#   --cap-drop=ALL      : Drop all Linux capabilities
+#   --cap-add=SETUID/GID: Required for gosu to switch users
+#   --cap-add=CHOWN     : Required for entrypoint to fix /qonq permissions
+#   --cap-add=FOWNER    : Required for chmod on files
+#   --cap-add=DAC_OVERRIDE: Required to access host-mounted directories
+#   --memory/--cpus     : Resource limits to prevent DoS
+#   --pids-limit        : Prevent fork bombs
+#   --tmpfs             : Ephemeral /tmp and cache with noexec
+DOCKER_SECURITY_FLAGS="--read-only \
+    --cap-drop=ALL \
+    --cap-add=SETUID \
+    --cap-add=SETGID \
+    --cap-add=CHOWN \
+    --cap-add=FOWNER \
+    --cap-add=DAC_OVERRIDE \
+    --memory=4g \
+    --memory-swap=4g \
+    --cpus=2 \
+    --pids-limit=100 \
+    --tmpfs /tmp:rw,noexec,nosuid,size=100m \
+    --tmpfs /home/qrane/.cache:rw,size=500m"
 
 # --- STYLING & COLORS ---
 B=$'\033[1;34m'
@@ -124,49 +149,93 @@ select_qage_interactive() {
     local i=1
     
     # Find all qage_* directories, sorted by date (newest first)
-    while IFS= read -r qage; do
-        qages+=("$qage")
-    done < <(ls -1dt "${WORKSPACE_DIR}"/qage_* 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+    for qage_dir in $(ls -1dt "${WORKSPACE_DIR}"/qage_* 2>/dev/null); do
+        if [ -d "$qage_dir" ]; then
+            qages+=("$(basename "$qage_dir")")
+        fi
+    done
     
     if [ ${#qages[@]} -eq 0 ]; then
-        log_qrane "No Qage directories found in worqspace."
+        echo "No Qage directories found in worqspace." >&2
         return 1
     fi
     
-    echo ""
-    echo -e "${C}┌─────────────────────────────────────────────────┐${R}"
-    echo -e "${C}│${W}         Available Qages (newest first)         ${C}│${R}"
-    echo -e "${C}├─────────────────────────────────────────────────┤${R}"
+    # Output menu to stderr so it shows on screen (stdout is captured)
+    echo "" >&2
+    echo -e "${C}┌───────────────────────────────────────────────────────────┐${R}" >&2
+    echo -e "${C}│${W}            Available Qages (newest first)                 ${C}│${R}" >&2
+    echo -e "${C}├───────────────────────────────────────────────────────────┤${R}" >&2
     
     for qage in "${qages[@]}"; do
         # Extract timestamp for prettier display
         local ts="${qage#qage_}"
         local formatted_ts="${ts:0:4}-${ts:4:2}-${ts:6:2} ${ts:9:2}:${ts:11:2}:${ts:13:2}"
-        printf "${C}│${R}  ${G}%2d${R}) %-20s ${Y}(%s)${R} ${C}│${R}\n" "$i" "$qage" "$formatted_ts"
+        echo -e "${C}│${R}  ${G}${i})${R} ${qage}  ${Y}(${formatted_ts})${R}" >&2
         ((i++))
     done
     
-    echo -e "${C}└─────────────────────────────────────────────────┘${R}"
-    echo ""
+    echo -e "${C}└───────────────────────────────────────────────────────────┘${R}" >&2
+    echo "" >&2
     
     local selection
-    echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Select Qage [1-${#qages[@]}]: "
-    read -r selection
+    echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Select Qage [1-${#qages[@]}] or 'q' to quit: " >&2
+    read -r selection </dev/tty
     
-    # Validate selection
-    if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#qages[@]} ]; then
-        log_qrane "Invalid selection."
+    # Allow quit
+    if [[ "$selection" == "q" ]] || [[ "$selection" == "Q" ]]; then
+        echo "Selection cancelled." >&2
         return 1
     fi
     
-    # Return selected qage name (array is 0-indexed)
+    # Validate selection
+    if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#qages[@]} ]; then
+        echo "Invalid selection: ${selection}" >&2
+        return 1
+    fi
+    
+    # Return selected qage name to stdout (this is what gets captured)
     echo "${qages[$((selection-1))]}"
+}
+
+# --- PERMISSION FIX HELPER ---
+# Fix permissions on qage directory so host user can access AND modify files
+# Container creates files as qrane user, this makes them writable by host
+fix_qage_permissions() {
+    local qage_path="$1"
+    if [ -d "$qage_path" ] && command -v docker >/dev/null 2>&1; then
+        docker run --rm -v "${qage_path}:/fix" \
+            --entrypoint /bin/bash "$IMAGE_NAME" \
+            -c "chmod -R a+rwX /fix 2>/dev/null || true" 2>/dev/null || true
+    fi
+}
+
+# --- DELETE QAGE HELPER ---
+# Delete qage using docker if host permissions fail
+delete_qage() {
+    local qage_path="$1"
+    
+    # First try normal delete
+    if rm -rf "$qage_path" 2>/dev/null; then
+        return 0
+    fi
+    
+    # If that failed, use docker to delete (runs as root)
+    if [ -d "$qage_path" ] && command -v docker >/dev/null 2>&1; then
+        docker run --rm -v "${qage_path}:/delete" \
+            --entrypoint /bin/bash "$IMAGE_NAME" \
+            -c "rm -rf /delete/* /delete/.[!.]* 2>/dev/null || true" 2>/dev/null
+        # Now try to remove the empty directory
+        rmdir "$qage_path" 2>/dev/null || rm -rf "$qage_path" 2>/dev/null || true
+    fi
 }
 
 # --- QONSTRUCTIONS SAVE PROMPT ---
 prompt_save_qonstruction() {
     local qage_path="$1"
     local qage_name="$(basename "$qage_path")"
+    
+    # Fix permissions first so we can access files
+    fix_qage_permissions "$qage_path"
     
     echo ""
     echo -e "${C}┌─────────────────────────────────────────────────┐${R}"
@@ -180,7 +249,16 @@ prompt_save_qonstruction() {
     echo ""
     
     if [[ ! $save_answer =~ ^[Yy]$ ]]; then
-        log_qrane "Qonstruction not saved. Qage remains at: ${qage_name}"
+        # User declined to save - ask if they want to delete the qage
+        echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Delete this Qage? [y/N] "
+        read -n 1 -r delete_answer
+        echo ""
+        if [[ $delete_answer =~ ^[Yy]$ ]]; then
+            delete_qage "$qage_path"
+            log_qrane "Qage deleted: ${qage_name}"
+        else
+            log_qrane "Qage preserved at: ${qage_name}"
+        fi
         return 0
     fi
     
@@ -383,15 +461,20 @@ case "$COMMAND" in
         if [ "$CLEAN_ALL" = true ]; then
             # Original behavior: clean all qages
             if ls "${WORKSPACE_DIR}"/qage_* 1> /dev/null 2>&1; then
-                log_qrane "Found previous run directories."
+                # Count qages
+                qage_count=$(ls -1d "${WORKSPACE_DIR}"/qage_* 2>/dev/null | wc -l)
+                log_qrane "Found ${qage_count} Qage directories."
 
-                PROMPT_STR="${PREFIX_TPL/\{PREFIX\}/cQQ} Delete ALL 'qage_*' directories? [y/N] "
+                PROMPT_STR="${PREFIX_TPL/\{PREFIX\}/cQQ} Delete ALL ${qage_count} 'qage_*' directories? [y/N] "
                 echo -ne "$PROMPT_STR"
-                read -n 1 -r
-                echo
+                read -r REPLY </dev/tty
 
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    rm -rf "${WORKSPACE_DIR}"/qage_*
+                    for qage_dir in "${WORKSPACE_DIR}"/qage_*; do
+                        if [ -d "$qage_dir" ]; then
+                            delete_qage "$qage_dir"
+                        fi
+                    done
                     log_qrane "All Qages cleaned."
                 else
                     log_qrane "Clean aborted."
@@ -405,11 +488,10 @@ case "$COMMAND" in
             if [ -d "$target_qage" ]; then
                 log_qrane "Found Qage: ${QAGE_NAME}"
                 echo -ne "${PREFIX_TPL/\{PREFIX\}/cQQ} Delete '${QAGE_NAME}'? [y/N] "
-                read -n 1 -r
-                echo
+                read -r REPLY </dev/tty
                 
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    rm -rf "$target_qage"
+                    delete_qage "$target_qage"
                     log_qrane "Qage '${QAGE_NAME}' deleted."
                 else
                     log_qrane "Clean aborted."
@@ -420,19 +502,19 @@ case "$COMMAND" in
             fi
         else
             # Interactive selection
-            selected=$(select_qage_interactive) || exit 1
-            if [ -n "$selected" ]; then
-                target_qage="${WORKSPACE_DIR}/${selected}"
-                echo -ne "${PREFIX_TPL/\{PREFIX\}/cQQ} Delete '${selected}'? [y/N] "
-                read -n 1 -r
-                echo
-                
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    rm -rf "$target_qage"
-                    log_qrane "Qage '${selected}' deleted."
-                else
-                    log_qrane "Clean aborted."
-                fi
+            selected=$(select_qage_interactive)
+            if [ $? -ne 0 ] || [ -z "$selected" ]; then
+                exit 1
+            fi
+            target_qage="${WORKSPACE_DIR}/${selected}"
+            echo -ne "${PREFIX_TPL/\{PREFIX\}/cQQ} Delete '${selected}'? [y/N] "
+            read -r REPLY </dev/tty
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                delete_qage "$target_qage"
+                log_qrane "Qage '${selected}' deleted."
+            else
+                log_qrane "Clean aborted."
             fi
         fi
         ;;
@@ -521,7 +603,8 @@ case "$COMMAND" in
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
-            docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
+            docker run --rm -it $DOCKER_SECURITY_FLAGS \
+                $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
@@ -610,7 +693,8 @@ case "$COMMAND" in
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
-            docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
+            docker run --rm -it $DOCKER_SECURITY_FLAGS \
+                $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi

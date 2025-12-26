@@ -2,6 +2,484 @@
 
 ---
 
+## [v0.9.9-beta] - 2025-12-26
+
+### 🎨 OUTPUT CLEANUP & UX IMPROVEMENTS
+
+Cleaner console output with less noise.
+
+---
+
+#### 🔇 Console Output Changes
+
+| Component | Change |
+|-----------|--------|
+| **TasqLeveler** | Only shows `[TasqLeveler]` status lines, not verbose headers |
+| **InspeQtor** | Only shows `=== InspeQtor` and `=== Final Assessment:` |
+| **Table dividers** | `|----` lines are now hidden |
+| **Batch details** | Per-batch progress hidden, only final assessment shown |
+
+---
+
+#### 🔧 pycg Removal
+
+| Issue | Resolution |
+|-------|------------|
+| **pycg package broken** | Module name mismatch on PyPI (PyCG vs pycg) |
+| **Dependency analysis** | Now relies on jedi (already integrated) |
+| **Warning spam** | Removed - silent fallback to empty call graph |
+
+---
+
+#### 📋 Verified Features
+
+| Feature | Status |
+|---------|--------|
+| **Universal File Rule** | ✅ InstruQtor enforces modify/extend for existing files |
+| **Skeleton Protection** | ✅ ConstruQtor skips files with Qompressor markers |
+| **Cycle Continuity** | ✅ PARTIAL → promotes reqap → next cycle fixes |
+| **LoQal Verification** | ✅ Internal to InspeQtor, no exit code issues |
+
+---
+
+#### 📝 Files Changed
+
+- `qrane/qrane.py` - Updated VISIBLE_KEYWORDS and BLOCKED_KEYWORDS
+- `worqer/qontextor.py` - Removed broken pycg, uses jedi only
+- `requirements.txt` - Removed pycg dependency
+
+---
+
+## [v0.9.8-beta] - 2025-12-26
+
+### 🐛 CRITICAL BUG FIXES
+
+Two critical bugs discovered during multi-cycle builds that caused pipeline failures.
+
+---
+
+#### 🐛 Bug Fixes
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| **Skeleton overwrites code** | AI copies bloq.d skeletons from context back to qodeyard | Detect and skip files containing Qompressor markers |
+| **Exit code 1 after inspeqtor** | loqal_verifier runs twice (in inspeqtor + standalone) | Remove standalone loqal_verifier from pipeline_config.yaml |
+
+---
+
+#### 📝 Technical Details
+
+**construqtor.py - Skeleton Detection:**
+```python
+# Skip files containing Qompressor skeleton markers
+skeleton_markers = [
+    "# ... (body stripped by Qompressor) ...",
+    "// ... (body stripped by Qompressor) ...",
+    "/* ... (body stripped by Qompressor) ... */",
+    "(body stripped by Qompressor)"
+]
+if any(marker in code_content for marker in skeleton_markers):
+    print(f"     [SKIP] Skeleton detected (not overwriting): {filename}")
+    continue
+```
+
+**pipeline_config.yaml:**
+- Removed standalone `loqal_verifier` agent
+- LoQal verification still runs as Stage 3 inside inspeqtor
+
+---
+
+#### 🔍 Issue Analysis
+
+**Skeleton Overwrite Bug:**
+1. `use_qompressor: true` sends bloq.d skeletons as context
+2. AI sees skeleton in prompt, copies it to output
+3. ConstruQtor writes skeleton to qodeyard
+4. Working code replaced with broken `# ... (body stripped by Qompressor) ...`
+
+**Duplicate Verifier Bug:**
+1. InspeQtor runs LoQal verification internally (Stage 3)
+2. Pipeline also runs loqal_verifier.py as standalone agent
+3. Standalone exits with code 1 on errors
+4. Pipeline aborts even though inspeqtor handled it
+
+---
+
+#### 📋 Migration
+
+No container rebuild required. Just update:
+- `worqer/construqtor.py`
+- `worqspace/pipeline_config.yaml`
+
+---
+
+## [v0.9.7-beta] - 2025-12-26
+
+### 🔧 RELIABILITY & COMPATIBILITY FIXES
+
+Fixes issues discovered during real-world testing with tasq builds.
+
+---
+
+#### 🐛 Bug Fixes
+
+| Issue | Fix |
+|-------|-----|
+| **pycg not found** | Now uses `sys.executable -m pycg` for reliable module invocation |
+| **sentence-transformers cache errors** | Added `--tmpfs /home/qrane/.cache:rw,size=500m` for writable cache |
+| **PATH issues in container** | Added `ENV PATH="/usr/local/bin:${PATH}"` to Dockerfile |
+
+---
+
+#### 🆕 New Features
+
+| Feature | Description |
+|---------|-------------|
+| **Writable cache tmpfs** | 500MB tmpfs mount for model caching during runs |
+| **Robust pycg detection** | Multi-method detection: module first, then direct executable |
+
+---
+
+#### ⚙️ Configuration Changes
+
+| Setting | New Default | Previous | Reason |
+|---------|-------------|----------|--------|
+| `briq_sensitivity` | 6 | 3 | Finer-grained task decomposition |
+| `auto_cycle_limit` | 3 | 7 | More controlled autonomous runs |
+
+---
+
+#### 🗂️ Ignore File Updates
+
+| File | Change |
+|------|--------|
+| `.gitignore` | Added `worqspace/qonstructions/*` (keeps `.gitkeep`) |
+| `.dockerignore` | Added `worqspace/qonstructions/*` |
+
+Qonstructions are now excluded from version control as they are user-specific outputs.
+
+---
+
+#### 📝 Technical Changes
+
+**Dockerfile:**
+```dockerfile
+# Added explicit PATH for pip scripts
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Created cache directory for sentence-transformers
+RUN mkdir -p /home/qrane/.cache/huggingface && \
+    chown -R qrane:qrew /home/qrane/.cache
+```
+
+**qonqrete.sh:**
+```bash
+# Added tmpfs for cache directory
+--tmpfs /home/qrane/.cache:rw,size=500m
+```
+
+**qontextor.py:**
+```python
+# Now uses sys.executable for reliable pycg invocation
+subprocess.run([sys.executable, "-m", "pycg", ...])
+```
+
+---
+
+#### 📋 Migration
+
+Requires container rebuild (`./qonqrete.sh init`) for Dockerfile changes.
+
+---
+
+## [v0.9.6-beta] - 2025-12-26
+
+### 🔧 BUGFIX & POLISH RELEASE
+
+Fixes several issues discovered during security hardening testing.
+
+---
+
+#### 🐛 Bug Fixes
+
+| Issue | Fix |
+|-------|-----|
+| **pycg not found** | Use `shutil.which()` to find pycg, fallback to common pip locations |
+| **Permission denied on qage files** | Changed `chmod a+rX` to `a+rwX` for full host access |
+| **Cannot save Qonstruction** | Added `fix_qage_permissions()` helper that runs docker to chmod files |
+| **Cannot delete Qage** | Added `delete_qage()` helper that uses docker when host rm fails |
+| **TasqLeveler KeyError** | Escaped `{{` in prompt template (Python .format() was interpreting dicts) |
+
+---
+
+#### 🆕 New Features
+
+| Feature | Description |
+|---------|-------------|
+| **Delete Qage prompt** | When declining to save Qonstruction, now asks if you want to delete the Qage |
+| **Permission fix helper** | `fix_qage_permissions()` ensures host user can read/write container-created files |
+| **Docker-based delete** | `delete_qage()` uses docker to delete when host permissions fail |
+
+---
+
+#### 🔒 Security Capability Additions
+
+Required capabilities for full functionality:
+
+| Capability | Purpose |
+|------------|---------|
+| `SETUID` | gosu user switch |
+| `SETGID` | gosu group switch |
+| `CHOWN` | Fix mounted volume ownership |
+| `FOWNER` | chmod on files |
+| `DAC_OVERRIDE` | Access host-mounted directories |
+
+---
+
+#### 📝 Technical Changes
+
+**entrypoint.sh:**
+```bash
+# Changed from 2770 to 2775 for host user read access
+chmod -R 2775 /qonq
+
+# Added umask for world-readable new files
+umask 0002
+```
+
+**qontextor.py:**
+```python
+# Use shutil.which to find pycg, with fallbacks
+import shutil
+pycg_cmd = shutil.which("pycg")
+if not pycg_cmd:
+    for candidate in ["/usr/local/bin/pycg", "/usr/bin/pycg"]:
+        if os.path.isfile(candidate):
+            pycg_cmd = candidate
+            break
+subprocess.run([pycg_cmd, "--output", ...])
+```
+
+**tasqleveler.py:**
+```python
+# Escaped literal braces in prompt template
+config={{'test': True}}  # Double braces escape .format()
+```
+
+**qonqrete.sh:**
+```bash
+# Permission fix now makes files writable (not just readable)
+fix_qage_permissions() {
+    docker run --rm -v "${qage_path}:/fix" \
+        --entrypoint /bin/bash "$IMAGE_NAME" \
+        -c "chmod -R a+rwX /fix"  # Changed from a+rX to a+rwX
+}
+
+# New delete helper uses docker when host can't delete
+delete_qage() {
+    rm -rf "$qage_path" 2>/dev/null || \
+    docker run --rm -v "${qage_path}:/delete" \
+        --entrypoint /bin/bash "$IMAGE_NAME" \
+        -c "rm -rf /delete/*"
+}
+```
+
+---
+
+#### 📋 Migration
+
+No breaking changes. Just update files from zip.
+
+---
+
+## [v0.9.5-beta] - 2025-12-26
+
+### 🔐 SECURITY HARDENING RELEASE
+
+This release focuses on comprehensive security hardening across all layers of QonQrete.
+
+---
+
+#### 🐳 Docker Container Hardening
+
+| Feature | Description |
+|---------|-------------|
+| **Read-only Filesystem** | Container root is read-only, only `/qonq` is writable |
+| **Drop All Capabilities** | `--cap-drop=ALL` removes all Linux capabilities |
+| **Memory Limits** | `--memory=4g --memory-swap=4g` prevents OOM attacks |
+| **PID Limits** | `--pids-limit=100` prevents fork bombs |
+| **CPU Limits** | `--cpus=2` ensures fair resource allocation |
+| **Secure tmpfs** | `--tmpfs /tmp:rw,noexec,nosuid,size=100m` for ephemeral /tmp |
+| **HEALTHCHECK** | Container health monitoring with Dockerfile directive |
+
+> **Note:** `--security-opt=no-new-privileges` intentionally omitted as it conflicts with `gosu` privilege dropping.
+
+**Docker Security Flags (in qonqrete.sh):**
+```bash
+DOCKER_SECURITY_FLAGS="--read-only \
+    --cap-drop=ALL \
+    --memory=4g --memory-swap=4g \
+    --cpus=2 --pids-limit=100 \
+    --tmpfs /tmp:rw,noexec,nosuid,size=100m"
+```
+
+> **Note:** `--security-opt=no-new-privileges:true` intentionally omitted - it conflicts with `gosu` privilege dropping. The gosu pattern provides equivalent security by dropping from root to `qrane` user.
+
+---
+
+#### 📦 Dependency Security
+
+| Feature | Description |
+|---------|-------------|
+| **Pinned Base Image** | `ubuntu:22.04@sha256:...` with digest for reproducibility |
+| **requirements.txt** | All Python packages pinned to specific versions |
+| **Minimal Install** | `--no-install-recommends` reduces attack surface |
+
+**New file: `requirements.txt`**
+```
+PyYAML==6.0.2
+openai==2.14.0
+anthropic==0.75.0
+google-generativeai==0.8.6
+jedi==0.19.2
+docstring-parser==0.16
+pycg==0.0.8
+numpy==2.2.1
+sentence-transformers==3.3.1
+jsonschema==4.23.0
+```
+
+> **Note:** `sentence-transformers` includes PyTorch - container image is ~3GB but enables full semantic search in Qontextor complex mode.
+
+---
+
+#### 🔑 Secrets Management
+
+| Feature | Description |
+|---------|-------------|
+| **.env.example** | Template file with placeholder API keys |
+| **No secrets in repo** | `.env` remains in `.gitignore` and `.dockerignore` |
+
+**New file: `.env.example`** - Copy to `.env` and add your keys.
+
+---
+
+#### ⏱️ API Timeouts & Retry Limits
+
+| Feature | Description |
+|---------|-------------|
+| **Default Timeout** | 300 seconds (5 minutes) for all AI API calls |
+| **Hard Retry Limit** | Maximum 10 retries enforced in code |
+| **Timeout Exceptions** | Proper `TimeoutError` raised instead of hanging |
+
+All providers (OpenAI, Anthropic, Gemini, DeepSeek) now have explicit timeout handling.
+
+---
+
+#### 🛡️ New Security Library: `lib_security.py`
+
+New module providing:
+
+| Function | Purpose |
+|----------|---------|
+| `validate_path()` | Jail enforcement - paths must stay within `/qonq` |
+| `safe_write_file()` | Atomic writes with size limits |
+| `safe_read_file()` | Size-limited reads with jail check |
+| `is_path_within_jail()` | Symlink-aware path validation |
+| `validate_config()` | JSON Schema validation for config.yaml |
+| `validate_tasq_file()` | Size limit check (100KB max) |
+| `setup_signal_handlers()` | SIGTERM/SIGINT graceful shutdown |
+| `sanitize_traceback()` | Redact API keys from error logs |
+| `SecurityLogger` | JSON-formatted structured logging |
+
+**Constants:**
+```python
+MAX_TASQ_SIZE = 100 * 1024           # 100KB
+MAX_GENERATED_FILE_SIZE = 1024 * 1024  # 1MB
+MAX_CONFIG_SIZE = 50 * 1024          # 50KB
+MAX_RETRIES_HARD_LIMIT = 10
+MAX_TIMEOUT_SECONDS = 300
+```
+
+---
+
+#### 🪵 Structured Logging
+
+| Feature | Description |
+|---------|-------------|
+| **JSON Format** | Machine-parseable log entries |
+| **Audit Trail** | Security events logged separately |
+| **Sanitized Tracebacks** | API keys redacted from error messages |
+
+Example JSON log entry:
+```json
+{
+  "timestamp": "2025-12-26T16:00:00.000Z",
+  "level": "INFO",
+  "event_type": "audit",
+  "message": "path_traversal_blocked",
+  "details": {"attempted_path": "../../../etc/passwd"}
+}
+```
+
+---
+
+#### 📁 File System Security
+
+| Feature | Description |
+|---------|-------------|
+| **Jail Enforcement** | All file operations validated against `/qonq` |
+| **Symlink Protection** | `os.path.realpath()` resolves symlinks before validation |
+| **Size Limits** | Generated files capped at 1MB, tasq.md at 100KB |
+| **Atomic Writes** | Write to temp file, then rename (prevents corruption) |
+
+---
+
+#### ⚡ Signal Handling
+
+| Feature | Description |
+|---------|-------------|
+| **SIGTERM Handler** | Graceful shutdown on container stop |
+| **SIGINT Handler** | Clean exit on Ctrl+C |
+| **Handler Registration** | Plugins can register cleanup callbacks |
+
+---
+
+#### 📋 Config Validation
+
+| Feature | Description |
+|---------|-------------|
+| **JSON Schema** | Config.yaml validated against schema |
+| **Retry Limits** | max_retries enforced 0-10 |
+| **Timeout Limits** | timeout enforced 1-300 seconds |
+| **Provider Validation** | Only known providers accepted |
+
+---
+
+### Migration Guide
+
+**No breaking changes.** All security features are transparent.
+
+1. Extract new zip
+2. Copy your `.env` from backup (or create from `.env.example`)
+3. Run `./qonqrete.sh init` to rebuild with hardened Dockerfile
+4. Run normally - all security features are automatic
+
+---
+
+### Files Added/Changed
+
+| File | Change |
+|------|--------|
+| `Dockerfile` | Pinned image, HEALTHCHECK, requirements.txt |
+| `requirements.txt` | NEW - Pinned Python dependencies |
+| `.env.example` | NEW - API key template |
+| `qonqrete.sh` | Docker security flags added |
+| `worqer/lib_security.py` | NEW - Security utilities |
+| `worqer/lib_ai.py` | Timeouts, proper exception handling |
+
+---
+
 ## [v0.9.3-beta] - 2025-12-26
 
 ### 🛡️ Security Hardening - gosu Entrypoint (Fixed)
@@ -25,13 +503,6 @@ The v0.9.1/v0.9.2 security hardening caused `PermissionError` on Linux because D
 |------|---------|
 | `entrypoint.sh` | Fixes permissions, drops to qrane user |
 | `Dockerfile` | Installs `gosu`, sets ENTRYPOINT |
-
-#### Why gosu?
-
-`gosu` is the industry-standard tool for dropping privileges in containers:
-- No TTY issues (unlike `su`)
-- Proper signal handling
-- Designed specifically for Docker entrypoints
 
 ---
 
@@ -74,29 +545,6 @@ from sqeleton.deepseek_provider import DeepSeekProvider
 # New
 from worqer.lib_ai import DeepSeekProvider
 ```
-
-### 🛡️ Security Hardening - Proper Non-Root Execution
-
-**Status:** IMPLEMENTED via `gosu` entrypoint pattern.
-
-The container now properly drops root privileges:
-
-| Step | What Happens |
-|------|--------------|
-| 1. Container starts | Runs as root (needed for permission fix) |
-| 2. `entrypoint.sh` | Fixes `/qonq` ownership to `qrane:qrew` |
-| 3. `gosu qrane` | Drops to non-root `qrane` user |
-| 4. Command executes | Runs as `qrane` (non-root) |
-
-**Why this works:**
-- Docker bind mounts inherit host permissions
-- Entrypoint runs as root FIRST, fixes permissions
-- Then drops privileges via `gosu` before running your code
-- Actual workload runs as non-root `qrane` user
-
-**Files added:**
-- `entrypoint.sh` - Permission fixer + privilege dropper
-- `gosu` package - Proper `su` for containers (no TTY issues)
 
 ---
 
@@ -386,7 +834,7 @@ CyQle 3: briq000_setup_project_directory_and_core  ← REBUILDING! ❌
 
 ### 🧪 Battle-Tested: 7-Cycle Autonomous Build
 
-v0.9.0-beta was validated with a 7-cycle autonomous build:
+v0.9.5-beta was validated with a 7-cycle autonomous build:
 
 | Metric | Result |
 |--------|--------|

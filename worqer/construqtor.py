@@ -345,6 +345,18 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         if len(code_content) < 3:
             print(f"     [SKIP] Content too short ({len(code_content)} chars): {filename}", flush=True)
             continue
+        
+        # CRITICAL: Skip if content contains Qompressor skeleton markers
+        # This prevents AI from copying skeleton context back into qodeyard
+        skeleton_markers = [
+            "# ... (body stripped by Qompressor) ...",
+            "// ... (body stripped by Qompressor) ...",
+            "/* ... (body stripped by Qompressor) ... */",
+            "(body stripped by Qompressor)"
+        ]
+        if any(marker in code_content for marker in skeleton_markers):
+            print(f"     [SKIP] Skeleton detected (not overwriting): {filename}", flush=True)
+            continue
 
         # Sanitize filename
         if filename.strip().startswith('qodeyard/'):
