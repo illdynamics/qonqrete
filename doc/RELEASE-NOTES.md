@@ -2,6 +2,187 @@
 
 ---
 
+## [v0.9.2-beta] - 2025-12-26
+
+### 🧹 Code Cleanup - DeepSeek Provider Consolidation
+
+**The Change:** The `sqeleton/` directory has been removed. The `DeepSeekProvider` class is now built directly into `worqer/lib_ai.py`.
+
+#### What Changed
+
+| Before | After |
+|--------|-------|
+| `sqeleton/deepseek_provider.py` | Built into `worqer/lib_ai.py` |
+| Separate import dependency | Self-contained lib_ai.py |
+| Non-streaming DeepSeek output | Full streaming support |
+
+**Benefits:**
+- 🧹 Cleaner directory structure (one less folder)
+- 📦 Simpler deployment (no separate provider scripts)
+- 🚀 DeepSeek now uses streaming output like other providers
+- 🔧 Easier maintenance (all AI providers in one file)
+
+#### Technical Details
+
+The `DeepSeekProvider` class is now defined in `lib_ai.py` with two methods:
+- `query(prompt)` - Original non-streaming method
+- `query_streaming(prompt)` - New generator for streaming responses
+
+The `_run_deepseek()` function now uses streaming, matching the behavior of OpenAI, Gemini, and Anthropic providers.
+
+#### Migration
+
+**No action required.** This is a transparent refactor. If you had custom code importing from `sqeleton.deepseek_provider`, update to:
+
+```python
+# Old (no longer works)
+from sqeleton.deepseek_provider import DeepSeekProvider
+
+# New
+from worqer.lib_ai import DeepSeekProvider
+```
+
+---
+
+## [v0.9.1-beta] - 2025-12-26
+
+### 🔄 Resume & Qonstructions - Persistent Project Workflow
+
+**The Big Idea:** No more losing your work! QonQrete now supports resuming from previous runs and saving projects permanently.
+
+#### New Commands
+
+| Command | Description |
+|---------|-------------|
+| `./qonqrete.sh resume` | Interactive kubectx-style picker for previous Qages |
+| `./qonqrete.sh resume -q <n>` | Resume from specific Qage directory |
+| `./qonqrete.sh clean` | Interactive picker for Qage deletion |
+| `./qonqrete.sh clean -q <n>` | Delete specific Qage |
+| `./qonqrete.sh clean -A` | Delete ALL Qages (original behavior) |
+
+#### Qonstructions
+
+After each run completes, QonQrete prompts to save your work:
+
+```
+┌─────────────────────────────────────────────────┐
+│           QonQrete Session Complete            │
+└─────────────────────────────────────────────────┘
+
+Save this run as a Qonstruction? [y/N] y
+Enter project name [project_20251226_115701]: my-api
+Saving Qonstruction to: qonstructions/my-api
+Qonstruction saved successfully!
+```
+
+Qonstructions are saved to `worqspace/qonstructions/<name>/` with:
+- Complete qodeyard (your generated code)
+- All context directories (tasq.d, exeq.d, reqap.d, etc.)
+- Meta information (meta.yaml)
+
+---
+
+### 🛡️ Security Hardening - Drop Root Privileges
+
+**The Big Idea:** Defense in depth inside the container. Even if a rogue prompt injection tries to overwrite core logic, it fails.
+
+#### User/Group Model
+
+| User | Role | Permissions |
+|------|------|-------------|
+| `qrane` | Orchestrator | Owns `/qonq`, runs `qrane.py` |
+| `worqer` | Agent Runner | Runs agents, writes to workspace |
+| `qrew` | Shared Group | Enables collaboration between users |
+
+#### Permissions
+
+- `/qonqrete` (code): Owned by `qrane:qrew`, mode 750
+- `/qonq` (workspace): Owned by `worqer:qrew`, mode 2770 (setgid)
+- Container runs as `qrane` user (non-root)
+
+**Impact:** Agents are jailed to `/qonq` and cannot modify orchestrator code or escape the sandbox.
+
+---
+
+### 🚀 Explicit Sqrapyard Control
+
+**The Change:** Sqrapyard seeding is now **opt-in** to prevent accidental imports of leftover code.
+
+```bash
+# Fresh start (default) - ignores sqrapyard
+./qonqrete.sh run
+
+# Seed from sqrapyard (must be explicit)
+./qonqrete.sh run -s
+./qonqrete.sh run --sqrapyard
+```
+
+**Rationale:** Many users were accidentally importing old sqrapyard contents into new projects. This prevents that confusion.
+
+---
+
+### ✏️ Interactive TasQ Editor
+
+**The Feature:** No `tasq.md`? No problem!
+
+When you run `./qonqrete.sh run` without a `tasq.md`, QonQrete:
+1. Opens your `$EDITOR` (default: vim) with a helpful template
+2. Waits for you to write your task and save
+3. Continues with the run
+
+**Template includes:**
+- Tips for writing good tasks
+- Example task format
+- Comments explaining TasqLeveler enhancement
+
+---
+
+### 🏷️ Flag Changes
+
+| Old Flag | New Flag | Purpose |
+|----------|----------|---------|
+| `-s/--msb` | `-M/--msb` | Microsandbox mode [EXPERIMENTAL] |
+| (none) | `-s/--sqrapyard` | Seed from sqrapyard |
+
+**TUI and MSB marked EXPERIMENTAL:**
+- `-t/--tui`: TUI mode now shows [EXPERIMENTAL] warning
+- `-M/--msb`: Microsandbox mode now shows [EXPERIMENTAL] warning
+
+---
+
+### 📁 Directory Structure Update
+
+New `qonstructions/` directory in worqspace:
+
+```
+worqspace/
+├── config.yaml
+├── pipeline_config.yaml
+├── caching_policy.yaml
+├── tasq.md
+├── sqrapyard/           # Input seed code
+├── qonstructions/       # NEW: Saved project outputs
+│   ├── my-api/
+│   │   ├── qodeyard/
+│   │   ├── tasq.d/
+│   │   ├── exeq.d/
+│   │   ├── meta.yaml
+│   │   └── ...
+│   └── another-project/
+└── qage_20251226_*/     # Ephemeral run directories
+```
+
+---
+
+### 🔧 Technical Changes
+
+1. **qonqrete.sh**: Complete rewrite with new CLI parser
+2. **Dockerfile**: Security hardening with user/group model
+3. **Documentation**: Updated all docs with new features
+4. **VERSION**: Bumped to 0.9.1
+
+---
+
 ## [v0.9.0-beta] - 2025-12-23
 
 ### 🚀 TasqLeveler Agent - Automatic Tasq Enhancement

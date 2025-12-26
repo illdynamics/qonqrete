@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v0.9.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.2-beta` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -52,3 +52,16 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **CheQpoint**: The mandatory pause after a `cyQle` for user review.
 - **Qommander**: In TUI mode, the top panel showing the main execution flow.
 - **Qonsole**: In TUI mode, the bottom panel showing raw agent logs.
+
+### Persistence & Resume (v0.9.1)
+- **Qonstruction**: A saved project output stored in `worqspace/qonstructions/`. Contains the complete qodeyard and all context directories.
+- **Resume**: The ability to continue work from a previous Qage, copying all state to a new run.
+- **Interactive Picker**: kubectx-style menu for selecting Qages (used in `resume` and `clean` commands).
+- **meta.yaml**: Metadata file in each Qonstruction containing project name, source qage, creation date, and version.
+
+### Security (v0.9.1)
+- **qrane (user)**: The orchestrator user that owns `/qonq` and runs `qrane.py`. Container runs as this user.
+- **worqer (user)**: The agent runner user that executes agents and writes to the workspace.
+- **qrew (group)**: Shared group that enables collaboration between qrane and worqer users.
+- **setgid**: File system permission that ensures new files inherit the qrew group ownership.
+- **Root Dropping**: The practice of running the container as a non-root user for security isolation.

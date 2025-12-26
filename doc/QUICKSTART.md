@@ -1,15 +1,17 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.9.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.2-beta` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
-## What's New in v0.8.0
+## What's New in v0.9.1
 
-- **Qontrabender**: Policy-driven hybrid caching with Variable Fidelity
-- **caching_policy.yaml**: Comprehensive configuration for cache behavior
-- **6 Operational Modes**: From `local_fast` to `debug_repro`
-- **Schema Validation**: Bad YAML can't brick your flow
+- **Resume Command**: Continue work from previous Qages with `./qonqrete.sh resume`
+- **Qonstructions**: Save completed runs as persistent projects
+- **Interactive Clean**: Pick which Qages to delete with kubectx-style selection
+- **Security Hardening**: Container runs as non-root with proper user isolation
+- **Explicit Sqrapyard**: Use `-s/--sqrapyard` flag to seed from sqrapyard (no longer automatic)
+- **Interactive TasQ Editor**: Opens `$EDITOR` if no tasq.md exists
 
 ## Prerequisites
 - **Docker:** Ensure the Docker daemon is running (or see ../README.md for Microsandbox setup).
@@ -33,12 +35,18 @@ For a new project, edit `worqspace/tasq.md` to define your initial objective. Fo
 Create a simple Python web server that listens on port 8080 and returns "Hello, QonQrete!" for all requests. The script should be executable.
 ```
 
-To start with existing code, see the "Seeding a Project with Sqrapyard" section below.
+**New in v0.9.1:** If no `tasq.md` exists, QonQrete will automatically open your `$EDITOR` (default: vim) with a template!
 
 ## 3. Run a CyQle
 This is the default manual mode. You can combine flags for different behaviors.
 ```bash
-# Run with the TUI and security-focused agent personas
+# Basic fresh start
+./qonqrete.sh run
+
+# Run with sqrapyard seeding
+./qonqrete.sh run -s
+
+# Run with the TUI and security-focused agent personas [EXPERIMENTAL]
 ./qonqrete.sh run --tui --mode security
 
 # Run in auto mode with highly granular task breakdown
@@ -49,13 +57,52 @@ This is the default manual mode. You can combine flags for different behaviors.
 ```
 At the `CheQpoint`, you will be prompted to `[Q]ontinue`, `[T]weaQ`, or `[X]Quit`.
 
-## 4. Seeding a Project with Sqrapyard
-To begin a `cyQle` with a pre-existing codebase:
-1.  Place your code files into the `worqspace/sqrapyard/` directory.
-2.  If you have a specific objective for the first cycle, create a `worqspace/sqrapyard/tasq.md` file.
-3.  Run `./qonqrete.sh run`. The system will automatically copy the contents of `sqrapyard` into the active `qodeyard` and use your `tasq.md` as the first instruction.
+## 4. Saving Your Work (Qonstructions)
 
-## 5. Configuration
+After each run completes, QonQrete will ask if you want to save the result:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│           QonQrete Session Complete                         │
+└─────────────────────────────────────────────────────────────┘
+
+Save this run as a Qonstruction? [y/N] y
+Enter project name [project_20251226_115701]: my-awesome-api
+Saving Qonstruction to: qonstructions/my-awesome-api
+Qonstruction saved successfully!
+Delete original Qage? [y/N] y
+```
+
+Qonstructions are saved to `worqspace/qonstructions/<name>/` with all context preserved.
+
+## 5. Resuming Previous Work
+
+Resume from a previous Qage to continue development:
+
+```bash
+# Interactive picker (kubectx-style)
+./qonqrete.sh resume
+
+# Direct selection
+./qonqrete.sh resume -q qage_20251226_115701
+```
+
+The resume command:
+1. Copies all content from the selected Qage to a new Qage
+2. Updates config files from the workspace
+3. Uses your updated `tasq.md` as the next cycle's task
+4. Starts the run with all previous context preserved
+
+## 6. Seeding a Project with Sqrapyard
+
+To begin a `cyQle` with a pre-existing codebase:
+1. Place your code files into the `worqspace/sqrapyard/` directory.
+2. Edit `worqspace/tasq.md` with your objective for this project.
+3. Run `./qonqrete.sh run -s` (the `-s` flag is now required to use sqrapyard).
+
+**Note:** Without the `-s` flag, sqrapyard contents are ignored to prevent accidental imports.
+
+## 7. Configuration
 Advanced options can be set in `worqspace/`.
 -   **`config.yaml`**:
     -   `use_qompressor`: `true` to generate token-efficient code skeletons (default), `false` to use full code.
@@ -66,14 +113,14 @@ Advanced options can be set in `worqspace/`.
     -   `agents`: Change the AI models for each agent. For `qontextor`, set `provider: local` to use the new high-speed, zero-cost analysis mode.
     -   `mode`: Set the default operational mode for agent personas (e.g., `program`, `enterprise`, `security`, `performance`, `innovative`).
     -   `briq_sensitivity`: Set the default task breakdown granularity (0=atomic, 9=monolithic).
--   **`caching_policy.yaml`** (NEW in v0.8.0):
+-   **`caching_policy.yaml`**:
     -   Defines Qontrabender behavior and operational modes
     -   Available modes: `local_fast`, `local_smart`, `cyber_bedrock`, `cyber_aggressive`, `paranoid_mincloud`, `debug_repro`
     -   See [QONTRABENDER.md](./QONTRABENDER.md) for full documentation
 -   **`pipeline_config.yaml`**:
-    -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime.
+    -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime. [EXPERIMENTAL]
 
-## 6. Qontrabender Quick Setup
+## 8. Qontrabender Quick Setup
 To configure the cache bender:
 
 1. Edit `worqspace/config.yaml` to select your mode:
@@ -99,8 +146,45 @@ python worqer/qontrabender.py --validate
 python worqer/qontrabender.py --modes
 ```
 
-## 7. Cleaning the Workspace
-To remove all `qage_<timestamp>` run directories, use the `clean` command.
+## 9. Cleaning the Workspace
+
+Multiple options for cleanup:
+
 ```bash
+# Interactive selection (pick which Qage to delete)
 ./qonqrete.sh clean
+
+# Delete specific Qage
+./qonqrete.sh clean -q qage_20251226_115701
+
+# Delete ALL Qages (original behavior)
+./qonqrete.sh clean -A
 ```
+
+## CLI Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `./qonqrete.sh init` | Build the Qage container |
+| `./qonqrete.sh run` | Start fresh session |
+| `./qonqrete.sh run -s` | Start with sqrapyard seeding |
+| `./qonqrete.sh resume` | Interactive resume picker |
+| `./qonqrete.sh resume -q <name>` | Resume specific Qage |
+| `./qonqrete.sh clean` | Interactive delete picker |
+| `./qonqrete.sh clean -q <name>` | Delete specific Qage |
+| `./qonqrete.sh clean -A` | Delete ALL Qages |
+
+## Flags Reference
+
+| Flag | Description |
+|------|-------------|
+| `-a, --auto` | Autonomous mode |
+| `-u, --user` | User-gated mode |
+| `-t, --tui` | TUI mode [EXPERIMENTAL] |
+| `-m, --mode <n>` | Operational mode |
+| `-b, --briq-sensitivity <N>` | Granularity (0-9) |
+| `-s, --sqrapyard` | Seed from sqrapyard |
+| `-M, --msb` | Microsandbox mode [EXPERIMENTAL] |
+| `-d, --docker` | Force Docker |
+| `-q, --qage <name>` | Specify Qage (resume/clean) |
+| `-A, --all` | All Qages (clean) |

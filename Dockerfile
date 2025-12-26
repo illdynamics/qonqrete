@@ -1,10 +1,15 @@
-# Base image with Python and essential tools
+# QonQrete Dockerfile - Security Hardened
+# v0.9.2-beta - Drops root, implements qrane/worqer/qrew permission model
+# DeepSeek provider now built into lib_ai.py (no sqeleton dependency)
+
 FROM ubuntu:22.04
 
 # Avoid interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+# =============================================================================
 # 1. Install base dependencies, modern Node.js, and Chafa (for splash)
+# =============================================================================
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -17,8 +22,9 @@ RUN apt-get update && apt-get install -y \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
-
+# =============================================================================
 # 2. Install Python packages for agents
+# =============================================================================
 RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir \
     pyyaml \
@@ -33,16 +39,64 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
     && rm -rf /root/.cache/pip
 
 # =============================================================================
-# 3. Create a working directory for the project
+# 3. Security Hardening - Create Users and Groups
+# =============================================================================
+# Create the qrew group (shared group for container operations)
+RUN groupadd -r qrew
+
+# Create qrane user - The Orchestrator (owns /qonq, runs qrane.py)
+RUN useradd -r -g qrew -m -d /home/qrane -s /bin/bash qrane
+
+# Create worqer user - The Agent Runner (runs instruqtor/construqtor/inspeqtor)
+# Added to qrew group for shared access
+RUN useradd -r -g qrew -m -d /home/worqer -s /bin/bash worqer
+
+# =============================================================================
+# 4. Create working directories with proper permissions
+# =============================================================================
 WORKDIR /qonqrete
 
-# 4. Copy the entire project into the container
+# Copy the entire project into the container
 COPY . .
 
-# 5. Set PYTHONPATH and make provider executable
+# Set PYTHONPATH
 ENV PYTHONPATH="/qonqrete"
-RUN chmod +x sqeleton/deepseek_provider.py
 
+# =============================================================================
+# 5. Security Hardening - Set Ownership and Permissions
+# =============================================================================
+# /qonqrete (code) owned by qrane:qrew - read-only for agents
+RUN chown -R qrane:qrew /qonqrete && \
+    chmod -R 750 /qonqrete
+
+# Create /qonq directory (the mounted workspace) with proper permissions
+# This is where the qage gets mounted at runtime
+RUN mkdir -p /qonq && \
+    chown qrane:qrew /qonq && \
+    chmod 770 /qonq
+
+# Set up workspace subdirectories with setgid for group inheritance
+# These get created inside the mounted volume, but we set defaults here
+RUN mkdir -p /qonq/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,qontext.d,bloq.d,briq.d} && \
+    chown -R worqer:qrew /qonq && \
+    chmod -R 2770 /qonq
+
+# The setgid bit (2xxx) ensures new files inherit the qrew group
+# This allows both qrane and worqer to read/write as needed
+
+# =============================================================================
 # 6. Dynamic Versioning (Injected by qonqrete.sh --build-arg)
+# =============================================================================
 ARG QONQ_VERSION
 ENV QONQ_VERSION=${QONQ_VERSION}
+
+# =============================================================================
+# 7. Drop Root - Run as qrane user
+# =============================================================================
+# Note: The orchestrator runs as qrane, but agents can be invoked as worqer
+# For now, we run everything as qrane (orchestrator privilege level)
+# Future: Could implement su/sudo to worqer for agent execution
+USER qrane
+
+# Default working directory for runtime
+WORKDIR /qonqrete

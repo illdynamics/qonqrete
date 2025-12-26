@@ -2,7 +2,7 @@
 # worqer/lib_ai.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # AI Provider Abstraction Layer with Budget Enforcement
-# v0.9.0 - Two-Stage Inspeqtion Support
+# v0.9.2 - DeepSeek provider now built-in (no external sqeleton dependency)
 # ═══════════════════════════════════════════════════════════════════════════════
 import sys
 import os
@@ -11,7 +11,68 @@ import threading
 import anthropic
 import openai
 import google.generativeai as genai
-from sqeleton.deepseek_provider import DeepSeekProvider
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEEPSEEK PROVIDER (built-in, uses OpenAI-compatible API)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DeepSeekProvider:
+    """
+    DeepSeek API client using OpenAI-compatible interface.
+    Supports models: deepseek-chat, deepseek-coder, deepseek-reasoner
+    """
+    def __init__(self, api_key=None, model="deepseek-chat"):
+        self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+        self.model = model
+        self.base_url = "https://api.deepseek.com"
+
+        if not self.api_key:
+            raise ValueError("DEEPSEEK_API_KEY not found in environment or arguments.")
+
+        self.client = openai.OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+        )
+
+    def query(self, prompt, stream=False):
+        """
+        Sends a prompt to the DeepSeek API and returns the response.
+        """
+        if not prompt:
+            return "Prompt cannot be empty."
+
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                stream=stream,
+            )
+            return resp.choices[0].message.content
+        except Exception as e:
+            return f"Error querying DeepSeek API: {e}"
+
+    def query_streaming(self, prompt):
+        """
+        Sends a prompt to DeepSeek with streaming response.
+        Yields chunks as they arrive.
+        """
+        if not prompt:
+            yield "Prompt cannot be empty."
+            return
+
+        try:
+            response_stream = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                stream=True,
+            )
+            for chunk in response_stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+        except Exception as e:
+            yield f"Error querying DeepSeek API: {e}"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HARD SAFETY LIMITS - These are NON-NEGOTIABLE
@@ -358,10 +419,11 @@ def _run_anthropic(model, prompt):
 
 
 def _run_deepseek(model, prompt):
+    """DeepSeek provider with streaming output."""
     provider = DeepSeekProvider(model=model)
-    sys.stderr.write("[Querying DeepSeek...]")
-    sys.stderr.flush()
-    response = provider.query(prompt)
-    sys.stderr.write(response)
-    sys.stderr.flush()
-    return response
+    captured_chunks = []
+    for chunk in provider.query_streaming(prompt):
+        captured_chunks.append(chunk)
+        sys.stderr.write(chunk)
+        sys.stderr.flush()
+    return "".join(captured_chunks).strip()

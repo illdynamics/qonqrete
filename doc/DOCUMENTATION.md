@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.9.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.2-beta` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 
@@ -438,47 +438,66 @@ This section traces the end-to-end execution flows of the QonQrete system, from 
 
 ### 1. Initialization Flow (`./qonqrete.sh init`)
 
-1.  **User Input**: User executes `./qonqrete.sh init`. An optional `--msb` or `--docker` flag can be provided.
+1.  **User Input**: User executes `./qonqrete.sh init`. An optional `-M/--msb` or `-d/--docker` flag can be provided.
 2.  **`qonqrete.sh`**: The script parses the `init` command.
-3.  **Runtime Detection**: It checks for the `--msb` or `--docker` flags. If none are provided, it checks `pipeline_config.yaml` for a `microsandbox: true` setting. If not found, it defaults to Docker.
+3.  **Runtime Detection**: It checks for the `-M/--msb` or `-d/--docker` flags. If none are provided, it checks `pipeline_config.yaml` for a `microsandbox: true` setting. If not found, it defaults to Docker.
 4.  **Container Build**:
     *   If the runtime is `docker`, it executes `docker build -t qonqrete-qage -f Dockerfile .`.
     *   If the runtime is `msb`, it executes `msb build . -t qonqrete-qage` (or `mbx`).
-5.  **Result**: A container image named `qonqrete-qage` is created in the local registry of the selected runtime, ready for execution.
+5.  **Security Note (v0.9.1+)**: The Dockerfile now creates non-root users (`qrane`, `worqer`) and the `qrew` group for proper permission isolation.
+6.  **Result**: A container image named `qonqrete-qage` is created in the local registry of the selected runtime, ready for execution.
 
 ### 2. Main Execution Flow (`./qonqrete.sh run`)
 
-1.  **User Input**: User executes `./qonqrete.sh run`. Optional flags like `--auto`, `--user`, and `--tui` can be included.
-2.  **`qonqrete.sh`**:
+1.  **User Input**: User executes `./qonqrete.sh run`. Optional flags like `--auto`, `--user`, `--tui`, and `-s/--sqrapyard` can be included.
+2.  **TasQ Check (v0.9.1+)**: If no `tasq.md` exists in worqspace, the script opens `$EDITOR` (default: vim) with a template for the user to write their task.
+3.  **`qonqrete.sh`**:
     *   Parses the `run` command and any additional flags.
     *   Reads the `VERSION` file and exports it as `QONQ_VERSION`.
     *   Creates a unique timestamped run directory (`qage_<timestamp>`) inside `worqspace/`.
-    *   **Sqrapyard Initialization**: It checks the persistent `worqspace/sqrapyard` directory. If it contains files, they are copied into the new `qage_<timestamp>/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
+    *   **Sqrapyard Initialization (v0.9.1+)**: Sqrapyard seeding is now **opt-in**. The `-s/--sqrapyard` flag must be provided to copy contents from `worqspace/sqrapyard` into the new `qage_<timestamp>/qodeyard`. Without this flag, sqrapyard is ignored to prevent accidental imports.
     *   Copies configuration files into the new run directory.
     *   Constructs the `docker run` or `msb run` command, mounting the `qage_<timestamp>` directory and passing the necessary environment variables.
-3.  **`qrane.py` (Inside the Container)**:
+4.  **`qrane.py` (Inside the Container)**:
     *   The orchestrator starts.
     *   **API Key Validation**: It reads `config.yaml` to identify all unique AI providers being used for the current run. It then checks that the corresponding environment variables (e.g., `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`) are set. If a required key for a configured provider is missing, it exits with a clear error message.
     *   It determines the UI mode (TUI/headless) and enters the main `cyQle` loop.
-4.  **The `cyQle` Loop**:
+5.  **The `cyQle` Loop**:
     *   The `Qrane` dynamically loads the agent pipeline from `pipeline_config.yaml`.
     *   It executes each agent in sequence.
-5.  **The `CheQpoint`**:
+6.  **The `CheQpoint`**:
     *   `qrane.py` reads the final `reQap.md` of the cycle.
-    .   It pauses and prompts the user for input (`[Q]ontinue`, `[T]weaQ`, `[X]Quit`), unless in autonomous mode. The default behavior (autonomous vs. user-gated) is controlled by the `cheqpoint` option in `config.yaml`, and can be overridden by the `--auto` or `--user` flags.
-6.  **Loop Continuation**:
+    *   It pauses and prompts the user for input (`[Q]ontinue`, `[T]weaQ`, `[X]Quit`), unless in autonomous mode. The default behavior (autonomous vs. user-gated) is controlled by the `cheqpoint` option in `config.yaml`, and can be overridden by the `--auto` or `--user` flags.
+7.  **Loop Continuation**:
     *   If approved, the `reQap.md` is promoted to become the task for the next cycle.
     *   The cycle counter increments, and the loop repeats.
-7.  **Exit**: If the user quits, the loop breaks, the container exits, and the script finishes.
+8.  **Exit & Save Prompt (v0.9.1+)**: When the user quits, the container exits, and the script prompts to save the run as a "Qonstruction" to `worqspace/qonstructions/<n>/`.
 
-### 3. Cleanup Flow (`./qonqrete.sh clean`)
+### 3. Resume Flow (`./qonqrete.sh resume`) - NEW in v0.9.1
 
-1.  **User Input**: User executes `./qonqrete.sh clean`.
+1.  **User Input**: User executes `./qonqrete.sh resume` (interactive) or `./qonqrete.sh resume -q <qage-name>` (direct).
+2.  **Qage Selection**:
+    *   If no `-q` flag is provided, display a kubectx-style interactive picker showing available Qages sorted by date (newest first).
+    *   User selects a Qage by number.
+3.  **State Copy**:
+    *   Create a new `qage_<timestamp>` directory.
+    *   Copy **all contents** from the selected source Qage (qodeyard, tasq.d, exeq.d, reqap.d, struqture, qontext.d, bloq.d, briq.d).
+    *   Update config.yaml and pipeline_config.yaml from the workspace (in case they changed).
+    *   If a new `tasq.md` exists in the workspace, copy it as the next cycle's task.
+4.  **Execution**: Proceeds exactly like a normal run, but with full context from the previous Qage preserved.
+5.  **Exit & Save**: Same as run - prompts to save as Qonstruction.
+
+### 4. Cleanup Flow (`./qonqrete.sh clean`) - UPDATED in v0.9.1
+
+1.  **User Input**: User executes one of:
+    *   `./qonqrete.sh clean` - Interactive mode
+    *   `./qonqrete.sh clean -q <qage-name>` - Delete specific Qage
+    *   `./qonqrete.sh clean -A` or `./qonqrete.sh clean --all` - Delete all Qages
 2.  **`qonqrete.sh`**:
-    *   Searches for `qage_*` directories in `worqspace/`.
-    *   Prompts the user for confirmation.
-    *   If confirmed, it executes `rm -rf worqspace/qage_*`.
-3.  **Result**: The `worqspace` is cleared of all previous run data.
+    *   **Interactive Mode**: Displays kubectx-style picker of available Qages. User selects one by number, confirms deletion.
+    *   **Specific Mode**: Validates the named Qage exists, prompts for confirmation, deletes if confirmed.
+    *   **All Mode**: Searches for all `qage_*` directories in `worqspace/`, prompts for confirmation, deletes all if confirmed.
+3.  **Result**: Selected Qage(s) are removed from the `worqspace`.
 
 ---
 
@@ -502,7 +521,7 @@ The following describes the logic of the three default agents that constitute th
 
 All agents utilize this central library to interact with AI models. It uses a hybrid approach:
 - **Official Python Libraries**: Used for OpenAI, Google Gemini, and Anthropic. These libraries read their respective API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`) directly from the environment.
-- **Custom Provider**: A custom, OpenAI-compatible provider located in `sqeleton/deepseek_provider.py` is used for DeepSeek. This method is more reliable and uses the `DEEPSEEK_API_KEY` from the environment.
+- **DeepSeek Provider**: A built-in `DeepSeekProvider` class in `lib_ai.py` provides OpenAI-compatible API access to DeepSeek models (deepseek-chat, deepseek-coder, deepseek-reasoner). Uses the `DEEPSEEK_API_KEY` from the environment.
 - **CLI Wrapper**: A wrapper around the `@qwen-code/qwen-code` CLI tool is used for Qwen models.
 
 This provides a consistent and modular interface for all AI interactions.
