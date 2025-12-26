@@ -70,7 +70,7 @@ For EACH significant module/class, add a code block showing what MUST work:
 ```python
 # 🎯 Golden Path Test:
 from module.submodule import ClassName
-obj = ClassName(config={'test': True})
+obj = ClassName(config={{'test': True}})
 assert hasattr(obj, 'required_method')
 result = obj.required_method('input')
 assert isinstance(result, expected_type)
@@ -83,13 +83,13 @@ If the project involves external APIs, databases, or servers, add mock class spe
 class MockExternalService:
     """Mock for testing without real service."""
     def __init__(self):
-        self._data = {'mock': 'data'}
+        self._data = {{'mock': 'data'}}
     
     def connect(self) -> bool:
         return True
     
     def get_items(self) -> list:
-        return [{'id': 1, 'name': 'mock_item'}]
+        return [{{'id': 1, 'name': 'mock_item'}}]
 ```
 
 ### 4. 📋 GLOBAL SUCCESS CRITERIA (Add near the top)

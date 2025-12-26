@@ -1,0 +1,25 @@
+# QonQrete Python Dependencies
+# Pinned versions for reproducible builds (December 2025)
+# Run: pip install --no-cache-dir -r requirements.txt
+# Security: Use `pip install --require-hashes -r requirements.txt` for hash verification
+
+# Core YAML parsing
+PyYAML==6.0.2
+
+# AI Provider SDKs
+openai==2.14.0
+anthropic==0.75.0
+google-generativeai==0.8.6
+
+# Code Analysis Tools
+jedi==0.19.2
+docstring-parser==0.16
+# Note: pycg removed - package is broken on PyPI (module name mismatch)
+# Call graph analysis uses jedi fallback instead
+
+# ML/Embeddings (for Qontextor complex mode semantic search)
+numpy==2.2.1
+sentence-transformers==3.3.1
+
+# JSON Schema validation (new in v0.9.5)
+jsonschema==4.23.0

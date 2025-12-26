@@ -2,7 +2,7 @@
 # worqer/lib_ai.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # AI Provider Abstraction Layer with Budget Enforcement
-# v0.9.2 - DeepSeek provider now built-in (no external sqeleton dependency)
+# v0.9.5 - Security hardened with timeouts and proper exception handling
 # ═══════════════════════════════════════════════════════════════════════════════
 import sys
 import os
@@ -11,6 +11,15 @@ import threading
 import anthropic
 import openai
 import google.generativeai as genai
+from worqer.lib_security import (
+    get_security_logger, sanitize_traceback,
+    MAX_TIMEOUT_SECONDS, MAX_RETRIES_HARD_LIMIT
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TIMEOUT CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+DEFAULT_API_TIMEOUT = 300  # 5 minutes default timeout for AI API calls
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEEPSEEK PROVIDER (built-in, uses OpenAI-compatible API)
@@ -21,10 +30,11 @@ class DeepSeekProvider:
     DeepSeek API client using OpenAI-compatible interface.
     Supports models: deepseek-chat, deepseek-coder, deepseek-reasoner
     """
-    def __init__(self, api_key=None, model="deepseek-chat"):
+    def __init__(self, api_key=None, model="deepseek-chat", timeout=DEFAULT_API_TIMEOUT):
         self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
         self.model = model
         self.base_url = "https://api.deepseek.com"
+        self.timeout = timeout
 
         if not self.api_key:
             raise ValueError("DEEPSEEK_API_KEY not found in environment or arguments.")
@@ -32,6 +42,7 @@ class DeepSeekProvider:
         self.client = openai.OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
+            timeout=self.timeout,
         )
 
     def query(self, prompt, stream=False):
@@ -48,8 +59,10 @@ class DeepSeekProvider:
                 stream=stream,
             )
             return resp.choices[0].message.content
-        except Exception as e:
-            return f"Error querying DeepSeek API: {e}"
+        except openai.APITimeoutError as e:
+            raise TimeoutError(f"DeepSeek API timeout after {self.timeout}s") from e
+        except openai.APIError as e:
+            raise RuntimeError(f"DeepSeek API error: {e}") from e
 
     def query_streaming(self, prompt):
         """
@@ -70,8 +83,15 @@ class DeepSeekProvider:
                 content = chunk.choices[0].delta.content
                 if content:
                     yield content
-        except Exception as e:
-            yield f"Error querying DeepSeek API: {e}"
+        except openai.APITimeoutError as e:
+            raise TimeoutError(f"DeepSeek API timeout") from e
+        except openai.APIError as e:
+            raise RuntimeError(f"DeepSeek API error: {e}") from e
+
+
+class TimeoutError(Exception):
+    """Raised when an API call times out."""
+    pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -368,59 +388,84 @@ def _run_streaming_cli_process(cmd, input_text) -> str:
         raise RuntimeError(f"Subprocess execution failed: {e}")
 
 
-def _run_openai(model, prompt):
-    client = openai.OpenAI()
-    response_stream = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        stream=True
-    )
-    captured_chunks = []
-    for chunk in response_stream:
-        content = chunk.choices[0].delta.content
-        if content:
-            captured_chunks.append(content)
-            sys.stderr.write(content)
-            sys.stderr.flush()
-    return "".join(captured_chunks).strip()
+def _run_openai(model, prompt, timeout=DEFAULT_API_TIMEOUT):
+    """OpenAI provider with streaming and timeout."""
+    try:
+        client = openai.OpenAI(timeout=timeout)
+        response_stream = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+            timeout=timeout
+        )
+        captured_chunks = []
+        for chunk in response_stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                captured_chunks.append(content)
+                sys.stderr.write(content)
+                sys.stderr.flush()
+        return "".join(captured_chunks).strip()
+    except openai.APITimeoutError as e:
+        raise TimeoutError(f"OpenAI API timeout after {timeout}s") from e
+    except openai.APIError as e:
+        raise RuntimeError(f"OpenAI API error: {e}") from e
 
 
-def _run_gemini(model, prompt):
-    genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-    client = genai.GenerativeModel(model)
-    response_stream = client.generate_content(prompt, stream=True)
-    
-    captured_chunks = []
-    for chunk in response_stream:
-        text = getattr(chunk, 'text', None)
-        if text:
-            captured_chunks.append(text)
-            sys.stderr.write(text)
-            sys.stderr.flush()
-    return "".join(captured_chunks).strip()
+def _run_gemini(model, prompt, timeout=DEFAULT_API_TIMEOUT):
+    """Gemini provider with streaming and timeout."""
+    try:
+        genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+        client = genai.GenerativeModel(model)
+        # Note: google-generativeai doesn't support timeout directly in generate_content
+        # Timeout is handled at the transport level
+        response_stream = client.generate_content(
+            prompt, 
+            stream=True,
+            request_options={"timeout": timeout}
+        )
+        
+        captured_chunks = []
+        for chunk in response_stream:
+            text = getattr(chunk, 'text', None)
+            if text:
+                captured_chunks.append(text)
+                sys.stderr.write(text)
+                sys.stderr.flush()
+        return "".join(captured_chunks).strip()
+    except Exception as e:
+        if "timeout" in str(e).lower() or "deadline" in str(e).lower():
+            raise TimeoutError(f"Gemini API timeout after {timeout}s") from e
+        raise RuntimeError(f"Gemini API error: {e}") from e
 
 
-def _run_anthropic(model, prompt):
-    client = anthropic.Anthropic()
-    response_stream = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-        stream=True
-    )
-    captured_chunks = []
-    for chunk in response_stream:
-        if chunk.type == 'content_block_delta' and hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
-            content = chunk.delta.text
-            captured_chunks.append(content)
-            sys.stderr.write(content)
-            sys.stderr.flush()
-    return "".join(captured_chunks).strip()
+def _run_anthropic(model, prompt, timeout=DEFAULT_API_TIMEOUT):
+    """Anthropic provider with streaming and timeout."""
+    try:
+        client = anthropic.Anthropic(timeout=timeout)
+        response_stream = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True
+        )
+        captured_chunks = []
+        for chunk in response_stream:
+            if chunk.type == 'content_block_delta' and hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
+                content = chunk.delta.text
+                captured_chunks.append(content)
+                sys.stderr.write(content)
+                sys.stderr.flush()
+        return "".join(captured_chunks).strip()
+    except anthropic.APITimeoutError as e:
+        raise TimeoutError(f"Anthropic API timeout after {timeout}s") from e
+    except anthropic.APIError as e:
+        raise RuntimeError(f"Anthropic API error: {e}") from e
 
 
-def _run_deepseek(model, prompt):
-    """DeepSeek provider with streaming output."""
-    provider = DeepSeekProvider(model=model)
+def _run_deepseek(model, prompt, timeout=DEFAULT_API_TIMEOUT):
+    """DeepSeek provider with streaming output and timeout."""
+    provider = DeepSeekProvider(model=model, timeout=timeout)
     captured_chunks = []
     for chunk in provider.query_streaming(prompt):
         captured_chunks.append(chunk)
