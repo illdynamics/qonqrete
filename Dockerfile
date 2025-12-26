@@ -1,5 +1,5 @@
 # QonQrete Dockerfile - Security Hardened
-# v0.9.2-beta - Drops root, implements qrane/worqer/qrew permission model
+# v0.9.3-beta - Drops root via gosu entrypoint, implements qrane/worqer/qrew permission model
 # DeepSeek provider now built into lib_ai.py (no sqeleton dependency)
 
 FROM ubuntu:22.04
@@ -8,7 +8,7 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # =============================================================================
-# 1. Install base dependencies, modern Node.js, and Chafa (for splash)
+# 1. Install base dependencies, gosu for privilege dropping, and Chafa (splash)
 # =============================================================================
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     chafa \
     vim \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
@@ -91,12 +92,20 @@ ARG QONQ_VERSION
 ENV QONQ_VERSION=${QONQ_VERSION}
 
 # =============================================================================
-# 7. Drop Root - Run as qrane user
+# 7. Entrypoint for Privilege Dropping
 # =============================================================================
-# Note: The orchestrator runs as qrane, but agents can be invoked as worqer
-# For now, we run everything as qrane (orchestrator privilege level)
-# Future: Could implement su/sudo to worqer for agent execution
-USER qrane
+# The entrypoint script:
+#   1. Runs as root initially (to fix mounted volume permissions)
+#   2. chown -R qrane:qrew /qonq (fixes host mount permissions)
+#   3. Drops to qrane user via gosu
+#   4. Executes the actual command
+#
+# This ensures the container runs as non-root while handling Docker's
+# bind mount permission inheritance from the host.
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # Default working directory for runtime
 WORKDIR /qonqrete
