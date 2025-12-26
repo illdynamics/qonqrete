@@ -13,13 +13,77 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.9.0-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.2-beta` (See `VERSION` file for the canonical version).
 
-> **Note on TUI Mode and Agent Testing:**
+> **Note on Experimental Features:**
 >
-> The Text-based User Interface (TUI) mode is currently under active development and may still have bugs. While the agent setup is dynamic, extensive testing is still required.
+> The following features are marked as **[EXPERIMENTAL]** and may have bugs:
+> - **TUI Mode** (`-t/--tui`): Text-based User Interface
+> - **Microsandbox** (`-M/--msb`): Alternative to Docker runtime
 >
-> We welcome community contributions! If you encounter any issues or have suggestions, please report them. Your feedback is invaluable in helping us improve the system.
+> We welcome community contributions! If you encounter any issues or have suggestions, please report them.
+
+---
+
+## What's New in v0.9.1-beta
+
+### 🔄 Resume & Qonstructions - Persistent Project Workflow
+
+No more losing your work! QonQrete now supports resuming from previous runs and saving projects permanently.
+
+| Feature | Command | Description |
+|---------|---------|-------------|
+| **Resume (Interactive)** | `./qonqrete.sh resume` | kubectx-style picker for previous Qages |
+| **Resume (Direct)** | `./qonqrete.sh resume -q qage_20251226` | Resume specific Qage |
+| **Qonstructions** | Auto-prompt after run | Save completed runs to `qonstructions/` |
+| **Clean (Interactive)** | `./qonqrete.sh clean` | Pick which Qage to delete |
+| **Clean (Specific)** | `./qonqrete.sh clean -q qage_20251226` | Delete specific Qage |
+| **Clean (All)** | `./qonqrete.sh clean -A` | Delete all Qages |
+
+### 🛡️ Security Hardening - Drop Root Privileges
+
+The container now runs as non-root users with proper permission isolation:
+
+| User | Role | Permissions |
+|------|------|-------------|
+| `qrane` | Orchestrator | Owns `/qonq`, runs `qrane.py` |
+| `worqer` | Agent Runner | Runs agents, writes to workspace |
+| `qrew` | Shared Group | Enables collaboration between users |
+
+**Protection Level:**
+- Container is jailed to `/qonq`
+- Agents cannot modify orchestrator code
+- setgid ensures proper group inheritance
+
+### 🚀 Explicit Sqrapyard Control
+
+Sqrapyard seeding is now **opt-in** to prevent accidental imports:
+
+```bash
+# Fresh start (default) - ignores sqrapyard
+./qonqrete.sh run
+
+# Seed from sqrapyard
+./qonqrete.sh run -s
+./qonqrete.sh run --sqrapyard
+```
+
+### ✏️ Interactive TasQ Editor
+
+No `tasq.md`? No problem! QonQrete opens your `$EDITOR` automatically:
+
+```bash
+./qonqrete.sh run
+# -> Opens vim/nano/code with template
+# -> Write your task, save, run!
+```
+
+### 🏷️ Flag Changes
+
+| Old Flag | New Flag | Purpose |
+|----------|----------|---------|
+| `-s/--msb` | `-M/--msb` | Microsandbox mode |
+| (none) | `-s/--sqrapyard` | Seed from sqrapyard |
 
 ---
 
@@ -141,6 +205,8 @@ QonQrete now features a **Triple-Core Memory System**:
 -   `qrane/`: The **Qrane** orchestrator and CLI
 -   `worqer/`: AI agent scripts (`tasqLeveler`, `instruQtor`, `construQtor`, `inspeQtor`, `qompressor`, `qontextor`, `qontrabender`)
 -   `worqspace/`: Shared data plane with configuration and generated artifacts
+    - `qonstructions/`: Saved project outputs (NEW in v0.9.1)
+    - `sqrapyard/`: Input seed code for projects
 
 ---
 
@@ -164,7 +230,7 @@ QonQrete now features a **Triple-Core Memory System**:
 
 > **Docker Desktop Users:** Grant Docker permission to access the project directory via **Settings > Resources > File Sharing**.
 
-### Microsandbox (Optional)
+### Microsandbox (Optional) [EXPERIMENTAL]
 
 Lightweight alternative to Docker. See [Microsandbox repository](https://github.com/a-i-s-r/microsandbox).
 
@@ -194,7 +260,13 @@ export DEEPSEEK_API_KEY='your-key'
 ### Run
 
 ```bash
-# With TUI
+# Fresh start (default)
+./qonqrete.sh run
+
+# With sqrapyard seeding
+./qonqrete.sh run -s
+
+# With TUI [EXPERIMENTAL]
 ./qonqrete.sh run --tui --mode security
 
 # Autonomous mode
@@ -204,10 +276,27 @@ export DEEPSEEK_API_KEY='your-key'
 ./qonqrete.sh run --user
 ```
 
+### Resume
+
+```bash
+# Interactive picker
+./qonqrete.sh resume
+
+# Specific Qage
+./qonqrete.sh resume -q qage_20251226_115701
+```
+
 ### Clean
 
 ```bash
+# Interactive picker
 ./qonqrete.sh clean
+
+# Specific Qage
+./qonqrete.sh clean -q qage_20251226_115701
+
+# All Qages
+./qonqrete.sh clean -A
 ```
 
 ---
@@ -267,6 +356,43 @@ options:
 | `cyber_aggressive` | Aggressive remote caching |
 | `paranoid_mincloud` | Minimal cloud exposure |
 | `debug_repro` | Maximum audit logging |
+
+---
+
+## CLI Reference
+
+```
+Usage: ./qonqrete.sh [COMMAND] [OPTIONS]
+
+Commands:
+  init              Build the Qage container image.
+  run               Start fresh QonQrete session.
+  resume            Resume from a previous Qage.
+  clean             Remove Qage directories.
+
+Global Options:
+  -h, --help        Show help message.
+  -V, --version     Show version information.
+
+Run Options:
+  -a, --auto                   Enable Autonomous Mode.
+  -u, --user                   Force User-gated Mode.
+  -t, --tui                    Enable TUI Mode. [EXPERIMENTAL]
+  -m, --mode <n>               Set Operational Mode.
+  -b, --briq-sensitivity <N>   Set Granularity (0-9).
+  -s, --sqrapyard              Seed from sqrapyard/ directory.
+  -M, --msb                    Force Microsandbox. [EXPERIMENTAL]
+  -d, --docker                 Force Docker.
+
+Resume Options:
+  -q, --qage <n>               Resume from specific Qage.
+  (no args)                    Interactive selection.
+
+Clean Options:
+  -q, --qage <n>               Clean specific Qage.
+  -A, --all                    Clean ALL Qages.
+  (no args)                    Interactive selection.
+```
 
 ---
 

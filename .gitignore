@@ -1,6 +1,9 @@
 # Secrets
 .env
 
+# Ideas
+.ideas
+
 # Ignore generated agent files
 **bloq.d/*
 **tasq.d/*
@@ -16,6 +19,9 @@
 worqspace/qage**
 worqspace/sqrapyard**
 worqspace/struqture**
+
+# Note: qonstructions/ is NOT ignored - users may want to commit saved projects
+# worqspace/qonstructions/ - contains saved project outputs
 
 # PyCache
 **__pycache**
