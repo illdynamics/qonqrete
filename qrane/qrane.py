@@ -88,9 +88,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     # Keywords that SHOULD be displayed (high-level status only)
     # These are checked FIRST - if a line contains ANY of these, it displays
     VISIBLE_KEYWORDS = [
-        # TasqLeveler status (v0.9.0+)
-        "[TasqLeveler]", "🚀 TasqLeveler", "Supercharging", "Enhanced tasq:",
-        "Enhancements added:", "📦", "🎯", "🧪", "📋", "⏱️",
+        # TasqLeveler status (v0.9.0+) - only key status lines
+        "[TasqLeveler]",
         
         # ConstruQtor status - explicit patterns
         "--- ConstruQtor", "-- Processing Briq:", "- Wrote [Code]", "- Wrote [Plan]",
@@ -104,10 +103,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         # InstruQtor status
         "--- Architect", "Generating", "Ingesting", "Estimated cost:",
         
-        # InspeQtor status (batched mode v0.8.6+)
-        "--- InspeQtor:", "=== InspeQtor", "-- Batch ", "Batch results:", 
-        "--- Reviews complete:", "=== Final Assessment:",
-        "Estimated batch cost:",
+        # InspeQtor status - ONLY final assessment (v0.9.8+)
+        "=== InspeQtor", "=== Final Assessment:",
         
         # CalQulator status
         "CalQulator", "Est. Cost", "TOTAL CYCLE", "-----------------------------------",
@@ -122,6 +119,11 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     
     # Keywords that should NEVER be displayed (suppress AI output noise)
     BLOCKED_KEYWORDS = [
+        # TasqLeveler verbose output (v0.9.8+)
+        "## 📋", "## 📦", "## 🎯", "## 🧪", "## ⏱️",
+        "# 🎯 Golden Path", "Overview", "Dependency Graph", "Success Criteria",
+        "Mock Infrastructure", "TOKEN BUDGET", "CONFIGURATION",
+        
         # InspeQtor verbose review content
         "## Summary", "## Issues Found", "## Suggestions", "## Executive",
         "## Critical Issues", "## Integration", "## Per-Briq", "## Warning",
@@ -129,6 +131,13 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         "-- Reviewing:",  # Individual briq review headers
         "Assessment: SUCCESS", "Assessment: PARTIAL", "Assessment: FAILURE",
         "Assessment: [SUCCESS]", "Assessment: [PARTIAL]", "Assessment: [FAILURE]",
+        
+        # InspeQtor table dividers (v0.9.8+)
+        "|----", "|---", "|-", "| ---",
+        
+        # InspeQtor batch/review noise (v0.9.8+)
+        "-- Batch ", "Batch results:", "--- Reviews complete:",
+        "Estimated batch cost:", "[CROSS-BRIQ]",
         
         # Code snippets
         "except ", "try:", "raise ", "return ", "import ", "from ",
@@ -142,13 +151,15 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         
         # Markdown noise
         "```", "- **", "* **", "### ",
-        
-        # Cross-briq noise
-        "[CROSS-BRIQ]",
     ]
     
     # Patterns that indicate code content (for lines WITHOUT visible keywords)
     CONTENT_FILTER_PATTERNS = [
+        # Markdown headers and formatting (v0.9.9+)
+        "## ", "# 🎯", "# 📋", "# 📦", "# 🧪", "# ⏱️",
+        "|---", "|-", "| ---",  # Table dividers
+        
+        # Code patterns
         "let ", "var ", "const ", "function ", "module.exports",
         "require(", "struct ", "enum ", "impl ", "fn ", "pub ",
         "self.", "this.", "super.",

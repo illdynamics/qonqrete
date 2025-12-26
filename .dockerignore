@@ -22,16 +22,13 @@
 **/exeq.d/*
 **/reqap.d/*
 **/qodeyard/*
-**/sqrapyard/*
-**/qonstructions/*
 
 # -----------------------------
 # Logs & Runtime Data
 # -----------------------------
 **/struqture/*
 worqspace/qage**
-worqspace/sqrapyard**
-worqspace/qonstructions**
+worqspace/qonstructions/*
 
 # -----------------------------
 # Python Cache

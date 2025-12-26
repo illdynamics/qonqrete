@@ -1,5 +1,5 @@
 # QonQrete Dockerfile - Security Hardened
-# v0.9.6-beta - Full container hardening with gosu entrypoint
+# v0.9.9-beta - Full container hardening with gosu entrypoint
 # =============================================================================
 # Security Features:
 #   - Pinned base image with digest
@@ -46,6 +46,13 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
 RUN groupadd -r qrew
 RUN useradd -r -g qrew -m -d /home/qrane -s /bin/bash qrane
 RUN useradd -r -g qrew -m -d /home/worqer -s /bin/bash worqer
+
+# Ensure pip scripts are in PATH for all users
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Create cache directories for sentence-transformers (avoid read-only warnings)
+RUN mkdir -p /home/qrane/.cache/huggingface && \
+    chown -R qrane:qrew /home/qrane/.cache
 
 # =============================================================================
 # 4. Copy project and set permissions
