@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.9.2-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.3-beta` (See `VERSION` file for the canonical version).
 
 > **Note on Experimental Features:**
 >
@@ -42,7 +42,7 @@ No more losing your work! QonQrete now supports resuming from previous runs and 
 
 ### 🛡️ Security Hardening - Drop Root Privileges
 
-The container now runs as non-root users with proper permission isolation:
+The container drops root privileges using the `gosu` entrypoint pattern:
 
 | User | Role | Permissions |
 |------|------|-------------|
@@ -50,7 +50,14 @@ The container now runs as non-root users with proper permission isolation:
 | `worqer` | Agent Runner | Runs agents, writes to workspace |
 | `qrew` | Shared Group | Enables collaboration between users |
 
+**How it works:**
+1. Container starts as root (briefly)
+2. `entrypoint.sh` fixes mounted volume permissions
+3. `gosu qrane` drops to non-root user
+4. Your code runs as `qrane` (non-root)
+
 **Protection Level:**
+- Workload runs as non-root `qrane` user
 - Container is jailed to `/qonq`
 - Agents cannot modify orchestrator code
 - setgid ensures proper group inheritance

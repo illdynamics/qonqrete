@@ -2,6 +2,39 @@
 
 ---
 
+## [v0.9.3-beta] - 2025-12-26
+
+### 🛡️ Security Hardening - gosu Entrypoint (Fixed)
+
+**The Fix:** Proper non-root execution now works on both Docker Desktop AND native Linux Docker.
+
+The v0.9.1/v0.9.2 security hardening caused `PermissionError` on Linux because Docker bind mounts inherit host permissions. This is now fixed with the `gosu` entrypoint pattern.
+
+#### How It Works
+
+| Step | User | What Happens |
+|------|------|--------------|
+| 1 | root | Container starts, runs `entrypoint.sh` |
+| 2 | root | `chown -R qrane:qrew /qonq` fixes mounted volume |
+| 3 | root→qrane | `gosu qrane` drops privileges |
+| 4 | qrane | Your actual command runs as **non-root** |
+
+#### Files Added/Changed
+
+| File | Purpose |
+|------|---------|
+| `entrypoint.sh` | Fixes permissions, drops to qrane user |
+| `Dockerfile` | Installs `gosu`, sets ENTRYPOINT |
+
+#### Why gosu?
+
+`gosu` is the industry-standard tool for dropping privileges in containers:
+- No TTY issues (unlike `su`)
+- Proper signal handling
+- Designed specifically for Docker entrypoints
+
+---
+
 ## [v0.9.2-beta] - 2025-12-26
 
 ### 🧹 Code Cleanup - DeepSeek Provider Consolidation
@@ -41,6 +74,29 @@ from sqeleton.deepseek_provider import DeepSeekProvider
 # New
 from worqer.lib_ai import DeepSeekProvider
 ```
+
+### 🛡️ Security Hardening - Proper Non-Root Execution
+
+**Status:** IMPLEMENTED via `gosu` entrypoint pattern.
+
+The container now properly drops root privileges:
+
+| Step | What Happens |
+|------|--------------|
+| 1. Container starts | Runs as root (needed for permission fix) |
+| 2. `entrypoint.sh` | Fixes `/qonq` ownership to `qrane:qrew` |
+| 3. `gosu qrane` | Drops to non-root `qrane` user |
+| 4. Command executes | Runs as `qrane` (non-root) |
+
+**Why this works:**
+- Docker bind mounts inherit host permissions
+- Entrypoint runs as root FIRST, fixes permissions
+- Then drops privileges via `gosu` before running your code
+- Actual workload runs as non-root `qrane` user
+
+**Files added:**
+- `entrypoint.sh` - Permission fixer + privilege dropper
+- `gosu` package - Proper `su` for containers (no TTY issues)
 
 ---
 
