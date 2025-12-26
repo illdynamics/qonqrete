@@ -269,8 +269,24 @@ def get_call_graph(directory: Path):
                 call_graph = {}
                 return call_graph
 
+            # Find pycg executable - check common locations
+            import shutil
+            pycg_cmd = shutil.which("pycg")
+            if not pycg_cmd:
+                # Check pip install locations
+                for candidate in ["/usr/local/bin/pycg", "/usr/bin/pycg", 
+                                  os.path.expanduser("~/.local/bin/pycg")]:
+                    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                        pycg_cmd = candidate
+                        break
+            
+            if not pycg_cmd:
+                print("  - [WARN] pycg not found in PATH. Dependency information will be incomplete.", flush=True)
+                call_graph = {}
+                return call_graph
+
             subprocess.run(
-                ["pycg", "--output", str(output_path)] + files_to_scan,
+                [pycg_cmd, "--output", str(output_path)] + files_to_scan,
                 cwd=str(directory),
                 check=True,
                 capture_output=True,

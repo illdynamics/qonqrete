@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v0.9.1-beta - Resume, Qonstructions, Interactive Clean, Security Hardening
+# v0.9.5-beta - Full Security Hardening Release
 
 set -euo pipefail
 
@@ -20,6 +20,30 @@ WORKSPACE_DIR="${SCRIPT_DIR}/worqspace"
 CONFIG_FILE="${WORKSPACE_DIR}/pipeline_config.yaml"
 CONTAINER_WORKSPACE="/qonq"
 QONSTRUCTIONS_DIR="${WORKSPACE_DIR}/qonstructions"
+
+# --- DOCKER SECURITY FLAGS ---
+# These flags harden the container runtime:
+#   --read-only         : Root filesystem is read-only (only /qonq is writable)
+#   --cap-drop=ALL      : Drop all Linux capabilities
+#   --cap-add=SETUID/GID: Required for gosu to switch users
+#   --cap-add=CHOWN     : Required for entrypoint to fix /qonq permissions
+#   --cap-add=FOWNER    : Required for chmod on files
+#   --cap-add=DAC_OVERRIDE: Required to access host-mounted directories
+#   --memory/--cpus     : Resource limits to prevent DoS
+#   --pids-limit        : Prevent fork bombs
+#   --tmpfs             : Ephemeral /tmp with noexec
+DOCKER_SECURITY_FLAGS="--read-only \
+    --cap-drop=ALL \
+    --cap-add=SETUID \
+    --cap-add=SETGID \
+    --cap-add=CHOWN \
+    --cap-add=FOWNER \
+    --cap-add=DAC_OVERRIDE \
+    --memory=4g \
+    --memory-swap=4g \
+    --cpus=2 \
+    --pids-limit=100 \
+    --tmpfs /tmp:rw,noexec,nosuid,size=100m"
 
 # --- STYLING & COLORS ---
 B=$'\033[1;34m'
@@ -163,10 +187,45 @@ select_qage_interactive() {
     echo "${qages[$((selection-1))]}"
 }
 
+# --- PERMISSION FIX HELPER ---
+# Fix permissions on qage directory so host user can access AND modify files
+# Container creates files as qrane user, this makes them writable by host
+fix_qage_permissions() {
+    local qage_path="$1"
+    if [ -d "$qage_path" ] && command -v docker >/dev/null 2>&1; then
+        docker run --rm -v "${qage_path}:/fix" \
+            --entrypoint /bin/bash "$IMAGE_NAME" \
+            -c "chmod -R a+rwX /fix 2>/dev/null || true" 2>/dev/null || true
+    fi
+}
+
+# --- DELETE QAGE HELPER ---
+# Delete qage using docker if host permissions fail
+delete_qage() {
+    local qage_path="$1"
+    
+    # First try normal delete
+    if rm -rf "$qage_path" 2>/dev/null; then
+        return 0
+    fi
+    
+    # If that failed, use docker to delete (runs as root)
+    if [ -d "$qage_path" ] && command -v docker >/dev/null 2>&1; then
+        docker run --rm -v "${qage_path}:/delete" \
+            --entrypoint /bin/bash "$IMAGE_NAME" \
+            -c "rm -rf /delete/* /delete/.[!.]* 2>/dev/null || true" 2>/dev/null
+        # Now try to remove the empty directory
+        rmdir "$qage_path" 2>/dev/null || rm -rf "$qage_path" 2>/dev/null || true
+    fi
+}
+
 # --- QONSTRUCTIONS SAVE PROMPT ---
 prompt_save_qonstruction() {
     local qage_path="$1"
     local qage_name="$(basename "$qage_path")"
+    
+    # Fix permissions first so we can access files
+    fix_qage_permissions "$qage_path"
     
     echo ""
     echo -e "${C}┌─────────────────────────────────────────────────┐${R}"
@@ -180,7 +239,16 @@ prompt_save_qonstruction() {
     echo ""
     
     if [[ ! $save_answer =~ ^[Yy]$ ]]; then
-        log_qrane "Qonstruction not saved. Qage remains at: ${qage_name}"
+        # User declined to save - ask if they want to delete the qage
+        echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Delete this Qage? [y/N] "
+        read -n 1 -r delete_answer
+        echo ""
+        if [[ $delete_answer =~ ^[Yy]$ ]]; then
+            delete_qage "$qage_path"
+            log_qrane "Qage deleted: ${qage_name}"
+        else
+            log_qrane "Qage preserved at: ${qage_name}"
+        fi
         return 0
     fi
     
@@ -521,7 +589,8 @@ case "$COMMAND" in
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
-            docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
+            docker run --rm -it $DOCKER_SECURITY_FLAGS \
+                $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
@@ -610,7 +679,8 @@ case "$COMMAND" in
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
-            docker run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
+            docker run --rm -it $DOCKER_SECURITY_FLAGS \
+                $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
