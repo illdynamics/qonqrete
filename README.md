@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.9.3-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.9.6-beta` (See `VERSION` file for the canonical version).
 
 > **Note on Experimental Features:**
 >
@@ -25,7 +25,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ---
 
-## What's New in v0.9.1-beta
+## What's New in v0.9.6-beta
 
 ### 🔄 Resume & Qonstructions - Persistent Project Workflow
 
@@ -40,27 +40,37 @@ No more losing your work! QonQrete now supports resuming from previous runs and 
 | **Clean (Specific)** | `./qonqrete.sh clean -q qage_20251226` | Delete specific Qage |
 | **Clean (All)** | `./qonqrete.sh clean -A` | Delete all Qages |
 
-### 🛡️ Security Hardening - Drop Root Privileges
+### 🛡️ Security Hardening (v0.9.6)
 
-The container drops root privileges using the `gosu` entrypoint pattern:
+QonQrete implements defense-in-depth security:
 
-| User | Role | Permissions |
-|------|------|-------------|
-| `qrane` | Orchestrator | Owns `/qonq`, runs `qrane.py` |
-| `worqer` | Agent Runner | Runs agents, writes to workspace |
-| `qrew` | Shared Group | Enables collaboration between users |
+#### Container Security
+| Feature | Protection |
+|---------|------------|
+| **Non-root execution** | `gosu` drops to `qrane` user after permission fix |
+| **Read-only filesystem** | Container root is read-only |
+| **Capability dropping** | `--cap-drop=ALL` then adds only required caps |
+| **Resource limits** | Memory (4GB), CPU (2 cores), PIDs (100) |
+| **Secure /tmp** | `--tmpfs /tmp:rw,noexec,nosuid,size=100m` |
 
-**How it works:**
-1. Container starts as root (briefly)
-2. `entrypoint.sh` fixes mounted volume permissions
-3. `gosu qrane` drops to non-root user
-4. Your code runs as `qrane` (non-root)
+**Required Capabilities:** SETUID, SETGID, CHOWN, FOWNER, DAC_OVERRIDE
 
-**Protection Level:**
-- Workload runs as non-root `qrane` user
-- Container is jailed to `/qonq`
-- Agents cannot modify orchestrator code
-- setgid ensures proper group inheritance
+#### Code Security
+| Feature | Protection |
+|---------|------------|
+| **Path jail enforcement** | All file ops validated against `/qonq` |
+| **Symlink protection** | Paths resolved before validation |
+| **API timeouts** | 5-minute timeout on all AI calls |
+| **Retry limits** | Hard cap of 10 retries |
+| **Size limits** | tasq.md: 100KB, generated files: 1MB |
+| **Config validation** | JSON Schema validation for config.yaml |
+
+#### Dependency Security
+| Feature | Protection |
+|---------|------------|
+| **Pinned base image** | Ubuntu with SHA256 digest |
+| **Pinned packages** | `requirements.txt` with exact versions |
+| **Minimal install** | `--no-install-recommends` |
 
 ### 🚀 Explicit Sqrapyard Control
 
@@ -94,7 +104,7 @@ No `tasq.md`? No problem! QonQrete opens your `$EDITOR` automatically:
 
 ---
 
-## What's New in v0.9.0-beta
+## What's New in v0.9.6-beta
 
 ### 🚀 TasqLeveler - Automatic Tasq Enhancement
 
