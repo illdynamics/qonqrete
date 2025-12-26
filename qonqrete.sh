@@ -480,14 +480,16 @@ case "$COMMAND" in
             log_qrane "Using updated tasq.md from worqspace."
             # Find the highest cycle number in tasq.d
             max_cycle=0
-            for f in "$RUN_HOST_PATH/tasq.d"/cyqle*_tasq.md 2>/dev/null; do
-                if [ -f "$f" ]; then
-                    num=$(basename "$f" | grep -oP 'cyqle\K[0-9]+' || echo "0")
-                    if [ "$num" -gt "$max_cycle" ]; then
-                        max_cycle=$num
+            if ls "$RUN_HOST_PATH/tasq.d"/cyqle*_tasq.md 1>/dev/null 2>&1; then
+                for f in "$RUN_HOST_PATH/tasq.d"/cyqle*_tasq.md; do
+                    if [ -f "$f" ]; then
+                        num=$(basename "$f" | grep -oP 'cyqle\K[0-9]+' || echo "0")
+                        if [ "$num" -gt "$max_cycle" ]; then
+                            max_cycle=$num
+                        fi
                     fi
-                fi
-            done
+                done
+            fi
             next_cycle=$((max_cycle + 1))
             cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle${next_cycle}_tasq.md"
         fi
