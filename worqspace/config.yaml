@@ -145,14 +145,14 @@ options:
   cheqpoint: false
 
   # Max cycles in auto-mode
-  auto_cycle_limit: 3
+  auto_cycle_limit: 4
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Generation Settings
   # ═══════════════════════════════════════════════════════════════════════════
   
   # Briq Granularity Control (0-9)
-  briq_sensitivity: 6
+  briq_sensitivity: 8
 
   # Operational Mode
   mode: program
