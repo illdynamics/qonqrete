@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v0.9.5-beta - Full Security Hardening Release
+# v1.0.0-stable - Production Release with Enforced Briq Sensitivity
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ else
     QONQ_V="0.0.0"
 fi
 
-VERSION="QonQrete v${QONQ_V}-beta"
+VERSION="QonQrete v${QONQ_V}-stable"
 IMAGE_NAME="qonqrete-qage"
 WORKSPACE_DIR="${SCRIPT_DIR}/worqspace"
 CONFIG_FILE="${WORKSPACE_DIR}/pipeline_config.yaml"
@@ -106,7 +106,8 @@ Run Options:
   -u, --user                   Force User-gated Mode.
   -t, --tui                    Enable TUI Mode. ${Y}[EXPERIMENTAL]${R}
   -m, --mode <n>               Set Operational Mode (program, enterprise, security, etc).
-  -b, --briq-sensitivity <N>   Set Granularity (0-9).
+  -b, --briq-sensitivity <N>   Set Granularity (0-9). Default: 7
+  -c, --cyqles <N>             Set max auto-cycles (1-10). Default: 4
   -s, --sqrapyard              Seed from sqrapyard/ directory contents.
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
   -d, --docker                 Force Docker.
@@ -125,6 +126,8 @@ Examples:
   ./qonqrete.sh run                        # Fresh start, no sqrapyard
   ./qonqrete.sh run -s                     # Start with sqrapyard contents
   ./qonqrete.sh run --auto --mode security # Autonomous security mode
+  ./qonqrete.sh run -b 7 -c 4              # Sensitivity 7, 4 cycles (default)
+  ./qonqrete.sh run -b 5 -c 6              # Complex project: sens 5, 6 cycles
   ./qonqrete.sh resume                     # Interactive Qage picker
   ./qonqrete.sh resume -q qage_20251226    # Resume specific Qage
   ./qonqrete.sh clean                      # Interactive Qage deletion
@@ -406,6 +409,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -b|--briq-sensitivity)
             PY_ARGS="$PY_ARGS --briq-sensitivity $2"
+            shift 2
+            ;;
+        -c|--cyqles)
+            PY_ARGS="$PY_ARGS --cyqles $2"
             shift 2
             ;;
 

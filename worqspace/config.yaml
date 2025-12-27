@@ -1,4 +1,4 @@
-# QonQrete Configuration v0.9.7
+# QonQrete Configuration v1.0.0
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -144,15 +144,33 @@ options:
   # false = Autonomous mode (cheqpoints disabled)
   cheqpoint: false
 
-  # Max cycles in auto-mode
+  # Max cycles in auto-mode (recommended: 4 for simple projects, 5-6 for complex)
   auto_cycle_limit: 4
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # Generation Settings
+  # Generation Settings (v1.0.0 - ENFORCED Briq Ranges)
   # ═══════════════════════════════════════════════════════════════════════════
   
-  # Briq Granularity Control (0-9)
-  briq_sensitivity: 8
+  # Briq Granularity Control (0-9) - NOW ENFORCED!
+  # v1.0.0: Briq counts are now ENFORCED, not just hints to the AI.
+  #
+  # SENSITIVITY SCALE:
+  #   9 = Monolithic    (exactly 1 briq)
+  #   8 = Very Broad    (2-3 briqs)
+  #   7 = Broad         (3-5 briqs)   ← RECOMMENDED DEFAULT
+  #   6 = Feature-level (5-8 briqs)
+  #   5 = Component     (8-12 briqs)
+  #   4 = Balanced      (10-15 briqs)
+  #   3 = Standard      (15-20 briqs)
+  #   2 = High Gran.    (20-30 briqs)
+  #   1 = Very High     (30-40 briqs)
+  #   0 = Atomic        (40-60 briqs)
+  #
+  # RECOMMENDATIONS:
+  #   Simple projects (web server, API): sens=7, cycles=4
+  #   Medium projects (full-stack app):  sens=6, cycles=5
+  #   Complex projects (multi-service):  sens=5, cycles=6
+  briq_sensitivity: 7
 
   # Operational Mode
   mode: program

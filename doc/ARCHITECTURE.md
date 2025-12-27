@@ -1,6 +1,6 @@
 # QonQrete Documentation
 
-**Version:** `v0.8.8-beta` (See `VERSION` file for the canonical version).
+**Version:** `v0.8.8-stable` (See `VERSION` file for the canonical version).
 
 This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
 

@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v0.9.9-beta` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.0-stable` (See `VERSION` file for the canonical version).
 
 > **Note on Experimental Features:**
 >
@@ -25,7 +25,51 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ---
 
-## What's New in v0.9.9-beta
+## What's New in v1.0.0 🎉
+
+### 🚨 PRODUCTION RELEASE - ENFORCED BRIQ SENSITIVITY
+
+The first stable production release! This fixes the critical briq sensitivity inconsistency bug.
+
+**The Problem:** `briq_sensitivity` was just a "hint" to the AI, resulting in wildly inconsistent outputs (1-10 briqs with same setting).
+
+**The Fix:** Briq counts are now **ENFORCED** with hard min/max ranges:
+- Too few briqs → System retries with stronger prompt
+- Too many briqs → System merges briqs automatically
+
+### 📊 NEW BRIQ SENSITIVITY SCALE
+
+| Level | Name | Briq Range | Use Case |
+|-------|------|------------|----------|
+| **9** | Monolithic | 1 | Single-file scripts |
+| **8** | Very Broad | 2-3 | Backend/Frontend split |
+| **7** | Broad | 3-5 | **RECOMMENDED DEFAULT** |
+| **6** | Feature | 5-8 | Feature-level decomposition |
+| **5** | Component | 8-12 | Component-level |
+| **4** | Balanced | 10-15 | Medium complexity |
+| **3** | Standard | 15-20 | Standard granularity |
+| **2** | High Gran. | 20-30 | High granularity |
+| **1** | Very High | 30-40 | Very fine-grained |
+| **0** | Atomic | 40-60 | Maximum decomposition |
+
+### 🎯 RECOMMENDED CONFIGURATIONS
+
+| Project Type | Sensitivity | Cycles | Expected Result |
+|--------------|-------------|--------|-----------------|
+| **Simple** (API, web server) | 7 | 4 | B+ to A- grade |
+| **Medium** (full-stack app) | 6 | 5 | B to B+ grade |
+| **Complex** (multi-service) | 5 | 6 | Comprehensive coverage |
+
+### ⚙️ New Defaults
+
+| Setting | Old | New |
+|---------|-----|-----|
+| `briq_sensitivity` | 8 | **7** |
+| `auto_cycle_limit` | 2 | **4** |
+
+---
+
+## What's New in v0.9.9-stable
 
 ### 🎨 Cleaner Console Output
 
@@ -40,7 +84,7 @@ Less noise, more signal:
 
 ---
 
-## What's New in v0.9.8-beta
+## What's New in v0.9.8-stable
 
 ### 🐛 Critical Bug Fixes
 
@@ -57,7 +101,7 @@ The skeleton bug occurred when AI copied `bloq.d/` skeletons from context back t
 
 ---
 
-## What's New in v0.9.7-beta
+## What's New in v0.9.7-stable
 
 ### 🔧 Reliability Fixes
 
@@ -82,7 +126,7 @@ Fixes discovered during real-world multi-cycle builds:
 
 ---
 
-## What's New in v0.9.6-beta
+## What's New in v0.9.6-stable
 
 ### 🔄 Resume & Qonstructions - Persistent Project Workflow
 
@@ -162,7 +206,7 @@ No `tasq.md`? No problem! QonQrete opens your `$EDITOR` automatically:
 
 ---
 
-## What's New in v0.9.0-beta
+## What's New in v0.9.0-stable
 
 ### 🚀 TasqLeveler - Automatic Tasq Enhancement
 
@@ -196,7 +240,7 @@ No more rebuild-from-scratch bugs on multi-cycle builds!
 
 ---
 
-## What's New in v0.8.0-beta
+## What's New in v0.8.0-stable
 
 ### 🌀 Qontrabender - The Cache Bender
 
@@ -418,7 +462,8 @@ options:
   use_qontextor: true
   use_qontrabender: true
   cheqpoint: false
-  auto_cycle_limit: 4
+  auto_cycle_limit: 4      # Recommended: 4 for simple, 5-6 for complex
+  briq_sensitivity: 7      # Recommended: 7 for simple, 5-6 for complex
 ```
 
 ### Qontrabender Modes
@@ -454,7 +499,8 @@ Run Options:
   -u, --user                   Force User-gated Mode.
   -t, --tui                    Enable TUI Mode. [EXPERIMENTAL]
   -m, --mode <n>               Set Operational Mode.
-  -b, --briq-sensitivity <N>   Set Granularity (0-9).
+  -b, --briq-sensitivity <N>   Set Granularity (0-9). Default: 7
+  -c, --cyqles <N>             Set max auto-cycles (1-10). Default: 4
   -s, --sqrapyard              Seed from sqrapyard/ directory.
   -M, --msb                    Force Microsandbox. [EXPERIMENTAL]
   -d, --docker                 Force Docker.
@@ -478,6 +524,7 @@ Clean Options:
 - [QONTRABENDER.md](./doc/QONTRABENDER.md) - Cache bender documentation
 - [RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) - Version history
 - [TERMINOLOGY.md](./doc/TERMINOLOGY.md) - QonQrete terminology
+- [TESTS_v1.0.0.md](./doc/TESTS_v1.0.0.md) - Configuration A/B testing results
 
 ---
 
