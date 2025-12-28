@@ -145,7 +145,7 @@ options:
   cheqpoint: false
 
   # Max cycles in auto-mode (recommended: 4 for simple projects, 5-6 for complex)
-  auto_cycle_limit: 4
+  auto_cycle_limit: 3
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Generation Settings (v1.0.0 - ENFORCED Briq Ranges)
@@ -170,7 +170,7 @@ options:
   #   Simple projects (web server, API): sens=7, cycles=4
   #   Medium projects (full-stack app):  sens=6, cycles=5
   #   Complex projects (multi-service):  sens=5, cycles=6
-  briq_sensitivity: 7
+  briq_sensitivity: 8
 
   # Operational Mode
   mode: program
