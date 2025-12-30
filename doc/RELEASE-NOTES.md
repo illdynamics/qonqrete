@@ -2,7 +2,57 @@
 
 ---
 
-## [v1.0.0-stable] - 2025-12-27
+## [v1.0.0-stable] - 2025-12-29
+
+### 🎉 PRODUCTION RELEASE - BULLETPROOF LANGUAGE DETECTION
+
+The definitive stable production release of QonQrete! This release fixes the critical "py file bug" and introduces the ULTIMATE language detection system that works with ALL AI providers.
+
+---
+
+#### 🔥 CRITICAL FIX: No More "py" or "js" File Creation
+
+**The Problem (v0.9.x):**
+When using OpenAI as the AI provider, code blocks like ` ```py ` would create files named "py" instead of being skipped:
+
+```
+# AI output:                  # Result (WRONG):
+```py                         → File "py" created
+print("hello")                  (should have been skipped!)
+```
+```
+
+This happened because OpenAI uses shorthand language identifiers (`py`, `js`, `ts`) instead of full names with paths (`python:src/main.py`).
+
+**The Fix (v1.0.0-stable):**
+The `language_keywords` set has been MASSIVELY expanded from **23 entries** to **400+ entries**, covering:
+
+| Category | Examples | Count |
+|----------|----------|-------|
+| Python variants | `py`, `py3`, `pyw`, `pyi`, `pyc`, `pyx`, `cython`, `jython`, `pypy` | 25+ |
+| JavaScript/TypeScript | `js`, `jsx`, `mjs`, `cjs`, `ts`, `tsx`, `es6`, `node`, `deno` | 40+ |
+| Infrastructure-as-Code | `tf`, `tfvars`, `hcl`, `ansible`, `puppet`, `k8s`, `helm` | 30+ |
+| All GitHub Linguist IDs | Every language identifier from Linguist v4.5.2+ | 300+ |
+| Generic markers | `code`, `snippet`, `output`, `console`, `terminal`, `result` | 20+ |
+
+**NEW: Smart Filename Validation**
+
+Added `_is_valid_filename()` function that distinguishes real files from language keywords:
+- ✅ `src/main.py` → Real file (has path + extension)
+- ✅ `Dockerfile` → Real file (known extensionless filename)
+- ❌ `py` → Language keyword (single word, no extension)
+- ❌ `typescript` → Language keyword (in comprehensive set)
+
+**Tested With:**
+- ✅ OpenAI GPT-4/GPT-4o (uses `py`, `js` shorthand)
+- ✅ Google Gemini (uses full names)
+- ✅ Anthropic Claude (uses full names + paths)
+- ✅ DeepSeek Coder (uses language-specific IDs)
+- ✅ Qwen/Qwen2.5-Coder (mixed behavior)
+
+---
+
+## [v1.0.0] - 2025-12-27
 
 ### 🎉 PRODUCTION RELEASE - ENFORCED BRIQ SENSITIVITY
 

@@ -448,7 +448,7 @@ def main():
     parser.add_argument("-V", "--version", action="version", version=get_version())
     parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
-    parser.add_argument("-c", "--cyqles", type=int, help="Max auto-cycles (1-10)")
+    parser.add_argument("-c", "--cyqles", type=int, help="Max auto-cycles (1-50)")
     args = parser.parse_args()
 
     if args.auto and args.user:
@@ -513,7 +513,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     # Max cycles: CLI overrides config
     max_cycles = config.get('options', {}).get('auto_cycle_limit', 4)
     if args.cyqles is not None:
-        max_cycles = max(1, min(10, args.cyqles))  # Clamp to 1-10
+        max_cycles = max(1, min(50, args.cyqles))  # Clamp to 1-50
     target_width = 11
     qrane_padding = " " * (target_width - 5)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"

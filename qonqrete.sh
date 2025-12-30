@@ -107,7 +107,7 @@ Run Options:
   -t, --tui                    Enable TUI Mode. ${Y}[EXPERIMENTAL]${R}
   -m, --mode <n>               Set Operational Mode (program, enterprise, security, etc).
   -b, --briq-sensitivity <N>   Set Granularity (0-9). Default: 7
-  -c, --cyqles <N>             Set max auto-cycles (1-10). Default: 4
+  -c, --cyqles <N>             Set max auto-cycles (1-50). Default: 4
   -s, --sqrapyard              Seed from sqrapyard/ directory contents.
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
   -d, --docker                 Force Docker.
