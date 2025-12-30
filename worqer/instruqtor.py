@@ -2,16 +2,29 @@
 # worqer/instruqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InstruQtor Agent - Task Decomposition & Planning
-# v0.9.0 - Universal File Rule (s00permode)
+# v1.0.0 - ENFORCED Briq Sensitivity (Production Release)
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# v0.9.0 FIX: Removed artificial "refinement modes". Instead uses one simple
-# universal rule that applies to ALL cycles:
+# v1.0.0 MAJOR FIX: Briq sensitivity now ENFORCES exact briq count ranges.
+# Previously, sensitivity was just a "hint" to the AI, resulting in wildly
+# inconsistent outputs (1-10 briqs with the same sensitivity setting).
 #
-#   📁 File EXISTS in qodeyard? → MODIFY/EXTEND it (never recreate)
-#   📄 File DOESN'T EXIST? → CREATE it (new modules welcome!)
+# Now each sensitivity level has a HARD MIN/MAX range that is enforced:
+#   - If AI produces too few briqs → regenerate with stronger prompt
+#   - If AI produces too many briqs → merge similar briqs together
 #
-# This prevents the rebuild-from-scratch bug while keeping full creative freedom.
+# SENSITIVITY SCALE (0-9):
+#   9 = Monolithic (exactly 1 briq)
+#   8 = Very Broad (2-3 briqs)
+#   7 = Broad (3-5 briqs) ← RECOMMENDED DEFAULT
+#   6 = Feature-level (5-8 briqs)
+#   5 = Component-level (8-12 briqs)
+#   4 = Balanced (10-15 briqs)
+#   3 = Standard (15-20 briqs)
+#   2 = High Granularity (20-30 briqs)
+#   1 = Very High Granularity (30-40 briqs)
+#   0 = Atomic (40-60 briqs)
+#
 # ═══════════════════════════════════════════════════════════════════════════════
 import os
 import sys
@@ -36,15 +49,37 @@ except ImportError:
     def calculate_cost(tokens, model, is_input=True): return (tokens / 1_000_000) * (0.4 if is_input else 1.6)
     def format_cost(cost): return f"${cost:.5f}" if cost < 0.01 else f"${cost:.2f}"
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENFORCED BRIQ SENSITIVITY RANGES (v1.0.0)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Each sensitivity level has a strict (min, max, target) briq count.
+# The system will ENFORCE these ranges, not just hint at them.
+
+BRIQ_RANGES = {
+    9: (1, 1, 1),      # Monolithic: exactly 1 briq
+    8: (2, 3, 2),      # Very Broad: 2-3 briqs
+    7: (3, 5, 4),      # Broad: 3-5 briqs (RECOMMENDED DEFAULT)
+    6: (5, 8, 6),      # Feature-level: 5-8 briqs
+    5: (8, 12, 10),    # Component-level: 8-12 briqs
+    4: (10, 15, 12),   # Balanced: 10-15 briqs
+    3: (15, 20, 18),   # Standard: 15-20 briqs
+    2: (20, 30, 25),   # High Granularity: 20-30 briqs
+    1: (30, 40, 35),   # Very High: 30-40 briqs
+    0: (40, 60, 50),   # Atomic: 40-60 briqs (maximum decomposition)
+}
+
+
 def clean_input_content(text: str) -> str:
     text = text.replace('\u200b', '').replace('\ufeff', '')
     text = text.replace('\xa0', ' ')
     text = "".join(ch for ch in text if ch.isprintable() or ch in ['\n', '\t', '\r'])
     return text
 
+
 def parse_xml_briqs(content: str) -> list[dict]:
-    # Robust parsing that handles potential AI formatting glitches
-    pattern_strict = re.compile(r'<briq\s+title=["\'](.*?)["\']\s*>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
+    """Robust parsing that handles potential AI formatting glitches."""
+    pattern_strict = re.compile(r'<briq\s+title=["\']([^"\']*)["\']>(.*?)</briq>', re.DOTALL | re.IGNORECASE)
     matches = pattern_strict.findall(content)
     results = [{'title': m[0].strip(), 'content': m[1].strip()} for m in matches]
 
@@ -58,38 +93,157 @@ def parse_xml_briqs(content: str) -> list[dict]:
             results.append({'title': title, 'content': content_body})
     return results
 
+
 def clean_filename_slug(text: str) -> str:
     """Converts a title into a readable, lowercase, underscore-separated slug."""
-    # Add underscore before uppercase letters (for PascalCase/camelCase)
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', text)
     s2 = re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1)
-    
-    # Replace non-alphanumeric characters with underscores
     s3 = re.sub(r'\W+', '_', s2)
-    
-    # Collapse multiple underscores into one
     s4 = re.sub(r'_+', '_', s3)
-    
-    # Remove leading/trailing underscores and lowercase
     slug = s4.strip('_').lower()
-    
-    # Limit length to avoid excessively long filenames
     return "_".join(slug.split('_')[:8]) if slug else "task"
 
-def get_sensitivity_prompt(level: int) -> str:
+
+def get_sensitivity_config(level: int) -> tuple[int, int, int, str]:
+    """
+    Returns (min_briqs, max_briqs, target_briqs, prompt_text) for the given sensitivity level.
+    """
+    min_b, max_b, target_b = BRIQ_RANGES.get(level, BRIQ_RANGES[7])
+    
     prompts = {
-        0: "**CRITICAL RULE (LEVEL 0 - ATOMIC):** Deconstruct the project into the maximum number of granular tasks possible. Target **50 or more** briqs. Deconstruct every single class, function, helper, and configuration file into its own briq. No grouping is permitted.",
-        1: "**CRITICAL RULE (LEVEL 1 - VERY HIGH GRANULARITY):** Break down the project into **30-40** briqs. Each major class and module should be a separate briq.",
-        2: "**CRITICAL RULE (LEVEL 2 - HIGH GRANULARITY):** Break down the project into **20-30** briqs. Group only very tightly coupled utility functions.",
-        3: "**CRITICAL RULE (LEVEL 3 - STANDARD GRANULARITY):** Break down the project into **15-20** briqs. This is the standard for most projects.",
-        4: "**CRITICAL RULE (LEVEL 4 - BALANCED):** Break down the project into **10-15** briqs. Group related classes and modules into logical components.",
-        5: "**CRITICAL RULE (LEVEL 5 - COMPONENT-LEVEL):** Break down the project into **8-12** briqs. Each briq should represent a major component or feature.",
-        6: "**CRITICAL RULE (LEVEL 6 - FEATURE-LEVEL):** Break down the project into **5-8** briqs. Each briq should represent a complete feature.",
-        7: "**CRITICAL RULE (LEVEL 7 - BROAD):** Break down the project into **3-5** briqs. These are large, multi-feature briqs.",
-        8: "**CRITICAL RULE (LEVEL 8 - VERY BROAD):** Break down the project into **2-3** briqs. The entire backend could be one briq, and the frontend another.",
-        9: "**CRITICAL RULE (LEVEL 9 - MONOLITHIC):** Output the entire project as **exactly 1** briq. Do not split it under any circumstances.",
+        9: f"**MANDATORY BRIQ COUNT: EXACTLY 1 BRIQ.** Output the entire project as a single monolithic briq. Do not split under any circumstances. This is non-negotiable.",
+        8: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create very broad briqs. Example: 'Backend' and 'Frontend' as separate briqs. Maximum {max_b} briqs allowed.",
+        7: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create broad briqs covering major components. Each briq should handle multiple related files. This is the recommended default for most projects.",
+        6: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create feature-level briqs. Each major feature or module gets its own briq.",
+        5: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create component-level briqs. Group related classes and utilities together.",
+        4: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create balanced briqs. Each significant class or module gets a briq.",
+        3: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Standard granularity. Most files get their own briq.",
+        2: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** High granularity. Split classes into separate briqs where logical.",
+        1: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Very high granularity. Each function or small utility gets a briq.",
+        0: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** ATOMIC decomposition. Maximum granularity - every single function, class, and config gets its own briq.",
     }
-    return prompts.get(level, prompts[3]) # Default to 3 if out of range
+    
+    prompt = prompts.get(level, prompts[7])
+    return min_b, max_b, target_b, prompt
+
+
+def merge_briqs(briqs: list[dict], target_count: int) -> list[dict]:
+    """
+    Merge briqs to reduce count to target.
+    Strategy: Combine consecutive briqs until we reach target count.
+    """
+    if len(briqs) <= target_count:
+        return briqs
+    
+    print(f"  [ENFORCE] Merging {len(briqs)} briqs down to {target_count}...", flush=True)
+    
+    # Calculate how many briqs to merge into each final briq
+    merge_factor = math.ceil(len(briqs) / target_count)
+    merged = []
+    
+    for i in range(0, len(briqs), merge_factor):
+        chunk = briqs[i:i + merge_factor]
+        if len(chunk) == 1:
+            merged.append(chunk[0])
+        else:
+            # Combine titles and content
+            combined_title = " + ".join([b['title'][:30] for b in chunk])
+            combined_content = "\n\n---\n\n".join([
+                f"## {b['title']}\n{b['content']}" for b in chunk
+            ])
+            merged.append({
+                'title': combined_title[:80],
+                'content': combined_content
+            })
+    
+    return merged[:target_count]
+
+
+def generate_briqs_with_enforcement(
+    ai_provider: str,
+    ai_model: str,
+    base_prompt: str,
+    sensitivity: int,
+    task_content: str,
+    qodeyard_tree: str,
+    max_retries: int = 2
+) -> list[dict]:
+    """
+    Generate briqs with ENFORCED count ranges.
+    Will retry with stronger prompts if AI doesn't comply.
+    """
+    min_briqs, max_briqs, target_briqs, sens_prompt = get_sensitivity_config(sensitivity)
+    
+    for attempt in range(max_retries + 1):
+        # Build enforcement prompt
+        if attempt == 0:
+            enforcement = sens_prompt
+        else:
+            # Stronger enforcement on retry
+            enforcement = f"""
+⚠️ RETRY ATTEMPT {attempt + 1} - STRICT ENFORCEMENT ⚠️
+
+{sens_prompt}
+
+YOUR PREVIOUS OUTPUT DID NOT COMPLY. YOU MUST OUTPUT BETWEEN {min_briqs} AND {max_briqs} BRIQS.
+
+COUNT YOUR BRIQS BEFORE OUTPUTTING. If you have fewer than {min_briqs}, split your briqs further.
+If you have more than {max_briqs}, combine related briqs together.
+
+THIS IS A HARD REQUIREMENT. NON-COMPLIANCE WILL CAUSE SYSTEM FAILURE.
+"""
+        
+        full_prompt = base_prompt.replace("{SENSITIVITY_PROMPT}", enforcement)
+        
+        # Estimate and log cost
+        input_tokens = estimate_tokens(full_prompt, ai_model)
+        estimated_output_tokens = 2000
+        input_cost = calculate_cost(input_tokens, ai_model, is_input=True)
+        output_cost = calculate_cost(estimated_output_tokens, ai_model, is_input=False)
+        total_cost = input_cost + output_cost
+        
+        if attempt == 0:
+            print(f"Estimated cost: {format_cost(total_cost)} ({input_tokens:,} in + ~{estimated_output_tokens:,} out tokens @ {ai_model})", flush=True)
+        
+        # Call AI
+        try:
+            response = lib_ai.run_ai_completion(ai_provider, ai_model, full_prompt)
+        except Exception as e:
+            sys.stderr.write(f"InstruQtor AI call failed: {e}\n")
+            if attempt < max_retries:
+                continue
+            sys.exit(1)
+        
+        # Parse briqs
+        briqs = parse_xml_briqs(response)
+        
+        if not briqs:
+            print(f"  [WARN] No valid briqs parsed, attempt {attempt + 1}", flush=True)
+            if attempt < max_retries:
+                continue
+            # Fallback: create single briq from raw response
+            briqs = [{'title': 'Master_Plan_Fallback', 'content': response}]
+        
+        briq_count = len(briqs)
+        
+        # Check compliance
+        if min_briqs <= briq_count <= max_briqs:
+            print(f"  [OK] Briq count {briq_count} is within range [{min_briqs}-{max_briqs}]", flush=True)
+            return briqs
+        elif briq_count > max_briqs:
+            # Too many - merge them
+            print(f"  [ENFORCE] Got {briq_count} briqs, max is {max_briqs}. Merging...", flush=True)
+            return merge_briqs(briqs, max_briqs)
+        else:
+            # Too few - retry with stronger prompt
+            print(f"  [ENFORCE] Got {briq_count} briqs, need at least {min_briqs}. Retrying...", flush=True)
+            if attempt >= max_retries:
+                # Last resort: accept what we have
+                print(f"  [WARN] Could not achieve minimum briq count after {max_retries + 1} attempts. Proceeding with {briq_count} briqs.", flush=True)
+                return briqs
+    
+    return briqs
+
 
 def main() -> None:
     if len(sys.argv) != 3: sys.exit(1)
@@ -111,11 +265,15 @@ def main() -> None:
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4o')
 
-    mode = os.environ.get('QONQ_MODE', 'enterprise')
-    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))
-    except: sensitivity = 5
+    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 7))
+    except: sensitivity = 7
+    
+    # Clamp sensitivity to valid range
+    sensitivity = max(0, min(9, sensitivity))
 
-    sens_prompt = get_sensitivity_prompt(sensitivity)
+    # Get briq range info for logging
+    min_briqs, max_briqs, target_briqs, _ = get_sensitivity_config(sensitivity)
+    print(f"  [CONFIG] Sensitivity: {sensitivity} → Target: {target_briqs} briqs (range: {min_briqs}-{max_briqs})", flush=True)
 
     # Gather Qodeyard Context
     qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
@@ -123,13 +281,10 @@ def main() -> None:
     qodeyard_file_count = 0
     if qodeyard_path.exists() and any(qodeyard_path.iterdir()):
         tree_lines = []
-        # Start with the root directory name
         tree_lines.append(f"{qodeyard_path.name}/")
         
-        # Use a recursive helper function for clarity
         def build_tree(dir_path: Path, prefix: str):
             nonlocal qodeyard_file_count
-            # List items and sort them (directories first, then files)
             items = sorted(list(dir_path.iterdir()), key=lambda p: (p.is_file(), p.name))
             for i, path in enumerate(items):
                 is_last = i == (len(items) - 1)
@@ -148,7 +303,7 @@ def main() -> None:
     else:
         qodeyard_tree = "[qodeyard is empty - this is a fresh build]"
 
-    # Build the universal file rule (applies to ALL cycles)
+    # Build the universal file rule
     universal_file_rule = """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 UNIVERSAL FILE RULE (STRICTLY ENFORCED)
@@ -164,13 +319,6 @@ Before creating ANY briq, check the file tree below:
   📄 FILE DOESN'T EXIST yet?
      → Create a briq to CREATE it (new modules are welcome!)
 
-EXAMPLES:
-  ✅ "Implement HavocClient RPC methods in src/c2/havoc_client.py" (MODIFY existing)
-  ✅ "Add geofencing module at src/safety/geofencing.py" (CREATE new)
-  ✅ "Fix syntax error in src/traffic/dga.py" (MODIFY existing)
-  ❌ "Setup project root and create main.py" (main.py EXISTS - don't recreate!)
-  ❌ "Create the configuration system" (config.yaml EXISTS - modify if needed!)
-
 This rule applies to ALL cycles. The qodeyard is your source of truth.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -181,15 +329,17 @@ This rule applies to ALL cycles. The qodeyard is your source of truth.
     else:
         context_msg = "\n📊 QODEYARD STATUS: Empty. This is cycle 1 - build from scratch.\n"
 
+    # Build base prompt with placeholder for sensitivity
     planner_prompt = f"""
-You are the **Principal Software Architect** and your only purpose is to break down a technical specification into a precise number of tasks, called 'briqs'. You must follow the rules exactly as specified.
+You are the **Principal Software Architect** and your only purpose is to break down a technical specification into a precise number of tasks, called 'briqs'. You must follow the rules EXACTLY as specified.
 
-{sens_prompt}
+{{SENSITIVITY_PROMPT}}
+
 {universal_file_rule}
 {context_msg}
 
 **ARCHITECTURAL DIRECTIVES:**
-1.  **ADHERE TO THE BRIQ COUNT:** This is a strict requirement. The number of briqs must be within the range specified in the CRITICAL RULE.
+1.  **ADHERE TO THE BRIQ COUNT:** This is a STRICT requirement. Count your briqs before outputting!
 2.  **RESPECT EXISTING FILES:** Check the file tree. Don't recreate what exists - modify or extend it.
 3.  **ADDRESS THE INPUT:** If the input contains a review with issues, create briqs to fix those issues.
 4.  **ADD MISSING PIECES:** Create briqs for genuinely missing functionality.
@@ -206,41 +356,36 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 **INPUT DOCUMENT:**
 {task_content}
 
-**BEGIN ATOMIC BREAKDOWN (Adhering to the CRITICAL RULE and UNIVERSAL FILE RULE):**
+**BEGIN ATOMIC BREAKDOWN (Count your briqs to ensure compliance!):**
 """
 
-    # Estimate cost for this AI call
-    input_tokens = estimate_tokens(planner_prompt, ai_model)
-    estimated_output_tokens = 2000  # Typical briq breakdown output
-    input_cost = calculate_cost(input_tokens, ai_model, is_input=True)
-    output_cost = calculate_cost(estimated_output_tokens, ai_model, is_input=False)
-    total_cost = input_cost + output_cost
-    print(f"Estimated cost: {format_cost(total_cost)} ({input_tokens:,} in + ~{estimated_output_tokens:,} out tokens @ {ai_model})", flush=True)
+    # Generate briqs with enforcement
+    briqs = generate_briqs_with_enforcement(
+        ai_provider=ai_provider,
+        ai_model=ai_model,
+        base_prompt=planner_prompt,
+        sensitivity=sensitivity,
+        task_content=task_content,
+        qodeyard_tree=qodeyard_tree
+    )
 
-    master_plan = ""
-    try:
-        master_plan = lib_ai.run_ai_completion(ai_provider, ai_model, planner_prompt)
-    except Exception as e:
-        sys.stderr.write(f"Instruqtor Failure: {e}\\n")
-        sys.exit(1)
-
-    briqs = parse_xml_briqs(master_plan)
-
-    if not briqs:
-        print("[WARN] Architect failed to produce valid XML. Generating raw output.", flush=True)
-        briqs = [{'title': 'Master_Plan_Fallback', 'content': master_plan}]
-
-    print(f"--- Architect Generating {len(briqs)} Build Phases (Sens:{sensitivity}) ---", flush=True)
+    print(f"--- Architect Generated {len(briqs)} Build Phases (Sens:{sensitivity}, Range:{min_briqs}-{max_briqs}) ---", flush=True)
 
     for i, item in enumerate(briqs):
         step_slug = clean_filename_slug(item['title'])
         filename = f"cyqle{cycle_num}_tasq1_briq{i:03d}_{step_slug}.md"
         file_path = output_dir / filename
 
+        # Estimate tokens for this briq
+        briq_content = f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}"
+        briq_tokens = estimate_tokens(briq_content, ai_model)
+        briq_cost = calculate_cost(briq_tokens, ai_model, is_input=True)
+
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}")
+            f.write(f"# {item['title']} [Est: {briq_tokens:,} toks | {format_cost(briq_cost)}]\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}")
 
         print(f"  - Wrote [Plan] {filename}", flush=True)
+
 
 if __name__ == '__main__':
     main()

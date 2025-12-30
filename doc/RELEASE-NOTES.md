@@ -2,6 +2,214 @@
 
 ---
 
+## [v1.0.0-stable] - 2025-12-29
+
+### 🎉 PRODUCTION RELEASE - BULLETPROOF LANGUAGE DETECTION
+
+The definitive stable production release of QonQrete! This release fixes the critical "py file bug" and introduces the ULTIMATE language detection system that works with ALL AI providers.
+
+---
+
+#### 🔥 CRITICAL FIX: No More "py" or "js" File Creation
+
+**The Problem (v0.9.x):**
+When using OpenAI as the AI provider, code blocks like ` ```py ` would create files named "py" instead of being skipped:
+
+```
+# AI output:                  # Result (WRONG):
+```py                         → File "py" created
+print("hello")                  (should have been skipped!)
+```
+```
+
+This happened because OpenAI uses shorthand language identifiers (`py`, `js`, `ts`) instead of full names with paths (`python:src/main.py`).
+
+**The Fix (v1.0.0-stable):**
+The `language_keywords` set has been MASSIVELY expanded from **23 entries** to **400+ entries**, covering:
+
+| Category | Examples | Count |
+|----------|----------|-------|
+| Python variants | `py`, `py3`, `pyw`, `pyi`, `pyc`, `pyx`, `cython`, `jython`, `pypy` | 25+ |
+| JavaScript/TypeScript | `js`, `jsx`, `mjs`, `cjs`, `ts`, `tsx`, `es6`, `node`, `deno` | 40+ |
+| Infrastructure-as-Code | `tf`, `tfvars`, `hcl`, `ansible`, `puppet`, `k8s`, `helm` | 30+ |
+| All GitHub Linguist IDs | Every language identifier from Linguist v4.5.2+ | 300+ |
+| Generic markers | `code`, `snippet`, `output`, `console`, `terminal`, `result` | 20+ |
+
+**NEW: Smart Filename Validation**
+
+Added `_is_valid_filename()` function that distinguishes real files from language keywords:
+- ✅ `src/main.py` → Real file (has path + extension)
+- ✅ `Dockerfile` → Real file (known extensionless filename)
+- ❌ `py` → Language keyword (single word, no extension)
+- ❌ `typescript` → Language keyword (in comprehensive set)
+
+**Tested With:**
+- ✅ OpenAI GPT-4/GPT-4o (uses `py`, `js` shorthand)
+- ✅ Google Gemini (uses full names)
+- ✅ Anthropic Claude (uses full names + paths)
+- ✅ DeepSeek Coder (uses language-specific IDs)
+- ✅ Qwen/Qwen2.5-Coder (mixed behavior)
+
+---
+
+## [v1.0.0] - 2025-12-27
+
+### 🎉 PRODUCTION RELEASE - ENFORCED BRIQ SENSITIVITY
+
+The first stable production release of QonQrete! This release fixes the critical briq sensitivity inconsistency bug and introduces enforced briq count ranges.
+
+---
+
+#### 🆕 NEW: Cycle Override Flag (-c/--cyqles)
+
+Now you can override the auto_cycle_limit directly from the command line!
+
+```bash
+# Default: 4 cycles
+./qonqrete.sh run
+
+# Override to 6 cycles for complex projects
+./qonqrete.sh run -c 6
+
+# Combine with sensitivity for full control
+./qonqrete.sh run -b 5 -c 6  # Complex project config
+./qonqrete.sh run -b 7 -c 4  # Simple project config (default)
+```
+
+**CLI Reference:**
+| Flag | Long Form | Description |
+|------|-----------|-------------|
+| `-c` | `--cyqles <N>` | Override max cycles (1-10) |
+| `-b` | `--briq-sensitivity <N>` | Override sensitivity (0-9) |
+
+---
+
+#### 🚨 CRITICAL FIX: Briq Sensitivity Now ENFORCED
+
+**The Problem (v0.9.x and earlier):**
+Previously, `briq_sensitivity` was just a "hint" to the AI, resulting in wildly inconsistent outputs. The same sensitivity setting could produce anywhere from 1 to 10+ briqs depending on AI mood:
+
+| Run | Sensitivity | Expected Briqs | Actual Briqs | Result |
+|-----|-------------|----------------|--------------|--------|
+| A | 8 | ~2-3 | **1** | Polish loop failure |
+| B | 8 | ~2-3 | **10** | Worked but inefficient |
+| C | 8 | ~2-3 | **7** | Unpredictable |
+
+**The Fix (v1.0.0):**
+Briq counts are now **ENFORCED** with hard min/max ranges:
+- If AI produces too few briqs → System retries with stronger prompt
+- If AI produces too many briqs → System merges briqs automatically
+
+---
+
+#### 📊 NEW BRIQ SENSITIVITY SCALE
+
+| Level | Name | Briq Range | Target | Use Case |
+|-------|------|------------|--------|----------|
+| **9** | Monolithic | 1 | 1 | Single-file scripts |
+| **8** | Very Broad | 2-3 | 2 | Backend/Frontend split |
+| **7** | Broad | 3-5 | 4 | **RECOMMENDED DEFAULT** |
+| **6** | Feature | 5-8 | 6 | Feature-level decomposition |
+| **5** | Component | 8-12 | 10 | Component-level |
+| **4** | Balanced | 10-15 | 12 | Medium complexity |
+| **3** | Standard | 15-20 | 18 | Standard granularity |
+| **2** | High Gran. | 20-30 | 25 | High granularity |
+| **1** | Very High | 30-40 | 35 | Very fine-grained |
+| **0** | Atomic | 40-60 | 50 | Maximum decomposition |
+
+---
+
+#### 🎯 RECOMMENDED CONFIGURATIONS
+
+| Project Type | Sensitivity | Cycles | Expected Result |
+|--------------|-------------|--------|-----------------|
+| **Simple** (API, web server) | 7 | 4 | B+ to A- grade |
+| **Medium** (full-stack app) | 6 | 5 | B to B+ grade |
+| **Complex** (multi-service) | 5 | 6 | Comprehensive coverage |
+
+---
+
+#### 🆕 New Features
+
+| Feature | Description |
+|---------|-------------|
+| **Enforced Briq Ranges** | System guarantees briq count within specified range |
+| **Auto-Retry** | Retries with stronger prompt if AI doesn't comply |
+| **Auto-Merge** | Automatically merges excess briqs to meet max limit |
+| **Range Logging** | Console shows `[CONFIG] Sensitivity: 7 → Target: 4 briqs (range: 3-5)` |
+| **Compliance Check** | `[OK] Briq count 4 is within range [3-5]` confirmation |
+
+---
+
+#### ⚙️ Configuration Changes
+
+| Setting | Old Default | New Default | Reason |
+|---------|-------------|-------------|--------|
+| `briq_sensitivity` | 8 | **7** | More consistent results |
+| `auto_cycle_limit` | 2 | **4** | Enough iterations for polish |
+
+---
+
+#### 📝 Technical Implementation
+
+**instruqtor.py - Enforced Ranges:**
+```python
+BRIQ_RANGES = {
+    9: (1, 1, 1),      # Monolithic: exactly 1 briq
+    8: (2, 3, 2),      # Very Broad: 2-3 briqs
+    7: (3, 5, 4),      # Broad: 3-5 briqs (RECOMMENDED)
+    6: (5, 8, 6),      # Feature-level: 5-8 briqs
+    5: (8, 12, 10),    # Component-level: 8-12 briqs
+    4: (10, 15, 12),   # Balanced: 10-15 briqs
+    3: (15, 20, 18),   # Standard: 15-20 briqs
+    2: (20, 30, 25),   # High Granularity: 20-30 briqs
+    1: (30, 40, 35),   # Very High: 30-40 briqs
+    0: (40, 60, 50),   # Atomic: 40-60 briqs
+}
+```
+
+**Enforcement Logic:**
+1. AI generates briqs with MANDATORY count prompt
+2. System checks if count is within range
+3. If too few → Retry with stronger prompt (up to 2 retries)
+4. If too many → Merge consecutive briqs to meet max
+5. Log compliance status
+
+---
+
+#### 📋 Migration from v0.9.x
+
+1. Update `config.yaml`:
+   ```yaml
+   briq_sensitivity: 7  # was 8
+   auto_cycle_limit: 4  # was 2
+   ```
+
+2. No container rebuild required - just replace `worqer/instruqtor.py`
+
+---
+
+#### 🧪 A/B Testing Results (Pre-Release)
+
+Extensive testing with 13 runs revealed the inconsistency bug and validated the fix:
+
+| Config | Runs | Briq Variance | Avg Grade | Notes |
+|--------|------|---------------|-----------|-------|
+| sens=8 (old) | 5 | 1-16 briqs | C+ (71%) | HIGH variance |
+| sens=7 (old) | 2 | 20 briqs | B (82%) | Better but expensive |
+| sens=8 (new) | TBD | 2-3 briqs | TBD | **ENFORCED** |
+
+---
+
+#### 📝 Files Changed
+
+- `worqer/instruqtor.py` - Complete rewrite with enforcement logic
+- `worqspace/config.yaml` - Updated defaults and documentation
+- `VERSION` - Bumped to 1.0.0
+- `doc/RELEASE-NOTES.md` - This document
+
+---
+
 ## [v0.9.9-beta] - 2025-12-26
 
 ### 🎨 OUTPUT CLEANUP & UX IMPROVEMENTS

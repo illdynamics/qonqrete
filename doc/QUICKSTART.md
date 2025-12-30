@@ -1,6 +1,6 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v0.9.9-beta` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.0` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
 
@@ -189,7 +189,8 @@ Multiple options for cleanup:
 | `-u, --user` | User-gated mode |
 | `-t, --tui` | TUI mode [EXPERIMENTAL] |
 | `-m, --mode <n>` | Operational mode |
-| `-b, --briq-sensitivity <N>` | Granularity (0-9) |
+| `-b, --briq-sensitivity <N>` | Granularity (0-9). Default: 7 |
+| `-c, --cyqles <N>` | Max auto-cycles (1-10). Default: 4 |
 | `-s, --sqrapyard` | Seed from sqrapyard |
 | `-M, --msb` | Microsandbox mode [EXPERIMENTAL] |
 | `-d, --docker` | Force Docker |

@@ -6,7 +6,7 @@ To assess Qwen's ability to process and generate coherent, structured output whe
 
 ## Test Setup:
 
-1.  **QonQrete Version:** `v0.6.1-beta` (post-Qwen integration)
+1.  **QonQrete Version:** `v0.6.1-stable` (post-Qwen integration)
 2.  **Dockerfile:** Modified to include `npm install -g @qwen-code/qwen-code`.
 3.  **`worqspace/config.yaml` Configuration:**
     *   `instruqtor`: `provider: qwen`, `model: qwen-max`
