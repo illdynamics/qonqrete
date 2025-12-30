@@ -448,6 +448,7 @@ def main():
     parser.add_argument("-V", "--version", action="version", version=get_version())
     parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
+    parser.add_argument("-c", "--cyqles", type=int, help="Max auto-cycles (1-50)")
     args = parser.parse_args()
 
     if args.auto and args.user:
@@ -504,12 +505,15 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     logger = logging.getLogger("qrane")
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
-    final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 5)
+    final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 7)
 
     os.environ['QONQ_MODE'] = final_mode
     os.environ['QONQ_SENSITIVITY'] = str(final_sens)
 
-    max_cycles = config.get('options', {}).get('auto_cycle_limit', 0)
+    # Max cycles: CLI overrides config
+    max_cycles = config.get('options', {}).get('auto_cycle_limit', 4)
+    if args.cyqles is not None:
+        max_cycles = max(1, min(50, args.cyqles))  # Clamp to 1-50
     target_width = 11
     qrane_padding = " " * (target_width - 5)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
@@ -523,7 +527,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
         print(f"{qrane_prefix}Seeding worQspace in Qage at: {worqspace}\r")
         print(f"{qrane_prefix}Importing gateQeeper's tasq.md...\r")
         time.sleep(0.3)
-        print(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode}, Sens: {final_sens})\r")
+        print(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode}, Sens: {final_sens}, Cyqles: {max_cycles})\r")
         
         # Show agent status
         qomp_status = f"{Colors.GREEN}ON{Colors.R}" if use_qompressor else f"{Colors.RED}OFF{Colors.R}"
