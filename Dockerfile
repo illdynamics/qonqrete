@@ -1,5 +1,5 @@
 # QonQrete Dockerfile - Security Hardened
-# v0.9.9-beta - Full container hardening with gosu entrypoint
+# v1.0.1-stable - Fixed HuggingFace cache permissions for Docker hardening
 # =============================================================================
 # Security Features:
 #   - Pinned base image with digest
@@ -7,6 +7,7 @@
 #   - Non-root execution via gosu
 #   - HEALTHCHECK directive
 #   - Minimal attack surface
+#   - Pre-downloaded ML models (v1.0.1 fix)
 # =============================================================================
 
 # Pinned base image with digest for reproducibility
@@ -50,7 +51,30 @@ RUN useradd -r -g qrew -m -d /home/worqer -s /bin/bash worqer
 # Ensure pip scripts are in PATH for all users
 ENV PATH="/usr/local/bin:${PATH}"
 
-# Create cache directories for sentence-transformers (avoid read-only warnings)
+# =============================================================================
+# 3a. Pre-download ML Models (v1.0.1 fix)
+# =============================================================================
+# Create a persistent cache directory OUTSIDE /home/qrane/.cache (which gets
+# mounted as tmpfs at runtime). This ensures the pre-downloaded models survive
+# the security hardening tmpfs mount.
+RUN mkdir -p /opt/hf_cache && chmod 755 /opt/hf_cache
+
+# Set HuggingFace environment variables BEFORE downloading
+ENV HF_HOME=/opt/hf_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/opt/hf_cache
+ENV TRANSFORMERS_CACHE=/opt/hf_cache
+
+# Pre-download the sentence-transformers model during build (runs as root)
+# This ensures the model is available at runtime without needing write access
+RUN python3 -c "from sentence_transformers import SentenceTransformer; \
+    print('Pre-downloading all-MiniLM-L6-v2 model...'); \
+    SentenceTransformer('all-MiniLM-L6-v2'); \
+    print('Model cached successfully to /opt/hf_cache')"
+
+# Make cache readable by all users (model files are read-only at runtime)
+RUN chmod -R 755 /opt/hf_cache
+
+# Create runtime cache directories for sentence-transformers (for any runtime writes)
 RUN mkdir -p /home/qrane/.cache/huggingface && \
     chown -R qrane:qrew /home/qrane/.cache
 

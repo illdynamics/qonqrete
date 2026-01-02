@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v1.0.0-stable - Production Release with Enforced Briq Sensitivity
+# v1.0.1-stable - Fixed HuggingFace Cache Permissions
 
 set -euo pipefail
 

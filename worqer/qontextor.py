@@ -6,6 +6,8 @@ QonQrete Qontextor - Dual-Mode Context Generator
 Supports two modes based on the agent's configuration in config.yaml:
 - provider: 'local' -> Pure deterministic analysis using AST and heuristics.
 - provider: [ai_provider] -> Uses an LLM for semantic analysis.
+
+v1.0.1 Fix: Proper HuggingFace cache handling for Docker hardened environments.
 """
 import sys
 import os
@@ -16,6 +18,16 @@ import yaml
 import subprocess
 import argparse
 from pathlib import Path
+
+# =============================================================================
+# v1.0.1 FIX: Set HuggingFace environment variables before imports
+# =============================================================================
+# These must be set BEFORE importing sentence_transformers or transformers
+# to ensure the pre-downloaded model in /opt/hf_cache is used
+if os.path.isdir('/opt/hf_cache'):
+    os.environ.setdefault('HF_HOME', '/opt/hf_cache')
+    os.environ.setdefault('SENTENCE_TRANSFORMERS_HOME', '/opt/hf_cache')
+    os.environ.setdefault('TRANSFORMERS_CACHE', '/opt/hf_cache')
 
 # --- Local Mode Imports (Optional) ---
 try:
@@ -49,13 +61,37 @@ call_graph = None
 semantic_index = None  # Stores (file_path, symbol_name, purpose, embedding) tuples
 
 def get_embedding_model():
-    """Lazy loader for the sentence transformer model."""
+    """
+    Lazy loader for the sentence transformer model.
+    
+    v1.0.1 Fix: Improved error handling and cache directory detection.
+    Falls back gracefully if model loading fails (e.g., permission issues).
+    """
     global embedding_model
     if embedding_model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
-        print("  - Loading semantic analysis model (once)...", flush=True)
-        # Uses a cached model, downloads on first run
-        embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-    return embedding_model
+        try:
+            # Check if pre-downloaded model exists in /opt/hf_cache
+            cache_dir = os.environ.get('SENTENCE_TRANSFORMERS_HOME', '/opt/hf_cache')
+            if os.path.isdir(cache_dir):
+                print(f"  - Loading semantic model from cache ({cache_dir})...", flush=True)
+            else:
+                print("  - Loading semantic analysis model (first run may download)...", flush=True)
+            
+            embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            print("  - Semantic model loaded successfully.", flush=True)
+        except PermissionError as e:
+            # v1.0.1 Fix: Catch permission errors explicitly
+            print(f"  - [WARN] Model loading failed (PermissionError): {e}", flush=True)
+            print("  - [WARN] Falling back to AST-only analysis (no semantic embeddings).", flush=True)
+            embedding_model = False  # Mark as "tried and failed"
+        except Exception as e:
+            # Catch any other errors (network, disk space, etc.)
+            print(f"  - [WARN] Model loading failed: {e}", flush=True)
+            print("  - [WARN] Falling back to AST-only analysis (no semantic embeddings).", flush=True)
+            embedding_model = False  # Mark as "tried and failed"
+    
+    # Return None if model loading failed (embedding_model == False)
+    return embedding_model if embedding_model else None
 
 def build_semantic_index(qontext_dir: Path) -> list:
     """
@@ -425,6 +461,13 @@ def path_to_module_str(base_path: Path, file_path: Path) -> str:
         return file_path.stem
 
 def generate_context_local(file_path: Path, local_mode: str, project_path: Path) -> FileContext:
+    """
+    Generate context for a file using local analysis (AST, Jedi, embeddings).
+    
+    v1.0.1 Fix: Improved error handling to distinguish between:
+    - AST parse errors (syntax issues in source file)
+    - Model loading errors (handled gracefully, continues without embeddings)
+    """
     ext = file_path.suffix.lower()
     content = file_path.read_text(errors='ignore')
 
@@ -465,22 +508,34 @@ def generate_context_local(file_path: Path, local_mode: str, project_path: Path)
                         pass
         
         # --- Semantic Enhancement (Complex Mode) ---
+        # v1.0.1 Fix: Model loading errors are now handled in get_embedding_model()
+        # and won't cause the entire file analysis to fail
         if local_mode == 'complex':
             model = get_embedding_model()
             if model:
                 purposes = [sym.purpose for sym in extractor.symbols if sym.purpose]
                 if purposes:
-                    embeddings = model.encode(purposes)
-                    # Map embeddings back to the symbols that had purposes
-                    emb_idx = 0
-                    for sym in extractor.symbols:
-                        if sym.purpose:
-                            sym.embedding = embeddings[emb_idx]
-                            emb_idx += 1
+                    try:
+                        embeddings = model.encode(purposes)
+                        # Map embeddings back to the symbols that had purposes
+                        emb_idx = 0
+                        for sym in extractor.symbols:
+                            if sym.purpose:
+                                sym.embedding = embeddings[emb_idx]
+                                emb_idx += 1
+                    except Exception as e:
+                        # If encoding fails, continue without embeddings
+                        print(f"  - [WARN] Embedding generation failed: {e}", flush=True)
         
         return FileContext(file_path=str(file_path), symbols=extractor.symbols)
+    
+    except SyntaxError as e:
+        # Actual AST/syntax error in the source file
+        return FileContext(str(file_path), error=f"AST Parse Error (SyntaxError): {e}")
     except Exception as e:
-        return FileContext(str(file_path), error=f"AST Parse Error: {e}")
+        # Other errors during AST parsing
+        error_type = type(e).__name__
+        return FileContext(str(file_path), error=f"Analysis Error ({error_type}): {e}")
 
 
 # --- AI Mode Logic ---
