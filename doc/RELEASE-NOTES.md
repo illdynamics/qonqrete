@@ -2,6 +2,113 @@
 
 ---
 
+## [v1.0.1-stable] - 2026-01-02
+
+### 🔧 HOTFIX: HuggingFace Cache Permissions in Docker Hardened Environment
+
+This hotfix resolves the critical permission error when using Qontextor's `complex` mode (semantic embeddings) in the Docker hardened container.
+
+---
+
+#### 🚨 THE PROBLEM (v1.0.0-stable)
+
+When running Qontextor with `local_mode: complex`, users would see errors like:
+
+```yaml
+error: 'AST Parse Error: PermissionError at /home/qrane/.cache/huggingface when downloading
+  sentence-transformers/all-MiniLM-L6-v2. Check cache directory permissions.'
+```
+
+**Root Cause:**
+The Docker security hardening in v0.9.9+ includes a tmpfs mount over `/home/qrane/.cache`:
+```bash
+--tmpfs /home/qrane/.cache:rw,size=500m
+```
+
+This ephemeral mount **wipes out** any pre-cached models from the Docker build, forcing the sentence-transformers library to re-download the model at runtime. The download then fails due to lock file conflicts or permission issues.
+
+---
+
+#### ✅ THE FIX (v1.0.1-stable)
+
+**1. Pre-downloaded Model in `/opt/hf_cache`**
+
+The Dockerfile now pre-downloads the `all-MiniLM-L6-v2` model during build time to a separate location (`/opt/hf_cache`) that is NOT affected by the tmpfs mount:
+
+```dockerfile
+# Pre-download the sentence-transformers model during build
+RUN python3 -c "from sentence_transformers import SentenceTransformer; \
+    SentenceTransformer('all-MiniLM-L6-v2')"
+```
+
+**2. Environment Variables in Entrypoint**
+
+The entrypoint.sh now exports HuggingFace environment variables to point to the pre-cached model:
+
+```bash
+export HF_HOME=/opt/hf_cache
+export SENTENCE_TRANSFORMERS_HOME=/opt/hf_cache
+export TRANSFORMERS_CACHE=/opt/hf_cache
+```
+
+**3. Improved Error Handling in Qontextor**
+
+The qontextor.py now:
+- Sets HF environment variables before importing sentence_transformers
+- Catches `PermissionError` explicitly and falls back to AST-only analysis
+- Distinguishes between actual AST parse errors and model loading failures
+- Continues analysis gracefully even if semantic embeddings fail
+
+---
+
+#### 📋 MIGRATION GUIDE
+
+**If upgrading from v1.0.0-stable:**
+
+1. **Rebuild the Docker image** (required to download the model):
+   ```bash
+   ./qonqrete.sh init
+   ```
+
+2. That's it! The fix is fully backward compatible.
+
+**Alternative: Use `fast` mode (no semantic embeddings)**
+
+If you prefer to skip semantic embeddings entirely, set in `config.yaml`:
+```yaml
+agents:
+  qontextor:
+    provider: local
+    local_mode: fast  # AST-only, no embeddings
+```
+
+---
+
+#### 🔍 TECHNICAL DETAILS
+
+| Component | Change | Purpose |
+|-----------|--------|---------|
+| `Dockerfile` | Pre-download model to `/opt/hf_cache` | Model survives tmpfs mount |
+| `Dockerfile` | Set `HF_HOME`, `SENTENCE_TRANSFORMERS_HOME` | Point to pre-cached location |
+| `entrypoint.sh` | Export HF environment variables | Persist settings for runtime |
+| `qontextor.py` | Set env vars before imports | Ensure correct cache path |
+| `qontextor.py` | Catch `PermissionError` explicitly | Graceful fallback |
+| `qontextor.py` | Better error type distinction | Clear error messages |
+
+---
+
+#### 🎯 FILES CHANGED
+
+- `Dockerfile` - Pre-download model, set environment variables
+- `entrypoint.sh` - Export HF cache environment variables
+- `worqer/qontextor.py` - Improved error handling, env var setup
+- `VERSION` - Bumped to 1.0.1-stable
+- `doc/RELEASE-NOTES.md` - This release note
+- `doc/CONTEXT.md` - Updated with v1.0.1 cache handling note
+- `doc/QUICKSTART.md` - Updated version reference
+
+---
+
 ## [v1.0.0-stable] - 2025-12-29
 
 ### 🎉 PRODUCTION RELEASE - BULLETPROOF LANGUAGE DETECTION

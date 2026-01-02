@@ -1,8 +1,14 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v1.0.0` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.1` (See `VERSION` file for the canonical version).
 
 This guide will walk you through running your first `cyQle` with the QonQrete system.
+
+## What's New in v1.0.1
+
+- **HuggingFace Cache Fix**: Fixed permission errors when using Qontextor `complex` mode in Docker hardened containers
+- **Pre-downloaded Models**: The sentence-transformers model is now pre-downloaded during Docker build
+- **Graceful Fallback**: Qontextor now falls back to AST-only analysis if semantic embeddings fail
 
 ## What's New in v0.9.8
 

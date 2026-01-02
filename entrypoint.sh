@@ -4,9 +4,18 @@
 # =============================================================================
 # This script runs as root at container startup, fixes permissions on the
 # mounted /qonq volume, then drops to the qrane user for actual execution.
+#
+# v1.0.1 Fix: Export HuggingFace cache environment variables to ensure
+# the pre-downloaded model in /opt/hf_cache is used instead of attempting
+# to download to /home/qrane/.cache (which is mounted as tmpfs).
 # =============================================================================
 
 set -e
+
+# v1.0.1 Fix: Set HuggingFace cache to pre-downloaded location
+export HF_HOME=/opt/hf_cache
+export SENTENCE_TRANSFORMERS_HOME=/opt/hf_cache
+export TRANSFORMERS_CACHE=/opt/hf_cache
 
 # Fix ownership on mounted /qonq volume
 # This is needed because Docker bind mounts inherit host permissions
