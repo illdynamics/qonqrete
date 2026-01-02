@@ -66,8 +66,8 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: deepseek
-    model: deepseek-chat           # $1.25/$10.00 per 1M - best for code generation
+    provider: gemini
+    model: gemini-2.5-flash           # $1.25/$10.00 per 1M - best for code generation
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
