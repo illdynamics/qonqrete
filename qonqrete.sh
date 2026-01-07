@@ -122,6 +122,9 @@ Clean Options:
   -A, --all                    Clean ALL Qage directories (current behavior).
   (no args)                    Interactive Qage selection for deletion.
 
+Save Options (after run/resume):
+  -n, --qonstruction-name <name>  Save the result non-interactively and delete the qage.
+
 Examples:
   ./qonqrete.sh run                        # Fresh start, no sqrapyard
   ./qonqrete.sh run -s                     # Start with sqrapyard contents
@@ -230,6 +233,49 @@ delete_qage() {
         # Now try to remove the empty directory
         rmdir "$qage_path" 2>/dev/null || rm -rf "$qage_path" 2>/dev/null || true
     fi
+}
+
+# --- QONSTRUCTIONS SAVE (NON-INTERACTIVE) ---
+save_qonstruction_non_interactive() {
+    local qage_path="$1"
+    local qage_name="$(basename "$qage_path")"
+    local project_name="$2"
+
+    log_qrane "Non-interactive save requested for Qonstruction: ${project_name}"
+    
+    # Create qonstructions directory if it doesn't exist
+    mkdir -p "$QONSTRUCTIONS_DIR"
+    
+    # Sanitize name
+    project_name=$(echo "$project_name" | tr -cd '[:alnum:]_-')
+    
+    local qonstruction_path="${QONSTRUCTIONS_DIR}/${project_name}"
+    
+    if [ -d "$qonstruction_path" ]; then
+        log_qrane "Qonstruction '${project_name}' already exists. Overwriting."
+        rm -rf "$qonstruction_path"
+    fi
+    
+    mkdir -p "$qonstruction_path"
+    
+    # Copy the entire qage contents
+    log_qrane "Saving Qonstruction to: qonstructions/${project_name}"
+    cp -r "$qage_path"/* "$qonstruction_path/"
+    
+    # Create metadata file
+    cat > "$qonstruction_path/meta.yaml" <<METAEOF
+# QonQrete Qonstruction Metadata
+project_name: "${project_name}"
+source_qage: "${qage_name}"
+created_at: "$(date -Iseconds)"
+qonqrete_version: "${QONQ_V}"
+METAEOF
+    
+    log_qrane "Qonstruction saved successfully!"
+    
+    # Delete the original qage
+    delete_qage "$qage_path"
+    log_qrane "Original Qage '${qage_name}' deleted."
 }
 
 # --- QONSTRUCTIONS SAVE PROMPT ---
@@ -385,6 +431,7 @@ RUNTIME_MODE=$(detect_runtime)
 USE_SQRAPYARD=false
 QAGE_NAME=""
 CLEAN_ALL=false
+QONSTRUCTION_NAME=""
 
 if [[ $# -eq 0 ]]; then show_help; exit 0; fi
 
@@ -422,6 +469,12 @@ while [[ $# -gt 0 ]]; do
         # Qage selection (for resume/clean)
         -q|--qage)
             QAGE_NAME="$2"
+            shift 2
+            ;;
+        
+        # Qonstruction name (for non-interactive save)
+        -n|--qonstruction-name)
+            QONSTRUCTION_NAME="$2"
             shift 2
             ;;
 
@@ -616,8 +669,12 @@ case "$COMMAND" in
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
         
-        # After run completes, prompt to save
-        prompt_save_qonstruction "$RUN_HOST_PATH"
+        # After run completes, decide how to save
+        if [ -n "$QONSTRUCTION_NAME" ]; then
+            save_qonstruction_non_interactive "$RUN_HOST_PATH" "$QONSTRUCTION_NAME"
+        else
+            prompt_save_qonstruction "$RUN_HOST_PATH"
+        fi
         ;;
 
     run)
@@ -706,7 +763,11 @@ case "$COMMAND" in
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         fi
         
-        # After run completes, prompt to save
-        prompt_save_qonstruction "$RUN_HOST_PATH"
+        # After run completes, decide how to save
+        if [ -n "$QONSTRUCTION_NAME" ]; then
+            save_qonstruction_non_interactive "$RUN_HOST_PATH" "$QONSTRUCTION_NAME"
+        else
+            prompt_save_qonstruction "$RUN_HOST_PATH"
+        fi
         ;;
 esac

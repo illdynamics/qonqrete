@@ -1,0 +1,152 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# QonQrete Configuration Template
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# v1.7.1-stable - Includes TimeWalQer time travel settings
+#
+# Copy this file to your worqspace as config.yaml and customize.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CORE SETTINGS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Maximum cyQles to run (0 = unlimited)
+max_cyqles: 10
+
+# Sensitivity for task splitting (1-10, higher = more splits)
+sensitivity: 7
+
+# Mode: program, enterprise, innovative
+mode: program
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PIPELINE AGENTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# InstruQtor - Task splitting agent
+instruqtor:
+  enabled: true
+  provider: local  # 'local' for zero-cost, or 'openai', 'anthropic', etc.
+  model: instruqtor
+  sensitivity: 7
+
+# ConstruQtor - Code generation agent
+construqtor:
+  enabled: true
+  provider: local  # 'local' for mindstaQ patterns, or AI provider
+  model: construqtor
+
+# InspeQtor - Code review agent
+inspeqtor:
+  enabled: true
+  provider: local  # 'local' for zero-cost AST analysis
+  model: inspeqtor
+  mode: program    # program, enterprise, innovative
+  check_imports: true
+  check_security: true
+  check_style: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVOLUTION LOOP (v1.7.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Qalibrator - AST mutation engine
+qalibrator:
+  enabled: true
+  max_generations: 50
+  population_size: 5
+  mutation_rate: 0.3
+  elite_count: 2
+  convergence_threshold: 0.001
+  stagnation_limit: 10
+  enabled_mutations:
+    - swap_statements
+    - swap_operators
+    - swap_conditionals
+    - inline_variable
+    - add_error_handling
+    - remove_dead_code
+    - simplify_boolean
+    - reorder_imports
+
+# Qualifier - Quality assessment agent
+qualifier:
+  enabled: true
+  min_fitness: 0.70
+  max_iterations: 50
+  stagnation_limit: 10
+  # See quality_qriteria.yaml for detailed dimension settings
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIMEWALQER - TIME TRAVEL SYSTEM (v1.7.1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+timewalqer:
+  # Enable/disable the time travel system
+  enabled: true
+  
+  # Use hard links for storage efficiency (cp -al instead of cp -r)
+  # This makes 100 snapshots take ~1x storage instead of 100x
+  use_hardlinks: true
+  
+  # Auto-revert to last good state on hard failures
+  auto_revert: true
+  
+  # Maximum timestones to keep (0 = unlimited)
+  # Older timestones are cleaned up, but Genesis (0) is always kept
+  max_timestones: 100
+  
+  # Track failed attempts in graveyard.d for forensics
+  graveyard_enabled: true
+  
+  # Directories to include in snapshots
+  snapshot_dirs:
+    - qodeyard
+    - qontext.d
+    - bloq.d
+    - tasq.d
+    - reqap.d
+    - briq.d
+    - struqture
+  
+  # Files to include in snapshots
+  snapshot_files:
+    - config.yaml
+    - tasq.md
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROVIDER SETTINGS (if using AI providers)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# OpenAI settings
+openai:
+  api_key: ${OPENAI_API_KEY}
+  model: gpt-4
+  temperature: 0.7
+
+# Anthropic settings
+anthropic:
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-3-sonnet
+  temperature: 0.7
+
+# Ollama settings (local)
+ollama:
+  base_url: http://localhost:11434
+  model: codellama
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGGING & DEBUG
+# ─────────────────────────────────────────────────────────────────────────────
+
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  file: struqture/qonqrete.log
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+debug:
+  verbose: false
+  trace_agents: false
+  save_intermediates: false

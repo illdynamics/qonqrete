@@ -654,31 +654,90 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         'renovate.json', 'dependabot.yml',
     }
     
+    # v1.7.8 FIX: Expanded blacklist of known bad filename patterns from console pollution
+    filename_blacklist = {
+        # Google API warnings
+        'google.generativeai', 'google.genai', 'google.api_core',
+        'generativeai', 'genai', 'api_core',
+        # Rust/installation warnings  
+        'sh.rustup.rs', 'rustup.rs', 'rustup', 'sh.rustup',
+        # JavaScript false positives
+        'response.js', 'response.json', 'response',
+        # Generic garbage
+        'readme.md', 'warning', 'error', 'info', 'debug',
+        'deprecated', 'futurewarning', 'import', 'from',
+        # More console pollution
+        'https', 'http', 'www', 'github.com', 'githubusercontent',
+        'pip', 'npm', 'yarn', 'cargo', 'apt-get', 'apt',
+        'install', 'update', 'upgrade',
+        # Python warnings
+        'usr', 'local', 'lib', 'site-packages', 'dist-packages',
+    }
+    
+    # v1.7.8 FIX: Valid file extensions for code files
+    valid_code_extensions = {
+        '.py', '.sh', '.bash', '.zsh', '.fish',  # Scripts
+        '.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs',  # JavaScript/TypeScript
+        '.go', '.rs', '.rb', '.php', '.pl', '.pm',  # Other languages
+        '.c', '.h', '.cpp', '.hpp', '.cc', '.hh',  # C/C++
+        '.java', '.kt', '.kts', '.scala', '.clj',  # JVM
+        '.cs', '.fs', '.vb',  # .NET
+        '.swift', '.m', '.mm',  # Apple
+        '.lua', '.r', '.R', '.jl',  # Other
+        '.sql', '.graphql', '.gql',  # Query languages
+        '.html', '.htm', '.css', '.scss', '.sass', '.less',  # Web
+        '.xml', '.xsl', '.xslt',  # XML
+        '.yaml', '.yml', '.json', '.toml', '.ini', '.cfg', '.conf',  # Config
+        '.md', '.rst', '.txt',  # Docs
+        '.dockerfile', '.containerfile',  # Container
+    }
+    
     def _is_valid_filename(candidate: str) -> bool:
         """
         Check if a candidate string looks like a valid filename rather than a language ID.
         
+        v1.7.8: Enhanced validation with expanded blacklist and fail-safe checks.
+        
         A valid filename typically:
-        1. Contains a file extension (dot followed by 1-10 alphanumeric chars), OR
+        1. Contains a valid code file extension, OR
         2. Is a known extensionless file (Dockerfile, Makefile, etc.), OR
         3. Contains a path separator with valid path components
         
-        Returns True if likely a filename, False if likely a language keyword.
+        Returns True if likely a filename, False if likely a language keyword or garbage.
         """
         if not candidate:
             return False
             
         candidate_lower = candidate.lower().strip()
         
+        # v1.7.8 FIX: Check blacklist first - also check basename for paths
+        basename = candidate_lower.split('/')[-1] if '/' in candidate_lower else candidate_lower
+        if candidate_lower in filename_blacklist:
+            return False
+        if basename in filename_blacklist:
+            return False
+        
+        # v1.7.8 FIX: Check if it looks like a URL or package name
+        if candidate_lower.startswith('http://') or candidate_lower.startswith('https://'):
+            return False
+        if candidate_lower.count('.') > 2:  # e.g., google.api_core.something
+            return False
+            
         # Check if it's a known extensionless filename
         # Also check the basename for path cases like "app/Dockerfile"
         basename = candidate_lower.split('/')[-1]
         if basename in known_extensionless_files or candidate_lower in known_extensionless_files:
             return True
         
-        # Check for file extension pattern: .ext where ext is 1-10 alphanumeric chars
-        if re.search(r'\.[a-zA-Z0-9]{1,10}$', candidate):
-            return True
+        # v1.7.8 FIX: Check for VALID code file extension (not just any extension)
+        ext_match = re.search(r'(\.[a-zA-Z0-9]+)$', candidate)
+        if ext_match:
+            ext = ext_match.group(1).lower()
+            if ext in valid_code_extensions:
+                return True
+            # Unknown extension - reject unless it's a path
+            if '/' not in candidate:
+                return False
         
         # Path with multiple components likely indicates a real file path
         # e.g., "src/utils/helpers" or "config/settings"
@@ -686,7 +745,12 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
             # Additional validation: components should look like identifiers
             parts = candidate.split('/')
             if all(re.match(r'^[a-zA-Z_][a-zA-Z0-9_.-]*$', p) for p in parts if p):
-                return True
+                # v1.7.8: Also check the final component has valid extension or is extensionless
+                final = parts[-1]
+                if '.' in final:
+                    ext = '.' + final.split('.')[-1].lower()
+                    return ext in valid_code_extensions
+                return final.lower() in known_extensionless_files
         
         # Single word without extension or path - likely a language keyword
         return False
@@ -711,13 +775,12 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         # Skip if filename is just a language keyword (case-insensitive)
         if filename.lower() in language_keywords:
             continue
-            
-        # Skip if filename doesn't look like a valid file path
-        # This catches edge cases where AI outputs something like "script" or "config"
+        
+        # v1.7.8 FIX: ALWAYS skip if filename validation fails
+        # The old logic had a bug that allowed blacklisted files with dots through
         if not _is_valid_filename(filename):
-            # Only skip if it's also short (single word without path/extension)
-            if '/' not in filename and '.' not in filename:
-                continue
+            print(f"     [SKIP] Invalid filename (blacklisted/bad extension): {filename}", flush=True)
+            continue
 
         # Clean the content
         code_content = code_content.strip() if code_content else ""
@@ -760,6 +823,23 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         
         full_path = proposed_abs
         safe_filename = full_path.relative_to(qodeyard_abs)
+        
+        # v1.7.8 FIX: SECONDARY blacklist check as fail-safe before write
+        # This catches any files that might have slipped through the first check
+        safe_filename_str = str(safe_filename).lower()
+        safe_basename = safe_filename_str.split('/')[-1] if '/' in safe_filename_str else safe_filename_str
+        if safe_basename in filename_blacklist or safe_filename_str in filename_blacklist:
+            print(f"     [SKIP] FAIL-SAFE: Blocked blacklisted file: {safe_filename}", flush=True)
+            continue
+        
+        # v1.7.8 FIX: Additional extension check at write time
+        if '.' in safe_basename:
+            ext = '.' + safe_basename.split('.')[-1]
+            # Block known garbage extensions
+            garbage_extensions = {'.generativeai', '.genai', '.api_core'}
+            if ext in garbage_extensions:
+                print(f"     [SKIP] FAIL-SAFE: Blocked garbage extension: {safe_filename}", flush=True)
+                continue
         
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(code_content, encoding='utf-8')

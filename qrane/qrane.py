@@ -401,6 +401,52 @@ def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
         if ui: ui.log_main(f"{qrane_prefix}{msg}")
         else: print(f"{qrane_prefix}{msg}")
 
+def save_as_qonstruction(qage_path: Path, name: str, worqspace_root: Path, prefix: str):
+    """Save current qage as a named qonstruction (v1.8.7 -n flag).
+    
+    Args:
+        qage_path: Path to the current qage directory
+        name: Name for the qonstruction
+        worqspace_root: Root worqspace path
+        prefix: Display prefix for messages
+    """
+    import shutil
+    from datetime import datetime
+    
+    # Sanitize name (remove special chars)
+    safe_name = re.sub(r'[^\w\-]', '_', name)
+    
+    # Destination: worqspace/qonstructions/<name>/
+    qonstructions_dir = worqspace_root / "qonstructions"
+    qonstructions_dir.mkdir(parents=True, exist_ok=True)
+    
+    dest_path = qonstructions_dir / safe_name
+    
+    # Handle existing qonstruction - add timestamp suffix
+    if dest_path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dest_path = qonstructions_dir / f"{safe_name}_{timestamp}"
+    
+    try:
+        # Copy qage to qonstruction
+        shutil.copytree(qage_path, dest_path)
+        
+        # Create meta.yaml
+        meta_content = f"""# QonQrete Qonstruction Metadata
+project_name: "{safe_name}"
+source_qage: "{qage_path.name}"
+created_at: "{datetime.now().isoformat()}"
+qonqrete_version: "1.8.7-stable"
+"""
+        with open(dest_path / "meta.yaml", 'w') as f:
+            f.write(meta_content)
+        
+        print(f"{prefix}Saved qonstruction: {Colors.GREEN}{dest_path.name}{Colors.R}")
+        print(f"{prefix}Location: {dest_path}")
+        
+    except Exception as e:
+        print(f"{prefix}{Colors.RED}Failed to save qonstruction: {e}{Colors.R}")
+
 def getch():
     try:
         import tty, termios
@@ -440,7 +486,8 @@ def check_api_keys(config, qrane_prefix):
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(prog="QonQrete")
+    parser = argparse.ArgumentParser(prog="QonQrete", 
+        description="QonQrete v1.8.7-stable - Zero-Cost Local Code Generation")
     parser.add_argument("-a", "--auto", action="store_true", help="Autonomous Mode")
     parser.add_argument("-u", "--user", action="store_true", help="Force User-gated Mode")
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
@@ -449,6 +496,8 @@ def main():
     parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
     parser.add_argument("-c", "--cyqles", type=int, help="Max auto-cycles (1-50)")
+    parser.add_argument("-n", "--qonstruction-name", type=str, dest="qonstruction_name",
+        help="Non-interactive: Auto-save qage as named qonstruction (no prompts)")
     args = parser.parse_args()
 
     if args.auto and args.user:
@@ -655,9 +704,28 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                     continue
                 if name == 'qontrabender' and not use_qontrabender:
                     continue
+                
+                # ═══════════════════════════════════════════════════════════════
+                # v1.2.0: Skip qontrabender and calqulator for local construqtor
+                # ═══════════════════════════════════════════════════════════════
+                construqtor_cfg = agent_configs.get('construqtor', {})
+                construqtor_provider = construqtor_cfg.get('provider', 'gemini')
+                is_local_construqtor = construqtor_provider.lower() == 'local'
+                
+                # Skip qontrabender if not using gemini (it's for Gemini context caching)
+                if name == 'qontrabender' and is_local_construqtor:
+                    continue
+                
+                # Skip calqulator if using local construqtor (no API costs to calculate)
+                if name == 'calqulator' and is_local_construqtor:
+                    continue
 
                 # --- DYNAMIC LOCAL AGENT LOADER ---
-                if provider == 'local':
+                # Only apply to TRUE local-only agents (NOT construqtor/instruqtor/inspeqtor)
+                # These agents route to local via lib_ai.py internally
+                INTERNAL_ROUTING_AGENTS = {'construqtor', 'instruqtor', 'inspeqtor'}
+                
+                if provider == 'local' and name not in INTERNAL_ROUTING_AGENTS:
                     model_name = agent_config.get('model')
                     if not model_name:
                         if ui: ui.log_main(f"Config Error: 'model' not specified for local agent '{name}'")
@@ -726,6 +794,10 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             raise
         session_failed = True
         user_aborted = True
+
+    # v1.8.7: Handle -n/--qonstruction-name auto-save
+    if args.qonstruction_name and not session_failed:
+        save_as_qonstruction(path_manager.root, args.qonstruction_name, worqspace, qrane_prefix)
 
     if not ui:
         print()

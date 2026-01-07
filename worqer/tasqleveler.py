@@ -2,8 +2,15 @@
 # worqer/tasqleveler.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # TasqLeveler Agent - Automatic Tasq Enhancement
-# v0.9.0 - Supercharges tasq.md with Golden Paths, Dependency Graphs & Mocks
+# v1.2.0 - LOCAL MODE: Zero-cost task enhancement via LocalTasqLeveler
 # ═══════════════════════════════════════════════════════════════════════════════
+#
+# v1.2.0 NEW: Local mode support for zero-cost task enhancement!
+# Set provider: local and model: tasqleveler in config.yaml to enable.
+# LocalTasqLeveler enhances tasks using pattern-based analysis:
+#   - Build order guidance, success criteria templates
+#   - Only triggers on tasks above threshold size
+#   - NO LLM calls, NO API costs!
 #
 # RUNS ONCE: Only on Cycle 1, before InstruQtor
 #
@@ -211,6 +218,43 @@ def main() -> None:
     
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4.1-mini')
+    
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # LOCAL TASQLEVELER ROUTING (v1.2.0) - Zero-cost task enhancement
+    # ═══════════════════════════════════════════════════════════════════════════════
+    if ai_provider.lower() == 'local' and ai_model.lower() in ('tasqleveler', 'local_tasqleveler', 'mindstaq'):
+        print(f"[TasqLeveler] 🧠 Using LocalTasqLeveler (zero-cost mode)", flush=True)
+        
+        try:
+            from worqer.mindstaq.local_tasqleveler import LocalTasqLeveler
+            
+            local_cfg = config.get('mindstaq', {}).get('tasqleveler', {})
+            leveler = LocalTasqLeveler(local_cfg)
+            
+            # Backup original
+            backup_path = input_path.with_name(input_path.stem + '_original.md')
+            if not backup_path.exists():
+                shutil.copy2(input_path, backup_path)
+                print(f"[TasqLeveler] 💾 Backed up original to: {backup_path.name}", flush=True)
+            
+            # Process
+            success = leveler.process_file(str(input_path), str(output_path), backup=False)
+            
+            if success:
+                print(f"[TasqLeveler] ✅ Enhancement complete!", flush=True)
+            else:
+                print(f"[TasqLeveler] ⏭️ No enhancement needed (task below threshold)", flush=True)
+            
+            print("═" * 70, flush=True)
+            return
+            
+        except ImportError as e:
+            print(f"[TasqLeveler] ⚠️ LocalTasqLeveler not available: {e}. Falling back to AI.", flush=True)
+            ai_provider = 'openai'
+        except Exception as e:
+            print(f"[TasqLeveler] ⚠️ LocalTasqLeveler failed: {e}. Falling back to AI.", flush=True)
+            ai_provider = 'openai'
+    # ═══════════════════════════════════════════════════════════════════════════════
     
     # Build prompt
     prompt = TASQLEVELER_PROMPT.format(tasq_content=original_tasq)

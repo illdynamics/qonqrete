@@ -2,15 +2,36 @@
 # worqer/lib_ai.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # AI Provider Abstraction Layer with Budget Enforcement
-# v0.9.5 - Security hardened with timeouts and proper exception handling
+# v1.8.0 - Fixed console pollution from deprecation warnings
 # ═══════════════════════════════════════════════════════════════════════════════
 import sys
 import os
 import subprocess
 import threading
-import anthropic
-import openai
-import google.generativeai as genai
+import warnings
+
+# v1.8.0 FIX: Suppress Google deprecation warnings BEFORE import
+# These warnings were polluting console output and getting parsed as filenames
+warnings.filterwarnings("ignore", category=FutureWarning, module="google")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google")
+warnings.filterwarnings("ignore", message=".*google.generativeai.*")
+
+# Suppress stderr during import to catch any print statements
+import io
+_original_stderr = sys.stderr
+sys.stderr = io.StringIO()
+try:
+    import anthropic
+    import openai
+    import google.generativeai as genai
+finally:
+    # Restore stderr, discarding any garbage output
+    _captured = sys.stderr.getvalue()
+    sys.stderr = _original_stderr
+    # Log if anything was captured (for debugging)
+    if _captured and 'generativeai' in _captured.lower():
+        pass  # Silently discard Google deprecation warnings
+
 from worqer.lib_security import (
     get_security_logger, sanitize_traceback,
     MAX_TIMEOUT_SECONDS, MAX_RETRIES_HARD_LIMIT
@@ -152,6 +173,10 @@ def run_ai_completion(
             return _run_anthropic(model, full_prompt)
         elif provider.lower() == 'deepseek':
             return _run_deepseek(model, full_prompt)
+        elif provider.lower() == 'local' and model.lower() in ('mindstaq', 'mindstaq-v1'):
+            return _run_mindstaq(model, full_prompt, context_files)
+        elif provider.lower() == 'local':
+            raise ValueError(f"Local model '{model}' not supported in lib_ai")
         else:
             raise ValueError(f"Unknown AI Provider: {provider}")
     except Exception as e:
@@ -472,3 +497,33 @@ def _run_deepseek(model, prompt, timeout=DEFAULT_API_TIMEOUT):
         sys.stderr.write(chunk)
         sys.stderr.flush()
     return "".join(captured_chunks).strip()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MINDSTAQ PROVIDER - Zero-Cost Local Code Generation (v1.1.0)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _run_mindstaq(model: str, prompt: str, context_files: list = None) -> str:
+    """mindstaQ provider - Pure symbolic reasoning, NO LLM, NO API COST."""
+    from pathlib import Path
+    
+    try:
+        from worqer.mindstaq import MindstaQEngine
+        
+        engine = MindstaQEngine.get_instance()
+        qodeyard_path = Path.cwd() / "qodeyard"
+        
+        sys.stderr.write("\n[mindstaQ] Starting zero-cost code generation...\n")
+        result = engine.generate(prompt=prompt, context_files=context_files or [], qodeyard_path=qodeyard_path)
+        
+        sys.stderr.write(f"[mindstaQ] Tier: {result.tier} | Score: {result.complexity_score}/666 | Latency: {result.latency_ms:.0f}ms\n")
+        
+        return result.code
+        
+    except ImportError as e:
+        sys.stderr.write(f"\n[mindstaQ ERROR] Could not import mindstaQ module: {e}\n")
+        raise RuntimeError(f"mindstaQ import failed: {e}")
+        
+    except Exception as e:
+        sys.stderr.write(f"\n[mindstaQ ERROR] Generation failed: {e}\n")
+        raise RuntimeError(f"mindstaQ generation failed: {e}")

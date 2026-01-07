@@ -2,8 +2,17 @@
 # worqer/inspeqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InspeQtor Agent - Multi-Stage Code Review System
-# v0.9.0 - Batched Reviews + Cost Efficiency + Gemini Flash-Lite
+# v1.1.2 - LOCAL MODE: Zero-cost code review via LocalInspeQtor
 # ═══════════════════════════════════════════════════════════════════════════════
+#
+# v1.1.2 NEW: Local mode support for zero-cost code review!
+# Set provider: local and model: inspeqtor in config.yaml to enable.
+# LocalInspeQtor reviews code using AST analysis and pattern matching:
+#   - Syntax validation, import checking
+#   - Security patterns (hardcoded secrets, SQL injection)
+#   - Code quality (complexity, docstrings, type hints)
+#   - Performance patterns (N+1, string concat in loops)
+#   - NO LLM calls, NO API costs!
 #
 # STAGE 1 (This File): Per-briq tactical reviews (batched or individual)
 # STAGE 2 (inspeqtor_meta.py): Global meta-review aggregating all briq reqaps
@@ -26,6 +35,11 @@ try:
 except ImportError: 
     print("CRITICAL: lib_ai.py not found.", flush=True)
     sys.exit(1)
+
+try:
+    from worqer.mindstaq.local_inspeqtor import __version__ as LOCAL_INSPEQTOR_VERSION
+except ImportError:
+    LOCAL_INSPEQTOR_VERSION = "unknown"
 
 # Import cost estimation
 sys.path.insert(0, str(Path(__file__).parent.parent / 'qrane'))
@@ -701,10 +715,144 @@ def main() -> None:
     reqap_dir = worqspace_root / "reqap.d"
     tasq_dir = worqspace_root / "tasq.d"
     
-    print(f"=== InspeQtor v0.9.0: Two-Stage Review for cyQle {cycle_num} ===", flush=True)
+    print(f"=== InspeQtor v1.1.2: Two-Stage Review for cyQle {cycle_num} ===", flush=True)
 
     # Load configuration
     config = load_inspeqtor_config(worqspace_root / 'config.yaml')
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # LOCAL INSPEQTOR ROUTING (v1.2.2) - Zero-cost code review with modes
+    # ═══════════════════════════════════════════════════════════════════════════
+    if config['provider'].lower() == 'local' and config['model'].lower() in ('inspeqtor', 'local_inspeqtor', 'mindstaq'):
+        # Get mode from environment or config
+        qonq_mode = os.environ.get('QONQ_MODE', 'program').lower()
+        print(f"  [LOCAL] Using LocalInspeQtor (mode: {qonq_mode})", flush=True)
+        
+        try:
+            from worqer.mindstaq.local_inspeqtor import LocalInspeQtor, ReviewReport
+            
+            local_cfg = {}
+            try:
+                with open(worqspace_root / 'config.yaml', 'r', encoding='utf-8') as f:
+                    local_cfg = yaml.safe_load(f) or {}
+            except:
+                pass
+            
+            # v1.2.2: Pass mode to LocalInspeQtor
+            mindstaq_cfg = local_cfg.get('mindstaq', {})
+            mindstaq_cfg['mode'] = qonq_mode  # Inject mode from QONQ_MODE
+            
+            inspeqtor = LocalInspeQtor(mindstaq_cfg)
+            
+            # Review qodeyard
+            print(f"  [LOCAL] Reviewing qodeyard...", flush=True)
+            report = inspeqtor.review_directory(str(qodeyard_path))
+            
+            # Format output
+            output = inspeqtor.format_report(report)
+            print(output, flush=True)
+            
+            # Generate reqap file
+            if report.passed:
+                assessment = "SUCCESS"
+                summary = f"LocalInspeQtor passed with score {report.overall_score}/100. No critical issues found."
+            elif report.critical_count > 0 or report.error_count > 0:
+                assessment = "FAILURE"
+                summary = f"LocalInspeQtor found {report.critical_count} critical and {report.error_count} error issues."
+            else:
+                assessment = "PARTIAL"
+                summary = f"LocalInspeQtor found {report.warning_count} warnings. Score: {report.overall_score}/100."
+            
+            # v1.8.4: Human-readable issue grouping by file
+            issues_by_file = {}
+            issue_type_counts = {}
+            
+            for file_review in report.files:
+                file_short = file_review.filepath.replace('/qonq/qodeyard/', '').replace('/qonq/', '')
+                if file_review.issues:
+                    issues_by_file[file_short] = []
+                    for issue in file_review.issues:
+                        issues_by_file[file_short].append({
+                            'rule': issue.rule_id,
+                            'msg': issue.message,
+                            'line': issue.line,
+                            'severity': issue.severity.value if hasattr(issue.severity, 'value') else str(issue.severity),
+                        })
+                        # Count issue types for summary
+                        issue_type_counts[issue.rule_id] = issue_type_counts.get(issue.rule_id, 0) + 1
+            
+            # v1.8.4: Format issues by file (human-readable)
+            issues_section = ""
+            if issues_by_file:
+                for filepath, issues in issues_by_file.items():
+                    issues_section += f"\n### 📄 {filepath}\n"
+                    for issue in issues:
+                        line_info = f" (line {issue['line']})" if issue['line'] > 0 else ""
+                        issues_section += f"- `{issue['rule']}` {issue['msg']}{line_info}\n"
+            else:
+                issues_section = "\n✅ No issues found!\n"
+            
+            # v1.8.4: Smart suggestions - deduplicated and actionable
+            suggestions_section = ""
+            if issue_type_counts:
+                suggestions_section = "\n"
+                for rule_id, count in sorted(issue_type_counts.items(), key=lambda x: -x[1])[:5]:
+                    if rule_id == 'QUAL001':
+                        suggestions_section += f"- Add docstrings to functions/classes ({count} files affected)\n"
+                    elif rule_id == 'STYLE004':
+                        suggestions_section += f"- Replace print() with logging ({count} occurrences)\n"
+                    elif rule_id == 'STYLE001':
+                        suggestions_section += f"- Shorten lines >120 chars ({count} occurrences)\n"
+                    elif rule_id.startswith('SEC'):
+                        suggestions_section += f"- Review security issue {rule_id} ({count} occurrences)\n"
+                    elif rule_id.startswith('PERF'):
+                        suggestions_section += f"- Check performance issue {rule_id} ({count} occurrences)\n"
+                    else:
+                        suggestions_section += f"- Review {rule_id} issues ({count} occurrences)\n"
+            else:
+                suggestions_section = "\n✅ Code looks good! No suggestions.\n"
+            
+            # v1.8.4: Clean, human-readable reqap format
+            reqap_content = f"""# Code Review Report
+
+**Assessment:** {assessment}  
+**Score:** {report.overall_score}/100  
+**Files Reviewed:** {len(report.files)}
+
+## Summary
+
+{summary}
+
+| Severity | Count |
+|----------|-------|
+| 🔴 Critical | {report.critical_count} |
+| 🟠 Error | {report.error_count} |
+| 🟡 Warning | {report.warning_count} |
+| 🔵 Info | {report.info_count} |
+
+## Issues by File
+{issues_section}
+## Suggestions
+{suggestions_section}
+---
+*Reviewed by LocalInspeQtor v{LOCAL_INSPEQTOR_VERSION} (zero-cost mode)*
+"""
+            
+            # Write reqap
+            reqap_dir.mkdir(parents=True, exist_ok=True)
+            with open(reqap_path, 'w', encoding='utf-8') as f:
+                f.write(reqap_content)
+            
+            print(f"  [LOCAL] Wrote reqap to {reqap_path}", flush=True)
+            sys.exit(0 if report.passed else 1)
+            
+        except ImportError as e:
+            sys.stderr.write(f"[WARN] LocalInspeQtor not available: {e}. Falling back to AI.\n")
+            config['provider'] = 'openai'
+        except Exception as e:
+            sys.stderr.write(f"[WARN] LocalInspeQtor failed: {e}. Falling back to AI.\n")
+            config['provider'] = 'openai'
+    # ═══════════════════════════════════════════════════════════════════════════
     
     # ═══════════════════════════════════════════════════════════════════════════
     # STAGE 1: Per-Briq Tactical Reviews

@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v0.9.9-stable` (See `VERSION` file for the canonical version).
+**Version:** `v1.2.3-stable` (See `VERSION` file for the canonical version).
 
 This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
 
@@ -13,8 +13,22 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **qontextor**: A specialized agent that generates a machine-readable symbol map of the codebase. It can run in a fully local mode (using AST, Jedi, and PyCG) or use AI to analyze the "skeletonized" code.
 - **qontrabender**: A policy-driven hybrid caching agent that assembles variable fidelity payloads. It mixes full code (MEAT) and skeletons (BONES) based on configurable rules.
 - **calqulator**: A specialized agent that provides a token and cost estimate for an upcoming cycle.
-- **Local Provider**: A provider type for agents that do not use AI and run completely locally (e.g., `calqulator`, `qompressor`, `qontrabender`).
+- **Local Provider**: A provider type for agents that do not use AI and run completely locally (e.g., `calqulator`, `qompressor`, `qontrabender`, `mindstaq`).
 - **LoQal Verifier**: A deterministic local verification agent that checks syntax and imports without AI.
+
+### mindstaQ: Zero-Cost Local Code Generation (v1.1.0+)
+- **mindstaQ**: The zero-cost local code generation engine. Uses `local` provider with model `mindstaq`.
+- **LocalTasqLeveler**: Zero-cost task enhancement agent (v1.2.0). Enhances tasks using patterns. Only triggers above threshold. Uses `local` provider with model `tasqleveler`.
+- **LocalInstruQtor**: Zero-cost task splitting agent (v1.1.2). Splits tasks into BRIQs using patterns, not AI. Uses `local` provider with model `instruqtor`.
+- **LocalInspeQtor**: Zero-cost code review agent (v1.1.2). Reviews code using AST analysis and pattern matching, not AI. Uses `local` provider with model `inspeqtor`.
+- **Qomputator**: Complexity scoring agent (0-666 scale). Routes tasks to appropriate tier.
+- **Qrystallizer**: Template engine agent (Tier 0, score 0-85). Uses built-in templates.
+- **sQavanger**: Search harvester agent (Tier 1, score 86-400). Searches pattern library via Qrawler.
+- **Qrawler**: The SearXNG instance used by sQavanger for web searches (v2.0 feature).
+- **Qombinator**: Evolutionary synthesis agent (Tier 2, score 401-666). Combines multiple sources.
+- **Qoncentrator**: AST grafting agent. Handles import resolution and code structure.
+- **Qonscience**: Verification agent. Validates code and performs auto-fix loops.
+- **Beast Number**: The 0-666 complexity scale used by Qomputator (666 is the beast number 😈).
 
 ### Environment & Structure
 - **Qage**: The secure Docker container or Microsandbox that contains the `Qrew`.

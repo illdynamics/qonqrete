@@ -613,6 +613,32 @@ def get_file_type(file_path: Path) -> str:
     return 'unknown'
 
 def should_process_file(file_path: Path) -> bool:
+    """Check if a file should be processed.
+    
+    v1.6.3: Skip system package directories to avoid context pollution.
+    """
+    # v1.6.3: Skip system package paths
+    path_str = str(file_path)
+    skip_patterns = [
+        '/packages/', '/site-packages/', '/dist-packages/',
+        '/node_modules/', '/__pycache__/', '/.git/',
+        '/venv/', '/.venv/', '/env/', '/.env/',
+        '/build/', '/dist/', '/.tox/', '/.pytest_cache/',
+    ]
+    for pattern in skip_patterns:
+        if pattern in path_str:
+            return False
+    
+    # Also check path parts
+    skip_dirs = {
+        'packages', 'site-packages', 'dist-packages',
+        'node_modules', '__pycache__', '.git',
+        'venv', '.venv', 'env', '.env',
+        'build', 'dist', '.tox', '.pytest_cache',
+    }
+    if any(part in skip_dirs for part in file_path.parts):
+        return False
+    
     return get_file_type(file_path) != 'unknown'
 
 def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, config: dict):
@@ -638,8 +664,24 @@ def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, confi
 
 def run_initial_scan(qodeyard_path: Path, qontext_path: Path, config: dict):
     print(f"--- Qontextor: Starting initial scan of {qodeyard_path} ---", flush=True)
+    
+    # v1.6.3: Directories to skip entirely
+    SKIP_DIRS = {
+        '.git', '.github', '.vscode', '.idea',
+        '__pycache__', '.pytest_cache', '.mypy_cache',
+        'node_modules', 'bower_components',
+        'venv', '.venv', 'env', '.env',
+        'site-packages', 'dist-packages',
+        'packages',  # Local package installs
+        '.tox', '.nox', 'htmlcov', '.coverage',
+        'dist', 'build', 'eggs',
+    }
+    
     get_call_graph(qodeyard_path)
-    for root, _, files in os.walk(qodeyard_path):
+    for root, dirs, files in os.walk(qodeyard_path):
+        # v1.6.3: Filter out skip directories IN-PLACE to prevent descent
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith('.')]
+        
         for file in files:
             file_path = Path(root) / file
             if should_process_file(file_path):

@@ -166,14 +166,38 @@ def main():
         shutil.rmtree(dest_dir)
     dest_dir.mkdir()
 
+    # v1.6.3: Comprehensive skip patterns for non-project directories
+    SKIP_DIRS = {
+        '.git', '.github', '.vscode', '.idea',
+        '__pycache__', '.pytest_cache', '.mypy_cache',
+        'node_modules', 'bower_components',
+        'venv', '.venv', 'env', '.env',
+        'site-packages', 'dist-packages',
+        'packages',  # Local package installs
+        '.tox', '.nox', 'htmlcov', '.coverage',
+        'dist', 'build', 'eggs', '*.egg-info',
+        '.terraform', '.vagrant',
+    }
+
     # 2. Walk and Process
     file_count = 0
-    for root, _, files in os.walk(source_dir):
+    skipped_count = 0
+    for root, dirs, files in os.walk(source_dir):
+        # v1.6.3: Filter out skip directories IN-PLACE to prevent descent
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith('.')]
+        
         for file in files:
             source_file = Path(root) / file
             
-            # Skip hidden files and .git
-            if '.git' in source_file.parts or file.startswith('.'):
+            # Skip hidden files
+            if file.startswith('.'):
+                skipped_count += 1
+                continue
+            
+            # v1.6.3: Additional path-based skip check
+            rel_path_str = str(source_file.relative_to(source_dir))
+            if any(skip in rel_path_str for skip in ['packages/', 'site-packages/', 'node_modules/', '__pycache__/']):
+                skipped_count += 1
                 continue
 
             rel_path = source_file.relative_to(source_dir)
@@ -182,7 +206,7 @@ def main():
             process_file(source_file, dest_file)
             file_count += 1
             
-    print(f"--- Qompressor: Finished. {file_count} files processed. ---")
+    print(f"--- Qompressor: Finished. {file_count} files processed, {skipped_count} skipped. ---")
 
 if __name__ == "__main__":
     main()

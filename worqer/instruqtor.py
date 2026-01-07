@@ -2,8 +2,15 @@
 # worqer/instruqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InstruQtor Agent - Task Decomposition & Planning
-# v1.0.0 - ENFORCED Briq Sensitivity (Production Release)
+# v1.1.2 - LOCAL MODE: Zero-cost task splitting via LocalInstruQtor
 # ═══════════════════════════════════════════════════════════════════════════════
+#
+# v1.1.2 NEW: Local mode support for zero-cost task splitting!
+# Set provider: local and model: instruqtor in config.yaml to enable.
+# LocalInstruQtor splits tasks using pattern-based analysis:
+#   - Paragraphs, bullet points, sections, logical conjunctions
+#   - Technical compound patterns (e.g., "build X and Y" → two tasks)
+#   - NO LLM calls, NO API costs!
 #
 # v1.0.0 MAJOR FIX: Briq sensitivity now ENFORCES exact briq count ranges.
 # Previously, sensitivity was just a "hint" to the AI, resulting in wildly
@@ -274,6 +281,48 @@ def main() -> None:
     # Get briq range info for logging
     min_briqs, max_briqs, target_briqs, _ = get_sensitivity_config(sensitivity)
     print(f"  [CONFIG] Sensitivity: {sensitivity} → Target: {target_briqs} briqs (range: {min_briqs}-{max_briqs})", flush=True)
+    
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # LOCAL INSTRUQTOR ROUTING (v1.1.2) - Zero-cost task splitting
+    # ═══════════════════════════════════════════════════════════════════════════════
+    if ai_provider.lower() == 'local' and ai_model.lower() in ('instruqtor', 'local_instruqtor', 'mindstaq'):
+        print(f"  [LOCAL] Using LocalInstruQtor (zero-cost mode)", flush=True)
+        
+        try:
+            from worqer.mindstaq.local_instruqtor import LocalInstruQtor
+            
+            local_cfg = config.get('mindstaq', {})
+            instruqtor = LocalInstruQtor(local_cfg)
+            result = instruqtor.split(task_content, sensitivity)
+            
+            # Convert to briq dicts
+            briqs = [{'title': b.title, 'content': b.content} for b in result.briqs]
+            
+            print(f"--- LocalInstruQtor Generated {len(briqs)} Build Phases (Sens:{sensitivity}, Range:{min_briqs}-{max_briqs}) ---", flush=True)
+            
+            # Write briqs to output
+            for i, item in enumerate(briqs):
+                step_slug = clean_filename_slug(item['title'])
+                filename = f"cyqle{cycle_num}_tasq1_briq{i:03d}_{step_slug}.md"
+                file_path = output_dir / filename
+                
+                briq_content = f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}"
+                briq_tokens = estimate_tokens(briq_content, "local")
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(f"# {item['title']} [Local: {briq_tokens:,} toks | $0.00]\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}")
+                
+                print(f"  - Wrote [Plan] {filename}", flush=True)
+            
+            return  # Exit early - local mode complete
+            
+        except ImportError as e:
+            sys.stderr.write(f"[WARN] LocalInstruQtor not available: {e}. Falling back to AI.\n")
+            ai_provider = 'openai'
+        except Exception as e:
+            sys.stderr.write(f"[WARN] LocalInstruQtor failed: {e}. Falling back to AI.\n")
+            ai_provider = 'openai'
+    # ═══════════════════════════════════════════════════════════════════════════════
 
     # Gather Qodeyard Context
     qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'

@@ -1,4 +1,13 @@
-# QonQrete Configuration v1.0.0
+# QonQrete Configuration v1.7.8-stable
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEW in v1.7.8: ALL LOCAL BY DEFAULT! 🆓🔥
+# - LocalInstruQtor: instruqtor.provider = 'local' (FREE task splitting)
+# - MindstaQ: construqtor.provider = 'local' (FREE code generation)
+# - LocalInspeQtor: inspeqtor.provider = 'local' (FREE code review)
+# - briq_sensitivity: 3 (Standard: 15-20 briqs)
+# - auto_cycle_limit: 6 (Optimal for complex projects)
+# 
+# NOTE: When using local construqtor, qontrabender and calqulator are auto-skipped
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -52,29 +61,70 @@ verification:
 
 agents:
   # ═══════════════════════════════════════════════════════════════════════════
-  # INSTRUQTOR - Briq Planning
+  # TASQLEVELER - Task Enhancement (v1.2.0: Now supports LocalTasqLeveler!)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # tasqleveler:
+  #   # PROVIDER OPTIONS:
+  #   # ├─ local + model: tasqleveler  ← FREE FOREVER! Pattern-based enhancement
+  #   # ├─ openai                      ← GPT-4 (default)
+  #   # ├─ anthropic                   ← Claude
+  #   # └─ gemini                      ← Google Gemini
+  #   provider: local        # ← Uncomment to enable LocalTasqLeveler
+  #   model: tasqleveler     # ← Only enhances tasks above threshold size
+  #   # THRESHOLD CONFIG (optional, v1.2.1 defaults):
+  #   # min_chars: 100       # Minimum chars to trigger enhancement
+  #   # min_lines: 5         # Minimum lines to trigger enhancement
+  #   # min_sections: 2      # Minimum sections to trigger enhancement
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INSTRUQTOR - Briq Planning (v1.1.2: Now supports LocalInstruQtor!)
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
-    provider: openai
-    model: gpt-4.1-nano    # $0.10/$0.40 per 1M - cheap & smart enough
+    # PROVIDER OPTIONS:
+    # ├─ local + model: instruqtor  ← FREE FOREVER! Pattern-based task splitting
+    # ├─ openai                     ← GPT-4 (default)
+    # ├─ anthropic                  ← Claude
+    # ├─ gemini                     ← Google Gemini
+    # └─ deepseek                   ← Cheap cloud option
+    provider: local        # v1.7.8: LOCAL BY DEFAULT!
+    model: instruqtor      # LocalInstruQtor: splits by paragraphs, bullets, sections
+    # provider: openai     # ← Uncomment for cloud mode
+    # model: gpt-4.1-nano  # $0.10/$0.40 per 1M - cheap & smart enough
 
   calqulator:
     provider: local
     model: calqulator
+    # NOTE: Calqulator is auto-skipped when construqtor.provider is 'local'
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # CONSTRUQTOR - Code Generation (needs smarter model)
+  # CONSTRUQTOR - Code Generation (v1.2.0: Now supports mindstaQ!)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: gemini
-    model: gemini-2.5-flash           # $1.25/$10.00 per 1M - best for code generation
+    # PROVIDER OPTIONS:
+    # ├─ local + model: mindstaq  ← FREE FOREVER! No LLM, symbolic reasoning
+    # ├─ gemini                   ← Google (current default)
+    # ├─ openai                   ← GPT-4
+    # ├─ anthropic                ← Claude
+    # └─ deepseek                 ← Cheap cloud option
+    provider: local        # v1.7.8: LOCAL BY DEFAULT!
+    model: mindstaq        # MindstaQ: Zero-LLM code generation engine
+    # provider: gemini     # ← Uncomment for cloud mode
+    # model: gemini-2.5-flash    # $1.25/$10.00 per 1M - best for code generation
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
+  # INSPEQTOR - Code Review (v1.1.2: Now supports LocalInspeQtor!)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
-    provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    # PROVIDER OPTIONS:
+    # ├─ local + model: inspeqtor  ← FREE FOREVER! AST-based code review
+    # ├─ openai                    ← GPT-4 (default)
+    # ├─ anthropic                 ← Claude
+    # ├─ gemini                    ← Google Gemini
+    # └─ deepseek                  ← Cheap cloud option
+    provider: local        # v1.7.8: LOCAL BY DEFAULT!
+    model: inspeqtor       # LocalInspeQtor: AST + pattern-based review
+    # provider: openai     # ← Uncomment for cloud mode
+    # model: gpt-4.1-mini  # $0.10/$0.40 per 1M - cheap & smart enough
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
     batch_mode: true                 # Group briqs into batches
@@ -104,6 +154,8 @@ agents:
   qontrabender:
     provider: local
     model: qontrabender
+    # NOTE: Qontrabender is auto-skipped when construqtor.provider is 'local'
+    # (It's specifically for Gemini context caching)
     
     # ═══════════════════════════════════════════════════════════════════════════
     # POLICY-DRIVEN CONFIGURATION (v0.8.0)
@@ -174,3 +226,65 @@ options:
 
   # Operational Mode
   mode: program
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MINDSTAQ CONFIGURATION (v1.1.0)
+# Zero-Cost Local Code Generation Engine
+# ═══════════════════════════════════════════════════════════════════════════════
+mindstaq:
+  enabled: true
+  version: "1.0.0"
+  
+  # Qomputator - Complexity Scoring (0-666 Scale)
+  qomputator:
+    thresholds:
+      tier_0_max: 85         # 0-85   → Qrystallizer (template engine)
+      tier_1_max: 400         # 101-400 → sQavanger (search via Qrawler)
+      tier_2_max: 666         # 401-666 → Qombinator (evolutionary synthesis)
+    weights:
+      lexical:
+        word_count_multiplier: 2
+        max_word_score: 50
+      technical:
+        entity_weight: 15
+        multi_entity_bonus: 20
+      reasoning:
+        optimization: 30
+        design: 40
+        concurrency: 25
+        security: 35
+  
+  # Qrystallizer - Template Engine (Tier 0)
+  qrystallizer:
+    enabled: true
+    min_similarity: 0.85
+  
+  # sQavanger - Search Harvester (Tier 1)
+  sqavanger:
+    strategy: parallel
+    timeout: 10
+    max_results: 10
+  
+  # Qrawler - SearXNG Instance (v2.0 Feature)
+  qrawler:
+    enabled: false
+    url: "http://localhost:8888"
+  
+  # Qombinator - Evolutionary Synthesis (Tier 2)
+  qombinator:
+    enabled: true
+    z3_enabled: false
+  
+  # Qoncentrator - AST Grafting
+  qoncentrator:
+    auto_resolve_imports: true
+    sort_imports: true
+    backend: ast
+  
+  # Qonscience - Verification
+  qonscience:
+    max_iterations: 5
+    auto_fix:
+      syntax_errors: true
+      missing_imports: true
+      undefined_names: true

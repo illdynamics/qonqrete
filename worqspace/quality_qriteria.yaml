@@ -1,0 +1,249 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# QonQrete Quality Qriteria Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# This file defines the quality criteria for the Qalibrator ⟷ Qualifier
+# evolution loop. The Qualifier uses these settings to determine if code
+# is "good enough" to pass to InspeQtor.
+#
+# v1.7.0-stable - Initial configuration
+#
+# Usage:
+#   - Place in worqspace/quality_qriteria.yaml
+#   - Or specify custom path via Qualifier(criteria_path='...')
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL SETTINGS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Minimum overall fitness score required to pass qualification (0.0 - 1.0)
+min_fitness: 0.70
+
+# Maximum evolution iterations before giving up
+max_iterations: 50
+
+# Stop if no improvement after this many iterations
+stagnation_limit: 10
+
+# ─────────────────────────────────────────────────────────────────────────────
+# QUALITY DIMENSIONS
+# ─────────────────────────────────────────────────────────────────────────────
+# Each dimension has:
+#   - weight: How much it contributes to overall fitness (0.0 - 1.0)
+#   - min_score: Minimum acceptable score for this dimension
+#   - blocking: If true, failing this dimension blocks qualification entirely
+
+dimensions:
+  
+  # SYNTAX - Code must compile
+  # This is non-negotiable; code that doesn't parse is useless
+  syntax:
+    weight: 1.0
+    min_score: 1.0
+    blocking: true
+  
+  # COMPLEXITY - Cyclomatic and cognitive complexity
+  # High complexity = hard to understand and maintain
+  complexity:
+    weight: 0.8
+    min_score: 0.5
+    blocking: false
+  
+  # STYLE - Basic formatting and PEP8-ish compliance
+  # Lower weight because style is less critical than function
+  style:
+    weight: 0.5
+    min_score: 0.4
+    blocking: false
+  
+  # SECURITY - No obvious security vulnerabilities
+  # High weight and blocking because security is critical
+  security:
+    weight: 0.9
+    min_score: 0.7
+    blocking: true
+  
+  # DOCUMENTATION - Docstrings, comments, type hints
+  # Important for maintainability but not blocking
+  documentation:
+    weight: 0.4
+    min_score: 0.3
+    blocking: false
+  
+  # TESTABILITY - Code structure supports testing
+  # Global state, side effects, etc. hurt testability
+  testability:
+    weight: 0.6
+    min_score: 0.4
+    blocking: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# THRESHOLDS
+# ─────────────────────────────────────────────────────────────────────────────
+# Specific numeric thresholds for quality checks
+
+thresholds:
+  
+  # Maximum lines per function before complexity warning
+  max_function_length: 50
+  
+  # Maximum cyclomatic complexity per function
+  max_complexity: 15
+  
+  # Maximum parameters per function
+  max_parameters: 7
+  
+  # Maximum nesting depth (if/for/while/with/try)
+  max_nesting_depth: 4
+  
+  # Minimum docstring coverage (0.0 - 1.0)
+  min_docstring_coverage: 0.5
+  
+  # Maximum line length
+  max_line_length: 120
+
+# ─────────────────────────────────────────────────────────────────────────────
+# QALIBRATOR MUTATION SETTINGS
+# ─────────────────────────────────────────────────────────────────────────────
+# Settings passed to Qalibrator for the evolution loop
+
+qalibrator:
+  
+  # Maximum generations per evolution run
+  max_generations: 50
+  
+  # Mutants to generate per generation
+  population_size: 5
+  
+  # Probability of applying each mutation
+  mutation_rate: 0.3
+  
+  # Best solutions to preserve across generations
+  elite_count: 2
+  
+  # Minimum fitness improvement to count as progress
+  convergence_threshold: 0.001
+  
+  # Enabled mutation types (comment out to disable)
+  enabled_mutations:
+    - swap_statements
+    - swap_operators
+    - swap_conditionals
+    - inline_variable
+    - extract_variable
+    - add_error_handling
+    - remove_dead_code
+    - simplify_boolean
+    - optimize_loop
+    - rename_variable
+    - add_type_hint
+    # - extract_function    # Can cause structural changes
+    # - merge_duplicates    # Requires careful analysis
+    - reorder_imports
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODE PRESETS
+# ─────────────────────────────────────────────────────────────────────────────
+# Quick presets for common use cases
+
+presets:
+  
+  # Fast mode - minimal checks, quick iteration
+  fast:
+    min_fitness: 0.50
+    max_iterations: 20
+    dimensions:
+      syntax: { weight: 1.0, blocking: true }
+      security: { weight: 0.8, blocking: true }
+      complexity: { weight: 0.5, blocking: false }
+  
+  # Strict mode - thorough checks, high bar
+  strict:
+    min_fitness: 0.85
+    max_iterations: 100
+    stagnation_limit: 20
+    dimensions:
+      syntax: { weight: 1.0, min_score: 1.0, blocking: true }
+      complexity: { weight: 0.9, min_score: 0.7, blocking: true }
+      style: { weight: 0.7, min_score: 0.6, blocking: false }
+      security: { weight: 1.0, min_score: 0.9, blocking: true }
+      documentation: { weight: 0.6, min_score: 0.5, blocking: false }
+      testability: { weight: 0.8, min_score: 0.6, blocking: true }
+  
+  # Production mode - balanced for production code
+  production:
+    min_fitness: 0.80
+    max_iterations: 75
+    stagnation_limit: 15
+    dimensions:
+      syntax: { weight: 1.0, min_score: 1.0, blocking: true }
+      complexity: { weight: 0.8, min_score: 0.6, blocking: false }
+      style: { weight: 0.6, min_score: 0.5, blocking: false }
+      security: { weight: 1.0, min_score: 0.8, blocking: true }
+      documentation: { weight: 0.5, min_score: 0.4, blocking: false }
+      testability: { weight: 0.7, min_score: 0.5, blocking: false }
+  
+  # Prototype mode - focus on working code, less on polish
+  prototype:
+    min_fitness: 0.60
+    max_iterations: 30
+    stagnation_limit: 8
+    dimensions:
+      syntax: { weight: 1.0, min_score: 1.0, blocking: true }
+      complexity: { weight: 0.6, min_score: 0.4, blocking: false }
+      style: { weight: 0.3, min_score: 0.3, blocking: false }
+      security: { weight: 0.9, min_score: 0.6, blocking: true }
+      documentation: { weight: 0.2, min_score: 0.2, blocking: false }
+      testability: { weight: 0.4, min_score: 0.3, blocking: false }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECURITY PATTERNS
+# ─────────────────────────────────────────────────────────────────────────────
+# Additional security patterns to check
+
+security_patterns:
+  
+  # Dangerous function calls that require extra scrutiny
+  dangerous_functions:
+    - eval
+    - exec
+    - compile
+    - __import__
+    - os.system
+    - subprocess.call
+    - subprocess.Popen
+    - pickle.loads
+    - yaml.load  # without Loader
+    - marshal.loads
+  
+  # Patterns that might indicate hardcoded secrets
+  secret_patterns:
+    - 'password\s*=\s*["\'][^"\']+["\']'
+    - 'secret\s*=\s*["\'][^"\']+["\']'
+    - 'api_key\s*=\s*["\'][^"\']+["\']'
+    - 'token\s*=\s*["\'][^"\']+["\']'
+    - 'private_key\s*=\s*["\'][^"\']+["\']'
+    - 'AWS_\w+\s*=\s*["\'][^"\']+["\']'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVOLUTION LOOP CONFIGURATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+evolution:
+  
+  # Allow fitness regression during evolution (explores more solutions)
+  allow_regression: true
+  
+  # Maximum regression allowed (0.05 = 5% drop acceptable)
+  max_regression: 0.05
+  
+  # Log detailed evolution progress
+  verbose_logging: false
+  
+  # Save intermediate results
+  checkpoint_interval: 10
+  
+  # Random seed for reproducibility (null = no fixed seed)
+  seed: null
