@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 mindstaQ: Zero-Cost Local Code Generation Engine
-v1.8.8-stable - SQAVENGER ATTRIBUTE FIX
+v1.8.9-stable - SQAVENGERRESULT DATACLASS FIX
 
 Agent Pipeline:
   USER BRIQ → Qomputator (score) → Tier Router

@@ -42,7 +42,7 @@ except ImportError:
     HAS_INTENT = False
 
 
-__version__ = '1.8.8-stable'
+__version__ = '1.8.9-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -68,7 +68,7 @@ class HarvestedCode:
 class SQavengerResult:
     """Result from sQavanger search and harvest."""
     task: str
-    success: bool
+    success: bool = False  # v1.8.9: Added default to fix instantiation error
     harvested_code: List[HarvestedCode] = field(default_factory=list)
     best_code: Optional[str] = None
     search_queries: List[str] = field(default_factory=list)

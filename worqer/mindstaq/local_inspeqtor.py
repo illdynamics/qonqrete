@@ -30,7 +30,7 @@ from pathlib import Path
 from enum import Enum
 
 
-__version__ = '1.8.8-stable'
+__version__ = '1.8.9-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
