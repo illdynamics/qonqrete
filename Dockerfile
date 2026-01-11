@@ -1,13 +1,13 @@
 # QonQrete Dockerfile - Security Hardened
-# v1.0.1-stable - Fixed HuggingFace cache permissions for Docker hardening
+# v2.1.0-stable - Full mindstaQ with z3 constraint solver
 # =============================================================================
 # Security Features:
 #   - Pinned base image with digest
-#   - Pinned Python dependencies
+#   - Pinned Python dependencies  
 #   - Non-root execution via gosu
 #   - HEALTHCHECK directive
 #   - Minimal attack surface
-#   - Pre-downloaded ML models (v1.0.1 fix)
+#   - Pre-downloaded ML models
 # =============================================================================
 
 # Pinned base image with digest for reproducibility
@@ -22,6 +22,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-dev \
     python-is-python3 \
     git \
     ca-certificates \
@@ -29,6 +30,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chafa \
     vim \
     gosu \
+    # Build dependencies for some Python packages
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    # PostgreSQL client libs (for psycopg2)
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -37,12 +44,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =============================================================================
 WORKDIR /qonqrete
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir --upgrade pip && \
+
+# Upgrade pip and install all dependencies including z3-solver
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
     pip3 install --no-cache-dir -r requirements.txt && \
     rm -rf /root/.cache/pip
 
 # =============================================================================
-# 3. Security Hardening - Create Users and Groups
+# 3. Verify z3 installation (v2.0.3)
+# =============================================================================
+RUN python3 -c "import z3; print(f'z3 version: {z3.get_version_string()}')" && \
+    echo "✓ z3-solver installed successfully"
+
+# =============================================================================
+# 4. Security Hardening - Create Users and Groups
 # =============================================================================
 RUN groupadd -r qrew
 RUN useradd -r -g qrew -m -d /home/qrane -s /bin/bash qrane
@@ -52,7 +67,7 @@ RUN useradd -r -g qrew -m -d /home/worqer -s /bin/bash worqer
 ENV PATH="/usr/local/bin:${PATH}"
 
 # =============================================================================
-# 3a. Pre-download ML Models (v1.0.1 fix)
+# 5. Pre-download ML Models
 # =============================================================================
 # Create a persistent cache directory OUTSIDE /home/qrane/.cache (which gets
 # mounted as tmpfs at runtime). This ensures the pre-downloaded models survive
@@ -79,7 +94,7 @@ RUN mkdir -p /home/qrane/.cache/huggingface && \
     chown -R qrane:qrew /home/qrane/.cache
 
 # =============================================================================
-# 4. Copy project and set permissions
+# 6. Copy project and set permissions
 # =============================================================================
 COPY . .
 
@@ -91,22 +106,22 @@ RUN mkdir -p /qonq/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,qontext.d,bloq.d,br
     chown -R worqer:qrew /qonq && chmod -R 2770 /qonq
 
 # =============================================================================
-# 5. Dynamic Versioning
+# 7. Dynamic Versioning
 # =============================================================================
-ARG QONQ_VERSION
+ARG QONQ_VERSION=2.1.0-stable
 ENV QONQ_VERSION=${QONQ_VERSION}
 
 # =============================================================================
-# 6. Entrypoint for Privilege Dropping
+# 8. Entrypoint for Privilege Dropping
 # =============================================================================
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # =============================================================================
-# 7. HEALTHCHECK - Verify container is responsive
+# 9. HEALTHCHECK - Verify container is responsive (including z3)
 # =============================================================================
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD gosu qrane python3 -c "import yaml, openai, anthropic; print('OK')" || exit 1
+    CMD gosu qrane python3 -c "import yaml, openai, anthropic, z3; print('OK')" || exit 1
 
 WORKDIR /qonqrete

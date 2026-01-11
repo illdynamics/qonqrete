@@ -9,10 +9,10 @@
 
 ### 1. SQavenger Import Typo (CRITICAL)
 **File:** `worqer/mindstaq/__init__.py`  
-**Bug:** Import statement referenced `sqavanger` (typo) instead of `sqavenger`  
+**Bug:** Import statement referenced `sqavenger` (typo) instead of `sqavenger`  
 **Impact:** Qombinator tier (Tier 2) code generation completely failed with:
 ```
-No module named 'worqer.mindstaq.sqavanger'
+No module named 'worqer.mindstaq.sqavenger'
 ```
 **Fix:** Corrected import to `from worqer.mindstaq.sqavenger import SQavenger`
 
@@ -80,7 +80,7 @@ class Task:
 - AI orchestration layer, database backends
 
 ### Root Cause
-The `sqavanger` typo prevented Tier 2 (Qombinator) from falling back to Tier 1 (SQavenger), forcing all code generation through the Qrystallizer fallback template regardless of task complexity.
+The `sqavenger` typo prevented Tier 2 (Qombinator) from falling back to Tier 1 (SQavenger), forcing all code generation through the Qrystallizer fallback template regardless of task complexity.
 
 **v1.8.7 Fix:** With the import corrected, future builds should properly route complex tasks (score 101-666) to SQavenger for web search-based code harvesting.
 

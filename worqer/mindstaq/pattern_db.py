@@ -14,7 +14,7 @@ from typing import List, Dict, Optional, Any, Set
 import re
 
 
-__version__ = '1.5.0'
+__version__ = '2.1.0-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -195,7 +195,7 @@ Multiple options for cleanup:
 | `-u, --user` | User-gated mode |
 | `-t, --tui` | TUI mode [EXPERIMENTAL] |
 | `-m, --mode <n>` | Operational mode |
-| `-b, --briq-sensitivity <N>` | Granularity (0-9). Default: 7 |
+| `-b, --briq-sensitivity <N>` | Granularity (0-16). Default: 5. Higher=More briqs |
 | `-c, --cyqles <N>` | Max auto-cycles (1-10). Default: 4 |
 | `-s, --sqrapyard` | Seed from sqrapyard |
 | `-M, --msb` | Microsandbox mode [EXPERIMENTAL] |

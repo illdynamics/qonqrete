@@ -12,29 +12,34 @@
 #   - Technical compound patterns (e.g., "build X and Y" → two tasks)
 #   - NO LLM calls, NO API costs!
 #
-# v1.0.0 MAJOR FIX: Briq sensitivity now ENFORCES exact briq count ranges.
-# Previously, sensitivity was just a "hint" to the AI, resulting in wildly
-# inconsistent outputs (1-10 briqs with the same sensitivity setting).
-#
-# Now each sensitivity level has a HARD MIN/MAX range that is enforced:
-#   - If AI produces too few briqs → regenerate with stronger prompt
-#   - If AI produces too many briqs → merge similar briqs together
-#
-# SENSITIVITY SCALE (0-9):
-#   9 = Monolithic (exactly 1 briq)
-#   8 = Very Broad (2-3 briqs)
-#   7 = Broad (3-5 briqs) ← RECOMMENDED DEFAULT
-#   6 = Feature-level (5-8 briqs)
-#   5 = Component-level (8-12 briqs)
-#   4 = Balanced (10-15 briqs)
-#   3 = Standard (15-20 briqs)
-#   2 = High Granularity (20-30 briqs)
-#   1 = Very High Granularity (30-40 briqs)
-#   0 = Atomic (40-60 briqs)
+# v2.1.5 INVERTED BRIQ SENSITIVITY SCALE
+# Now: Higher number = MORE briqs (more intuitive!)
+# 
+# SENSITIVITY SCALE (0-16):
+#   0 = Monolithic (exactly 1 briq) - One giant briq for simple tasks
+#   1 = Very Broad (2-3 briqs)
+#   2 = Broad (3-5 briqs)
+#   3 = Feature-level (5-8 briqs)
+#   4 = Component-level (8-12 briqs)
+#   5 = Balanced (10-15 briqs) ← RECOMMENDED DEFAULT
+#   6 = Standard (15-20 briqs)
+#   7 = High Granularity (20-30 briqs)
+#   8 = Very High (30-40 briqs)
+#   9 = Atomic (40-60 briqs)
+#  10 = Ultra (50-75 briqs)
+#  11 = Mega (60-90 briqs)
+#  12 = Hyper (75-110 briqs)
+#  13 = Extreme (90-130 briqs)
+#  14 = Maximum (110-160 briqs)
+#  15 = Insane (130-200 briqs)
+#  16 = QONQRETE MAX (160-250 briqs) - For mega-enterprise tasqs!
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 import os
 import sys
+# v1.9.7: Force unbuffered stdout
+if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"): sys.stderr.reconfigure(line_buffering=True)
 import yaml
 import re
 import math
@@ -64,16 +69,25 @@ except ImportError:
 # The system will ENFORCE these ranges, not just hint at them.
 
 BRIQ_RANGES = {
-    9: (1, 1, 1),      # Monolithic: exactly 1 briq
-    8: (2, 3, 2),      # Very Broad: 2-3 briqs
-    7: (3, 5, 4),      # Broad: 3-5 briqs (RECOMMENDED DEFAULT)
-    6: (5, 8, 6),      # Feature-level: 5-8 briqs
-    5: (8, 12, 10),    # Component-level: 8-12 briqs
-    4: (10, 15, 12),   # Balanced: 10-15 briqs
-    3: (15, 20, 18),   # Standard: 15-20 briqs
-    2: (20, 30, 25),   # High Granularity: 20-30 briqs
-    1: (30, 40, 35),   # Very High: 30-40 briqs
-    0: (40, 60, 50),   # Atomic: 40-60 briqs (maximum decomposition)
+    # v2.1.5: INVERTED SCALE - Higher number = More briqs!
+    0: (1, 1, 1),        # Monolithic: exactly 1 briq
+    1: (2, 3, 2),        # Very Broad: 2-3 briqs
+    2: (3, 5, 4),        # Broad: 3-5 briqs
+    3: (5, 8, 6),        # Feature-level: 5-8 briqs
+    4: (8, 12, 10),      # Component-level: 8-12 briqs
+    5: (10, 15, 12),     # Balanced: 10-15 briqs (RECOMMENDED DEFAULT)
+    6: (15, 20, 18),     # Standard: 15-20 briqs
+    7: (20, 30, 25),     # High Granularity: 20-30 briqs
+    8: (30, 40, 35),     # Very High: 30-40 briqs
+    9: (40, 60, 50),     # Atomic: 40-60 briqs
+    # v2.1.5: Extended range for mega-projects
+    10: (50, 75, 60),    # Ultra: 50-75 briqs
+    11: (60, 90, 75),    # Mega: 60-90 briqs
+    12: (75, 110, 90),   # Hyper: 75-110 briqs
+    13: (90, 130, 110),  # Extreme: 90-130 briqs
+    14: (110, 160, 135), # Maximum: 110-160 briqs
+    15: (130, 200, 165), # Insane: 130-200 briqs
+    16: (160, 250, 200), # QONQRETE MAX: 160-250 briqs (enterprise mega-tasqs)
 }
 
 
@@ -115,22 +129,31 @@ def get_sensitivity_config(level: int) -> tuple[int, int, int, str]:
     """
     Returns (min_briqs, max_briqs, target_briqs, prompt_text) for the given sensitivity level.
     """
-    min_b, max_b, target_b = BRIQ_RANGES.get(level, BRIQ_RANGES[7])
+    min_b, max_b, target_b = BRIQ_RANGES.get(level, BRIQ_RANGES[5])  # v2.1.5: Default to 5 (Balanced)
     
     prompts = {
-        9: f"**MANDATORY BRIQ COUNT: EXACTLY 1 BRIQ.** Output the entire project as a single monolithic briq. Do not split under any circumstances. This is non-negotiable.",
-        8: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create very broad briqs. Example: 'Backend' and 'Frontend' as separate briqs. Maximum {max_b} briqs allowed.",
-        7: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create broad briqs covering major components. Each briq should handle multiple related files. This is the recommended default for most projects.",
-        6: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create feature-level briqs. Each major feature or module gets its own briq.",
-        5: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create component-level briqs. Group related classes and utilities together.",
-        4: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create balanced briqs. Each significant class or module gets a briq.",
-        3: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Standard granularity. Most files get their own briq.",
-        2: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** High granularity. Split classes into separate briqs where logical.",
-        1: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Very high granularity. Each function or small utility gets a briq.",
-        0: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** ATOMIC decomposition. Maximum granularity - every single function, class, and config gets its own briq.",
+        # v2.1.5: INVERTED - Higher = More briqs
+        0: f"**MANDATORY BRIQ COUNT: EXACTLY 1 BRIQ.** Output the entire project as a single monolithic briq. Do not split under any circumstances. This is non-negotiable.",
+        1: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create very broad briqs. Example: 'Backend' and 'Frontend' as separate briqs. Maximum {max_b} briqs allowed.",
+        2: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create broad briqs covering major components. Each briq should handle multiple related files.",
+        3: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create feature-level briqs. Each major feature or module gets its own briq.",
+        4: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create component-level briqs. Group related classes and utilities together.",
+        5: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create balanced briqs. Each significant class or module gets a briq. This is the RECOMMENDED DEFAULT.",
+        6: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Standard granularity. Most files get their own briq.",
+        7: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** High granularity. Split classes into separate briqs where logical.",
+        8: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Very high granularity. Each function or small utility gets a briq.",
+        9: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** ATOMIC decomposition. Maximum granularity - every function, class, and config gets its own briq.",
+        # v2.1.5: Extended levels for mega-projects
+        10: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** ULTRA decomposition. Break down every component into fine-grained briqs.",
+        11: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** MEGA decomposition. Extremely detailed briqs for large enterprise projects.",
+        12: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** HYPER decomposition. Each method, config option, and utility gets its own briq.",
+        13: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** EXTREME decomposition. Maximum detail for complex multi-layer architectures.",
+        14: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** MAXIMUM decomposition. Near line-by-line granularity for critical systems.",
+        15: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** INSANE decomposition. Every single requirement gets dedicated attention.",
+        16: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** QONQRETE MAX. Enterprise mega-project level. Use for tasqs with 1000+ requirements.",
     }
     
-    prompt = prompts.get(level, prompts[7])
+    prompt = prompts.get(level, prompts[5])  # v2.1.5: Default to 5 (Balanced)
     return min_b, max_b, target_b, prompt
 
 
@@ -272,11 +295,11 @@ def main() -> None:
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4o')
 
-    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 7))
-    except: sensitivity = 7
+    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))  # v2.1.5: Default 5
+    except: sensitivity = 5
     
-    # Clamp sensitivity to valid range
-    sensitivity = max(0, min(9, sensitivity))
+    # Clamp sensitivity to valid range (v2.1.5: extended to 0-16)
+    sensitivity = max(0, min(16, sensitivity))
 
     # Get briq range info for logging
     min_briqs, max_briqs, target_briqs, _ = get_sensitivity_config(sensitivity)
@@ -284,6 +307,7 @@ def main() -> None:
     
     # ═══════════════════════════════════════════════════════════════════════════════
     # LOCAL INSTRUQTOR ROUTING (v1.1.2) - Zero-cost task splitting
+    # v2.1.5: Gap-Filling for Cycle 2+ - Create missing files!
     # ═══════════════════════════════════════════════════════════════════════════════
     if ai_provider.lower() == 'local' and ai_model.lower() in ('instruqtor', 'local_instruqtor', 'mindstaq'):
         print(f"  [LOCAL] Using LocalInstruQtor (zero-cost mode)", flush=True)
@@ -297,6 +321,54 @@ def main() -> None:
             
             # Convert to briq dicts
             briqs = [{'title': b.title, 'content': b.content} for b in result.briqs]
+            
+            # ═══════════════════════════════════════════════════════════════════════════
+            # v2.1.5: QONVERGER - Gap-Filling for Cycle 2+ 🔥
+            # Check previous cycle's qodeyard for missing files and add CREATE briqs
+            # ═══════════════════════════════════════════════════════════════════════════
+            if int(cycle_num) > 1:
+                print(f"  [QONVERGER] Cycle {cycle_num} - Checking for missing files from previous cycle...", flush=True)
+                try:
+                    from worqer.mindstaq.qonverger import Qonverger
+                    
+                    # Find original tasq.md
+                    worqspace_root = Path(os.getcwd())
+                    original_tasq = worqspace_root / "tasq.md"
+                    if not original_tasq.exists():
+                        original_tasq = worqspace_root / "tasq.d" / "cyqle1_tasq.md"
+                    
+                    qodeyard_path = worqspace_root / "qodeyard"
+                    
+                    if original_tasq.exists() and qodeyard_path.exists():
+                        with open(original_tasq, 'r', encoding='utf-8') as f:
+                            tasq_content = f.read()
+                        
+                        qonverger = Qonverger(tasq_content, qodeyard_path)
+                        gaps = qonverger.find_gaps()
+                        
+                        if gaps:
+                            print(f"  [QONVERGER] Found {len(gaps)} missing files! Adding CREATE briqs...", flush=True)
+                            
+                            # Generate creation briqs for gaps
+                            gap_briqs = qonverger.generate_creation_briqs(gaps, max_briqs=max_briqs)
+                            
+                            # Add gap briqs at the BEGINNING (higher priority)
+                            creation_briqs = []
+                            for gb in gap_briqs:
+                                creation_briqs.append({
+                                    'title': f"🆕 {gb['title']}",
+                                    'content': gb['content'],
+                                })
+                            
+                            # Prepend creation briqs to regular briqs
+                            briqs = creation_briqs + briqs
+                            print(f"  [QONVERGER] Added {len(creation_briqs)} CREATE briqs (total: {len(briqs)} briqs)", flush=True)
+                        else:
+                            print(f"  [QONVERGER] No gaps found - all files present! ✅", flush=True)
+                            
+                except Exception as e:
+                    print(f"  [QONVERGER] Qonvergence analysis skipped: {e}", flush=True)
+            # ═══════════════════════════════════════════════════════════════════════════
             
             print(f"--- LocalInstruQtor Generated {len(briqs)} Build Phases (Sens:{sensitivity}, Range:{min_briqs}-{max_briqs}) ---", flush=True)
             

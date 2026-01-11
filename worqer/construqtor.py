@@ -22,6 +22,9 @@
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 import sys
+# v1.9.7: Force unbuffered stdout
+if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"): sys.stderr.reconfigure(line_buffering=True)
 import os
 import yaml
 import re
@@ -1153,8 +1156,11 @@ def main():
     interleaved_config = get_interleaved_config(config)
     
     agent_cfg = config.get('agents', {}).get('construqtor', {})
-    ai_provider = agent_cfg.get('provider', 'gemini')
-    ai_model = agent_cfg.get('model', 'gemini-1.5-pro')
+    ai_provider = agent_cfg.get('provider', 'local')  # v2.1.0: DEFAULT TO LOCAL!
+    ai_model = agent_cfg.get('model', 'mindstaq')  # v2.1.0: DEFAULT TO MINDSTAQ!
+    
+    # v2.1.0 DEBUG: Show what provider is being used
+    print(f"    Provider: {ai_provider} | Model: {ai_model} | Mode: {'LOCAL MINDSTAQ' if ai_provider == 'local' else 'CLOUD API'}", flush=True)
     use_qompressor = config.get('options', {}).get('use_qompressor', True)
     
     # InspeQtor config for reviews

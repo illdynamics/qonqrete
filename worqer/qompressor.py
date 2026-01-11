@@ -6,6 +6,9 @@ Mirrors qodeyard into bloq.d, stripping code bodies but keeping architecture.
 FAST. ZERO TOKEN COST.
 """
 import sys
+# v1.9.7: Force unbuffered stdout
+if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"): sys.stderr.reconfigure(line_buffering=True)
 import os
 import ast
 import shutil

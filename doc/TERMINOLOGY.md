@@ -23,8 +23,8 @@ This document defines the official vocabulary for the QonQrete Secure AI Constru
 - **LocalInspeQtor**: Zero-cost code review agent (v1.1.2). Reviews code using AST analysis and pattern matching, not AI. Uses `local` provider with model `inspeqtor`.
 - **Qomputator**: Complexity scoring agent (0-666 scale). Routes tasks to appropriate tier.
 - **Qrystallizer**: Template engine agent (Tier 0, score 0-85). Uses built-in templates.
-- **sQavanger**: Search harvester agent (Tier 1, score 86-400). Searches pattern library via Qrawler.
-- **Qrawler**: The SearXNG instance used by sQavanger for web searches (v2.0 feature).
+- **sQavenger**: Search harvester agent (Tier 1, score 86-400). Searches pattern library via Qrawler.
+- **Qrawler**: The SearXNG instance used by sQavenger for web searches (v2.0 feature).
 - **Qombinator**: Evolutionary synthesis agent (Tier 2, score 401-666). Combines multiple sources.
 - **Qoncentrator**: AST grafting agent. Handles import resolution and code structure.
 - **Qonscience**: Verification agent. Validates code and performs auto-fix loops.

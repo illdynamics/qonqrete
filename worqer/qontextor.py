@@ -10,6 +10,9 @@ Supports two modes based on the agent's configuration in config.yaml:
 v1.0.1 Fix: Proper HuggingFace cache handling for Docker hardened environments.
 """
 import sys
+# v1.9.7: Force unbuffered stdout
+if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"): sys.stderr.reconfigure(line_buffering=True)
 import os
 import ast
 import re

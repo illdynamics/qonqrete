@@ -29,7 +29,7 @@ task = intent.raw_task  # ❌ AttributeError!
 task = intent.raw_text  # ✅ Correct attribute
 ```
 
-**Impact:** This was the REAL reason all code generation fell back to the generic `AsyncWorkerPool` template! The v1.8.7 sqavanger→sqavenger typo fix was correct, but SQavenger itself was crashing on every invocation with:
+**Impact:** This was the REAL reason all code generation fell back to the generic `AsyncWorkerPool` template! The v1.8.7 sqavenger→sqavenger typo fix was correct, but SQavenger itself was crashing on every invocation with:
 
 ```
 'CrystallizedIntent' object has no attribute 'entities'
@@ -127,7 +127,7 @@ Expected: Generated code should now be MORE task-specific, not generic fallback.
 | Version | Critical Fix |
 |---------|--------------|
 | v1.8.5 | Initial release |
-| v1.8.7 | sqavanger→sqavenger typo, hardcoded paths, -n flag |
+| v1.8.7 | sqavenger→sqavenger typo, hardcoded paths, -n flag |
 | **v1.8.8** | **SQavenger .entities/.raw_task AttributeError** |
 
 ---

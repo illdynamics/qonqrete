@@ -1075,10 +1075,13 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {{
         'test_function': [r'test', r'unittest', r'pytest'],
         'config_loader': [r'config', r'configuration', r'settings'],
         # v1.7.8: Security/Safety matchers
-        'safety_governor': [r'safety', r'governor', r'geofenc', r'killswitch', r'scope.*valid', r'authorized'],
-        'redis_backend': [r'redis', r'pub.*sub', r'cache.*backend', r'message.*queue'],
-        'base_tool': [r'tool.*wrapper', r'base.*tool', r'nmap', r'masscan', r'nuclei', r'scanner'],
-        'base_capability': [r'capability', r'ai.*capab', r'decision.*engine', r'context.*manager'],
+        # v2.1.6 FIX: REMOVED specific tool names (nmap, masscan, nuclei, etc.) from matchers!
+        # These were causing template copypasta instead of letting web search find REAL implementations.
+        # Only match when user EXPLICITLY asks for base/generic versions.
+        'safety_governor': [r'generic.*safety', r'base.*governor', r'template.*safety'],
+        'redis_backend': [r'generic.*redis', r'template.*redis', r'base.*cache'],
+        'base_tool': [r'generic.*tool.*wrapper', r'base.*tool.*template', r'tool.*skeleton'],
+        'base_capability': [r'generic.*capability', r'base.*capability.*template'],
         # v1.7.9: Enhanced shell script matchers
         'shell_provision': [r'provision', r'provisioning', r'\.sh.*provision', r'setup.*server', r'install.*package'],
         'shell_setup': [r'setup\.sh', r'install\.sh', r'init\.sh', r'bootstrap'],

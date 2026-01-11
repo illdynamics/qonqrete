@@ -106,7 +106,7 @@ Run Options:
   -u, --user                   Force User-gated Mode.
   -t, --tui                    Enable TUI Mode. ${Y}[EXPERIMENTAL]${R}
   -m, --mode <n>               Set Operational Mode (program, enterprise, security, etc).
-  -b, --briq-sensitivity <N>   Set Granularity (0-9). Default: 7
+  -b, --briq-sensitivity <N>   Set Granularity (0-16). Default: 5. Higher=More briqs
   -c, --cyqles <N>             Set max auto-cycles (1-50). Default: 4
   -s, --sqrapyard              Seed from sqrapyard/ directory contents.
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
@@ -129,7 +129,7 @@ Examples:
   ./qonqrete.sh run                        # Fresh start, no sqrapyard
   ./qonqrete.sh run -s                     # Start with sqrapyard contents
   ./qonqrete.sh run --auto --mode security # Autonomous security mode
-  ./qonqrete.sh run -b 7 -c 4              # Sensitivity 7, 4 cycles (default)
+  ./qonqrete.sh run -b 5 -c 4              # Sensitivity 5, 4 cycles (default)
   ./qonqrete.sh run -b 5 -c 6              # Complex project: sens 5, 6 cycles
   ./qonqrete.sh resume                     # Interactive Qage picker
   ./qonqrete.sh resume -q qage_20251226    # Resume specific Qage
@@ -663,6 +663,7 @@ case "$COMMAND" in
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
+            # v2.2.5: Simplified! No docker networking - use default bridge (172.17.0.1:8888)
             docker run --rm -it $DOCKER_SECURITY_FLAGS \
                 $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \
@@ -757,6 +758,7 @@ case "$COMMAND" in
                 $API_ENV_VARS \
                 -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
         else
+            # v2.2.5: Simplified! No docker networking - use default bridge (172.17.0.1:8888)
             docker run --rm -it $DOCKER_SECURITY_FLAGS \
                 $RUN_MOUNTS $DEV_MOUNTS \
                 $API_ENV_VARS \

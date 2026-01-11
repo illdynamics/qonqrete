@@ -1,25 +1,93 @@
 # QonQrete Python Dependencies
-# Pinned versions for reproducible builds (December 2025)
+# v2.0.3-stable - Full mindstaQ with z3 constraint solver
+# Pinned versions for reproducible builds (January 2026)
 # Run: pip install --no-cache-dir -r requirements.txt
-# Security: Use `pip install --require-hashes -r requirements.txt` for hash verification
 
-# Core YAML parsing
+# ═══════════════════════════════════════════════════════════════════════════════
+# CORE DEPENDENCIES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# YAML parsing
 PyYAML==6.0.2
 
-# AI Provider SDKs
+# JSON Schema validation
+jsonschema==4.23.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AI PROVIDER SDKs
+# ═══════════════════════════════════════════════════════════════════════════════
+
 openai==2.14.0
 anthropic==0.75.0
 google-generativeai==0.8.6
 
-# Code Analysis Tools
+# ═══════════════════════════════════════════════════════════════════════════════
+# WEB SEARCH & CRAWLING (Qrawler, SQavenger, ParallelHarvester)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+aiohttp==3.11.11
+beautifulsoup4==4.12.3
+duckduckgo-search==7.3.2
+requests==2.32.3
+
+# Tor support for DeepQrawler (optional but included)
+aiohttp-socks==0.9.0
+PySocks==1.7.1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CODE ANALYSIS (Qonscience, LocalInspeQtor)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 jedi==0.19.2
 docstring-parser==0.16
-# Note: pycg removed - package is broken on PyPI (module name mismatch)
-# Call graph analysis uses jedi fallback instead
 
-# ML/Embeddings (for Qontextor complex mode semantic search)
+# ═══════════════════════════════════════════════════════════════════════════════
+# ML/EMBEDDINGS (SemanticMatcher, Qontextor)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 numpy==2.2.1
 sentence-transformers==3.3.1
 
-# JSON Schema validation (new in v0.9.5)
-jsonschema==4.23.0
+# ═══════════════════════════════════════════════════════════════════════════════
+# Z3 CONSTRAINT SOLVER (v2.0.3) - Formal Reasoning
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Microsoft z3 theorem prover for:
+# - Type path synthesis (optimal type conversions)
+# - Decision table solving (SAT-based rule evaluation)
+# - Code property verification (formal proofs)
+# - Complexity constraint solving (tier optimization)
+z3-solver==4.13.0.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECURITY COMPONENTS (AllowlistSecurity patterns)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Password hashing
+bcrypt==4.2.0
+
+# JWT token handling
+PyJWT==2.10.0
+
+# Cryptography (used by various security patterns)
+cryptography==44.0.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DATABASE PATTERNS (PatternDB, generated code patterns)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# PostgreSQL adapter (for generated DB patterns)
+psycopg2-binary==2.9.10
+
+# Redis client (for generated caching patterns)
+redis==5.2.1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OPTIONAL BUT RECOMMENDED
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Async HTTP client improvements
+aiofiles==24.1.0
+
+# Better logging
+colorlog==6.9.0

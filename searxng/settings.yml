@@ -1,0 +1,20 @@
+# SearXNG settings for QonQrete v2.0.9
+# Limiter DISABLED for local API access
+
+use_default_settings: true
+
+server:
+  secret_key: "qonqrete-searxng-secret-key-1234567890"
+  limiter: false
+  image_proxy: false
+  method: "POST"
+
+search:
+  safe_search: 0
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+ui:
+  default_theme: simple

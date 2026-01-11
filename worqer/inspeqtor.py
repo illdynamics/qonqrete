@@ -24,6 +24,9 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 import os
 import sys
+# v1.9.7: Force unbuffered stdout
+if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"): sys.stderr.reconfigure(line_buffering=True)
 import yaml
 import re
 import glob
@@ -39,7 +42,7 @@ except ImportError:
 try:
     from worqer.mindstaq.local_inspeqtor import __version__ as LOCAL_INSPEQTOR_VERSION
 except ImportError:
-    LOCAL_INSPEQTOR_VERSION = "unknown"
+    LOCAL_INSPEQTOR_VERSION = '2.0.0-stable'
 
 # Import cost estimation
 sys.path.insert(0, str(Path(__file__).parent.parent / 'qrane'))
@@ -813,6 +816,30 @@ def main() -> None:
                 suggestions_section = "\n✅ Code looks good! No suggestions.\n"
             
             # v1.8.4: Clean, human-readable reqap format
+            # v2.1.5: Add Qonvergence Analysis for cycle 2+ creation briqs
+            qonvergence_section = ""
+            try:
+                from worqer.mindstaq.qonverger import qonverge
+                
+                # Find original tasq.md
+                original_tasq = worqspace_root / "tasq.md"
+                if not original_tasq.exists():
+                    original_tasq = tasq_dir / "cyqle1_tasq.md"
+                
+                if original_tasq.exists():
+                    gaps, qonverge_suggestions = qonverge(
+                        original_tasq,
+                        qodeyard_path,
+                        max_suggestions=30
+                    )
+                    if gaps:
+                        qonvergence_section = f"\n{qonverge_suggestions}\n"
+                        print(f"  [QONVERGER] Found {len(gaps)} missing files from tasq.md!", flush=True)
+                    else:
+                        print(f"  [QONVERGER] All required files created! ✅", flush=True)
+            except Exception as e:
+                print(f"  [QONVERGER] Qonvergence analysis skipped: {e}", flush=True)
+            
             reqap_content = f"""# Code Review Report
 
 **Assessment:** {assessment}  
@@ -834,6 +861,7 @@ def main() -> None:
 {issues_section}
 ## Suggestions
 {suggestions_section}
+{qonvergence_section}
 ---
 *Reviewed by LocalInspeQtor v{LOCAL_INSPEQTOR_VERSION} (zero-cost mode)*
 """

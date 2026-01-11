@@ -27,7 +27,7 @@
 ║  │                                                                         │ ║
 ║  │  ROUTING THRESHOLDS:                                                    │ ║
 ║  │  ├─ 0-100:   TIER 0 → Qrystallizer                                      │ ║
-║  │  ├─ 101-400: TIER 1 → sQavanger                                         │ ║
+║  │  ├─ 101-400: TIER 1 → sQavenger                                         │ ║
 ║  │  └─ 401-666: TIER 2 → Qombinator                                        │ ║
 ║  └───────────────────────────────┬─────────────────────────────────────────┘ ║
 ║                                  │                                           ║
@@ -35,7 +35,7 @@
 ║         ▼                        ▼                            ▼              ║
 ║  ┌─────────────┐      ┌─────────────────────┐      ┌─────────────────────┐   ║
 ║  │   TIER 0    │      │       TIER 1        │      │       TIER 2        │   ║
-║  │ QRYSTALLIZER│      │      SQAVANGER      │      │     QOMBINATOR      │   ║
+║  │ QRYSTALLIZER│      │      SQAVENGER      │      │     QOMBINATOR      │   ║
 ║  │  (0-100)    │      │      (101-400)      │      │      (401-666)      │   ║
 ║  │             │      │                     │      │                     │   ║
 ║  │ 20+ built-in│      │ Pattern Library     │      │ Multi-source        │   ║
@@ -99,7 +99,7 @@ flowchart TD
 
     subgraph Tiers
         T0["Qrystallizer<br/>(0-100)"]
-        T1["sQavanger<br/>(101-400)"]
+        T1["sQavenger<br/>(101-400)"]
         T2["Qombinator<br/>(401-666)"]
     end
 
@@ -140,7 +140,7 @@ qonqrete-localai/
 │   │
 │   ├── qomputator.py           # Complexity scoring (0-666)
 │   ├── qrystallizer.py         # Template engine (Tier 0)
-│   ├── sqavanger.py            # Search harvester (Tier 1)
+│   ├── sqavenger.py            # Search harvester (Tier 1)
 │   ├── qombinator.py           # Evolutionary synthesis (Tier 2)
 │   ├── qoncentrator.py         # AST grafting
 │   ├── qonscience.py           # Verification

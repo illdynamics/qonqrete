@@ -494,7 +494,7 @@ def main():
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
     parser.add_argument("-V", "--version", action="version", version=get_version())
     parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
-    parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
+    parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-16). Higher=More briqs")
     parser.add_argument("-c", "--cyqles", type=int, help="Max auto-cycles (1-50)")
     parser.add_argument("-n", "--qonstruction-name", type=str, dest="qonstruction_name",
         help="Non-interactive: Auto-save qage as named qonstruction (no prompts)")
@@ -554,7 +554,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     logger = logging.getLogger("qrane")
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
-    final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 7)
+    final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 5)  # v2.1.3: Default 5 (Balanced)
 
     os.environ['QONQ_MODE'] = final_mode
     os.environ['QONQ_SENSITIVITY'] = str(final_sens)
@@ -596,6 +596,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
         # Use a temporary env for initial runs
         initial_env = os.environ.copy()
         initial_env["CYCLE_NUM"] = "0"
+        initial_env["PYTHONUNBUFFERED"] = "1"
 
         # 1. Run Qompressor (FAST - Structural Warmup) - if enabled
         if use_qompressor:
@@ -603,7 +604,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if ui: ui.log_main(f"{qrane_prefix}{msg}")
             else: print(f"{qrane_prefix}{msg}\r")
 
-            qompressor_cmd = ["python3", str(AGENT_MODULE_DIR / "qompressor.py"), str(path_manager.qodeyard_dir), str(path_manager.bloq_dir)]
+            qompressor_cmd = ["python3", "-u", str(AGENT_MODULE_DIR / "qompressor.py"), str(path_manager.qodeyard_dir), str(path_manager.bloq_dir)]
             qonsole_log_path = path_manager.get_qonsole_log_path("qompressor_warmup")
             events_log_path = path_manager.get_events_log_path("qompressor_warmup")
 
@@ -621,7 +622,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if ui: ui.log_main(f"{qrane_prefix}{msg}")
             else: print(f"{qrane_prefix}{msg}\r")
 
-            qontextor_cmd = ["python3", str(AGENT_MODULE_DIR / "qontextor.py"), str(path_manager.qodeyard_dir), str(path_manager.qontext_dir)]
+            qontextor_cmd = ["python3", "-u", str(AGENT_MODULE_DIR / "qontextor.py"), str(path_manager.qodeyard_dir), str(path_manager.qontext_dir)]
             qonsole_log_path = path_manager.get_qonsole_log_path("qontextor_initial")
             events_log_path = path_manager.get_events_log_path("qontextor_initial")
 
@@ -643,7 +644,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if ui: ui.log_main(f"{qrane_prefix}{msg}")
             else: print(f"{qrane_prefix}{msg}\r")
 
-            qontrabender_cmd = ["python3", str(AGENT_MODULE_DIR / "qontrabender.py"), "--check"]
+            qontrabender_cmd = ["python3", "-u", str(AGENT_MODULE_DIR / "qontrabender.py"), "--check"]
             qonsole_log_path = path_manager.get_qonsole_log_path("qontrabender_warmup")
             events_log_path = path_manager.get_events_log_path("qontrabender_warmup")
 
@@ -673,6 +674,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
             env = os.environ.copy()
             env["CYCLE_NUM"] = str(cycle)
+            env["PYTHONUNBUFFERED"] = "1"
 
             try:
                 with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
@@ -750,7 +752,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 else:
                     input_paths = [str(path_manager.root / resolve_template(input_val))]
 
-                cmd = ["python3", str(AGENT_MODULE_DIR / script)] + input_paths
+                cmd = ["python3", "-u", str(AGENT_MODULE_DIR / script)] + input_paths
 
                 # Handle single or multiple outputs
                 output_val = agent_def['output']

@@ -150,3 +150,43 @@ debug:
   verbose: false
   trace_agents: false
   save_intermediates: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MINDSTAQ SETTINGS (v1.9.7)
+# ─────────────────────────────────────────────────────────────────────────────
+
+mindstaq:
+  # Triple Threat Mode - Run ALL tiers in parallel and combine best results!
+  # This triples the generation power at zero extra cost.
+  triple_threat:
+    enabled: true    # Set to true for maximum quality
+    timeout: 30      # Seconds to wait for all tiers
+  
+  # Qomputator complexity thresholds
+  qomputator:
+    thresholds:
+      tier_0_max: 100   # 0-100: Qrystallizer (templates)
+      tier_1_max: 400   # 101-400: SQavenger (web search + patterns)
+                        # 401-666: Qombinator (frankenstein + breeding)
+  
+  # Qonscience verification settings
+  qonscience:
+    max_iterations: 5
+    auto_fix:
+      syntax_errors: true
+      import_errors: true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SQAVANGER SETTINGS (v1.9.9) - Web Search Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+sqavanger:
+  # v1.9.9: Enable offline mode to skip ALL web searches (much faster!)
+  # When true, immediately falls back to OFFLINE_PATTERNS
+  offline_mode: true    # Set to true for maximum speed (no network waits)
+  
+  # Timeout for web searches (seconds) - reduced from 30 to 5 in v1.9.9
+  timeout: 5
+  
+  # Maximum results per search query
+  max_results: 5

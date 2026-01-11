@@ -19,7 +19,7 @@ from typing import List, Dict, Optional, Any, Set, Tuple
 from collections import defaultdict
 
 
-__version__ = '1.5.0'
+__version__ = '2.1.0-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -154,7 +154,13 @@ class NameNormalizer(ast.NodeTransformer):
     
     def visit_Name(self, node):
         if node.id not in self.skip_names and not is_dunder(node.id):
-            # Check if needs conversion
+            # v2.0.1 FIX: Skip PascalCase names (class references like SafetyConfig, RuntimeError)
+            # They should NOT be converted to snake_case
+            if node.id[0].isupper() and not node.id.isupper():
+                # This is likely a class name reference - leave it alone
+                return node
+            
+            # Check if needs conversion (only for non-class names)
             snake = to_snake_case(node.id)
             if snake != node.id and not node.id.isupper():  # Skip constants
                 self.renames[node.id] = snake

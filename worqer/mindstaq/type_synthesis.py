@@ -25,8 +25,16 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Set, Tuple, Callable
 from collections import defaultdict
 
+# v2.0.3: z3 integration for constraint-based synthesis
+try:
+    from .z3_solver import Z3Reasoner, has_z3, solve_type_conversion
+    HAS_Z3 = has_z3()
+except ImportError:
+    HAS_Z3 = False
+    Z3Reasoner = None
 
-__version__ = '1.6.0'
+
+__version__ = '2.1.0-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

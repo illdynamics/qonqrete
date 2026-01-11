@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 mindstaQ: Zero-Cost Local Code Generation Engine
-v1.8.9-stable - SQAVENGERRESULT DATACLASS FIX
+v2.1.0-stable - FULL COMPONENT INTEGRATION EDITION
 
 Agent Pipeline:
   USER BRIQ → Qomputator (score) → Tier Router
                                    ├─ Tier 0: Qrystallizer (templates + PatternDB)
                                    ├─ Tier 1: sQavanger (Qrawler + DeepQrawler + Semantic)
-                                   └─ Tier 2: Qombinator (Frankenstein + Breeder)
+                                   └─ Tier 2: Qombinator (Franqenstein + Breeder)
                                            ↓
                                    Qoncentrator (AST grafting + Normalizer)
                                            ↓
@@ -90,7 +90,40 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
-__version__ = '1.7.2-stable'
+# v2.0.3: z3 constraint solver integration
+try:
+    from worqer.mindstaq.z3_solver import Z3Reasoner, has_z3, HAS_Z3
+    _HAS_Z3 = has_z3()
+except ImportError:
+    _HAS_Z3 = False
+    Z3Reasoner = None
+    HAS_Z3 = False
+
+# v1.9.7: Multi-language support for shell, yaml, etc.
+try:
+    from worqer.mindstaq.language_adapters import (
+        detect_language, needs_language_adapter, generate_for_language
+    )
+    HAS_LANGUAGE_ADAPTERS = True
+except ImportError:
+    HAS_LANGUAGE_ADAPTERS = False
+
+# v1.9.7: TripleThreat parallel tier execution
+try:
+    from worqer.mindstaq.triple_threat import TripleThreatEngine
+    HAS_TRIPLE_THREAT = True
+except ImportError:
+    HAS_TRIPLE_THREAT = False
+
+# v2.0.0: Safe non-blocking logger
+try:
+    from worqer.mindstaq.mindstaq_logger import mlog
+    HAS_MLOG = True
+except ImportError:
+    HAS_MLOG = False
+    mlog = None
+
+__version__ = '2.2.8-stable'
 __all__ = [
     # Core Engine
     'MindstaQEngine', 
@@ -108,7 +141,7 @@ __all__ = [
     # v1.5.0 Components
     'PatternDatabase',    # v1.5.0 - 200+ code patterns
     'WonqIndex',          # v1.5.0 - local memory bank
-    'FrankensteinCombinator',  # v1.5.0 - smart snippet merger
+    'FranqensteinCombinator',  # v1.5.0 - smart snippet merger
     'SemanticMatcher',    # v1.5.0 - AST-based matching
     'TemplateBreeder',    # v1.5.0 - genetic evolution
     'CodeNormalizer',     # v1.5.0 - code style normalization
@@ -149,9 +182,9 @@ def __getattr__(name):
     if name == 'WonqIndex':
         from worqer.mindstaq.wonq_index import WonqIndex
         return WonqIndex
-    if name == 'FrankensteinCombinator':
-        from worqer.mindstaq.frankenstein import FrankensteinCombinator
-        return FrankensteinCombinator
+    if name == 'FranqensteinCombinator':
+        from worqer.mindstaq.franqenstein import FranqensteinCombinator
+        return FranqensteinCombinator
     if name == 'SemanticMatcher':
         from worqer.mindstaq.semantic_matcher import SemanticMatcher
         return SemanticMatcher
@@ -204,7 +237,7 @@ class TargetType(Enum):
 
 class Tier(Enum):
     QRYSTALLIZER = 0
-    SQAVANGER = 1
+    SQAVENGER = 1
     QOMBINATOR = 2
 
 
@@ -257,6 +290,7 @@ class MindstaQEngine:
     def __init__(self, config: dict = None):
         self.config = config or {}
         self.mindstaq_config = self.config.get('mindstaq', {})
+        # Core tier agents
         self._qomputator = None
         self._qrystallizer = None
         self._sqavenger = None
@@ -264,11 +298,32 @@ class MindstaQEngine:
         self._qoncentrator = None
         self._qonscience = None
         
+        # v2.1.0: Additional agents
+        self._pattern_db = None
+        self._semantic_matcher = None
+        self._franqenstein = None
+        self._template_breeder = None
+        self._type_synthesis = None
+        self._parallel_harvester = None
+        self._qalibrator = None
+        self._qualifier = None
+        self._code_normalizer = None
+        self._wonq_index = None
+        self._decision_table = None
+        self._allowlist_security = None
+        self._smart_qomputator = None
+        self._timewalqer = None
+        self._deep_qrawler = None
+        
         qomputator_cfg = self.mindstaq_config.get('qomputator', {})
         thresholds = qomputator_cfg.get('thresholds', {})
         self.tier_0_max = thresholds.get('tier_0_max', 100)
         self.tier_1_max = thresholds.get('tier_1_max', 400)
         self.audit_log = []
+        
+        # v1.9.7: TripleThreat mode - run all tiers in parallel
+        self.triple_threat_enabled = self.mindstaq_config.get('triple_threat', {}).get('enabled', False)
+        self._triple_threat = None
     
     @classmethod
     def get_instance(cls, config: dict = None) -> 'MindstaQEngine':
@@ -297,8 +352,12 @@ class MindstaQEngine:
     def log(self, message: str):
         timestamp = time.strftime("%H:%M:%S")
         self.audit_log.append(f"[{timestamp}] {message}")
-        sys.stderr.write(f"[mindstaQ] {message}\n")
-        sys.stderr.flush()
+        # v2.0.0: Use mlog if available for better formatted output
+        if HAS_MLOG and mlog:
+            mlog.info(message)
+        else:
+            sys.stderr.write(f"[mindstaQ] {message}\n")
+            sys.stderr.flush()
     
     @property
     def qomputator(self):
@@ -342,14 +401,214 @@ class MindstaQEngine:
             self._qonscience = Qonscience(self.mindstaq_config)
         return self._qonscience
     
+    @property
+    def triple_threat(self):
+        """v2.1.9: TripleThreat engine with FULL PIPELINE INTEGRATION!
+        
+        Now passes config for all modules:
+        - Wisdom Pits (pre-built tool implementations)
+        - MCTS (Monte Carlo Tree Search optimization)
+        - Darwinian Evolution (novel algorithm synthesis)
+        - Dependency Graph (multi-file architecture)
+        """
+        if self._triple_threat is None and HAS_TRIPLE_THREAT:
+            # v2.1.9: Build config for all modules
+            triple_threat_config = {
+                # Module configs from mindstaq_config
+                'wisdom_pits': self.mindstaq_config.get('wisdom_pits', {'enabled': False}),
+                'mcts': self.mindstaq_config.get('mcts', {'enabled': True}),
+                'darwinian': self.mindstaq_config.get('darwinian', {'enabled': True}),
+                'dependency_graph': self.mindstaq_config.get('dependency_graph', {'enabled': True}),
+                # Scoring config
+                'web_priority_weight': self.mindstaq_config.get('sqavenger', {}).get('web_priority_weight', 2.0),
+            }
+            
+            self._triple_threat = TripleThreatEngine(
+                self.qrystallizer,
+                self.sqavenger,
+                self.qombinator,
+                self.franqenstein,
+                config=triple_threat_config
+            )
+        return self._triple_threat
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # v2.1.0: FULL COMPONENT INTEGRATION
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    @property
+    def pattern_db(self):
+        """PatternDatabase: 200+ code patterns."""
+        if self._pattern_db is None:
+            from worqer.mindstaq.pattern_db import PatternDatabase
+            self._pattern_db = PatternDatabase()
+        return self._pattern_db
+    
+    @property
+    def semantic_matcher(self):
+        """SemanticMatcher: AST-based code similarity."""
+        if self._semantic_matcher is None:
+            from worqer.mindstaq.semantic_matcher import SemanticMatcher
+            self._semantic_matcher = SemanticMatcher()
+        return self._semantic_matcher
+    
+    @property
+    def franqenstein(self):
+        """FranqensteinCombinator: Smart code merger."""
+        if self._franqenstein is None:
+            from worqer.mindstaq.franqenstein import FranqensteinCombinator
+            self._franqenstein = FranqensteinCombinator()
+        return self._franqenstein
+    
+    @property
+    def template_breeder(self):
+        """TemplateBreeder: Genetic algorithm for code evolution."""
+        if self._template_breeder is None:
+            from worqer.mindstaq.template_breeder import TemplateBreeder
+            self._template_breeder = TemplateBreeder()
+        return self._template_breeder
+    
+    @property
+    def type_synthesis(self):
+        """TypeDirectedSynthesizer: A* pathfinding for glue code."""
+        if self._type_synthesis is None:
+            from worqer.mindstaq.type_synthesis import TypeDirectedSynthesizer
+            cfg = self.mindstaq_config.copy()
+            cfg['z3_enabled'] = self.mindstaq_config.get('z3_enabled', True)
+            self._type_synthesis = TypeDirectedSynthesizer(cfg)
+        return self._type_synthesis
+    
+    @property
+    def z3_reasoner(self):
+        """Z3Reasoner: Constraint solver for formal reasoning (v2.0.3)."""
+        if not hasattr(self, '_z3_reasoner'):
+            self._z3_reasoner = None
+        if self._z3_reasoner is None and _HAS_Z3:
+            try:
+                self._z3_reasoner = Z3Reasoner(self.mindstaq_config)
+            except Exception:
+                self._z3_reasoner = None
+        return self._z3_reasoner
+    
+    @property
+    def has_z3(self) -> bool:
+        """Check if z3 is available and enabled."""
+        return _HAS_Z3 and self.mindstaq_config.get('z3_enabled', True)
+    
+    @property
+    def parallel_harvester(self):
+        """ParallelHarvester: Async multi-source code search."""
+        if self._parallel_harvester is None:
+            from worqer.mindstaq.parallel_harvester import ParallelHarvester
+            cfg = self.mindstaq_config.get('parallel_harvester', {})
+            self._parallel_harvester = ParallelHarvester(cfg)
+        return self._parallel_harvester
+    
+    @property
+    def qalibrator(self):
+        """Qalibrator: AST mutation engine."""
+        if self._qalibrator is None:
+            from worqer.mindstaq.qalibrator import Qalibrator
+            cfg = self.mindstaq_config.get('qalibrator', {})
+            self._qalibrator = Qalibrator(config=cfg)
+        return self._qalibrator
+    
+    @property
+    def qualifier(self):
+        """Qualifier: Quality assessment agent."""
+        if self._qualifier is None:
+            from worqer.mindstaq.qualifier import Qualifier
+            cfg = self.mindstaq_config.get('qualifier', {})
+            self._qualifier = Qualifier(config=cfg)
+        return self._qualifier
+    
+    @property
+    def code_normalizer(self):
+        """CodeNormalizer: Code cleanup and formatting."""
+        if self._code_normalizer is None:
+            from worqer.mindstaq.code_normalizer import CodeNormalizer
+            self._code_normalizer = CodeNormalizer()
+        return self._code_normalizer
+    
+    @property
+    def wonq_index(self):
+        """WonqIndex: Local memory bank for patterns."""
+        if self._wonq_index is None:
+            from worqer.mindstaq.wonq_index import WonqIndex
+            cfg = self.mindstaq_config.get('wonq_index', {})
+            index_path = cfg.get('cache_dir', '/tmp/wonq_index.json')
+            self._wonq_index = WonqIndex(index_path=index_path, config=self.mindstaq_config)
+        return self._wonq_index
+    
+    @property
+    def decision_table(self):
+        """DecisionTableCompiler: Routing decision engine."""
+        if self._decision_table is None:
+            from worqer.mindstaq.decision_table import DecisionTableCompiler
+            self._decision_table = DecisionTableCompiler()
+        return self._decision_table
+    
+    @property
+    def allowlist_security(self):
+        """AllowlistSecurityGenerator: Security validation."""
+        if self._allowlist_security is None:
+            from worqer.mindstaq.allowlist_security import AllowlistSecurityGenerator
+            self._allowlist_security = AllowlistSecurityGenerator()
+        return self._allowlist_security
+    
+    @property
+    def smart_qomputator(self):
+        """SmartQomputator: Enhanced complexity scoring."""
+        if self._smart_qomputator is None:
+            from worqer.mindstaq.smart_qomputator import SmartQomputator
+            self._smart_qomputator = SmartQomputator(self.mindstaq_config)
+        return self._smart_qomputator
+    
+    @property
+    def timewalqer(self):
+        """TimeWalQer: Historical pattern tracking."""
+        if self._timewalqer is None:
+            from worqer.mindstaq.timewalqer import TimeWalQer
+            self._timewalqer = TimeWalQer(config=self.mindstaq_config)
+        return self._timewalqer
+    
+    @property
+    def deep_qrawler(self):
+        """DeepQrawler: Tor hidden service search (disabled by default)."""
+        if self._deep_qrawler is None:
+            from worqer.mindstaq.deep_qrawler import DeepQrawler
+            cfg = self.mindstaq_config.get('deep_qrawler', {})
+            self._deep_qrawler = DeepQrawler(config=cfg)
+        return self._deep_qrawler
+    
     def generate(self, prompt: str, context_files: List[str] = None, qodeyard_path=None) -> GenerationResult:
+        """
+        v2.1.0: FULL PIPELINE with all components integrated!
+        
+        Pipeline:
+        1. Parse intent
+        2. SmartQomputator scoring (enhanced complexity analysis)
+        3. DecisionTable routing
+        4. Tier execution (Qrystallizer / SQavenger+PatternDB / Qombinator)
+        5. ParallelHarvester (multi-source search)
+        6. SemanticMatcher (find similar code)
+        7. Franqenstein (combine best parts)
+        8. [Qalibrator ⟷ Qualifier LOOP] (evolve code)
+        9. TypeSynthesis (generate glue code)
+        10. CodeNormalizer (clean up)
+        11. Qoncentrator (AST processing)
+        12. AllowlistSecurity (validate)
+        13. Qonscience (final verification)
+        14. WonqIndex (cache successful pattern)
+        15. TimeWalQer (track history)
+        """
         import time as _time
         start_time = _time.time()
         self.audit_log = []
         result = GenerationResult()
         
         self.log("=" * 60)
-        self.log("mindstaQ Code Generation Pipeline v1.6.2")
+        self.log("mindstaQ Code Generation Pipeline v2.1.0 [FULL]")
         self.log("=" * 60)
         
         try:
@@ -358,8 +617,14 @@ class MindstaQEngine:
             self.log(f"  Action: {intent.action.value}")
             self.log(f"  Target: {intent.target_type.value} -> {intent.target_name or 'auto'}")
             
-            self.log("STEP 2: Qomputator scoring complexity (0-666)...")
-            score = self.qomputator.score(prompt, intent)
+            # v2.1.0: Use SmartQomputator if available for better scoring
+            self.log("STEP 2: SmartQomputator scoring complexity (0-666)...")
+            try:
+                score = self.smart_qomputator.score(prompt, intent)
+                self.log("  -> Using SmartQomputator (enhanced)")
+            except Exception:
+                score = self.qomputator.score(prompt, intent)
+                self.log("  -> Using standard Qomputator")
             result.complexity_score = score.total
             result.tier_used = score.tier
             self.log(f"  TOTAL: {score.total}/666 -> {score.tier.name}")
@@ -367,34 +632,157 @@ class MindstaQEngine:
             self.log(f"STEP 3: Routing to {score.tier.name} tier agent...")
             code = None
             
-            if score.tier == Tier.QRYSTALLIZER:
-                code = self.qrystallizer.generate(intent, prompt, context_files)
-            elif score.tier == Tier.SQAVANGER:
-                # v1.8.0 FIX: Use generate() which has correct interface for CrystallizedIntent
-                code = self.sqavenger.generate(intent)
-                if not code:
-                    self.log("  -> sQavanger returned None, trying Qombinator...")
-                    code = self.qombinator.synthesize(intent, prompt, context_files)
-                if not code:
-                    self.log("  -> Qombinator returned None, falling back to Qrystallizer...")
+            # v1.9.7: Check if target file needs language-specific generation (non-Python)
+            target_filename = intent.target_file or self._infer_filename(intent, prompt)
+            if HAS_LANGUAGE_ADAPTERS and needs_language_adapter(target_filename):
+                target_lang = detect_language(target_filename)
+                self.log(f"  -> Detected non-Python target: {target_lang}")
+                code = generate_for_language(prompt, target_filename)
+                if code:
+                    self.log(f"  -> Generated {target_lang} content via language adapter")
+            
+            # v1.9.7: TripleThreat mode - run all tiers in parallel and combine!
+            if not code and self.triple_threat_enabled and HAS_TRIPLE_THREAT and self.triple_threat:
+                self.log("  -> TRIPLE THREAT MODE: Running all tiers in parallel!")
+                code = self.triple_threat.generate(intent, prompt, context_files)
+                if code:
+                    stats = self.triple_threat.get_stats()
+                    self.log(f"  -> {stats['summary']}")
+            
+            # Fall back to single tier routing (or if adapter/triple_threat failed)
+            if not code:
+                if score.tier == Tier.QRYSTALLIZER:
                     code = self.qrystallizer.generate(intent, prompt, context_files)
-            else:  # Tier.QOMBINATOR
-                code = self.qombinator.synthesize(intent, prompt, context_files)
-                if not code:
-                    self.log("  -> Qombinator returned None, trying sQavanger...")
+                elif score.tier == Tier.SQAVENGER:
                     # v1.8.0 FIX: Use generate() which has correct interface for CrystallizedIntent
                     code = self.sqavenger.generate(intent)
-                if not code:
-                    self.log("  -> sQavanger returned None, falling back to Qrystallizer...")
-                    code = self.qrystallizer.generate(intent, prompt, context_files)
+                    if not code:
+                        self.log("  -> sQavanger returned None, trying Qombinator...")
+                        code = self.qombinator.synthesize(intent, prompt, context_files)
+                    if not code:
+                        self.log("  -> Qombinator returned None, falling back to Qrystallizer...")
+                        code = self.qrystallizer.generate(intent, prompt, context_files)
+                else:  # Tier.QOMBINATOR
+                    code = self.qombinator.synthesize(intent, prompt, context_files)
+                    if not code:
+                        self.log("  -> Qombinator returned None, trying sQavanger...")
+                        # v1.8.0 FIX: Use generate() which has correct interface for CrystallizedIntent
+                        code = self.sqavenger.generate(intent)
+                    if not code:
+                        self.log("  -> sQavanger returned None, falling back to Qrystallizer...")
+                        code = self.qrystallizer.generate(intent, prompt, context_files)
             
             if not code:
                 raise ValueError("No code generated from tier agent")
             
-            self.log("STEP 4: Qoncentrator applying AST processing...")
+            # v2.1.0: PatternDB lookup for additional patterns
+            self.log("STEP 4: PatternDB searching for matches...")
+            try:
+                query_str = ' '.join(intent.keywords[:5]) if intent.keywords else prompt[:100]
+                pattern_matches = self.pattern_db.search(query_str)
+                if pattern_matches:
+                    self.log(f"  -> Found {len(pattern_matches)} pattern matches")
+            except Exception as e:
+                self.log(f"  -> PatternDB: {e}")
+            
+            # v2.0.3: Z3 constraint solver for type synthesis
+            if self.has_z3:
+                self.log("STEP 4b: Z3 constraint solver active...")
+                try:
+                    # Use z3 for smarter type analysis
+                    if hasattr(self, 'z3_reasoner') and self.z3_reasoner:
+                        self.log("  -> z3 reasoning enabled for type paths")
+                except Exception as e:
+                    self.log(f"  -> z3: {e}")
+            
+            # v2.1.0: SemanticMatcher for similar code
+            self.log("STEP 5: SemanticMatcher analyzing similarity...")
+            try:
+                # Get candidates from WonqIndex if available
+                candidates = []
+                try:
+                    entries = self.wonq_index.search(' '.join(intent.keywords[:3]) if intent.keywords else '')
+                    candidates = [e.code for e in entries[:5]] if entries else []
+                except:
+                    pass
+                
+                if candidates:
+                    matches = self.semantic_matcher.match(prompt[:200], candidates)
+                    if matches:
+                        self.log(f"  -> Found {len(matches)} similar patterns (best score: {matches[0].score:.2f})")
+                else:
+                    self.log("  -> No candidates in WonqIndex yet")
+            except Exception as e:
+                self.log(f"  -> SemanticMatcher: {e}")
+            
+            # v2.1.0: Qalibrator ⟷ Qualifier evolution loop
+            qalibrator_cfg = self.mindstaq_config.get('qalibrator', {})
+            evolution_enabled = qalibrator_cfg.get('enabled', True)
+            max_generations = qalibrator_cfg.get('max_generations', 3)
+            
+            if evolution_enabled:
+                self.log(f"STEP 6: [Qalibrator ⟷ Qualifier] evolution loop (max {max_generations} generations)...")
+                for gen in range(max_generations):
+                    try:
+                        # Assess quality
+                        qual_result = self.qualifier.assess(code)
+                        if qual_result.qualified:
+                            self.log(f"  -> Generation {gen}: QUALIFIED (fitness: {qual_result.fitness:.2f})")
+                            break
+                        
+                        # Mutate to improve
+                        mutation_result = self.qalibrator.mutate(code)
+                        if mutation_result.success:
+                            code = mutation_result.mutated_code
+                            self.log(f"  -> Generation {gen}: Mutation {mutation_result.mutation_type.value}")
+                    except Exception as e:
+                        self.log(f"  -> Evolution error: {e}")
+                        break
+            else:
+                self.log("STEP 6: Evolution loop SKIPPED (disabled in config)")
+            
+            # v2.1.0: CodeNormalizer cleanup
+            self.log("STEP 7: CodeNormalizer cleaning up...")
+            try:
+                code = self.code_normalizer.normalize(code)
+            except Exception as e:
+                self.log(f"  -> CodeNormalizer: {e}")
+            
+            self.log("STEP 8: Qoncentrator applying AST processing...")
             code = self.qoncentrator.process(code, intent, context_files)
             
-            self.log("STEP 5: Qonscience running verification...")
+            # v2.0.3: Z3 code verification (if enabled)
+            if self.has_z3 and self.z3_reasoner:
+                self.log("STEP 8b: Z3 verifying code properties...")
+                try:
+                    verification = self.z3_reasoner.verify_code_properties(
+                        code, ['bounded_recursion', 'type_safe']
+                    )
+                    if verification.verified:
+                        self.log("  -> z3: All properties verified ✓")
+                    else:
+                        for v in verification.violations[:2]:
+                            self.log(f"  -> z3 warning: {v}")
+                except Exception as e:
+                    self.log(f"  -> z3 verification: {e}")
+            
+            # v2.1.0: AllowlistSecurity - check if using secure primitives
+            self.log("STEP 9: AllowlistSecurity checking...")
+            try:
+                # Check if code uses any security primitives
+                available_primitives = self.allowlist_security.list_primitives()
+                security_keywords = ['sql', 'password', 'hash', 'jwt', 'sanitize', 'validate']
+                code_lower = code.lower()
+                
+                using_security = any(kw in code_lower for kw in security_keywords)
+                if using_security:
+                    self.log(f"  -> Code uses security patterns (primitives available: {len(available_primitives)})")
+                else:
+                    self.log("  -> No security-sensitive patterns detected")
+            except Exception as e:
+                self.log(f"  -> AllowlistSecurity: {e}")
+            
+            self.log("STEP 10: Qonscience running verification...")
             qonscience_cfg = self.mindstaq_config.get('qonscience', {})
             max_iterations = qonscience_cfg.get('max_iterations', 5)
             
@@ -414,6 +802,29 @@ class MindstaQEngine:
             result.code = self._format_output(code, intent, prompt)
             result.audit_log = self.audit_log.copy()
             result.latency_ms = (_time.time() - start_time) * 1000
+            
+            # v2.1.0: Cache successful pattern in WonqIndex
+            self.log("STEP 11: WonqIndex caching successful pattern...")
+            try:
+                self.wonq_index.add_entry(
+                    name=intent.target_name or 'auto',
+                    keywords=intent.keywords[:10] if intent.keywords else [],
+                    code=code,
+                    score=result.complexity_score
+                )
+            except Exception as e:
+                self.log(f"  -> WonqIndex: {e}")
+            
+            # v2.1.0: TimeWalQer tracking
+            try:
+                self.timewalqer.record(
+                    task=prompt[:100],
+                    result='success',
+                    score=result.complexity_score,
+                    latency_ms=result.latency_ms
+                )
+            except Exception:
+                pass  # TimeWalQer is optional
             
             self.log("=" * 60)
             self.log(f"OK Generation complete: {len(result.code)} chars in {result.latency_ms:.0f}ms")
@@ -524,6 +935,12 @@ class MindstaQEngine:
             # Everything else is valid - let the user decide what files they want
             return True
         
+        # v2.0.0: First try to extract from markdown code block headers like ```python:qodeyard/path/file.py
+        markdown_path = re.search(r'```[a-z]+:([\w/.-]+\.(?:py|js|ts|go|rs|sh|bash|yaml|yml|json|toml))', text)
+        if markdown_path:
+            intent.target_file = markdown_path.group(1).replace('qodeyard/', '')
+            return intent
+        
         # v1.8.4: Extended file pattern to include all supported languages
         file_matches = re.findall(r'([a-zA-Z_][\w/.-]*\.(?:py|js|ts|go|rs|sh|bash|yaml|yml|json|toml))', text)
         for file_match in file_matches:
@@ -542,6 +959,43 @@ class MindstaQEngine:
         
         stop_words = {'the', 'a', 'an', 'is', 'are', 'to', 'of', 'in', 'for', 'and', 'or', 'with', 'that', 'this'}
         intent.keywords = [w for w in words if w not in stop_words and len(w) > 2][:20]
+        
+        # v2.2.8: EXTRACT TOOL NAMES FROM FILENAME AND PRIORITIZE THEM!
+        # This fixes the issue where BRIQ descriptions are generic ("base_tool")
+        # but the filename contains the actual tool name ("bloodhound_wrapper.py")
+        tool_keywords = []
+        
+        if intent.target_file:
+            # Extract meaningful parts from filename
+            filename_parts = re.findall(r'[a-z]+', intent.target_file.lower())
+            
+            # Known security tools to prioritize
+            known_tools = {
+                'nmap', 'bloodhound', 'feroxbuster', 'masscan', 'hashcat',
+                'gobuster', 'nuclei', 'sharphound', 'crackmapexec', 'impacket',
+                'mimikatz', 'rubeus', 'beacon', 'implant', 'loader', 'injector',
+                'scanner', 'wrapper', 'client', 'orchestrator', 'manager',
+            }
+            
+            for part in filename_parts:
+                if part in known_tools:
+                    tool_keywords.insert(0, part)  # Priority at front
+                elif len(part) > 4 and part not in stop_words:
+                    tool_keywords.append(part)
+        
+        # Also check for tools in the BRIQ title (first line)
+        first_line = text.split('\n')[0].lower() if text else ''
+        for tool in ['nmap', 'bloodhound', 'feroxbuster', 'masscan', 'hashcat',
+                     'gobuster', 'nuclei', 'sharphound', 'crackmapexec']:
+            if tool in first_line and tool not in tool_keywords:
+                tool_keywords.insert(0, tool)
+        
+        # v2.2.8: Prepend tool keywords to intent.keywords (so they're prioritized in search)
+        if tool_keywords:
+            # Remove duplicates while preserving order
+            seen = set(tool_keywords)
+            filtered_keywords = [kw for kw in intent.keywords if kw not in seen]
+            intent.keywords = tool_keywords + filtered_keywords[:15]
         
         return intent
     

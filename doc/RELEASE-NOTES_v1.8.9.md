@@ -51,7 +51,7 @@ The v1.8.8 `.entities`/`.raw_task` fix was bypassed because SQavengerResult inst
 
 **Chain of Failures:**
 ```
-v1.8.7: sqavanger typo → import failed → fallback
+v1.8.7: sqavenger typo → import failed → fallback
 v1.8.8: .entities/.raw_task → AttributeError → fallback  
 v1.8.8: SQavengerResult(task=...) → missing 'success' → fallback
 ```
@@ -78,7 +78,7 @@ Same as v1.8.7 and v1.8.8 - no functional improvement due to cascading failures.
 
 | Version | Bug | Error | Status |
 |---------|-----|-------|--------|
-| v1.8.5 | `sqavanger` typo | `No module named 'worqer.mindstaq.sqavanger'` | ✅ Fixed v1.8.7 |
+| v1.8.5 | `sqavenger` typo | `No module named 'worqer.mindstaq.sqavenger'` | ✅ Fixed v1.8.7 |
 | v1.8.7 | `.entities` attribute | `'CrystallizedIntent' has no attribute 'entities'` | ✅ Fixed v1.8.8 |
 | v1.8.7 | `.raw_task` attribute | `'CrystallizedIntent' has no attribute 'raw_task'` | ✅ Fixed v1.8.8 |
 | v1.8.8 | `SQavengerResult(task=...)` | `missing 1 required positional argument: 'success'` | ✅ Fixed v1.8.9 |

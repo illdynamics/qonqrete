@@ -1,0 +1,39 @@
+# QonQrete SearXNG Stack
+# v2.0.9-stable - Limiter DISABLED for local API access
+# 
+# Usage:
+#   docker compose -f docker-compose.searxng.yml up -d
+#
+# Verify:
+#   curl -X POST -d 'q=test&format=json' http://localhost:8888/search
+
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: qonqrete-searxng
+    ports:
+      - "8888:8080"
+    environment:
+      - SEARXNG_SECRET=qonqrete-searxng-secret-key-12345
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    restart: unless-stopped
+    networks:
+      - qonqrete-net
+
+  redis:
+    image: redis:alpine
+    container_name: qonqrete-redis
+    command: redis-server --save 30 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - qonqrete-net
+
+networks:
+  qonqrete-net:
+    driver: bridge
+
+volumes:
+  redis-data:

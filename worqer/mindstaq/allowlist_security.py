@@ -24,7 +24,7 @@ from typing import List, Dict, Optional, Any, Set, Tuple
 from enum import Enum
 
 
-__version__ = '1.6.0'
+__version__ = '2.1.0-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

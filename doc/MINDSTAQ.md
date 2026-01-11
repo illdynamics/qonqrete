@@ -160,7 +160,7 @@ agents:
 |-------|------|------|------|
 | **Qomputator** | `qomputator.py` | Complexity scoring (0-666) | Router |
 | **Qrystallizer** | `qrystallizer.py` | Template engine | Tier 0 |
-| **sQavanger** | `sqavanger.py` | Search harvester via Qrawler | Tier 1 |
+| **sQavenger** | `sqavenger.py` | Search harvester via Qrawler | Tier 1 |
 | **Qombinator** | `qombinator.py` | Evolutionary synthesis | Tier 2 |
 | **Qoncentrator** | `qoncentrator.py` | AST grafting | Post-process |
 | **Qonscience** | `qonscience.py` | Verification & auto-fix | Post-process |
@@ -178,7 +178,7 @@ USER BRIQ / TASK
        │
        ├─── 0-85 ─────▶ QRYSTALLIZER (Tier 0 - Templates)
        │
-       ├─── 86-400 ───▶ SQAVANGER (Tier 1 - Search via Qrawler)
+       ├─── 86-400 ───▶ SQAVENGER (Tier 1 - Search via Qrawler)
        │
        └─── 401-666 ──▶ QOMBINATOR (Tier 2 - Evolutionary)
               │
@@ -218,7 +218,7 @@ The Qomputator scores task complexity on a **0-666 scale** (The Beast Number �
 | Score Range | Tier | Agent | Method |
 |-------------|------|-------|--------|
 | **0-85** | 0 | Qrystallizer | Template matching (~10-50ms) |
-| **86-400** | 1 | sQavanger | Pattern search (~500ms-2s) |
+| **86-400** | 1 | sQavenger | Pattern search (~500ms-2s) |
 | **401-666** | 2 | Qombinator | Evolutionary synthesis (~2-10s) |
 
 ---
@@ -234,7 +234,7 @@ mindstaq:
       tier_1_max: 400
   qrystallizer:
     enabled: true
-  sqavanger:
+  sqavenger:
     strategy: parallel
   qrawler:
     enabled: false
@@ -269,7 +269,7 @@ python worqer/qomputator.py --text "Add email validation"
 python worqer/qrystallizer.py --text "Create validation function" --list
 
 # Search patterns
-python worqer/sqavanger.py --text "HTTP GET request" --list
+python worqer/sqavenger.py --text "HTTP GET request" --list
 
 # Verify code
 python worqer/qonscience.py --file mycode.py --fix

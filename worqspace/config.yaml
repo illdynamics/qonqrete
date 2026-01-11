@@ -1,10 +1,36 @@
-# QonQrete Configuration v1.7.8-stable
+# QonQrete Configuration v2.1.9-stable
 # ═══════════════════════════════════════════════════════════════════════════════
-# NEW in v1.7.8: ALL LOCAL BY DEFAULT! 🆓🔥
+# v2.1.9 CRITICAL FIX: MODULES NOW WIRED INTO PIPELINE!
+# 
+# Previously, modules like MCTS, Darwinian, Wisdom Pits existed but were
+# NEVER CALLED during code generation. This version wires them in!
+#
+# NEW in v2.1.9: INVERTED BRIQ SENSITIVITY SCALE! 🔄
+# Higher number = MORE briqs (more intuitive!)
+#
+# BRIQ SENSITIVITY SCALE (0-16):
+#   0  = Monolithic (1 briq)         - Single giant briq
+#   1  = Very Broad (2-3 briqs)      - Major chunks only
+#   2  = Broad (3-5 briqs)           - Large components
+#   3  = Feature-level (5-8 briqs)   - Per-feature
+#   4  = Component-level (8-12)      - Per-component
+#   5  = Balanced (10-15 briqs)      ← RECOMMENDED DEFAULT
+#   6  = Standard (15-20 briqs)      - Most files separate
+#   7  = High (20-30 briqs)          - Detailed split
+#   8  = Very High (30-40 briqs)     - Fine-grained
+#   9  = Atomic (40-60 briqs)        - Maximum detail
+#  10  = Ultra (50-75 briqs)         - Enterprise projects
+#  11  = Mega (60-90 briqs)          - Large enterprise
+#  12  = Hyper (75-110 briqs)        - Complex architectures
+#  13  = Extreme (90-130 briqs)      - Multi-layer systems
+#  14  = Maximum (110-160 briqs)     - Critical systems
+#  15  = Insane (130-200 briqs)      - Mega specifications
+#  16  = QONQRETE MAX (160-250)      - Enterprise mega-tasqs!
+#
 # - LocalInstruQtor: instruqtor.provider = 'local' (FREE task splitting)
 # - MindstaQ: construqtor.provider = 'local' (FREE code generation)
 # - LocalInspeQtor: inspeqtor.provider = 'local' (FREE code review)
-# - briq_sensitivity: 3 (Standard: 15-20 briqs)
+# - briq_sensitivity: 5 (Balanced: 10-15 briqs) ← NEW DEFAULT
 # - auto_cycle_limit: 6 (Optimal for complex projects)
 # 
 # NOTE: When using local construqtor, qontrabender and calqulator are auto-skipped
@@ -222,7 +248,7 @@ options:
   #   Simple projects (web server, API): sens=7, cycles=4
   #   Medium projects (full-stack app):  sens=6, cycles=5
   #   Complex projects (multi-service):  sens=5, cycles=6
-  briq_sensitivity: 3
+  briq_sensitivity: 5  # v2.1.3: Balanced (10-15 briqs) - Higher = More briqs
 
   # Operational Mode
   mode: program
@@ -232,14 +258,58 @@ options:
 # Zero-Cost Local Code Generation Engine
 # ═══════════════════════════════════════════════════════════════════════════════
 mindstaq:
+
+  # v2.1.9: TripleThreat - Run all tiers in parallel with FULL PIPELINE INTEGRATION!
+  triple_threat:
+    enabled: true               # Enable parallel tier execution
+    timeout_per_tier: 30        # Max seconds per tier
+    combine_strategy: best      # best | merge | all
+  
+  # v2.1.9: Wisdom Pits - Pre-built tool implementations
+  # These are expert-crafted implementations for common security tools
+  # Set enabled: true when you've populated the wisdom pits storage
+  wisdom_pits:
+    enabled: false              # DISABLED - set true when ready
+    storage_path: "/tmp/wisdom_pits"
+    tools:
+      - nmap
+      - bloodhound
+      - feroxbuster
+      - masscan
+      - nikto
+  
+  # v2.1.9: MCTS - Monte Carlo Tree Search for code optimization
+  # Uses AlphaGo-style strategic search to find optimal implementations
+  mcts:
+    enabled: true               # ENABLED by default
+    iterations: 300             # Search iterations
+    time_limit: 30.0            # Max seconds per optimization
+    min_improvement: 0.1        # Minimum fitness improvement to use
+    min_fitness: 0.5            # Minimum fitness threshold
+  
+  # v2.1.9: Darwinian Evolution - Genetic algorithm for novel algorithms
+  # Best for generating new algorithms from scratch
+  darwinian:
+    enabled: true               # ENABLED by default
+    max_generations: 50         # Evolution generations
+    population_size: 20         # Population size per generation
+    mutation_rate: 0.3          # Mutation probability
+  
+  # v2.1.9: Dependency Graph - Multi-file architecture analysis
+  # Helps understand project structure for better code integration
+  dependency_graph:
+    enabled: true               # ENABLED by default
+    max_depth: 5                # Max import depth to analyze
+    include_stdlib: false       # Don't include standard library
+  
   enabled: true
-  version: "1.0.0"
+  version: "2.1.9"
   
   # Qomputator - Complexity Scoring (0-666 Scale)
   qomputator:
     thresholds:
       tier_0_max: 85         # 0-85   → Qrystallizer (template engine)
-      tier_1_max: 400         # 101-400 → sQavanger (search via Qrawler)
+      tier_1_max: 400         # 101-400 → sQavenger (search via Qrawler)
       tier_2_max: 666         # 401-666 → Qombinator (evolutionary synthesis)
     weights:
       lexical:
@@ -259,21 +329,31 @@ mindstaq:
     enabled: true
     min_similarity: 0.85
   
-  # sQavanger - Search Harvester (Tier 1)
-  sqavanger:
+  # sQavenger - Search Harvester (Tier 1)
+  # sQavenger - Search Harvester (Tier 1)
+  # v2.0.0: SQavenger - Search & Harvest Engine
+  sqavenger:
+    offline_mode: false          # v2.0.0: Online mode - search web for code snippets
     strategy: parallel
-    timeout: 10
+    timeout: 10                  # v2.0.0: 10s per query with graceful fallback
     max_results: 10
   
-  # Qrawler - SearXNG Instance (v2.0 Feature)
+  # Qrawler - Web Search for Code Harvesting (v1.9.1: FULLY FUNCTIONAL!)
+  # Works with SearXNG (recommended) or DuckDuckGo (fallback)
+  # v2.0.0: Qrawler - Web Search for Code Harvesting
   qrawler:
-    enabled: false
-    url: "http://localhost:8888"
+    enabled: true                          # v2.0.0: ENABLED for web code search
+    searxng_url: "http://172.17.0.1:8888"   # v2.2.6: Host gateway (works from inside Docker!)
+    cache_dir: "/tmp/qrawler_cache"        # Cache search results
+    cache_ttl_hours: 24                    # Cache expiry
+    web_priority_weight: 2.0               # v2.1.6: Boost web results over templates
+    # NOTE: If SearXNG unavailable, falls back to DuckDuckGo
+    # Install deps: pip install aiohttp beautifulsoup4 duckduckgo-search
   
   # Qombinator - Evolutionary Synthesis (Tier 2)
   qombinator:
     enabled: true
-    z3_enabled: false
+    z3_enabled: true  # v2.0.3: Constraint solver for reasoning
   
   # Qoncentrator - AST Grafting
   qoncentrator:
@@ -288,3 +368,155 @@ mindstaq:
       syntax_errors: true
       missing_imports: true
       undefined_names: true
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEEP WEB SEARCH (v2.0.1) - Tor Hidden Services
+# ═══════════════════════════════════════════════════════════════════════════════
+deep_qrawler:
+  enabled: false                # DISABLED BY DEFAULT - requires Tor running
+  tor_socks_port: 9050          # Tor SOCKS proxy port
+  tor_control_port: 9051        # Tor control port for circuit rotation
+  timeout: 30                   # Timeout per request in seconds
+  max_retries: 3                # Retry count for failed requests
+  circuit_rotation: true        # Rotate circuits to avoid rate limiting
+  safe_mode: true               # Only use Ahmia (filtered) not Torch (unfiltered)
+  max_results_per_source: 10     # Limit results from each source
+  engines:
+    ahmia: true                 # Safe - filters illegal content
+    torch: false                # DANGEROUS - no filtering, use with caution
+  # NOTE: Requires: pip install aiohttp aiohttp-socks
+  # NOTE: Requires: Tor running on localhost:9050
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Z3 CONSTRAINT SOLVER (v2.0.3) - Formal Reasoning
+# ═══════════════════════════════════════════════════════════════════════════════
+z3_solver:
+  enabled: true                 # Enable z3 constraint solving
+  timeout_ms: 5000              # Timeout per solve operation
+  features:
+    type_synthesis: true        # Use z3 for optimal type conversion paths
+    decision_tables: true       # Use z3 for decision table evaluation
+    code_verification: true     # Use z3 for code property verification
+    complexity_scoring: true    # Use z3 for tier selection constraints
+  properties_to_verify:
+    - bounded_recursion         # Check recursion has base case
+    - type_safe                 # Check type hints are present
+    # - no_infinite_loop        # Check for infinite loops (slower)
+    # - deterministic           # Check for non-deterministic imports
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PATTERN DATABASE (v2.0.1) - 200+ Code Patterns
+# ═══════════════════════════════════════════════════════════════════════════════
+pattern_db:
+  enabled: true
+  categories:
+    - http
+    - database  
+    - auth
+    - crypto
+    - async
+    - testing
+    - cli
+    - file_io
+    - validation
+    - logging
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# QALIBRATOR + QUALIFIER (v2.0.1) - AST Evolution Loop
+# ═══════════════════════════════════════════════════════════════════════════════
+qalibrator:
+  enabled: true                 # Enable AST mutation evolution
+  max_generations: 5            # Maximum evolution iterations
+  mutation_rate: 0.3            # Probability of mutation per generation
+  mutations:
+    swap_statements: true       # Swap order of independent statements
+    swap_operators: true        # +/-, ==/!=, and/or
+    add_error_handling: true    # Wrap in try/except
+    simplify_boolean: true      # Simplify boolean expressions
+    add_type_hints: true        # Add type annotations
+    extract_function: false     # Extract code blocks (can be disruptive)
+
+qualifier:
+  enabled: true
+  min_fitness: 0.7              # Minimum fitness to pass (0-1)
+  weights:
+    syntax: 0.25                # Code compiles
+    complexity: 0.15            # Cyclomatic complexity
+    style: 0.10                 # PEP8 compliance
+    security: 0.20              # No obvious security issues
+    documentation: 0.10         # Has docstrings
+    testability: 0.10           # Code is testable
+    maintainability: 0.10       # Overall maintainability
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WONQ INDEX (v2.0.1) - Local Pattern Memory
+# ═══════════════════════════════════════════════════════════════════════════════
+wonq_index:
+  enabled: true
+  cache_dir: "/tmp/wonq_index"  # Where to store the index
+  max_entries: 10000            # Maximum cached patterns
+  min_score: 200                # Minimum WoNQ score to cache (0-666)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TIMEWALQER (v2.0.1) - Historical Pattern Tracking
+# ═══════════════════════════════════════════════════════════════════════════════
+timewalqer:
+  enabled: true
+  log_file: "/tmp/timewalqer.log"
+  track_success: true           # Track successful generations
+  track_failures: true          # Track failed generations
+  retention_days: 30            # How long to keep history
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PARALLEL HARVESTER (v2.0.1) - Multi-Source Async Search
+# ═══════════════════════════════════════════════════════════════════════════════
+parallel_harvester:
+  enabled: true
+  timeout: 15                   # Timeout for all sources combined
+  sources:
+    pattern_db: true            # Local pattern database
+    wonq_index: true            # Previously successful patterns
+    qrawler: true               # Web search (clearnet)
+    
+# ═══════════════════════════════════════════════════════════════════════════════
+# SEMANTIC MATCHER (v2.0.1) - AST Similarity Matching
+# ═══════════════════════════════════════════════════════════════════════════════
+semantic_matcher:
+  enabled: true
+  min_similarity: 0.6           # Minimum similarity score (0-1)
+  features:
+    ast_structure: true         # Compare AST node types
+    imports: true               # Compare import statements
+    function_names: true        # Compare function signatures
+    complexity: true            # Compare complexity metrics
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FRANQENSTEIN (v2.0.1) - Smart Code Merger
+# ═══════════════════════════════════════════════════════════════════════════════
+franqenstein:
+  enabled: true
+  prefer_type_hints: true       # Prefer code with type hints
+  prefer_docstrings: true       # Prefer code with docstrings
+  prefer_error_handling: true   # Prefer code with try/except
+  dedup_imports: true           # Deduplicate imports when merging
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TEMPLATE BREEDER (v2.0.1) - Genetic Algorithm Evolution
+# ═══════════════════════════════════════════════════════════════════════════════
+template_breeder:
+  enabled: false                # Disabled by default (slow)
+  population_size: 10           # Number of individuals
+  max_generations: 20           # Maximum generations
+  crossover_rate: 0.7           # Probability of crossover
+  mutation_rate: 0.1            # Probability of mutation
+  elite_count: 2                # Keep top N individuals
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TYPE SYNTHESIS (v2.0.1) - A* Pathfinding for Glue Code
+# ═══════════════════════════════════════════════════════════════════════════════
+type_synthesis:
+  enabled: true
+  max_path_length: 5            # Maximum function composition depth
+  builtin_transformers: true    # Include Python builtin type conversions

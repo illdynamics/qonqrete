@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 
 
-__version__ = '1.5.0'
+__version__ = '2.1.0-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

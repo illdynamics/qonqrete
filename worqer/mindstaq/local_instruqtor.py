@@ -20,7 +20,7 @@ from typing import List, Optional, Set, Tuple
 from enum import Enum
 
 
-__version__ = '1.7.2-stable'
+__version__ = '2.1.0-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -28,16 +28,25 @@ __version__ = '1.7.2-stable'
 # ═══════════════════════════════════════════════════════════════════════════════
 
 BRIQ_RANGES = {
-    9: (1, 1, 1),      # Monolithic: exactly 1 briq
-    8: (2, 3, 2),      # Very Broad: 2-3 briqs
-    7: (3, 5, 4),      # Broad: 3-5 briqs (RECOMMENDED DEFAULT)
-    6: (5, 8, 6),      # Feature-level: 5-8 briqs
-    5: (8, 12, 10),    # Component-level: 8-12 briqs
-    4: (10, 15, 12),   # Balanced: 10-15 briqs
-    3: (15, 20, 18),   # Standard: 15-20 briqs
-    2: (20, 30, 25),   # High Granularity: 20-30 briqs
-    1: (30, 40, 35),   # Very High: 30-40 briqs
-    0: (40, 60, 50),   # Atomic: 40-60 briqs
+    # v2.1.5: INVERTED SCALE - Higher number = More briqs!
+    0: (1, 1, 1),        # Monolithic: exactly 1 briq
+    1: (2, 3, 2),        # Very Broad: 2-3 briqs
+    2: (3, 5, 4),        # Broad: 3-5 briqs
+    3: (5, 8, 6),        # Feature-level: 5-8 briqs
+    4: (8, 12, 10),      # Component-level: 8-12 briqs
+    5: (10, 15, 12),     # Balanced: 10-15 briqs (RECOMMENDED DEFAULT)
+    6: (15, 20, 18),     # Standard: 15-20 briqs
+    7: (20, 30, 25),     # High Granularity: 20-30 briqs
+    8: (30, 40, 35),     # Very High: 30-40 briqs
+    9: (40, 60, 50),     # Atomic: 40-60 briqs
+    # v2.1.5: Extended range for mega-projects
+    10: (50, 75, 60),    # Ultra: 50-75 briqs
+    11: (60, 90, 75),    # Mega: 60-90 briqs
+    12: (75, 110, 90),   # Hyper: 75-110 briqs
+    13: (90, 130, 110),  # Extreme: 90-130 briqs
+    14: (110, 160, 135), # Maximum: 110-160 briqs
+    15: (130, 200, 165), # Insane: 130-200 briqs
+    16: (160, 250, 200), # QONQRETE MAX: 160-250 briqs
 }
 
 
@@ -126,7 +135,7 @@ class LocalInstruQtor:
     def __init__(self, config: dict = None):
         self.config = config or {}
         instruqtor_cfg = self.config.get('instruqtor', {})
-        self.sensitivity = instruqtor_cfg.get('default_sensitivity', 7)
+        self.sensitivity = instruqtor_cfg.get('default_sensitivity', 5)  # v2.1.3: Default 5 (Balanced)
         self.min_title_words = instruqtor_cfg.get('min_title_words', 2)
         self.max_title_words = instruqtor_cfg.get('max_title_words', 8)
     
@@ -136,7 +145,7 @@ class LocalInstruQtor:
         
         Args:
             task_content: The task text to split
-            sensitivity: 0-9 (0=atomic/many briqs, 9=monolithic/1 briq)
+            sensitivity: 0-16 (0=monolithic/1 briq, 9=atomic/40-60, 16=max/160-250)
         
         Returns:
             SplitResult with list of Briqs
@@ -144,9 +153,9 @@ class LocalInstruQtor:
         if sensitivity is None:
             sensitivity = self.sensitivity
         
-        # Clamp sensitivity
-        sensitivity = max(0, min(9, sensitivity))
-        min_briqs, max_briqs, target_briqs = BRIQ_RANGES.get(sensitivity, BRIQ_RANGES[7])
+        # v2.1.5: Clamp sensitivity to extended range 0-16
+        sensitivity = max(0, min(16, sensitivity))
+        min_briqs, max_briqs, target_briqs = BRIQ_RANGES.get(sensitivity, BRIQ_RANGES[5])  # v2.1.5: Default 5 (Balanced)
         
         result = SplitResult(
             sensitivity=sensitivity,
@@ -163,16 +172,15 @@ class LocalInstruQtor:
             return result
         
         # ═══════════════════════════════════════════════════════════════════════════
-        # v1.6.3 FIX: Short-circuit for high sensitivity (8-9)
-        # At sens=9 (monolithic) or sens=8 (very broad), preserve FULL original content
-        # Don't fragment the task into sections/bullets - that destroys context!
+        # v2.1.5 FIX: Short-circuit for LOW sensitivity (0-1) = MONOLITHIC
+        # INVERTED SCALE: 0 = monolithic, 16 = maximum briqs
         # ═══════════════════════════════════════════════════════════════════════════
-        if sensitivity >= 8:
+        if sensitivity <= 1:
             # Extract a good title from the first meaningful line
             title = self._generate_title(task_content)
             
-            # For sens=9: exactly 1 briq with FULL content
-            if sensitivity == 9:
+            # For sens=0: exactly 1 briq with FULL content
+            if sensitivity == 0:
                 result.briqs = [Briq(
                     title=title,
                     content=task_content,
@@ -180,7 +188,7 @@ class LocalInstruQtor:
                 )]
                 return result
             
-            # For sens=8: 2-3 briqs, split by major sections only (# headers)
+            # For sens=1: 2-3 briqs, split by major sections only (# headers)
             major_sections = self._split_by_major_sections_only(task_content)
             if len(major_sections) >= 2:
                 result.briqs = major_sections[:max_briqs]
@@ -812,7 +820,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LocalInstruQtor - Zero-Cost Task Splitter')
     parser.add_argument('--text', '-t', type=str, help='Task text to split')
     parser.add_argument('--file', '-f', type=str, help='File containing task')
-    parser.add_argument('--sensitivity', '-s', type=int, default=7, help='Sensitivity level (0-9)')
+    parser.add_argument('--sensitivity', '-s', type=int, default=5, help='Sensitivity level (0-16). Higher=More briqs')
     parser.add_argument('--explain', '-e', action='store_true', help='Show detailed analysis')
     args = parser.parse_args()
     

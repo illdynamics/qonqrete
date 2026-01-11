@@ -15,7 +15,16 @@ from typing import List, Dict, Optional, Any, Set, Tuple
 from enum import Enum
 
 
-__version__ = '1.5.0'
+# v2.0.3: z3 integration for constraint-based scoring
+try:
+    from .z3_solver import Z3Reasoner, has_z3
+    HAS_Z3 = has_z3()
+except ImportError:
+    HAS_Z3 = False
+    Z3Reasoner = None
+
+
+__version__ = '2.1.0-stable'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -215,6 +224,14 @@ class SmartQomputator:
     
     def __init__(self, config: dict = None):
         self.config = config or {}
+        self.use_z3 = self.config.get('z3_enabled', True) and HAS_Z3
+        self._z3_reasoner = None
+        
+        if self.use_z3:
+            try:
+                self._z3_reasoner = Z3Reasoner(self.config)
+            except Exception:
+                self.use_z3 = False
         
         # Tier thresholds
         self.tier_thresholds = {
@@ -436,6 +453,49 @@ class SmartQomputator:
         modifier = sum(keywords.values())
         
         return max(0, min(100, base + modifier))
+    
+    def score_with_constraints(self, task: str) -> Tuple[str, int, Dict[str, int]]:
+        """
+        v2.0.3: Use z3 to determine optimal tier based on constraints.
+        
+        Args:
+            task: Task description
+            
+        Returns:
+            (tier_name, total_score, feature_breakdown)
+        """
+        if not self.use_z3 or not self._z3_reasoner:
+            # Fallback to regular scoring
+            score = self.quick_score(task)
+            tier = 'QRYSTALLIZER' if score < 100 else 'SQAVENGER' if score < 400 else 'QOMBINATOR'
+            return (tier, score, {'base': score})
+        
+        # Extract features
+        features = self._extract_keywords(task)
+        task_types = self._detect_task_types(task)
+        
+        # Build feature scores
+        feature_scores = {
+            'keywords': min(len(features) * 10, 150),
+            'complexity': sum(int(conf * 50) for _, conf in task_types[:3]),
+            'domain_depth': len(task_types) * 20,
+        }
+        
+        # Use z3 to find optimal tier
+        tier_thresholds = {
+            'QRYSTALLIZER': (0, 100),
+            'SQAVENGER': (101, 400),
+            'QOMBINATOR': (401, 666),
+        }
+        
+        try:
+            return self._z3_reasoner.solve_complexity_constraints(
+                feature_scores, tier_thresholds
+            )
+        except Exception:
+            score = sum(feature_scores.values())
+            tier = 'QRYSTALLIZER' if score < 100 else 'SQAVENGER' if score < 400 else 'QOMBINATOR'
+            return (tier, score, feature_scores)
     
     def should_use_mindstaq(self, task: str) -> Tuple[bool, str]:
         """

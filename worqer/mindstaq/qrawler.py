@@ -1,17 +1,30 @@
 #!/usr/bin/env python3
 """
 Qrawler: Web Search Engine Interface for mindstaQ
-Part of mindstaQ - REAL web search for code harvesting
+v2.2.6-stable - BULLETPROOF! Host Gateway + SSL Fix! 🔥
+
+v2.2.6 CRITICAL FIX:
+  - config.yaml now defaults to http://172.17.0.1:8888 (not localhost!)
+  - localhost doesn't work from inside Docker container!
+  - 172.17.0.1 is Docker's bridge gateway to host machine
+  - SSL completely disabled with explicit ssl=False
+
+v2.2.5 (retained):
+  - Just use http://172.17.0.1:8888 directly
+  - No docker network complexity
 
 Supports multiple search backends:
 - SearXNG (self-hosted, unlimited, RECOMMENDED)
-- DuckDuckGo (no API key, rate limited)
-- StackOverflow (API, 300/day free)
-- GitHub Code Search (API, needs token)
+- DuckDuckGo (no API key, rate limited fallback)
 
-v1.3.0 - REAL WEB SEARCH IMPLEMENTATION
+Configuration in config.yaml:
+  qrawler:
+    enabled: true
+    searxng_url: "http://172.17.0.1:8888"  # NOT localhost!
+    cache_dir: "/tmp/qrawler_cache"
+    cache_ttl_hours: 24
 
-Dependencies (install for full functionality):
+Dependencies:
   pip install aiohttp beautifulsoup4 duckduckgo-search
 """
 
@@ -20,14 +33,21 @@ import re
 import json
 import os
 import hashlib
+import ssl
+import sys
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Tuple, Tuple
+from typing import List, Dict, Optional, Any, Tuple
 from pathlib import Path
 from datetime import datetime, timedelta
-from urllib.parse import quote_plus
-import sys
+from urllib.parse import quote_plus, urlparse
 
-# Graceful imports - work without dependencies
+__version__ = '2.2.8-stable'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRACEFUL IMPORTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
 try:
     import aiohttp
     HAS_AIOHTTP = True
@@ -40,15 +60,38 @@ try:
     HAS_BS4 = True
 except ImportError:
     HAS_BS4 = False
+    BeautifulSoup = None
 
 try:
     from duckduckgo_search import DDGS
     HAS_DDGS = True
 except ImportError:
     HAS_DDGS = False
+    DDGS = None
+
+# Logging
+try:
+    from worqer.mindstaq.mindstaq_logger import mlog
+except ImportError:
+    mlog = None
 
 
-__version__ = '1.3.1'
+def _log(msg: str, level: str = "INFO"):
+    """v2.2.1: REAL logging that shows what's happening!"""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    log_msg = f"[QRAWLER {level}] {msg}"
+    
+    if mlog:
+        if level == "ERROR":
+            mlog.error(log_msg)
+        elif level == "WARN":
+            mlog.warn(log_msg)
+        else:
+            mlog.tier("QRAWLER", msg)
+    
+    # Always print to stderr
+    sys.stderr.write(f"[{timestamp}] {log_msg}\n")
+    sys.stderr.flush()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -61,10 +104,10 @@ class CodeSnippet:
     code: str
     language: str
     source_url: str
-    source_name: str  # stackoverflow, github, etc.
+    source_name: str
     title: str = ""
-    score: int = 0  # upvotes, stars, etc.
-    relevance: float = 0.0  # 0-1 relevance score
+    score: int = 0
+    relevance: float = 0.0
     timestamp: datetime = field(default_factory=datetime.utcnow)
     
     def __hash__(self):
@@ -77,7 +120,7 @@ class SearchResult:
     title: str
     url: str
     snippet: str
-    source: str  # searxng, duckduckgo, stackoverflow, github
+    source: str
     score: int = 0
     code_blocks: List[CodeSnippet] = field(default_factory=list)
 
@@ -99,135 +142,134 @@ class QrawlerResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class CodeExtractor:
-    """Extract code blocks from HTML and text."""
+    """Extract code snippets from HTML pages."""
     
-    # Language detection patterns
-    LANG_PATTERNS = {
-        'python': [r'import\s+\w+', r'from\s+\w+\s+import', r'def\s+\w+\s*\(', r'class\s+\w+[\(:]'],
-        'yaml': [r'^\w+:\s*$', r'^\s*-\s+\w+:', r'^\s+\w+:\s+\w+'],
-        'json': [r'^\s*\{', r'^\s*\[', r'"[\w_]+"\s*:'],
-        'bash': [r'^#!/bin/bash', r'^\s*\$\s+', r'\becho\s+', r'\bsudo\s+'],
-        'shell': [r'^#!/bin/sh', r'\bexport\s+\w+=', r'\bsource\s+'],
+    LANGUAGE_HINTS = {
+        'python': ['python', 'py', 'python3', 'lang-python', 'language-python'],
+        'javascript': ['javascript', 'js', 'lang-js', 'language-javascript'],
+        'bash': ['bash', 'shell', 'sh', 'lang-bash', 'language-bash'],
+        'yaml': ['yaml', 'yml', 'lang-yaml'],
+        'json': ['json', 'lang-json'],
+        'sql': ['sql', 'lang-sql'],
+        'go': ['go', 'golang', 'lang-go'],
+        'rust': ['rust', 'lang-rust'],
     }
     
     @classmethod
-    def detect_language(cls, code: str) -> str:
-        """Detect the programming language of a code snippet."""
-        if not code.strip():
-            return 'unknown'
+    def detect_language(cls, code: str, classes: List[str] = None) -> str:
+        """Detect programming language."""
+        classes = classes or []
+        classes_lower = [c.lower() for c in classes]
         
-        scores = {}
-        for lang, patterns in cls.LANG_PATTERNS.items():
-            score = sum(1 for p in patterns if re.search(p, code, re.MULTILINE | re.IGNORECASE))
-            if score > 0:
-                scores[lang] = score
+        for lang, hints in cls.LANGUAGE_HINTS.items():
+            for hint in hints:
+                if any(hint in c for c in classes_lower):
+                    return lang
         
-        return max(scores, key=scores.get) if scores else 'unknown'
+        code_lower = code.lower()
+        if 'def ' in code and ':' in code:
+            return 'python'
+        if 'import ' in code and ('from ' in code or 'as ' in code):
+            return 'python'
+        if 'function ' in code or 'const ' in code or 'let ' in code:
+            return 'javascript'
+        if code.strip().startswith('#!/bin/bash'):
+            return 'bash'
+        
+        return 'unknown'
     
     @classmethod
-    def extract_from_html(cls, html: str, target_lang: str = None) -> List[CodeSnippet]:
-        """Extract code blocks from HTML content."""
-        if HAS_BS4:
-            return cls._extract_with_bs4(html, target_lang)
-        return cls._extract_with_regex(html, target_lang)
-    
-    @classmethod
-    def _extract_with_bs4(cls, html: str, target_lang: str = None) -> List[CodeSnippet]:
-        """Extract using BeautifulSoup."""
+    def extract_from_html(cls, html: str, source_url: str = "") -> List[CodeSnippet]:
+        """Extract code snippets from HTML."""
         snippets = []
-        soup = BeautifulSoup(html, 'html.parser')
         
-        for pre in soup.find_all('pre'):
-            code_elem = pre.find('code')
-            code = code_elem.get_text() if code_elem else pre.get_text()
+        if not HAS_BS4 or not html:
+            return snippets
+        
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
             
-            if len(code.strip()) < 20:
-                continue
+            # Strategy 1: <pre><code> blocks
+            for pre in soup.find_all('pre'):
+                code_elem = pre.find('code')
+                if code_elem:
+                    code_text = code_elem.get_text(strip=True)
+                    if len(code_text) > 20:
+                        classes = code_elem.get('class', [])
+                        if isinstance(classes, str):
+                            classes = [classes]
+                        
+                        lang = cls.detect_language(code_text, classes)
+                        snippets.append(CodeSnippet(
+                            code=code_text,
+                            language=lang,
+                            source_url=source_url,
+                            source_name=cls._get_source_name(source_url)
+                        ))
             
-            lang = 'unknown'
-            classes = (code_elem or pre).get('class', [])
-            for c in classes:
-                if 'language-' in c:
-                    lang = c.replace('language-', '')
-                    break
-                elif 'lang-' in c:
-                    lang = c.replace('lang-', '')
-                    break
+            # Strategy 2: Highlight.js blocks
+            for hljs in soup.find_all(class_=re.compile(r'hljs|highlight')):
+                code_text = hljs.get_text(strip=True)
+                if len(code_text) > 20:
+                    classes = hljs.get('class', [])
+                    if isinstance(classes, str):
+                        classes = [classes]
+                    
+                    lang = cls.detect_language(code_text, classes)
+                    if not any(s.code == code_text for s in snippets):
+                        snippets.append(CodeSnippet(
+                            code=code_text,
+                            language=lang,
+                            source_url=source_url,
+                            source_name=cls._get_source_name(source_url)
+                        ))
             
-            if lang == 'unknown':
-                lang = cls.detect_language(code)
+            _log(f"Extracted {len(snippets)} snippets from {source_url[:50]}...")
             
-            if target_lang and lang != target_lang and lang != 'unknown':
-                continue
-            
-            snippets.append(CodeSnippet(
-                code=code.strip(),
-                language=lang,
-                source_url='',
-                source_name='html'
-            ))
+        except Exception as e:
+            _log(f"HTML parsing error: {e}", "ERROR")
         
         return snippets
     
     @classmethod
-    def _extract_with_regex(cls, html: str, target_lang: str = None) -> List[CodeSnippet]:
-        """Fallback extraction using regex."""
+    def extract_from_markdown(cls, text: str, source_url: str = "") -> List[CodeSnippet]:
+        """Extract code from markdown."""
         snippets = []
+        pattern = r'```(\w*)\n(.*?)```'
+        matches = re.findall(pattern, text, re.DOTALL)
         
-        patterns = [
-            r'<pre[^>]*><code[^>]*>(.*?)</code></pre>',
-            r'<pre[^>]*>(.*?)</pre>',
-        ]
-        
-        for pattern in patterns:
-            for match in re.finditer(pattern, html, re.DOTALL | re.IGNORECASE):
-                code = match.group(1)
-                code = re.sub(r'<[^>]+>', '', code)
-                code = code.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
-                
-                if len(code.strip()) < 20:
-                    continue
-                
-                lang = cls.detect_language(code)
-                if target_lang and lang != target_lang and lang != 'unknown':
-                    continue
-                
+        for lang, code in matches:
+            code = code.strip()
+            if len(code) > 20:
+                if not lang:
+                    lang = cls.detect_language(code)
                 snippets.append(CodeSnippet(
-                    code=code.strip(),
-                    language=lang,
-                    source_url='',
-                    source_name='html'
+                    code=code,
+                    language=lang or 'unknown',
+                    source_url=source_url,
+                    source_name=cls._get_source_name(source_url)
                 ))
         
         return snippets
     
     @classmethod
-    def extract_from_markdown(cls, text: str, target_lang: str = None) -> List[CodeSnippet]:
-        """Extract code blocks from Markdown text."""
-        snippets = []
+    def _get_source_name(cls, url: str) -> str:
+        """Get source name from URL."""
+        if not url:
+            return 'unknown'
         
-        pattern = r'```(\w+)?\n(.*?)```'
-        for match in re.finditer(pattern, text, re.DOTALL):
-            lang = match.group(1) or 'unknown'
-            code = match.group(2)
-            
-            if len(code.strip()) < 20:
-                continue
-            
-            if lang == 'unknown':
-                lang = cls.detect_language(code)
-            
-            if target_lang and lang != target_lang and lang != 'unknown':
-                continue
-            
-            snippets.append(CodeSnippet(
-                code=code.strip(),
-                language=lang,
-                source_url='',
-                source_name='markdown'
-            ))
+        domain = urlparse(url).netloc.lower()
         
-        return snippets
+        if 'stackoverflow.com' in domain:
+            return 'stackoverflow'
+        elif 'github.com' in domain:
+            return 'github'
+        elif 'realpython.com' in domain:
+            return 'realpython'
+        elif 'geeksforgeeks.org' in domain:
+            return 'geeksforgeeks'
+        else:
+            return domain.split('.')[0]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -236,76 +278,89 @@ class CodeExtractor:
 
 class Qrawler:
     """
-    Qrawler: Multi-engine web search for code harvesting.
+    v2.2.1: Web Search with SSL FIX and Docker Networking!
     
-    Searches multiple backends in parallel and aggregates results.
-    Extracts code snippets from search results.
-    Caches results for offline reuse.
+    Fixes:
+    - ssl=False explicitly in connectors
+    - POST requests verified working
     
-    Works in degraded mode without network dependencies.
+    v2.2.5: SIMPLIFIED! Just use host gateway port 8888 - no docker networking complexity!
     """
     
     def __init__(self, config: dict = None):
-        self.config = config or {}
-        qrawler_cfg = self.config.get('qrawler', {})
+        config = config or {}
+        qrawler_cfg = config.get('qrawler', config.get('mindstaq', {}).get('qrawler', {}))
         
-        # SearXNG configuration
-        self.searxng_url = qrawler_cfg.get('searxng_url') or os.environ.get('SEARXNG_URL', 'http://localhost:8888')
+        # v2.2.5: SIMPLE SearXNG configuration - host gateway port 8888!
+        # Default to 172.17.0.1:8888 which is Docker's bridge gateway to host
+        self.searxng_url = qrawler_cfg.get('searxng_url', 'http://172.17.0.1:8888')
+        self.enabled = qrawler_cfg.get('enabled', True)
         
         # Cache configuration
-        self.cache_dir = Path(qrawler_cfg.get('cache_dir', '/tmp/qrawler_cache'))
-        self.cache_ttl = qrawler_cfg.get('cache_ttl_hours', 24)
+        cache_dir = qrawler_cfg.get('cache_dir', '/tmp/qrawler_cache')
+        self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_ttl = qrawler_cfg.get('cache_ttl_hours', 24)
         
-        # Target languages
-        self.target_languages = qrawler_cfg.get('languages', ['python', 'yaml', 'json', 'bash', 'shell'])
+        # Request configuration
+        self.timeout = qrawler_cfg.get('timeout', 15)
+        self.max_fetch = qrawler_cfg.get('max_fetch', 5)
         
-        # Check what's available
-        self.has_network = HAS_AIOHTTP
-        self.has_ddg = HAS_DDGS
+        # Priority sites
+        self.priority_sites = [
+            'stackoverflow.com',
+            'github.com',
+            'realpython.com',
+            'geeksforgeeks.org',
+        ]
+        
+        _log(f"Qrawler v2.2.8: SearXNG={self.searxng_url}, enabled={self.enabled}")
     
     def _cache_key(self, query: str) -> str:
-        """Generate cache key for a query."""
         return hashlib.md5(query.encode()).hexdigest()
     
     def _get_cached(self, query: str) -> Optional[QrawlerResult]:
-        """Get cached result if available and not expired."""
+        """Get cached result if available."""
         cache_file = self.cache_dir / f"{self._cache_key(query)}.json"
-        if cache_file.exists():
-            try:
-                with open(cache_file, 'r') as f:
-                    data = json.load(f)
-                cached_time = datetime.fromisoformat(data.get('timestamp', '2000-01-01'))
-                if datetime.utcnow() - cached_time < timedelta(hours=self.cache_ttl):
-                    result = QrawlerResult(
-                        query=data['query'],
-                        total_found=data.get('total_found', 0),
-                        search_time_ms=data.get('search_time_ms', 0),
-                        engines_used=data.get('engines_used', [])
-                    )
-                    for snippet_data in data.get('code_snippets', []):
-                        result.code_snippets.append(CodeSnippet(
-                            code=snippet_data['code'],
-                            language=snippet_data['language'],
-                            source_url=snippet_data['source_url'],
-                            source_name=snippet_data['source_name'],
-                            title=snippet_data.get('title', ''),
-                            score=snippet_data.get('score', 0)
-                        ))
-                    return result
-            except Exception:
-                pass
+        
+        if not cache_file.exists():
+            return None
+        
+        try:
+            with open(cache_file, 'r') as f:
+                data = json.load(f)
+            
+            cached_time = datetime.fromisoformat(data['timestamp'])
+            if datetime.utcnow() - cached_time < timedelta(hours=self.cache_ttl):
+                _log(f"Cache hit: {query[:30]}...")
+                result = QrawlerResult(
+                    query=data['query'],
+                    total_found=data.get('total_found', 0),
+                    engines_used=data.get('engines_used', ['cache'])
+                )
+                for snippet_data in data.get('code_snippets', []):
+                    result.code_snippets.append(CodeSnippet(
+                        code=snippet_data['code'],
+                        language=snippet_data['language'],
+                        source_url=snippet_data['source_url'],
+                        source_name=snippet_data['source_name'],
+                        score=snippet_data.get('score', 0)
+                    ))
+                return result
+        except Exception as e:
+            _log(f"Cache read error: {e}", "WARN")
+        
         return None
     
     def _save_cache(self, result: QrawlerResult):
         """Save result to cache."""
         cache_file = self.cache_dir / f"{self._cache_key(result.query)}.json"
+        
         try:
             data = {
                 'query': result.query,
                 'timestamp': datetime.utcnow().isoformat(),
                 'total_found': result.total_found,
-                'search_time_ms': result.search_time_ms,
                 'engines_used': result.engines_used,
                 'code_snippets': [
                     {
@@ -313,7 +368,6 @@ class Qrawler:
                         'language': s.language,
                         'source_url': s.source_url,
                         'source_name': s.source_name,
-                        'title': s.title,
                         'score': s.score
                     }
                     for s in result.code_snippets
@@ -321,261 +375,323 @@ class Qrawler:
             }
             with open(cache_file, 'w') as f:
                 json.dump(data, f)
-        except Exception:
-            pass
+        except Exception as e:
+            _log(f"Cache write error: {e}", "WARN")
     
     async def _search_searxng(self, query: str, max_results: int = 10) -> List[SearchResult]:
-        """Search using SearXNG instance."""
+        """
+        v2.2.5: SIMPLIFIED! Search SearXNG using host gateway port 8888.
+        No more docker networking complexity - just use the configured URL directly.
+        """
         results = []
         
         if not HAS_AIOHTTP:
+            _log("aiohttp not available", "ERROR")
             return results
         
+        # v2.2.5: Use configured URL directly (defaults to 172.17.0.1:8888)
+        search_url = f"{self.searxng_url}/search"
+        _log(f"SearXNG POST to {search_url}: {query[:40]}...")
+        
         try:
-            url = f"{self.searxng_url}/search"
-            params = {
+            # v2.2.1: CRITICAL - ssl=False in connector!
+            connector = aiohttp.TCPConnector(ssl=False)
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            
+            # POST with form data (verified working!)
+            form_data = {
                 'q': query,
                 'format': 'json',
-                'categories': 'it',
+                'categories': 'it'
             }
             
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            headers = {
+                'User-Agent': 'QonQrete/2.2.7 (Code Search)',
+                'Accept': 'application/json'
+            }
+            
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                async with session.post(search_url, data=form_data, headers=headers) as response:
+                    _log(f"SearXNG response: {response.status}")
+                    
                     if response.status == 200:
                         data = await response.json()
-                        for item in data.get('results', [])[:max_results]:
+                        searxng_results = data.get('results', [])
+                        _log(f"SearXNG returned {len(searxng_results)} results")
+                        
+                        for item in searxng_results[:max_results]:
+                            url = item.get('url', '')
+                            score = int(item.get('score', 0) * 100)
+                            
+                            # Boost priority sites
+                            for i, site in enumerate(self.priority_sites):
+                                if site in url:
+                                    score += (len(self.priority_sites) - i) * 10
+                                    break
+                            
                             results.append(SearchResult(
                                 title=item.get('title', ''),
-                                url=item.get('url', ''),
+                                url=url,
                                 snippet=item.get('content', ''),
                                 source='searxng',
-                                score=int(item.get('score', 0) * 100) if item.get('score') else 0
+                                score=score
                             ))
-        except Exception:
-            pass
+                    else:
+                        text = await response.text()
+                        _log(f"SearXNG error {response.status}: {text[:100]}", "ERROR")
+        
+        except asyncio.TimeoutError:
+            _log(f"SearXNG timeout after {self.timeout}s", "WARN")
+        except Exception as e:
+            _log(f"SearXNG error: {type(e).__name__}: {e}", "ERROR")
         
         return results
     
-    def _search_ddg_sync(self, query: str, max_results: int = 10) -> List[SearchResult]:
-        """Search using DuckDuckGo (synchronous)."""
+    async def _search_duckduckgo(self, query: str, max_results: int = 10) -> List[SearchResult]:
+        """v2.2.1: DuckDuckGo fallback with proper error handling."""
         results = []
         
         if not HAS_DDGS:
+            _log("duckduckgo-search not installed", "WARN")
             return results
+        
+        _log(f"DuckDuckGo query: {query[:40]}...")
         
         try:
-            ddg_results = list(DDGS().text(query, max_results=max_results))
+            loop = asyncio.get_event_loop()
+            ddg_results = await loop.run_in_executor(
+                None,
+                lambda: list(DDGS().text(query, max_results=max_results))
+            )
+            
+            _log(f"DuckDuckGo returned {len(ddg_results)} results")
+            
             for item in ddg_results:
+                url = item.get('href', '')
+                score = 10
+                
+                for i, site in enumerate(self.priority_sites):
+                    if site in url:
+                        score += (len(self.priority_sites) - i) * 10
+                        break
+                
                 results.append(SearchResult(
                     title=item.get('title', ''),
-                    url=item.get('href', ''),
+                    url=url,
                     snippet=item.get('body', ''),
-                    source='duckduckgo'
+                    source='duckduckgo',
+                    score=score
                 ))
-        except Exception:
-            pass
+        
+        except Exception as e:
+            _log(f"DuckDuckGo error: {type(e).__name__}: {e}", "ERROR")
         
         return results
     
-    def _search_site_specific_sync(self, query: str, sites: List[str], max_per_site: int = 3) -> List[SearchResult]:
-        """Search specific high-quality code sites via DuckDuckGo site: operator."""
-        results = []
+    async def _fetch_page(self, url: str) -> Optional[str]:
+        """v2.2.1: Fetch page with SSL disabled."""
+        if not HAS_AIOHTTP:
+            return None
         
-        if not HAS_DDGS:
-            return results
+        _log(f"Fetching: {url[:50]}...")
         
-        for site in sites:
-            try:
-                site_query = f"site:{site} {query}"
-                ddg_results = list(DDGS().text(site_query, max_results=max_per_site))
-                for item in ddg_results:
-                    # Boost score for high-quality sites
-                    score_boost = {
-                        'stackoverflow.com': 50,
-                        'github.com': 40,
-                        'realpython.com': 35,
-                        'geeksforgeeks.org': 30,
-                        'rosettacode.org': 45,  # Algorithm gold mine
-                        'docs.python.org': 40,
-                        'w3schools.com': 20,
-                    }.get(site, 10)
-                    
-                    results.append(SearchResult(
-                        title=item.get('title', ''),
-                        url=item.get('href', ''),
-                        snippet=item.get('body', ''),
-                        source=f'ddg:{site}',
-                        score=score_boost
-                    ))
-            except Exception:
-                pass
+        try:
+            # v2.2.1: SSL=False for all fetches
+            connector = aiohttp.TCPConnector(ssl=False)
+            timeout = aiohttp.ClientTimeout(total=10)
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
+            }
+            
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                async with session.get(url, headers=headers, allow_redirects=True) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'text/html' in content_type:
+                            html = await response.text()
+                            _log(f"Fetched {len(html)} bytes")
+                            return html
+                    else:
+                        _log(f"Fetch failed {response.status}", "WARN")
         
-        return results
+        except asyncio.TimeoutError:
+            _log(f"Fetch timeout: {url[:40]}", "WARN")
+        except Exception as e:
+            _log(f"Fetch error: {type(e).__name__}", "ERROR")
+        
+        return None
     
-    def _build_smart_queries(self, base_query: str) -> List[Tuple[str, List[str]]]:
-        """Build smart queries targeting specific sites based on query type.
-        
-        Returns list of (query, sites_to_search) tuples.
+    async def _fetch_and_extract_code(self, results: List[SearchResult]) -> List[CodeSnippet]:
         """
-        queries = []
-        base_lower = base_query.lower()
+        v2.2.1: Fetch pages and extract code.
+        v2.2.8: Added DOMAIN FILTERING to skip non-Python sources!
+        """
+        snippets = []
         
-        # Always search general first
-        queries.append((base_query, []))
+        if not results:
+            return snippets
         
-        # Algorithm-related: target Rosetta Code and GeeksForGeeks
-        algo_keywords = ['algorithm', 'sort', 'search', 'tree', 'graph', 'hash', 
-                        'dynamic', 'recursive', 'binary', 'linked list', 'queue', 'stack']
-        if any(kw in base_lower for kw in algo_keywords):
-            queries.append((f"{base_query} implementation", 
-                          ['rosettacode.org', 'geeksforgeeks.org']))
+        # v2.2.8: DOMAIN FILTERING!
+        # These domains return garbage for Python code searches:
+        # - MDN (Mozilla Developer Network) = JavaScript/HTML/CSS docs
+        # - Docker Hub = Container images, not code
+        # - Hackage = Haskell packages
+        # - ArchWiki/Gentoo = Linux docs, not Python
+        BLOCKED_DOMAINS = {
+            'developer.mozilla.org',  # MDN - JS/HTML/CSS docs
+            'hub.docker.com',         # Docker Hub - no code
+            'hackage.haskell.org',    # Haskell - wrong language!
+            'wiki.archlinux.org',     # Linux docs
+            'wiki.gentoo.org',        # Linux docs  
+            'docs.microsoft.com',     # Microsoft docs
+            'learn.microsoft.com',    # Microsoft docs
+            'npmjs.com',              # npm - JavaScript
+            'www.npmjs.com',          # npm - JavaScript
+            'crates.io',              # Rust packages
+            'rubygems.org',           # Ruby gems
+            'packagist.org',          # PHP packages
+            'nuget.org',              # .NET packages
+            'mvnrepository.com',      # Java/Maven
+        }
         
-        # Web/API: target Real Python and docs
-        web_keywords = ['api', 'rest', 'http', 'flask', 'django', 'fastapi', 'request', 'json']
-        if any(kw in base_lower for kw in web_keywords):
-            queries.append((f"{base_query} example", 
-                          ['realpython.com', 'stackoverflow.com']))
+        # v2.2.8: PRIORITIZE these domains for Python code:
+        PRIORITY_DOMAINS = {
+            'github.com': 10,           # Best source!
+            'stackoverflow.com': 8,     # Good code examples
+            'gitlab.com': 7,            # Code repos
+            'bitbucket.org': 6,         # Code repos
+            'realpython.com': 5,        # Python tutorials
+            'docs.python.org': 5,       # Official Python docs
+            'pypi.org': 4,              # Python packages
+            'readthedocs.io': 4,        # Documentation
+            'gist.github.com': 8,       # Code snippets
+        }
         
-        # Database: target specific docs
-        db_keywords = ['database', 'sql', 'postgres', 'mysql', 'sqlite', 'mongodb', 'redis']
-        if any(kw in base_lower for kw in db_keywords):
-            queries.append((f"python {base_query}", 
-                          ['stackoverflow.com', 'realpython.com']))
+        # Filter and re-score results
+        filtered_results = []
+        for result in results:
+            try:
+                domain = urlparse(result.url).netloc.lower()
+                
+                # Skip blocked domains
+                if domain in BLOCKED_DOMAINS:
+                    _log(f"BLOCKED: {domain} (non-Python source)")
+                    continue
+                
+                # Boost priority domains
+                for priority_domain, boost in PRIORITY_DOMAINS.items():
+                    if priority_domain in domain:
+                        result.score += boost
+                        _log(f"BOOSTED: {domain} (+{boost})")
+                        break
+                
+                filtered_results.append(result)
+            except Exception:
+                filtered_results.append(result)
         
-        # Security/crypto: careful targeting
-        security_keywords = ['encrypt', 'decrypt', 'hash', 'ssl', 'tls', 'auth', 'jwt', 'oauth']
-        if any(kw in base_lower for kw in security_keywords):
-            queries.append((f"python {base_query} secure", 
-                          ['stackoverflow.com', 'docs.python.org']))
+        if not filtered_results:
+            _log("All results filtered out - using original results")
+            filtered_results = results
         
-        # Async/concurrent: specific patterns
-        async_keywords = ['async', 'await', 'thread', 'concurrent', 'parallel', 'multiprocess']
-        if any(kw in base_lower for kw in async_keywords):
-            queries.append((f"python {base_query} example",
-                          ['realpython.com', 'stackoverflow.com']))
+        sorted_results = sorted(filtered_results, key=lambda r: r.score, reverse=True)
+        fetch_count = min(len(sorted_results), self.max_fetch)
         
-        # Shell/bash: target Unix docs
-        shell_keywords = ['bash', 'shell', 'script', 'command', 'linux', 'unix']
-        if any(kw in base_lower for kw in shell_keywords):
-            queries.append((f"bash {base_query}",
-                          ['stackoverflow.com']))
+        _log(f"Fetching top {fetch_count} pages (filtered from {len(results)})...")
         
-        return queries
+        for result in sorted_results[:fetch_count]:
+            html = await self._fetch_page(result.url)
+            
+            if html:
+                page_snippets = CodeExtractor.extract_from_html(html, result.url)
+                
+                if 'github.com' in result.url:
+                    md_snippets = CodeExtractor.extract_from_markdown(html, result.url)
+                    page_snippets.extend(md_snippets)
+                
+                for snippet in page_snippets:
+                    snippet.score = result.score
+                    snippet.title = result.title
+                
+                snippets.extend(page_snippets[:3])
+        
+        _log(f"Total extracted: {len(snippets)} snippets")
+        return snippets
     
     async def search(self, query: str, max_results: int = 10, use_cache: bool = True) -> QrawlerResult:
         """
-        Search all backends for code snippets with smart targeting.
-        
-        Args:
-            query: Search query
-            max_results: Max results per backend
-            use_cache: Whether to use cached results
-        
-        Returns:
-            QrawlerResult with aggregated code snippets
+        v2.2.1: Main search with SSL fix and Docker networking.
         """
         start_time = datetime.utcnow()
         
-        # Check cache first
         if use_cache:
             cached = self._get_cached(query)
             if cached:
-                cached.search_time_ms = 0
                 return cached
         
         result = QrawlerResult(query=query)
         all_results: List[SearchResult] = []
         
-        # Try SearXNG (primary, best results)
+        _log("=" * 50)
+        _log(f"SEARCH: {query}")
+        _log("=" * 50)
+        
+        # Try SearXNG first
         searxng_results = await self._search_searxng(query, max_results)
         if searxng_results:
             result.engines_used.append('searxng')
             all_results.extend(searxng_results)
         
-        # Build smart queries based on task type
-        smart_queries = self._build_smart_queries(query)
-        
-        # Execute smart site-specific searches
-        try:
-            loop = asyncio.get_event_loop()
-            
-            # General DuckDuckGo search
-            ddg_results = await loop.run_in_executor(None, self._search_ddg_sync, query, max_results)
+        # Fallback to DuckDuckGo
+        if len(all_results) < 3:
+            _log("Trying DuckDuckGo fallback...")
+            ddg_results = await self._search_duckduckgo(query, max_results)
             if ddg_results:
                 result.engines_used.append('duckduckgo')
                 all_results.extend(ddg_results)
-            
-            # Site-specific searches for relevant query types
-            for smart_query, target_sites in smart_queries[1:]:  # Skip first (general)
-                if target_sites:
-                    site_results = await loop.run_in_executor(
-                        None, self._search_site_specific_sync, smart_query, target_sites, 3
-                    )
-                    if site_results:
-                        for site in target_sites:
-                            if f'ddg:{site}' not in result.engines_used:
-                                result.engines_used.append(f'ddg:{site}')
-                        all_results.extend(site_results)
-        except Exception:
-            pass
         
+        result.total_found = len(all_results)
         result.results = all_results
         
-        # Extract code snippets (would need to fetch URLs - simplified here)
-        # In a full implementation, we'd fetch each URL and extract code
+        if all_results:
+            snippets = await self._fetch_and_extract_code(all_results)
+            result.code_snippets = snippets
+        else:
+            result.errors.append("No results from any engine")
         
         result.search_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
         
-        # Cache result
-        if use_cache and result.code_snippets:
+        if result.code_snippets:
             self._save_cache(result)
         
+        _log(f"DONE: {len(result.code_snippets)} snippets in {result.search_time_ms}ms")
+        
         return result
-    
-    def search_sync(self, query: str, max_results: int = 10, use_cache: bool = True) -> QrawlerResult:
-        """Synchronous wrapper for search."""
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        return loop.run_until_complete(self.search(query, max_results, use_cache))
-    
-    def build_query(self, task: str, context: dict = None) -> str:
-        """Build an optimized search query from a task description."""
-        context = context or {}
-        query_parts = []
-        
-        lang = context.get('language', 'python')
-        query_parts.append(lang)
-        
-        task_clean = re.sub(r'[^\w\s]', ' ', task.lower())
-        stopwords = {'the', 'a', 'an', 'to', 'for', 'and', 'or', 'in', 'on', 'at', 'is', 'are'}
-        task_words = [w for w in task_clean.split() if w not in stopwords and len(w) > 2]
-        query_parts.extend(task_words[:5])
-        
-        query_parts.append('example')
-        
-        return ' '.join(query_parts)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TESTING
+# TEST
 # ═══════════════════════════════════════════════════════════════════════════════
+
+async def test_qrawler():
+    """Test Qrawler."""
+    print("=" * 70)
+    print("QRAWLER v2.2.1 TEST")
+    print("=" * 70)
+    
+    qrawler = Qrawler()
+    result = await qrawler.search("python nmap scanner subprocess")
+    
+    print(f"\nEngines: {result.engines_used}")
+    print(f"Results: {result.total_found}")
+    print(f"Snippets: {len(result.code_snippets)}")
+    print(f"Time: {result.search_time_ms}ms")
+    
+    if result.code_snippets:
+        print(f"\nTop snippet ({result.code_snippets[0].source_name}):")
+        print(result.code_snippets[0].code[:200])
+
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("QRAWLER STATUS")
-    print("=" * 60)
-    print(f"aiohttp available: {HAS_AIOHTTP}")
-    print(f"BeautifulSoup available: {HAS_BS4}")
-    print(f"DuckDuckGo available: {HAS_DDGS}")
-    
-    # Test code extraction
-    html = '<pre><code class="language-python">def hello(): return "world"</code></pre>'
-    snippets = CodeExtractor.extract_from_html(html)
-    print(f"\nCode extraction test: {len(snippets)} snippets found")
-    if snippets:
-        print(f"  Language: {snippets[0].language}")
-        print(f"  Code: {snippets[0].code[:50]}...")
+    asyncio.run(test_qrawler())

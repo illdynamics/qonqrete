@@ -253,7 +253,7 @@ class Qomputator:
         if result.total <= self.tier_0_max:
             result.tier = Tier.QRYSTALLIZER
         elif result.total <= self.tier_1_max:
-            result.tier = Tier.SQAVANGER
+            result.tier = Tier.SQAVENGER
         else:
             result.tier = Tier.QOMBINATOR
         
