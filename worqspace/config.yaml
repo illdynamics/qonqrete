@@ -1,4 +1,31 @@
-# QonQrete Configuration v1.0.0
+# QonQrete Configuration v1.0.2-stable
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# v1.0.2 NEW: INVERTED BRIQ SENSITIVITY SCALE! 🔄
+# Higher number = MORE briqs (more intuitive!)
+#
+# BRIQ SENSITIVITY SCALE (0-16):
+#   0  = Monolithic (1 briq)         - Single giant briq
+#   1  = Very Broad (2-3 briqs)      - Major chunks only
+#   2  = Broad (3-5 briqs)           - Large components
+#   3  = Feature-level (5-8 briqs)   - Per-feature
+#   4  = Component-level (8-12)      - Per-component
+#   5  = Balanced (10-15 briqs)      ← RECOMMENDED DEFAULT
+#   6  = Standard (15-20 briqs)      - Most files separate
+#   7  = High (20-30 briqs)          - Detailed split
+#   8  = Very High (30-40 briqs)     - Fine-grained
+#   9  = Atomic (40-60 briqs)        - Maximum detail
+#  10  = Ultra (50-75 briqs)         - Enterprise projects
+#  11  = Mega (60-90 briqs)          - Large enterprise
+#  12  = Hyper (75-110 briqs)        - Complex architectures
+#  13  = Extreme (90-130 briqs)      - Multi-layer systems
+#  14  = Maximum (110-160 briqs)     - Critical systems
+#  15  = Insane (130-200 briqs)      - Mega specifications
+#  16  = QONQRETE MAX (160-250)      - Enterprise mega-tasqs!
+#
+# v1.0.2 NEW: Non-interactive qonstruction save with -n flag
+# v1.0.2 NEW: Qontrabender only active when using Gemini for construqtor
+#
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -52,6 +79,13 @@ verification:
 
 agents:
   # ═══════════════════════════════════════════════════════════════════════════
+  # TASQLEVELER - Task Enhancement (OPTIONAL)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # tasqleveler:
+  #   provider: local
+  #   model: tasqleveler
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # INSTRUQTOR - Briq Planning
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
@@ -102,6 +136,8 @@ agents:
     model: qompressor
 
   qontrabender:
+    # NOTE: Qontrabender is ONLY active when construqtor uses Gemini!
+    # It's specifically designed for Gemini's context caching feature.
     provider: local
     model: qontrabender
     
@@ -134,6 +170,7 @@ options:
   use_qontextor: true
 
   # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
+  # NOTE: Only works when construqtor.provider is 'gemini'!
   use_qontrabender: true
 
   # ═══════════════════════════════════════════════════════════════════════════
@@ -144,33 +181,40 @@ options:
   # false = Autonomous mode (cheqpoints disabled)
   cheqpoint: false
 
-  # Max cycles in auto-mode (recommended: 4 for simple projects, 5-6 for complex)
-  auto_cycle_limit: 6
+  # Max cycles in auto-mode (recommended: 3 for simple, 4-6 for complex)
+  auto_cycle_limit: 3
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # Generation Settings (v1.0.0 - ENFORCED Briq Ranges)
+  # Generation Settings (v1.0.2 - INVERTED ENFORCED Briq Ranges)
   # ═══════════════════════════════════════════════════════════════════════════
   
-  # Briq Granularity Control (0-9) - NOW ENFORCED!
-  # v1.0.0: Briq counts are now ENFORCED, not just hints to the AI.
+  # Briq Granularity Control (0-16) - INVERTED & ENFORCED!
+  # v1.0.2: Higher number = MORE briqs! (more intuitive)
   #
   # SENSITIVITY SCALE:
-  #   9 = Monolithic    (exactly 1 briq)
-  #   8 = Very Broad    (2-3 briqs)
-  #   7 = Broad         (3-5 briqs)   ← RECOMMENDED DEFAULT
-  #   6 = Feature-level (5-8 briqs)
-  #   5 = Component     (8-12 briqs)
-  #   4 = Balanced      (10-15 briqs)
-  #   3 = Standard      (15-20 briqs)
-  #   2 = High Gran.    (20-30 briqs)
-  #   1 = Very High     (30-40 briqs)
-  #   0 = Atomic        (40-60 briqs)
+  #   0  = Monolithic    (exactly 1 briq)
+  #   1  = Very Broad    (2-3 briqs)
+  #   2  = Broad         (3-5 briqs)
+  #   3  = Feature-level (5-8 briqs)
+  #   4  = Component     (8-12 briqs)
+  #   5  = Balanced      (10-15 briqs)  ← RECOMMENDED DEFAULT
+  #   6  = Standard      (15-20 briqs)
+  #   7  = High Gran.    (20-30 briqs)
+  #   8  = Very High     (30-40 briqs)
+  #   9  = Atomic        (40-60 briqs)
+  #  10  = Ultra         (50-75 briqs)
+  #  11  = Mega          (60-90 briqs)
+  #  12  = Hyper         (75-110 briqs)
+  #  13  = Extreme       (90-130 briqs)
+  #  14  = Maximum       (110-160 briqs)
+  #  15  = Insane        (130-200 briqs)
+  #  16  = QONQRETE MAX  (160-250 briqs)
   #
   # RECOMMENDATIONS:
-  #   Simple projects (web server, API): sens=7, cycles=4
-  #   Medium projects (full-stack app):  sens=6, cycles=5
-  #   Complex projects (multi-service):  sens=5, cycles=6
-  briq_sensitivity: 3
+  #   Simple projects (web server, API): sens=5, cycles=3
+  #   Medium projects (full-stack app):  sens=6, cycles=4
+  #   Complex projects (multi-service):  sens=7, cycles=5
+  briq_sensitivity: 6
 
   # Operational Mode
   mode: program

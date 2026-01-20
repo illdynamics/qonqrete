@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v1.0.0-stable` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.2-stable` (See `VERSION` file for the canonical version).
 
 > **Note on Experimental Features:**
 >
@@ -25,7 +25,45 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ---
 
-## What's New in v1.0.0 🎉
+## What's New in v1.0.2 🎉
+
+### 🔄 INVERTED BRIQ SENSITIVITY SCALE
+
+The briq sensitivity scale has been **INVERTED** for more intuitive usage:
+- **Higher number = MORE briqs** (no more confusion!)
+- Extended scale: **0-16** (was 0-9)
+- New enterprise-level granularity options (10-16)
+
+### 📊 NEW BRIQ SENSITIVITY SCALE (INVERTED!)
+
+| Level | Name | Briq Range | Use Case |
+|-------|------|------------|----------|
+| **0** | Monolithic | 1 | Single-file scripts |
+| **1** | Very Broad | 2-3 | Backend/Frontend split |
+| **2** | Broad | 3-5 | Large components |
+| **3** | Feature | 5-8 | Feature-level |
+| **4** | Component | 8-12 | Component-level |
+| **5** | Balanced | 10-15 | **← RECOMMENDED DEFAULT** |
+| **6** | Standard | 15-20 | Most files separate |
+| **7** | High | 20-30 | Detailed split |
+| **8** | Very High | 30-40 | Fine-grained |
+| **9** | Atomic | 40-60 | Maximum detail |
+| **10-16** | Enterprise | 50-250 | Mega-projects |
+
+### 🆕 NON-INTERACTIVE QONSTRUCTION SAVE
+
+New `-n/--qonstruction-name` flag for automated pipelines:
+```bash
+./qonqrete.sh run -a -b 6 -c 3 -n myproject
+```
+
+### 🎯 GEMINI-ONLY QONTRABENDER
+
+Qontrabender now only activates when using Gemini as the construqtor provider (it's for Gemini's context caching).
+
+---
+
+## Previous Release: v1.0.0 🎉
 
 ### 🚨 PRODUCTION RELEASE - ENFORCED BRIQ SENSITIVITY
 
@@ -37,13 +75,13 @@ The first stable production release! This fixes the critical briq sensitivity in
 - Too few briqs → System retries with stronger prompt
 - Too many briqs → System merges briqs automatically
 
-### 📊 NEW BRIQ SENSITIVITY SCALE
+### 📊 OLD BRIQ SENSITIVITY SCALE (v1.0.0 - DEPRECATED)
 
 | Level | Name | Briq Range | Use Case |
 |-------|------|------------|----------|
 | **9** | Monolithic | 1 | Single-file scripts |
 | **8** | Very Broad | 2-3 | Backend/Frontend split |
-| **7** | Broad | 3-5 | **RECOMMENDED DEFAULT** |
+| **7** | Broad | 3-5 | **OLD DEFAULT** |
 | **6** | Feature | 5-8 | Feature-level decomposition |
 | **5** | Component | 8-12 | Component-level |
 | **4** | Balanced | 10-15 | Medium complexity |
