@@ -655,6 +655,21 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                     continue
                 if name == 'qontrabender' and not use_qontrabender:
                     continue
+                
+                # ═══════════════════════════════════════════════════════════════
+                # v1.0.2: Skip qontrabender if NOT using Gemini for construqtor
+                # Qontrabender is specifically for Gemini's context caching feature
+                # ═══════════════════════════════════════════════════════════════
+                construqtor_cfg = agent_configs.get('construqtor', {})
+                construqtor_provider = construqtor_cfg.get('provider', 'gemini').lower()
+                
+                # Skip qontrabender unless construqtor is using Gemini
+                if name == 'qontrabender' and construqtor_provider != 'gemini':
+                    continue
+                
+                # Skip calqulator if using local construqtor (no API costs to calculate)
+                if name == 'calqulator' and construqtor_provider == 'local':
+                    continue
 
                 # --- DYNAMIC LOCAL AGENT LOADER ---
                 if provider == 'local':

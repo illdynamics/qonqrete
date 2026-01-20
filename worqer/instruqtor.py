@@ -2,8 +2,11 @@
 # worqer/instruqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InstruQtor Agent - Task Decomposition & Planning
-# v1.0.0 - ENFORCED Briq Sensitivity (Production Release)
+# v1.0.2 - INVERTED Briq Sensitivity Scale (Higher = More Briqs!)
 # ═══════════════════════════════════════════════════════════════════════════════
+#
+# v1.0.2: INVERTED BRIQ SENSITIVITY SCALE! 🔄
+# Higher number = MORE briqs (more intuitive!)
 #
 # v1.0.0 MAJOR FIX: Briq sensitivity now ENFORCES exact briq count ranges.
 # Previously, sensitivity was just a "hint" to the AI, resulting in wildly
@@ -13,17 +16,24 @@
 #   - If AI produces too few briqs → regenerate with stronger prompt
 #   - If AI produces too many briqs → merge similar briqs together
 #
-# SENSITIVITY SCALE (0-9):
-#   9 = Monolithic (exactly 1 briq)
-#   8 = Very Broad (2-3 briqs)
-#   7 = Broad (3-5 briqs) ← RECOMMENDED DEFAULT
-#   6 = Feature-level (5-8 briqs)
-#   5 = Component-level (8-12 briqs)
-#   4 = Balanced (10-15 briqs)
-#   3 = Standard (15-20 briqs)
-#   2 = High Granularity (20-30 briqs)
-#   1 = Very High Granularity (30-40 briqs)
-#   0 = Atomic (40-60 briqs)
+# BRIQ SENSITIVITY SCALE (0-16):
+#   0  = Monolithic (1 briq)         - Single giant briq
+#   1  = Very Broad (2-3 briqs)      - Major chunks only
+#   2  = Broad (3-5 briqs)           - Large components
+#   3  = Feature-level (5-8 briqs)   - Per-feature
+#   4  = Component-level (8-12)      - Per-component
+#   5  = Balanced (10-15 briqs)      ← RECOMMENDED DEFAULT
+#   6  = Standard (15-20 briqs)      - Most files separate
+#   7  = High (20-30 briqs)          - Detailed split
+#   8  = Very High (30-40 briqs)     - Fine-grained
+#   9  = Atomic (40-60 briqs)        - Maximum detail
+#  10  = Ultra (50-75 briqs)         - Enterprise projects
+#  11  = Mega (60-90 briqs)          - Large enterprise
+#  12  = Hyper (75-110 briqs)        - Complex architectures
+#  13  = Extreme (90-130 briqs)      - Multi-layer systems
+#  14  = Maximum (110-160 briqs)     - Critical systems
+#  15  = Insane (130-200 briqs)      - Mega specifications
+#  16  = QONQRETE MAX (160-250)      - Enterprise mega-tasqs!
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 import os
@@ -51,22 +61,31 @@ except ImportError:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ENFORCED BRIQ SENSITIVITY RANGES (v1.0.0)
+# ENFORCED BRIQ SENSITIVITY RANGES (v1.0.2 - INVERTED SCALE!)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Each sensitivity level has a strict (min, max, target) briq count.
 # The system will ENFORCE these ranges, not just hint at them.
+# v1.0.2: INVERTED SCALE - Higher number = More briqs!
 
 BRIQ_RANGES = {
-    9: (1, 1, 1),      # Monolithic: exactly 1 briq
-    8: (2, 3, 2),      # Very Broad: 2-3 briqs
-    7: (3, 5, 4),      # Broad: 3-5 briqs (RECOMMENDED DEFAULT)
-    6: (5, 8, 6),      # Feature-level: 5-8 briqs
-    5: (8, 12, 10),    # Component-level: 8-12 briqs
-    4: (10, 15, 12),   # Balanced: 10-15 briqs
-    3: (15, 20, 18),   # Standard: 15-20 briqs
-    2: (20, 30, 25),   # High Granularity: 20-30 briqs
-    1: (30, 40, 35),   # Very High: 30-40 briqs
-    0: (40, 60, 50),   # Atomic: 40-60 briqs (maximum decomposition)
+    0: (1, 1, 1),        # Monolithic: exactly 1 briq
+    1: (2, 3, 2),        # Very Broad: 2-3 briqs
+    2: (3, 5, 4),        # Broad: 3-5 briqs
+    3: (5, 8, 6),        # Feature-level: 5-8 briqs
+    4: (8, 12, 10),      # Component-level: 8-12 briqs
+    5: (10, 15, 12),     # Balanced: 10-15 briqs (RECOMMENDED DEFAULT)
+    6: (15, 20, 18),     # Standard: 15-20 briqs
+    7: (20, 30, 25),     # High Granularity: 20-30 briqs
+    8: (30, 40, 35),     # Very High: 30-40 briqs
+    9: (40, 60, 50),     # Atomic: 40-60 briqs
+    # v1.0.2: Extended range for mega-projects
+    10: (50, 75, 60),    # Ultra: 50-75 briqs
+    11: (60, 90, 75),    # Mega: 60-90 briqs
+    12: (75, 110, 90),   # Hyper: 75-110 briqs
+    13: (90, 130, 110),  # Extreme: 90-130 briqs
+    14: (110, 160, 135), # Maximum: 110-160 briqs
+    15: (130, 200, 165), # Insane: 130-200 briqs
+    16: (160, 250, 200), # QONQRETE MAX: 160-250 briqs (enterprise mega-tasqs)
 }
 
 
@@ -107,23 +126,33 @@ def clean_filename_slug(text: str) -> str:
 def get_sensitivity_config(level: int) -> tuple[int, int, int, str]:
     """
     Returns (min_briqs, max_briqs, target_briqs, prompt_text) for the given sensitivity level.
+    v1.0.2: INVERTED SCALE - Higher number = More briqs!
     """
-    min_b, max_b, target_b = BRIQ_RANGES.get(level, BRIQ_RANGES[7])
+    min_b, max_b, target_b = BRIQ_RANGES.get(level, BRIQ_RANGES[5])  # v1.0.2: Default to 5 (Balanced)
     
     prompts = {
-        9: f"**MANDATORY BRIQ COUNT: EXACTLY 1 BRIQ.** Output the entire project as a single monolithic briq. Do not split under any circumstances. This is non-negotiable.",
-        8: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create very broad briqs. Example: 'Backend' and 'Frontend' as separate briqs. Maximum {max_b} briqs allowed.",
-        7: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create broad briqs covering major components. Each briq should handle multiple related files. This is the recommended default for most projects.",
-        6: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create feature-level briqs. Each major feature or module gets its own briq.",
-        5: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create component-level briqs. Group related classes and utilities together.",
-        4: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create balanced briqs. Each significant class or module gets a briq.",
-        3: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Standard granularity. Most files get their own briq.",
-        2: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** High granularity. Split classes into separate briqs where logical.",
-        1: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Very high granularity. Each function or small utility gets a briq.",
-        0: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** ATOMIC decomposition. Maximum granularity - every single function, class, and config gets its own briq.",
+        # v1.0.2: INVERTED - Higher = More briqs
+        0: f"**MANDATORY BRIQ COUNT: EXACTLY 1 BRIQ.** Output the entire project as a single monolithic briq. Do not split under any circumstances. This is non-negotiable.",
+        1: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create very broad briqs. Example: 'Backend' and 'Frontend' as separate briqs. Maximum {max_b} briqs allowed.",
+        2: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create broad briqs covering major components. Each briq should handle multiple related files.",
+        3: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create feature-level briqs. Each major feature or module gets its own briq.",
+        4: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create component-level briqs. Group related classes and utilities together.",
+        5: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Create balanced briqs. Each significant class or module gets a briq. This is the RECOMMENDED DEFAULT.",
+        6: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Standard granularity. Most files get their own briq.",
+        7: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** High granularity. Split classes into separate briqs where logical.",
+        8: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** Very high granularity. Each function or small utility gets a briq.",
+        9: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** ATOMIC decomposition. Maximum granularity - every function, class, and config gets its own briq.",
+        # v1.0.2: Extended levels for mega-projects
+        10: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** ULTRA decomposition. Break down every component into fine-grained briqs.",
+        11: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** MEGA decomposition. Extremely detailed briqs for large enterprise projects.",
+        12: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** HYPER decomposition. Each method, config option, and utility gets its own briq.",
+        13: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** EXTREME decomposition. Maximum detail for complex multi-layer architectures.",
+        14: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** MAXIMUM decomposition. Near line-by-line granularity for critical systems.",
+        15: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** INSANE decomposition. Every single requirement gets dedicated attention.",
+        16: f"**MANDATORY BRIQ COUNT: {min_b}-{max_b} BRIQS (target: {target_b}).** QONQRETE MAX. Enterprise mega-project level. Use for tasqs with 1000+ requirements.",
     }
     
-    prompt = prompts.get(level, prompts[7])
+    prompt = prompts.get(level, prompts[5])  # v1.0.2: Default to 5 (Balanced)
     return min_b, max_b, target_b, prompt
 
 
@@ -265,11 +294,11 @@ def main() -> None:
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4o')
 
-    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 7))
-    except: sensitivity = 7
+    try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))  # v1.0.2: Default to 5 (Balanced)
+    except: sensitivity = 5
     
-    # Clamp sensitivity to valid range
-    sensitivity = max(0, min(9, sensitivity))
+    # Clamp sensitivity to valid range (v1.0.2: 0-16 inverted scale)
+    sensitivity = max(0, min(16, sensitivity))
 
     # Get briq range info for logging
     min_briqs, max_briqs, target_briqs, _ = get_sensitivity_config(sensitivity)
