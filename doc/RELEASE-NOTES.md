@@ -2,6 +2,135 @@
 
 ---
 
+## [v1.0.2-stable] - 2026-01-20
+
+### 🔄 INVERTED BRIQ SENSITIVITY SCALE & NON-INTERACTIVE RUNS
+
+This release brings a more intuitive briq sensitivity scale, non-interactive qonstruction saving, and Gemini-only Qontrabender activation.
+
+---
+
+#### 🆕 NEW FEATURES
+
+**1. Inverted Briq Sensitivity Scale (0-16)**
+
+The briq sensitivity scale has been INVERTED and EXTENDED for a more intuitive experience:
+- **Higher number = MORE briqs** (no more confusion!)
+- **Extended range: 0-16** (was 0-9)
+- New enterprise-level granularity options (10-16)
+
+| Level | Name | Briq Count | Use Case |
+|-------|------|------------|----------|
+| 0 | Monolithic | 1 | Single file scripts |
+| 1 | Very Broad | 2-3 | Tiny projects |
+| 2 | Broad | 3-5 | Small projects |
+| 3 | Feature-level | 5-8 | Basic apps |
+| 4 | Component-level | 8-12 | Standard apps |
+| **5** | **Balanced** | **10-15** | **← RECOMMENDED DEFAULT** |
+| 6 | Standard | 15-20 | Most files separate |
+| 7 | High | 20-30 | Detailed split |
+| 8 | Very High | 30-40 | Fine-grained |
+| 9 | Atomic | 40-60 | Maximum detail |
+| 10 | Ultra | 50-75 | Enterprise projects |
+| 11 | Mega | 60-90 | Large enterprise |
+| 12 | Hyper | 75-110 | Complex architectures |
+| 13 | Extreme | 90-130 | Multi-layer systems |
+| 14 | Maximum | 110-160 | Critical systems |
+| 15 | Insane | 130-200 | Mega specifications |
+| 16 | QONQRETE MAX | 160-250 | Enterprise mega-tasqs! |
+
+**2. Non-Interactive Qonstruction Save (-n flag)**
+
+Run fully automated pipelines with auto-saving:
+```bash
+./qonqrete.sh run -a -b 6 -c 3 -n myproject
+```
+
+- The `-n/--qonstruction-name` flag enables non-interactive qonstruction saving
+- Automatically saves to `worqspace/qonstructions/<name>`
+- Auto-deletes the original qage after saving (no more clutter!)
+- Perfect for CI/CD pipelines and automated testing
+
+**3. Gemini-Only Qontrabender**
+
+Qontrabender is now automatically skipped when NOT using Gemini as the construqtor provider:
+- Qontrabender is specifically designed for Gemini's context caching feature
+- Using it with other providers has no benefit
+- This reduces unnecessary processing for non-Gemini builds
+- Calqulator is also skipped for local construqtor (no API costs to calculate)
+
+---
+
+#### 📋 MIGRATION GUIDE
+
+**If upgrading from v1.0.1-stable or earlier:**
+
+1. **Update your briq sensitivity values!**
+   - OLD: sens=7 (3-5 briqs) → NEW: sens=2 (3-5 briqs)
+   - OLD: sens=5 (8-12 briqs) → NEW: sens=4 (8-12 briqs)
+   - Or use the new recommended default: **sens=5 or 6**
+
+2. **Update your scripts if using -b flag:**
+   ```bash
+   # OLD (v1.0.1): 7 = Broad (3-5 briqs)
+   ./qonqrete.sh run -b 7 -c 4
+   
+   # NEW (v1.0.2): 6 = Standard (15-20 briqs), 3 cycles
+   ./qonqrete.sh run -b 6 -c 3
+   ```
+
+3. **New defaults:**
+   - Default briq sensitivity: **6** (Standard: 15-20 briqs)
+   - Default cycles: **3**
+   - Default mode: **program**
+
+---
+
+#### 🔍 TECHNICAL CHANGES
+
+| Component | Change | Purpose |
+|-----------|--------|---------|
+| `instruqtor.py` | Inverted BRIQ_RANGES (0-16) | Higher = more briqs |
+| `instruqtor.py` | Extended scale (10-16) | Enterprise granularity |
+| `instruqtor.py` | Default sensitivity: 5 | Balanced default |
+| `qonqrete.sh` | `-n/--qonstruction-name` flag | Non-interactive saves |
+| `qonqrete.sh` | `save_qonstruction_non_interactive()` | Auto-save function |
+| `qrane/qrane.py` | Gemini-only Qontrabender check | Skip for non-Gemini |
+| `qrane/qrane.py` | Local construqtor calqulator skip | No cost calc for local |
+| `config.yaml` | New scale documentation | Clear guidance |
+| `config.yaml` | Default: briq_sens=6, cycles=3 | New defaults |
+
+---
+
+#### 🎯 FILES CHANGED
+
+- `worqer/instruqtor.py` - Inverted briq sensitivity scale
+- `qonqrete.sh` - Added -n flag and non-interactive save
+- `qrane/qrane.py` - Gemini-only Qontrabender check
+- `worqspace/config.yaml` - Updated defaults and documentation
+- `VERSION` - Bumped to 1.0.2
+- `doc/RELEASE-NOTES.md` - This file
+
+---
+
+#### 🏷️ QUICK REFERENCE
+
+```bash
+# Simple project (web server, API)
+./qonqrete.sh run -a -b 5 -c 3
+
+# Medium project (full-stack app)
+./qonqrete.sh run -a -b 6 -c 4
+
+# Complex project (multi-service)
+./qonqrete.sh run -a -b 7 -c 5
+
+# CI/CD pipeline (auto-save)
+./qonqrete.sh run -a -b 6 -c 3 -n myproject
+```
+
+---
+
 ## [v1.0.1-stable] - 2026-01-02
 
 ### 🔧 HOTFIX: HuggingFace Cache Permissions in Docker Hardened Environment
