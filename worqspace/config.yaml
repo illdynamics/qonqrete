@@ -1,7 +1,7 @@
-# QonQrete Configuration v1.0.2-stable
+# QonQrete Configuration v1.0.3-stable
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# v1.0.2 NEW: INVERTED BRIQ SENSITIVITY SCALE! 🔄
+# v1.0.2 NEW: INVERTED BRIQ SENSITIVITY SCALE!
 # Higher number = MORE briqs (more intuitive!)
 #
 # BRIQ SENSITIVITY SCALE (0-16):
@@ -81,9 +81,9 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   # TASQLEVELER - Task Enhancement (OPTIONAL)
   # ═══════════════════════════════════════════════════════════════════════════
-  # tasqleveler:
-  #   provider: local
-  #   model: tasqleveler
+  tasqleveler:
+    provider: openai
+    model: gpt-4.1-mini
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSTRUQTOR - Briq Planning
@@ -100,8 +100,8 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: gemini
-    model: gemini-2.5-flash           # $1.25/$10.00 per 1M - best for code generation
+    provider: openai
+    model: gpt-4.1-mini           # $1.25/$10.00 per 1M - best for code generation
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
@@ -171,7 +171,7 @@ options:
 
   # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
   # NOTE: Only works when construqtor.provider is 'gemini'!
-  use_qontrabender: true
+  use_qontrabender: false
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Cheqpoint Configuration
@@ -214,7 +214,7 @@ options:
   #   Simple projects (web server, API): sens=5, cycles=3
   #   Medium projects (full-stack app):  sens=6, cycles=4
   #   Complex projects (multi-service):  sens=7, cycles=5
-  briq_sensitivity: 6
+  briq_sensitivity: 10
 
   # Operational Mode
   mode: program
