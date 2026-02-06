@@ -644,7 +644,7 @@ case "$COMMAND" in
 
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
-             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
+             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/qonqrete.jpg --size=128x36 --stretch; sleep 1; clear; fi;"
         fi
 
         CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
@@ -738,7 +738,7 @@ case "$COMMAND" in
 
         SPLASH_CMD=""
         if [[ "$PY_ARGS" != *"--tui"* ]]; then
-             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/splash.png --size=128x36 --stretch; sleep 1; clear; fi;"
+             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/qonqrete.jpg --size=128x36 --stretch; sleep 1; clear; fi;"
         fi
 
         CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
