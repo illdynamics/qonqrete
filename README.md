@@ -2,7 +2,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
 
-![Splash](qrane/splash.jpg)
+![Splash](qrane/qonqrete.jpg)
 
 
 QonQrete is a Secure AI Construction Loop System, using a Multi-Agent Pipeline Orchestrator in a Sandbox environment with YAML Configuration. In short: it spawns 3 AI agents in a sandbox/container and makes them work together on tasks. It can run with a hard requirement for user approval between steps, or in a fully autonomous mode where it keeps running until the user decides to stop it.
@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v1.0.2-stable` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.3-stable` (See `VERSION` file for the canonical version).
 
 > **Note on Experimental Features:**
 >
@@ -22,6 +22,37 @@ This architecture ensures that AI-generated code and processes cannot affect the
 > - **Microsandbox** (`-M/--msb`): Alternative to Docker runtime
 >
 > We welcome community contributions! If you encounter any issues or have suggestions, please report them.
+
+---
+
+## What's New in v1.0.3 🚀
+
+### 🎯 BATCHED BRIQ GENERATION - Bypass Token Limits!
+
+**Finally:** Generate 50-250+ briqs without hitting token limits!
+
+High-sensitivity builds (sensitivity >= 8) now use a **2-phase approach**:
+1. **Blueprint (JSON)** - Generate complete list of briq titles/objectives
+2. **Fabrication (Batched)** - Generate full XML content in chunks of 5
+
+**Benefits:**
+- ✅ **Actually get 60+ briqs** for sensitivity 10 (previously capped ~30-40)
+- ✅ **100-200+ briqs** for sensitivity 14-16 (enterprise projects)
+- ✅ **Cost transparency** with per-batch reporting
+- ✅ **Fault tolerance** - Failed batches don't kill generation
+- ✅ **Automatic fallback** to single-shot if needed
+
+**Configuration:**
+```yaml
+instruqtor:
+  batch_mode: true         # Auto-enables for sensitivity >= 8
+  batch_size: 5            # Briqs per batch
+```
+
+**Example:**
+```bash
+./qonqrete.sh run -b 10 -c 4 -a  # Generates 50-75 briqs reliably!
+```
 
 ---
 

@@ -2,8 +2,12 @@
 # worqer/instruqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InstruQtor Agent - Task Decomposition & Planning
-# v1.0.2 - INVERTED Briq Sensitivity Scale (Higher = More Briqs!)
+# v1.0.3 - Batched Briq Generation (Blueprint → Fabrication Pipeline)
 # ═══════════════════════════════════════════════════════════════════════════════
+#
+# v1.0.3: BATCHED BRIQ GENERATION! 🚀
+# Enables generating 50-250+ briqs without hitting token limits!
+# Uses 2-phase approach: Blueprint (JSON) → Fabrication (batched XML)
 #
 # v1.0.2: INVERTED BRIQ SENSITIVITY SCALE! 🔄
 # Higher number = MORE briqs (more intuitive!)
@@ -41,6 +45,7 @@ import sys
 import yaml
 import re
 import math
+import json
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -188,6 +193,211 @@ def merge_briqs(briqs: list[dict], target_count: int) -> list[dict]:
     return merged[:target_count]
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# BATCHED BRIQ GENERATION (v1.0.3) - Blueprint → Fabrication Pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def generate_briqs_paginated(
+    ai_provider: str,
+    ai_model: str,
+    base_prompt: str,
+    sensitivity: int,
+    target_briqs: int,
+    batch_size: int,
+    task_content: str,
+    qodeyard_tree: str,
+    universal_file_rule: str
+) -> list[dict]:
+    """
+    Generate briqs using 2-phase approach to bypass token limits.
+    
+    Phase 1: Blueprint (JSON) - Get list of briq titles/objectives
+    Phase 2: Fabrication (Batched) - Generate full XML content in chunks
+    
+    Args:
+        ai_provider: AI provider (openai, gemini, etc.)
+        ai_model: Model name
+        base_prompt: Base prompt template
+        sensitivity: Briq sensitivity level
+        target_briqs: Target number of briqs
+        batch_size: Number of briqs to fabricate per batch
+        task_content: Original task content
+        qodeyard_tree: Qodeyard file tree
+        universal_file_rule: Universal file rule text
+    
+    Returns:
+        List of briq dicts with 'title' and 'content' keys
+    """
+    print(f"\n🚀 [BATCHED GENERATION] Phase 1: Blueprint (Target: {target_briqs} briqs)", flush=True)
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # PHASE 1: BLUEPRINT (JSON) - Get list of titles/objectives
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    blueprint_prompt = f"""You are the **Principal Software Architect** creating a project blueprint.
+
+Your task: Generate a JSON list of EXACTLY {target_briqs} briq specifications.
+
+**OUTPUT FORMAT (JSON ONLY):**
+```json
+[
+  {{"title": "Setup_Project_Structure", "objective": "Create project directories and configuration files"}},
+  {{"title": "Implement_Core_Module", "objective": "Build the main business logic module"}},
+  ...
+]
+```
+
+**RULES:**
+1. Output ONLY the JSON array, nothing else
+2. Each item must have "title" and "objective" keys
+3. Titles should be Short_Snake_Case
+4. Objectives should be 1-2 sentences
+5. You MUST generate EXACTLY {target_briqs} items
+6. Order logically (foundations before features)
+
+{universal_file_rule}
+
+**EXISTING FILE STRUCTURE in qodeyard:**
+```
+{qodeyard_tree}
+```
+
+**INPUT DOCUMENT:**
+{task_content}
+
+**BEGIN BLUEPRINT (JSON array with {target_briqs} items):**
+"""
+
+    # Call AI to get blueprint
+    try:
+        blueprint_response = lib_ai.ai_query(
+            prompt=blueprint_prompt,
+            provider=ai_provider,
+            model=ai_model
+        )
+    except Exception as e:
+        print(f"  ⚠️  [BLUEPRINT] AI call failed: {e}. Falling back to single-shot.", flush=True)
+        return []  # Signal to fallback
+    
+    # Parse JSON blueprint
+    try:
+        # Extract JSON from response (may have markdown fences)
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', blueprint_response)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            json_str = blueprint_response.strip()
+        
+        blueprint = json.loads(json_str)
+        
+        if not isinstance(blueprint, list):
+            raise ValueError("Blueprint must be a JSON array")
+        
+        # Validate blueprint structure
+        for item in blueprint:
+            if not isinstance(item, dict) or 'title' not in item or 'objective' not in item:
+                raise ValueError("Each blueprint item must have 'title' and 'objective'")
+        
+        print(f"  ✅ [BLUEPRINT] Generated {len(blueprint)} briq specifications", flush=True)
+        
+        # Estimate tokens for blueprint phase
+        blueprint_tokens = estimate_tokens(blueprint_prompt + blueprint_response, ai_model)
+        blueprint_cost = calculate_cost(blueprint_tokens, ai_model, is_input=True)
+        print(f"  💰 [BLUEPRINT] Cost: {format_cost(blueprint_cost)} ({blueprint_tokens:,} tokens)", flush=True)
+        
+    except Exception as e:
+        print(f"  ⚠️  [BLUEPRINT] Failed to parse JSON: {e}. Falling back to single-shot.", flush=True)
+        return []  # Signal to fallback
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # PHASE 2: FABRICATION (BATCHED) - Generate full XML content in chunks
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    num_batches = math.ceil(len(blueprint) / batch_size)
+    print(f"\n🔨 [FABRICATION] Phase 2: Generating {len(blueprint)} briqs in {num_batches} batches (size: {batch_size})", flush=True)
+    
+    all_briqs = []
+    total_fabrication_cost = 0
+    
+    for batch_idx in range(num_batches):
+        start_idx = batch_idx * batch_size
+        end_idx = min(start_idx + batch_size, len(blueprint))
+        batch_items = blueprint[start_idx:end_idx]
+        
+        print(f"\n  📦 [Batch {batch_idx + 1}/{num_batches}] Fabricating briqs {start_idx + 1}-{end_idx}...", flush=True)
+        
+        # Build batch fabrication prompt
+        batch_list = "\n".join([
+            f"{i+1}. **{item['title']}**: {item['objective']}"
+            for i, item in enumerate(batch_items)
+        ])
+        
+        fabrication_prompt = f"""You are the **Principal Software Architect** fabricating detailed briqs.
+
+**MASTER BLUEPRINT:** You are working on items {start_idx + 1}-{end_idx} of a {len(blueprint)}-briq project.
+
+**YOUR BATCH (Generate full XML for these {len(batch_items)} briqs):**
+{batch_list}
+
+{universal_file_rule}
+
+**EXISTING FILE STRUCTURE in qodeyard:**
+```
+{qodeyard_tree}
+```
+
+**ORIGINAL TASK CONTEXT:**
+{task_content[:2000]}...
+
+**OUTPUT FORMAT (STRICT XML):**
+You must wrap each task in `<briq title="Title_From_Blueprint">...</briq>` tags.
+Include detailed implementation instructions for each briq.
+Do not include any other text outside of the `<briq>` tags.
+
+**BEGIN FABRICATION (Generate {len(batch_items)} briqs):**
+"""
+
+        # Call AI to fabricate this batch
+        try:
+            fabrication_response = lib_ai.ai_query(
+                prompt=fabrication_prompt,
+                provider=ai_provider,
+                model=ai_model
+            )
+            
+            # Parse XML briqs from response
+            batch_briqs = parse_xml_briqs(fabrication_response)
+            
+            if not batch_briqs:
+                print(f"  ⚠️  [Batch {batch_idx + 1}] No briqs parsed, retrying...", flush=True)
+                # Retry once
+                fabrication_response = lib_ai.ai_query(
+                    prompt=fabrication_prompt,
+                    provider=ai_provider,
+                    model=ai_model
+                )
+                batch_briqs = parse_xml_briqs(fabrication_response)
+            
+            # Estimate cost for this batch
+            batch_tokens = estimate_tokens(fabrication_prompt + fabrication_response, ai_model)
+            batch_cost = calculate_cost(batch_tokens, ai_model, is_input=True)
+            total_fabrication_cost += batch_cost
+            
+            print(f"  ✅ [Batch {batch_idx + 1}] Generated {len(batch_briqs)} briqs | Cost: {format_cost(batch_cost)} ({batch_tokens:,} toks)", flush=True)
+            
+            all_briqs.extend(batch_briqs)
+            
+        except Exception as e:
+            print(f"  ❌ [Batch {batch_idx + 1}] Fabrication failed: {e}", flush=True)
+            # Continue with next batch rather than failing entire generation
+            continue
+    
+    print(f"\n  💰 [FABRICATION] Total Cost: {format_cost(total_fabrication_cost)}", flush=True)
+    print(f"  ✅ [COMPLETE] Generated {len(all_briqs)} briqs across {num_batches} batches", flush=True)
+    
+    return all_briqs
+
+
 def generate_briqs_with_enforcement(
     ai_provider: str,
     ai_model: str,
@@ -293,6 +503,10 @@ def main() -> None:
     agent_cfg = config.get('agents', {}).get('instruqtor', {})
     ai_provider = agent_cfg.get('provider', 'openai')
     ai_model = agent_cfg.get('model', 'gpt-4o')
+    
+    # v1.0.3: Load batched generation config
+    batch_mode = agent_cfg.get('batch_mode', True)
+    batch_size = agent_cfg.get('batch_size', 5)
 
     try: sensitivity = int(os.environ.get('QONQ_SENSITIVITY', 5))  # v1.0.2: Default to 5 (Balanced)
     except: sensitivity = 5
@@ -302,7 +516,13 @@ def main() -> None:
 
     # Get briq range info for logging
     min_briqs, max_briqs, target_briqs, _ = get_sensitivity_config(sensitivity)
+    
+    # v1.0.3: Determine if we should use batched generation
+    use_batched = batch_mode and sensitivity >= 8
+    strategy = "Batched" if use_batched else "Single-shot"
+    
     print(f"  [CONFIG] Sensitivity: {sensitivity} → Target: {target_briqs} briqs (range: {min_briqs}-{max_briqs})", flush=True)
+    print(f"  [CONFIG] Strategy: {strategy} (batch_size: {batch_size}, batch_mode: {batch_mode})", flush=True)
 
     # Gather Qodeyard Context
     qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
@@ -388,15 +608,42 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 **BEGIN ATOMIC BREAKDOWN (Count your briqs to ensure compliance!):**
 """
 
-    # Generate briqs with enforcement
-    briqs = generate_briqs_with_enforcement(
-        ai_provider=ai_provider,
-        ai_model=ai_model,
-        base_prompt=planner_prompt,
-        sensitivity=sensitivity,
-        task_content=task_content,
-        qodeyard_tree=qodeyard_tree
-    )
+    # v1.0.3: Generate briqs using appropriate strategy
+    if use_batched:
+        # Try batched generation first
+        briqs = generate_briqs_paginated(
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            base_prompt=planner_prompt,
+            sensitivity=sensitivity,
+            target_briqs=target_briqs,
+            batch_size=batch_size,
+            task_content=task_content,
+            qodeyard_tree=qodeyard_tree,
+            universal_file_rule=universal_file_rule
+        )
+        
+        # Fallback to single-shot if batched fails
+        if not briqs:
+            print(f"\n  ⚠️  [FALLBACK] Batched generation failed, using single-shot enforcement...", flush=True)
+            briqs = generate_briqs_with_enforcement(
+                ai_provider=ai_provider,
+                ai_model=ai_model,
+                base_prompt=planner_prompt,
+                sensitivity=sensitivity,
+                task_content=task_content,
+                qodeyard_tree=qodeyard_tree
+            )
+    else:
+        # Use traditional single-shot enforcement
+        briqs = generate_briqs_with_enforcement(
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            base_prompt=planner_prompt,
+            sensitivity=sensitivity,
+            task_content=task_content,
+            qodeyard_tree=qodeyard_tree
+        )
 
     print(f"--- Architect Generated {len(briqs)} Build Phases (Sens:{sensitivity}, Range:{min_briqs}-{max_briqs}) ---", flush=True)
 
