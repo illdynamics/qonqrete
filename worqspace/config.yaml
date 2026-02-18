@@ -90,7 +90,7 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
     provider: openai
-    model: gpt-4.1-nano    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
 
   calqulator:
     provider: local
@@ -100,8 +100,8 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: openai
-    model: gpt-4.1-mini           # $1.25/$10.00 per 1M - best for code generation
+    provider: deepseek
+    model: deepseek-chat           # $1.25/$10.00 per 1M - best for code generation
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
@@ -111,14 +111,14 @@ agents:
     model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
-    batch_mode: true                 # Group briqs into batches
-    batch_token_roof: 60000          # Max input tokens per batch (~240KB)
-    batch_max_briqs: 12              # Max briqs per batch (safety cap)
+    batch_mode: false                 # Group briqs into batches
+    batch_token_roof: 30000          # Max input tokens per batch (~240KB)
+    batch_max_briqs: 6              # Max briqs per batch (safety cap)
     
     # Legacy per-briq limits (used when batch_mode=false)
-    max_prompt_chars_per_briq: 500000
-    max_context_files_per_briq: 40
-    max_chars_per_context_file: 80000
+    max_prompt_chars_per_briq: 250000
+    max_context_files_per_briq: 20
+    max_chars_per_context_file: 40000
     
     # Context filtering
     use_filtered_context: true
@@ -182,7 +182,7 @@ options:
   cheqpoint: false
 
   # Max cycles in auto-mode (recommended: 3 for simple, 4-6 for complex)
-  auto_cycle_limit: 3
+  auto_cycle_limit: 1
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Generation Settings (v1.0.2 - INVERTED ENFORCED Briq Ranges)
@@ -214,7 +214,7 @@ options:
   #   Simple projects (web server, API): sens=5, cycles=3
   #   Medium projects (full-stack app):  sens=6, cycles=4
   #   Complex projects (multi-service):  sens=7, cycles=5
-  briq_sensitivity: 10
+  briq_sensitivity: 16
 
   # Operational Mode
   mode: program
