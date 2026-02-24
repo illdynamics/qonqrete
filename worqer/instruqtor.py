@@ -2,7 +2,7 @@
 # worqer/instruqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InstruQtor Agent - Task Decomposition & Planning
-# v1.0.3 - Batched Briq Generation (Blueprint → Fabrication Pipeline)
+# v1.0.4-stable - QONTRACT Generation + Invariant Injection
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # v1.0.3: BATCHED BRIQ GENERATION! 🚀
@@ -46,6 +46,7 @@ import yaml
 import re
 import math
 import json
+import hashlib
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -63,6 +64,294 @@ except ImportError:
     def estimate_tokens(text, model="gpt-4.1-mini"): return len(text) // 4
     def calculate_cost(tokens, model, is_input=True): return (tokens / 1_000_000) * (0.4 if is_input else 1.6)
     def format_cost(cost): return f"${cost:.5f}" if cost < 0.01 else f"${cost:.2f}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# QONTRACT GENERATION (v1.0.4) - Persistent Constitution from Cycle 1
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Keywords that signal contractual rules in tasq markdown
+RULE_HEADERS = re.compile(
+    r'^#+\s*(Rules?|Requirements?|Strict\s+rules?|Constraints?|Invariants?|Specifications?|Must\s+haves?|Non-negotiables?)',
+    re.IGNORECASE | re.MULTILINE
+)
+
+IMPERATIVE_PATTERN = re.compile(
+    r'^\s*[-*]\s+.*\b(MUST|SHALL|EXACTLY|NEVER|ALWAYS|NO\s|DO\s+NOT|FORBIDDEN|REQUIRED|MANDATORY)\b',
+    re.IGNORECASE | re.MULTILINE
+)
+
+
+def extract_qontract_from_tasq(tasq_content: str, source_file: str) -> dict:
+    """
+    Deterministically extract contractual invariants from cycle1 tasq markdown.
+
+    Returns a structured contract dict ready for JSON serialization.
+    """
+    rules_text = []
+
+    # Strategy 1: Extract sections under explicit rule headers
+    lines = tasq_content.split('\n')
+    in_rules_section = False
+    current_depth = 0
+
+    for i, line in enumerate(lines):
+        header_match = re.match(r'^(#+)\s+', line)
+        if header_match:
+            depth = len(header_match.group(1))
+            if RULE_HEADERS.match(line):
+                in_rules_section = True
+                current_depth = depth
+                continue
+            elif in_rules_section and depth <= current_depth:
+                in_rules_section = False
+                continue
+
+        if in_rules_section and line.strip():
+            rules_text.append(line)
+
+    # Strategy 2: If no explicit headers, extract imperative bullet lines
+    if not rules_text:
+        for match in IMPERATIVE_PATTERN.finditer(tasq_content):
+            rules_text.append(match.group(0).strip())
+
+    # Parse into structured invariants
+    invariants = _parse_invariants_from_rules(rules_text, tasq_content)
+
+    # Build contract
+    contract = {
+        'version': '1.0.4',
+        'meta': {
+            'source_cycle': 1,
+            'source_file': source_file,
+            'hash': hashlib.sha256(tasq_content.encode()).hexdigest()[:16],
+        },
+        'invariants': invariants,
+        'raw_rules': rules_text[:50]  # Cap for compactness
+    }
+
+    return contract
+
+
+def _parse_invariants_from_rules(rules_text: list[str], full_tasq: str) -> dict:
+    """
+    Parse structured invariants from extracted rule text.
+    Uses pattern matching to identify common contract patterns.
+    """
+    invariants = {}
+
+    combined = '\n'.join(rules_text) + '\n' + full_tasq
+
+    # Detect forbidden imports
+    forbidden_imports = []
+    for match in re.finditer(r'\b(?:no|forbid|do\s+not\s+use|never\s+use|must\s+not.*?import)\s+[`"\']*(\w+)[`"\']*', combined, re.IGNORECASE):
+        candidate = match.group(1).lower()
+        if candidate in ('uuid', 'pickle', 'eval', 'exec', 'subprocess'):
+            forbidden_imports.append(candidate)
+    # Also check explicit patterns
+    for match in re.finditer(r'(?:forbidden|banned|prohibited)\s+(?:imports?|modules?|packages?)\s*:?\s*([\w,\s`]+)', combined, re.IGNORECASE):
+        for item in re.findall(r'`?(\w+)`?', match.group(1)):
+            if item.lower() not in forbidden_imports and len(item) > 1:
+                forbidden_imports.append(item.lower())
+    if forbidden_imports:
+        invariants['forbidden_imports'] = list(set(forbidden_imports))
+
+    # Detect forbidden fields
+    forbidden_fields = []
+    for match in re.finditer(r'(?:forbid|no|must\s+not\s+have)\s+(?:field|column|attribute)\s+(?:named?\s+)?[`"\']*(\w+)[`"\']*', combined, re.IGNORECASE):
+        forbidden_fields.append(match.group(1))
+    if forbidden_fields:
+        invariants['forbidden_fields'] = list(set(forbidden_fields))
+
+    # Detect schema field sets: "User must have exactly id, username, email, password"
+    schemas = {}
+    schema_pattern = re.compile(
+        r'(\w+)\s+(?:must|shall)\s+have\s+(?:exactly\s+)?(?:fields?\s*:?\s*)?([`\w,\s]+)',
+        re.IGNORECASE
+    )
+    for match in schema_pattern.finditer(combined):
+        model_name = match.group(1)
+        if model_name[0].isupper():  # Likely a model name
+            field_str = match.group(2)
+            fields_raw = re.findall(r'`?(\w+)`?', field_str)
+            fields = {f: '*' for f in fields_raw if f.lower() not in ('must', 'have', 'exactly', 'fields', 'and', 'the')}
+            if fields:
+                schemas[model_name] = {'fields': fields, 'exact': 'exactly' in match.group(0).lower()}
+    if schemas:
+        invariants['schemas'] = schemas
+
+    # Detect ID type rules
+    id_type_match = re.search(r'id\s+(?:must|shall)\s+be\s+(?:an?\s+)?(\w+(?:\[\w+\])?)', combined, re.IGNORECASE)
+    if id_type_match:
+        invariants['id_type'] = id_type_match.group(1)
+    elif re.search(r'\bid\b.*\b(?:int|integer)\b', combined, re.IGNORECASE):
+        invariants['id_type'] = 'int'
+
+    # Detect ID assignment strategy
+    if re.search(r'(?:auto.?assign|start\s+at\s+1|monotonic|sequential|incrementing)\s+(?:id|integer)', combined, re.IGNORECASE):
+        invariants['id_strategy'] = 'monotonic_int_start_1'
+    elif re.search(r'id.*(?:start|begin).*\b1\b', combined, re.IGNORECASE):
+        invariants['id_strategy'] = 'monotonic_int_start_1'
+
+    # Detect required endpoints
+    endpoints = []
+    ep_pattern = re.compile(r'(GET|POST|PUT|DELETE|PATCH)\s+[`"\']*(/[\w/{}\-]+)[`"\']*', re.IGNORECASE)
+    for match in ep_pattern.finditer(combined):
+        ep = {'method': match.group(1).lower(), 'path': match.group(2)}
+        if ep not in endpoints:
+            endpoints.append(ep)
+    if endpoints:
+        invariants['required_endpoints'] = endpoints
+
+    return invariants
+
+
+def generate_qontract_md(contract: dict) -> str:
+    """Generate human-readable qontract.md from contract dict."""
+    inv = contract.get('invariants', {})
+    meta = contract.get('meta', {})
+
+    md = f"# QONTRACT — Project Constitution\n\n"
+    md += f"_Generated by InstruQtor v1.0.4 | Source: cycle {meta.get('source_cycle', 1)} | Hash: {meta.get('hash', 'n/a')}_\n\n"
+    md += "---\n\n"
+
+    if inv.get('forbidden_imports'):
+        md += "## Forbidden Imports\n\n"
+        for imp in inv['forbidden_imports']:
+            md += f"- `{imp}` — MUST NOT be imported\n"
+        md += "\n"
+
+    if inv.get('forbidden_fields'):
+        md += "## Forbidden Fields\n\n"
+        for fld in inv['forbidden_fields']:
+            md += f"- `{fld}` — MUST NOT be used as a field name\n"
+        md += "\n"
+
+    if inv.get('schemas'):
+        md += "## Schema Invariants\n\n"
+        for model, spec in inv['schemas'].items():
+            exact = " (EXACT — no other fields)" if spec.get('exact') else ""
+            md += f"### {model}{exact}\n\n"
+            for field, ftype in spec.get('fields', {}).items():
+                md += f"- `{field}`: {ftype}\n"
+            md += "\n"
+
+    if inv.get('id_type'):
+        md += f"## ID Type Rule\n\n- `id` fields MUST be `{inv['id_type']}`\n\n"
+
+    if inv.get('id_strategy'):
+        md += f"## ID Assignment Strategy\n\n- {inv['id_strategy']}\n\n"
+
+    if inv.get('required_endpoints'):
+        md += "## Required Endpoints\n\n"
+        for ep in inv['required_endpoints']:
+            md += f"- `{ep['method'].upper()} {ep['path']}`\n"
+        md += "\n"
+
+    # Raw rules for reference
+    raw = contract.get('raw_rules', [])
+    if raw:
+        md += "## Extracted Rules (Raw)\n\n"
+        for rule in raw[:30]:
+            md += f"{rule}\n"
+        md += "\n"
+
+    return md
+
+
+def write_qontract(contract: dict, qontract_dir: Path):
+    """Write qontract.md and qontract.json to qontract.d/."""
+    qontract_dir.mkdir(parents=True, exist_ok=True)
+
+    json_path = qontract_dir / 'qontract.json'
+    md_path = qontract_dir / 'qontract.md'
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(contract, f, indent=2)
+    print(f"  📜 Wrote QONTRACT: {json_path}", flush=True)
+
+    md_content = generate_qontract_md(contract)
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write(md_content)
+    print(f"  📜 Wrote QONTRACT: {md_path}", flush=True)
+
+    inv_count = sum(1 for v in contract.get('invariants', {}).values() if v)
+    print(f"  📜 QONTRACT: {inv_count} invariant categories extracted", flush=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INVARIANT INJECTION INTO BRIQS (v1.0.4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Scope tag keywords for matching briqs to invariants
+SCOPE_KEYWORDS = {
+    'schema': ['model', 'schema', 'pydantic', 'dataclass', 'class', 'entity', 'type'],
+    'storage': ['storage', 'store', 'database', 'db', 'repository', 'persist', 'save', 'crud', 'memory'],
+    'id': ['id', 'identifier', 'primary_key', 'pk', 'uuid', 'counter', 'sequence', 'auto_increment'],
+    'routing': ['route', 'router', 'endpoint', 'api', 'handler', 'controller', 'path', 'url', 'http', 'rest'],
+    'runtime': ['main', 'server', 'app', 'start', 'run', 'entrypoint', 'boot', 'config', 'port'],
+}
+
+
+def infer_scope_tags(briq_title: str, briq_content: str) -> list[str]:
+    """Infer scope tags for a briq based on its title and content."""
+    tags = set()
+    combined = (briq_title + ' ' + briq_content).lower()
+
+    for scope, keywords in SCOPE_KEYWORDS.items():
+        if any(kw in combined for kw in keywords):
+            tags.add(scope)
+    return list(tags)
+
+
+def get_relevant_invariants(scope_tags: list[str], contract: dict) -> str:
+    """Get invariant snippets relevant to the given scope tags."""
+    inv = contract.get('invariants', {})
+    snippets = []
+
+    if 'schema' in scope_tags and inv.get('schemas'):
+        for model, spec in inv['schemas'].items():
+            exact = " (EXACT)" if spec.get('exact') else ""
+            fields = ', '.join(f"`{f}`" for f in spec.get('fields', {}))
+            snippets.append(f"Schema: {model}{exact} fields: {fields}")
+
+    if 'schema' in scope_tags and inv.get('forbidden_fields'):
+        snippets.append(f"Forbidden fields: {', '.join(inv['forbidden_fields'])}")
+
+    if ('storage' in scope_tags or 'id' in scope_tags) and inv.get('id_type'):
+        snippets.append(f"ID type: {inv['id_type']}")
+
+    if ('storage' in scope_tags or 'id' in scope_tags) and inv.get('id_strategy'):
+        snippets.append(f"ID strategy: {inv['id_strategy']}")
+
+    if ('storage' in scope_tags or 'id' in scope_tags) and inv.get('forbidden_imports'):
+        if 'uuid' in inv['forbidden_imports']:
+            snippets.append("FORBIDDEN: uuid import")
+
+    if 'routing' in scope_tags and inv.get('required_endpoints'):
+        eps = [f"{e['method'].upper()} {e['path']}" for e in inv['required_endpoints']]
+        snippets.append(f"Required endpoints: {', '.join(eps)}")
+
+    if inv.get('forbidden_imports'):
+        snippets.append(f"Forbidden imports: {', '.join(inv['forbidden_imports'])}")
+
+    return snippets
+
+
+def inject_invariants_into_briq(briq_content: str, scope_tags: list[str], contract: dict) -> str:
+    """Append relevant invariant snippets to a briq's content."""
+    if not scope_tags:
+        return briq_content
+    snippets = get_relevant_invariants(scope_tags, contract)
+    if not snippets:
+        return briq_content
+
+    invariant_section = "\n\n---\n**Invariant Snippets (from QONTRACT):**\n"
+    invariant_section += f"_Scope: {', '.join(scope_tags)}_\n"
+    for s in snippets:
+        invariant_section += f"- {s}\n"
+
+    return briq_content + invariant_section
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -647,20 +936,71 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 
     print(f"--- Architect Generated {len(briqs)} Build Phases (Sens:{sensitivity}, Range:{min_briqs}-{max_briqs}) ---", flush=True)
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # v1.0.4: QONTRACT GENERATION (Cycle 1 only)
+    # ═══════════════════════════════════════════════════════════════════════════
+    worqspace_root = Path(os.environ.get('QONQ_WORKSPACE', os.getcwd()))
+    qontract_dir = worqspace_root / 'qontract.d'
+    contract = {}
+
+    if cycle_num == '1':
+        print(f"\n  📜 [QONTRACT] Generating project constitution from cycle1 tasq...", flush=True)
+        contract = extract_qontract_from_tasq(task_content, input_file.name)
+        write_qontract(contract, qontract_dir)
+        # Fail-fast: assert contract files were created
+        md_check = qontract_dir / 'qontract.json'
+        if not md_check.exists():
+            print(f"  ❌ FAIL-FAST: Contract files not created in {qontract_dir}", flush=True)
+            sys.exit(1)
+    else:
+        # Load existing contract for invariant injection
+        contract_path = qontract_dir / 'qontract.json'
+        if contract_path.exists():
+            try:
+                with open(contract_path, 'r', encoding='utf-8') as f:
+                    contract = json.load(f)
+                print(f"  📜 [QONTRACT] Loaded existing contract ({len(contract.get('invariants', {}))} invariant categories)", flush=True)
+            except Exception as e:
+                print(f"  ⚠️  [QONTRACT] Could not load contract: {e}", flush=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # WRITE BRIQS (with v1.0.4 invariant injection)
+    # ═══════════════════════════════════════════════════════════════════════════
     for i, item in enumerate(briqs):
         step_slug = clean_filename_slug(item['title'])
         filename = f"cyqle{cycle_num}_tasq1_briq{i:03d}_{step_slug}.md"
         file_path = output_dir / filename
 
+        briq_content = item['content']
+
+        # v1.0.4: Inject relevant invariants based on scope tags + add Contract-Relevant header
+        scope_tags = []
+        contract_relevant = False
+        if contract.get('invariants'):
+            scope_tags = infer_scope_tags(item['title'], briq_content)
+            # Contract-relevant if scope includes schema, storage, routing, or id
+            contract_relevant = bool(scope_tags and any(
+                t in scope_tags for t in ('schema', 'storage', 'routing', 'id')
+            ))
+            if scope_tags:
+                briq_content = inject_invariants_into_briq(briq_content, scope_tags, contract)
+                print(f"  - Wrote [Plan] {filename} (scope: {', '.join(scope_tags)}, contract-relevant: {contract_relevant})", flush=True)
+            else:
+                print(f"  - Wrote [Plan] {filename} (no invariants)", flush=True)
+        else:
+            print(f"  - Wrote [Plan] {filename}", flush=True)
+
         # Estimate tokens for this briq
-        briq_content = f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}"
-        briq_tokens = estimate_tokens(briq_content, ai_model)
+        full_briq = f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{briq_content}"
+        briq_tokens = estimate_tokens(full_briq, ai_model)
         briq_cost = calculate_cost(briq_tokens, ai_model, is_input=True)
 
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(f"# {item['title']} [Est: {briq_tokens:,} toks | {format_cost(briq_cost)}]\n\n**ARCHITECT'S INSTRUCTION:**\n{item['content']}")
+        # v1.0.4: Build briq with frontmatter including scope + contract relevance
+        scope_str = ', '.join(scope_tags) if scope_tags else 'none'
+        frontmatter = f"Scope: {scope_str}\nContract-Relevant: {'yes' if contract_relevant else 'no'}\n\n"
 
-        print(f"  - Wrote [Plan] {filename}", flush=True)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(f"{frontmatter}# {item['title']} [Est: {briq_tokens:,} toks | {format_cost(briq_cost)}]\n\n**ARCHITECT'S INSTRUCTION:**\n{briq_content}")
 
 
 if __name__ == '__main__':

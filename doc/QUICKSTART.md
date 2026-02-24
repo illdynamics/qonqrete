@@ -1,78 +1,75 @@
 # QonQrete Quickstart Guide
 
-**Version:** `v1.0.1` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.4-stable` (See `VERSION` file for the canonical version).
 
-This guide will walk you through running your first `cyQle` with the QonQrete system.
-
-## What's New in v1.0.1
-
-- **HuggingFace Cache Fix**: Fixed permission errors when using Qontextor `complex` mode in Docker hardened containers
-- **Pre-downloaded Models**: The sentence-transformers model is now pre-downloaded during Docker build
-- **Graceful Fallback**: Qontextor now falls back to AST-only analysis if semantic embeddings fail
-
-## What's New in v0.9.8
-
-- **pycg Reliability**: Fixed module invocation using `sys.executable -m pycg`
-- **Cache Support**: Added writable tmpfs for sentence-transformers caching
-- **Default Tuning**: `briq_sensitivity: 6`, `auto_cycle_limit: 3`
-- **Ignore Updates**: Qonstructions now excluded from git/docker
-
-## What's New in v0.9.6
-
-- **Resume Command**: Continue work from previous Qages with `./qonqrete.sh resume`
-- **Qonstructions**: Save completed runs as persistent projects
-- **Interactive Clean**: Pick which Qages to delete with kubectx-style selection
-- **Security Hardening**: Container runs as non-root with proper user isolation
-- **Explicit Sqrapyard**: Use `-s/--sqrapyard` flag to seed from sqrapyard (no longer automatic)
-- **Interactive TasQ Editor**: Opens `$EDITOR` if no tasq.md exists
+Get up and running with QonQrete in minutes. The system automatically detects your OS, container engine (Docker/Podman), and build backend — so there's one unified workflow for all platforms.
 
 ## Prerequisites
-- **Docker:** Ensure the Docker daemon is running (or see ../README.md for Microsandbox setup).
-- **API Keys:** Before running, you must export the API keys for the AI providers you intend to use. The system will automatically check for the necessary keys based on your `worqspace/config.yaml` and exit with an error if they are not set.
-  - `export OPENAI_API_KEY='your-key'`
-  - `export GOOGLE_API_KEY='your-key'` (or `GEMINI_API_KEY`)
-  - `export ANTHROPIC_API_KEY='your-key'`
-  - `export DEEPSEEK_API_KEY='your-key'`
-  - `export QWEN_API_KEY='your-key'`
 
-## 1. First-Time Setup
-Build the secure `Qage` environment. You only need to do this once.
+- **Container Engine:** Docker or Podman installed and running.
+  - **macOS + Podman:** QonQrete auto-initializes and starts the Podman machine for you.
+  - **Windows:** WSL2 with Docker Desktop recommended. Git Bash works but WSL2 is preferred.
+- **API Keys:** Export keys for the AI providers configured in `worqspace/config.yaml`:
+  ```bash
+  export OPENAI_API_KEY='your-key'
+  export DEEPSEEK_API_KEY='your-key'
+  # Optional depending on config:
+  export GOOGLE_API_KEY='your-key'     # or GEMINI_API_KEY
+  export ANTHROPIC_API_KEY='your-key'
+  export QWEN_API_KEY='your-key'
+  ```
+  The system checks for required keys at startup and tells you exactly which ones are missing.
+
+## 1. Build the Qage
+
+One-time setup. QonQrete auto-detects Docker vs Podman and buildx vs plain build:
+
 ```bash
 chmod +x qonqrete.sh
 ./qonqrete.sh init
 ```
 
-## 2. Define Your TasQ
-For a new project, edit `worqspace/tasq.md` to define your initial objective. For example:
-```markdown
-Create a simple Python web server that listens on port 8080 and returns "Hello, QonQrete!" for all requests. The script should be executable.
+You can force a specific engine if needed:
+```bash
+./qonqrete.sh init --docker    # Force Docker
+./qonqrete.sh init --podman    # Force Podman
 ```
 
-**New in v0.9.1:** If no `tasq.md` exists, QonQrete will automatically open your `$EDITOR` (default: vim) with a template!
+## 2. Define Your TasQ
+
+Edit `worqspace/tasq.md` with your project objective:
+
+```markdown
+Create a Python FastAPI server with CRUD endpoints for a todo list.
+Use SQLite for storage. Include proper error handling and input validation.
+```
+
+If no `tasq.md` exists, QonQrete opens your `$EDITOR` (default: vim) with a template.
 
 ## 3. Run a CyQle
-This is the default manual mode. You can combine flags for different behaviors.
+
 ```bash
-# Basic fresh start
+# Basic fresh start (auto-detects everything)
 ./qonqrete.sh run
 
-# Run with sqrapyard seeding
+# Autonomous mode with custom settings
+./qonqrete.sh run --auto --briq-sensitivity 6 --cyqles 3
+
+# With sqrapyard seeding (existing code)
 ./qonqrete.sh run -s
 
-# Run with the TUI and security-focused agent personas [EXPERIMENTAL]
-./qonqrete.sh run --tui --mode security
-
-# Run in auto mode with highly granular task breakdown
-./qonqrete.sh run --auto --briq-sensitivity 1
-
-# Force user-gated mode, overriding a `cheqpoint: false` setting in config.yaml
+# Force user-gated mode
 ./qonqrete.sh run --user
+
+# Auto-save result without prompts
+./qonqrete.sh run -a -n myproject
 ```
-At the `CheQpoint`, you will be prompted to `[Q]ontinue`, `[T]weaQ`, or `[X]Quit`.
 
-## 4. Saving Your Work (Qonstructions)
+At the CheQpoint, you'll be prompted: `[Q]ontinue`, `[T]weaQ` (edit), or `[X]Quit`.
 
-After each run completes, QonQrete will ask if you want to save the result:
+## 4. Saving Your Work
+
+After each run, QonQrete asks if you want to save the result as a Qonstruction:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -80,97 +77,86 @@ After each run completes, QonQrete will ask if you want to save the result:
 └─────────────────────────────────────────────────────────────┘
 
 Save this run as a Qonstruction? [y/N] y
-Enter project name [project_20251226_115701]: my-awesome-api
-Saving Qonstruction to: qonstructions/my-awesome-api
+Enter project name [project_20260223_115701]: my-api
 Qonstruction saved successfully!
-Delete original Qage? [y/N] y
 ```
 
-Qonstructions are saved to `worqspace/qonstructions/<name>/` with all context preserved.
+Qonstructions are stored in `worqspace/qonstructions/<name>/` with full context preserved.
+
+For automated pipelines, use the `-n` flag:
+```bash
+./qonqrete.sh run -a -b 6 -c 3 -n myproject
+```
 
 ## 5. Resuming Previous Work
 
-Resume from a previous Qage to continue development:
-
 ```bash
-# Interactive picker (kubectx-style)
+# Interactive picker (kubectx-style, newest first)
 ./qonqrete.sh resume
 
 # Direct selection
-./qonqrete.sh resume -q qage_20251226_115701
+./qonqrete.sh resume -q qage_20260223_115701
 ```
 
-The resume command:
-1. Copies all content from the selected Qage to a new Qage
-2. Updates config files from the workspace
-3. Uses your updated `tasq.md` as the next cycle's task
-4. Starts the run with all previous context preserved
+Resume copies all state from the selected Qage, updates configs from the workspace, and uses your latest `tasq.md` as the next cycle's task.
 
-## 6. Seeding a Project with Sqrapyard
+## 6. Seeding with Sqrapyard
 
-To begin a `cyQle` with a pre-existing codebase:
-1. Place your code files into the `worqspace/sqrapyard/` directory.
-2. Edit `worqspace/tasq.md` with your objective for this project.
-3. Run `./qonqrete.sh run -s` (the `-s` flag is now required to use sqrapyard).
+To start from an existing codebase:
 
-**Note:** Without the `-s` flag, sqrapyard contents are ignored to prevent accidental imports.
+1. Place your code in `worqspace/sqrapyard/`
+2. Edit `worqspace/tasq.md` with your objective
+3. Run with the `-s` flag: `./qonqrete.sh run -s`
+
+Without `-s`, sqrapyard contents are ignored (prevents accidental imports).
 
 ## 7. Configuration
-Advanced options can be set in `worqspace/`.
--   **`config.yaml`**:
-    -   `use_qompressor`: `true` to generate token-efficient code skeletons (default), `false` to use full code.
-    -   `use_qontextor`: `true` to generate a semantic index of the code (default), `false` to disable.
-    -   `use_qontrabender`: `true` to enable policy-driven hybrid caching (default), `false` to disable.
-    -   `cheqpoint`: Sets the default behavior. `true` for user-gated mode, `false` for autonomous. Can be overridden with `--user` or `--auto`.
-    -   `auto_cycle_limit`: Set the maximum number of cycles for auto-mode.
-    -   `agents`: Change the AI models for each agent. For `qontextor`, set `provider: local` to use the new high-speed, zero-cost analysis mode.
-    -   `mode`: Set the default operational mode for agent personas (e.g., `program`, `enterprise`, `security`, `performance`, `innovative`).
-    -   `briq_sensitivity`: Set the default task breakdown granularity (0=atomic, 9=monolithic).
--   **`caching_policy.yaml`**:
-    -   Defines Qontrabender behavior and operational modes
-    -   Available modes: `local_fast`, `local_smart`, `cyber_bedrock`, `cyber_aggressive`, `paranoid_mincloud`, `debug_repro`
-    -   See [QONTRABENDER.md](./QONTRABENDER.md) for full documentation
--   **`pipeline_config.yaml`**:
-    -   `microsandbox`: Set to `true` to make Microsandbox (`msb`) the default container runtime. [EXPERIMENTAL]
 
-## 8. Qontrabender Quick Setup
-To configure the cache bender:
+### `worqspace/config.yaml`
 
-1. Edit `worqspace/config.yaml` to select your mode:
-```yaml
-agents:
-  qontrabender:
-    policy_file: "./caching_policy.yaml"
-    mode: local_smart  # Options: local_fast, local_smart, cyber_bedrock, etc.
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `agents.<name>.provider` | AI provider per agent (`openai`, `deepseek`, `gemini`, `anthropic`, `qwen`, `local`) | varies |
+| `agents.<name>.model` | Model name per agent | varies |
+| `options.cheqpoint` | `true` = user-gated, `false` = autonomous | `false` |
+| `options.auto_cycle_limit` | Max cycles in auto-mode (1-50) | `4` |
+| `options.briq_sensitivity` | Granularity (0-16). Higher = more briqs. | `5` recommended |
+| `options.mode` | Operational mode (`program`, `enterprise`, `security`, etc.) | `program` |
+| `options.use_qompressor` | Enable skeleton generation | `true` |
+| `options.use_qontextor` | Enable semantic indexing | `true` |
+| `options.use_qontrabender` | Enable hybrid caching (Gemini only) | `false` |
+| `retry.max_attempts` | Max attempts per briq | `3` |
+| `retry.stop_on_briq_fail` | Fail-fast vs fail-tolerant | `false` |
+| `interleaved.enabled` | Per-briq build+verify loop | `true` |
+| `interleaved.local_validation` | Local syntax check per briq | `true` |
+
+### `worqspace/pipeline_config.yaml`
+
+Defines the agent execution order. The default pipeline is:
+
+```
+instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
 ```
 
-2. Run Qontrabender commands:
+TasqLeveler is available but commented out by default. To enable, uncomment its block.
+
+### Environment Overrides
+
 ```bash
-# Check status
-python worqer/qontrabender.py --status
-
-# Analyze file fidelity decisions
-python worqer/qontrabender.py --analyze
-
-# Validate policy file
-python worqer/qontrabender.py --validate
-
-# List available modes
-python worqer/qontrabender.py --modes
+CONTAINER_ENGINE=docker|podman   # Override engine auto-detection
+BUILD_BACKEND=buildx|plain       # Override build backend auto-detection
 ```
 
-## 9. Cleaning the Workspace
-
-Multiple options for cleanup:
+## 8. Cleaning Up
 
 ```bash
 # Interactive selection (pick which Qage to delete)
 ./qonqrete.sh clean
 
 # Delete specific Qage
-./qonqrete.sh clean -q qage_20251226_115701
+./qonqrete.sh clean -q qage_20260223_115701
 
-# Delete ALL Qages (original behavior)
+# Delete ALL Qages
 ./qonqrete.sh clean -A
 ```
 
@@ -181,24 +167,42 @@ Multiple options for cleanup:
 | `./qonqrete.sh init` | Build the Qage container |
 | `./qonqrete.sh run` | Start fresh session |
 | `./qonqrete.sh run -s` | Start with sqrapyard seeding |
+| `./qonqrete.sh run -a` | Autonomous mode |
+| `./qonqrete.sh run -a -n <name>` | Auto-save as Qonstruction |
 | `./qonqrete.sh resume` | Interactive resume picker |
-| `./qonqrete.sh resume -q <name>` | Resume specific Qage |
+| `./qonqrete.sh resume -q <qage>` | Resume specific Qage |
 | `./qonqrete.sh clean` | Interactive delete picker |
-| `./qonqrete.sh clean -q <name>` | Delete specific Qage |
 | `./qonqrete.sh clean -A` | Delete ALL Qages |
 
 ## Flags Reference
 
 | Flag | Description |
 |------|-------------|
-| `-a, --auto` | Autonomous mode |
-| `-u, --user` | User-gated mode |
-| `-t, --tui` | TUI mode [EXPERIMENTAL] |
-| `-m, --mode <n>` | Operational mode |
-| `-b, --briq-sensitivity <N>` | Granularity (0-9). Default: 7 |
-| `-c, --cyqles <N>` | Max auto-cycles (1-10). Default: 4 |
+| `-a, --auto` | Autonomous mode (no cheqpoints) |
+| `-u, --user` | User-gated mode (force cheqpoints) |
+| `-t, --tui` | TUI mode **[EXPERIMENTAL]** |
+| `-m, --mode <name>` | Operational mode |
+| `-b, --briq-sensitivity <N>` | Granularity (0-16). Default: 5 recommended |
+| `-c, --cyqles <N>` | Max auto-cycles (1-50) |
+| `-n, --qonstruction-name <name>` | Auto-save as Qonstruction |
 | `-s, --sqrapyard` | Seed from sqrapyard |
-| `-M, --msb` | Microsandbox mode [EXPERIMENTAL] |
-| `-d, --docker` | Force Docker |
+| `-d, --docker` | Force Docker engine |
+| `-p, --podman` | Force Podman engine |
+| `-M, --msb` | Microsandbox mode **[EXPERIMENTAL]** |
+| `-w, --wonqrete` | Experimental mode |
 | `-q, --qage <name>` | Specify Qage (resume/clean) |
 | `-A, --all` | All Qages (clean) |
+
+## Briq Sensitivity Scale
+
+| Level | Name | Briq Range | Use Case |
+|-------|------|------------|----------|
+| 0 | Monolithic | 1 | Single-file scripts |
+| 1-2 | Broad | 2-5 | Large components |
+| 3-4 | Feature | 5-12 | Per-feature/component |
+| **5** | **Balanced** | **10-15** | **← RECOMMENDED** |
+| 6-7 | High | 15-30 | Detailed split |
+| 8-9 | Atomic | 30-60 | Fine-grained |
+| 10-16 | Enterprise | 50-250 | Mega-projects (batched) |
+
+Sensitivity >= 8 auto-enables batched briq generation (Blueprint → Fabrication pipeline).

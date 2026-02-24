@@ -23,6 +23,7 @@
 
 import os
 import sys
+import re
 import yaml
 import shutil
 from pathlib import Path
@@ -188,6 +189,41 @@ def main() -> None:
     original_lines = len(original_tasq.split('\n'))
     original_chars = len(original_tasq)
     print(f"[TasqLeveler] 📄 Original tasq: {original_lines} lines, {original_chars:,} chars", flush=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # v1.0.4: COMPLEXITY SCORING - Skip enhancement for tiny tasqs
+    # ═══════════════════════════════════════════════════════════════════════════
+    tasqleveler_cfg = config.get('agents', {}).get('tasqleveler', {}) if 'config' in dir() else {}
+    # Try to load config now if not yet loaded
+    try:
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            tl_config = yaml.safe_load(f) or {}
+    except:
+        tl_config = {}
+    tasqleveler_cfg = tl_config.get('agents', {}).get('tasqleveler', {})
+    tl_options = tl_config.get('tasqleveler', {})
+
+    tl_enabled = tl_options.get('enabled', tasqleveler_cfg.get('enabled', True))
+    min_complexity_score = tl_options.get('min_complexity_score', tasqleveler_cfg.get('min_complexity_score', 15))
+    min_lines = tl_options.get('min_lines', tasqleveler_cfg.get('min_lines', 20))
+
+    if not tl_enabled:
+        print(f"[TasqLeveler] ⏭️ Disabled in config", flush=True)
+        return
+
+    # Compute complexity score
+    complexity_score = 0
+    complexity_score += original_lines  # 1 point per line
+    complexity_score += len(re.findall(r'^#+\s', original_tasq, re.MULTILINE)) * 3  # 3 points per section header
+    complexity_score += len(re.findall(r'^\s*[-*]\s', original_tasq, re.MULTILINE))  # 1 point per bullet
+    complexity_score += len(re.findall(r'```', original_tasq)) * 2  # 2 points per code block fence
+    complexity_score += original_chars // 200  # 1 point per 200 chars
+
+    print(f"[TasqLeveler] 📊 Complexity score: {complexity_score} (threshold: {min_complexity_score}, min_lines: {min_lines})", flush=True)
+
+    if complexity_score < min_complexity_score or original_lines < min_lines:
+        print(f"[TasqLeveler] ⏭️ Tasq too simple (score {complexity_score} < {min_complexity_score} or lines {original_lines} < {min_lines}) — skipping enhancement", flush=True)
+        return
     
     # Check if already enhanced (skip if so)
     enhancement_markers = ['🎯 Golden Path', 'Dependency Graph', '📦', 'Global Success Criteria']
