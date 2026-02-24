@@ -2,7 +2,7 @@
 # worqer/inspeqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InspeQtor Agent - Multi-Stage Code Review System
-# v0.9.0 - Batched Reviews + Cost Efficiency + Gemini Flash-Lite
+# v1.0.4-stable - QONTRACT Enforcement + QontractGuard Integration
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # STAGE 1 (This File): Per-briq tactical reviews (batched or individual)
@@ -26,6 +26,13 @@ try:
 except ImportError: 
     print("CRITICAL: lib_ai.py not found.", flush=True)
     sys.exit(1)
+
+# v1.0.4: Import QontractGuard
+try:
+    import qontract_guard
+except ImportError:
+    qontract_guard = None
+    print("[WARN] qontract_guard module not found — deterministic checks disabled", flush=True)
 
 # Import cost estimation
 sys.path.insert(0, str(Path(__file__).parent.parent / 'qrane'))
@@ -344,7 +351,8 @@ def build_briq_review_prompt(
     briq_name: str,
     briq_content: str,
     changed_files: list[tuple[str, str]],
-    cycle_goal: str = ""
+    cycle_goal: str = "",
+    qontract_context: str = ""  # v1.0.4
 ) -> str:
     """Build the prompt for reviewing a single briq."""
     
@@ -360,10 +368,20 @@ def build_briq_review_prompt(
     else:
         changed_code_section = "\n_No changed code artifacts for this briq._\n"
     
+    # v1.0.4: QONTRACT section
+    qontract_section = ""
+    if qontract_context:
+        qontract_section = f"""
+
+## 📜 PROJECT CONSTITUTION (QONTRACT)
+{qontract_context[:3000]}
+**You MUST verify code against these invariants.**
+"""
+
     prompt = f"""You are the 'inspeQtor', a senior software quality engineer performing a focused code review.
 
 **SCOPE:** You are reviewing a SINGLE briq (task unit) from a larger cycle. Focus only on this specific unit.
-
+{qontract_section}
 **YOUR TASK:**
 Determine if the code changes for this briq are complete, correct, and consistent with the existing architecture.
 
@@ -371,6 +389,7 @@ Determine if the code changes for this briq are complete, correct, and consisten
 1. **Correctness:** Is the code logically correct and free of obvious bugs?
 2. **Completeness:** Did the code fully implement what the briq specified?
 3. **Consistency:** Do the changes integrate properly with existing code patterns and conventions?
+4. **Contract Compliance:** Does the code comply with QONTRACT invariants?
 
 **OUTPUT FORMAT (Strict Markdown):**
 
@@ -676,13 +695,19 @@ def run_per_briq_reviews(
     return results
 
 
+
 def main() -> None:
     """
     InspeQtor main entry point.
+    v1.0.4-stable: Reordered stages per G4.5/G4.6 spec.
+    
+    Stage order:
+      STAGE 0: QontractGuard (deterministic, BEFORE AI)
+      STAGE 1: LoQal Verification (syntax/import sanity, BEFORE AI)
+      STAGE 2: Per-Briq Tactical Reviews (AI, only if guard passes or report-only)
+      STAGE 3: Global Meta-Review (AI aggregation)
     
     Usage: inspeqtor.py <summary_path> <changed_files_path> <reqap_output_path>
-    
-    This now runs per-briq reviews and then triggers the meta-review.
     """
     if len(sys.argv) != 4:
         print("Usage: inspeqtor.py <summary_path> <changed_files_path> <reqap_output_path>", flush=True)
@@ -696,35 +721,279 @@ def main() -> None:
     worqspace_root = Path(os.getcwd())
     qodeyard_path = worqspace_root / "qodeyard"
     qontext_path = worqspace_root / "qontext.d"
+    bloq_path = worqspace_root / "bloq.d"
     briq_dir = worqspace_root / "briq.d"
     exeq_dir = worqspace_root / "exeq.d"
     reqap_dir = worqspace_root / "reqap.d"
     tasq_dir = worqspace_root / "tasq.d"
+    struqture_dir = worqspace_root / "struqture"
     
-    print(f"=== InspeQtor v0.9.0: Two-Stage Review for cyQle {cycle_num} ===", flush=True)
+    print(f"=== InspeQtor v1.0.4: Multi-Stage Review for cyQle {cycle_num} ===", flush=True)
 
     # Load configuration
     config = load_inspeqtor_config(worqspace_root / 'config.yaml')
-    
+
     # ═══════════════════════════════════════════════════════════════════════════
-    # STAGE 1: Per-Briq Tactical Reviews
+    # B) FAIL-FAST: Contract must exist (cycles > 1)
     # ═══════════════════════════════════════════════════════════════════════════
-    print("\n--- STAGE 1: Per-Briq Tactical Reviews ---", flush=True)
-    
-    briq_results = run_per_briq_reviews(
-        cycle_num,
-        briq_dir,
-        exeq_dir,
-        qodeyard_path,
-        qontext_path,
-        reqap_dir,
-        config
+    qontract_dir = worqspace_root / "qontract.d"
+    if cycle_num != '1':
+        try:
+            from runtime_checks import ensure_qontract_present
+            ensure_qontract_present(worqspace_root)
+            print(f"    ✅ Contract present (fail-fast check passed)", flush=True)
+        except RuntimeError as e:
+            print(f"    ❌ {e}", flush=True)
+            sys.exit(1)
+        except ImportError:
+            pass
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # v1.0.4 (C): CONTEXT ASSEMBLY — Contract + Tasqs + Qodeyard (primary)
+    # bloq.d and qontext.d are optional and may be stale
+    # ═══════════════════════════════════════════════════════════════════════════
+    print(f"\n--- Context Assembly ---", flush=True)
+
+    # 1. QONTRACT (always included, from qontract.d/)
+    qontract_content = ""
+    qontract_md_path = qontract_dir / "qontract.md"
+    if qontract_md_path.exists():
+        try:
+            with open(qontract_md_path, 'r', encoding='utf-8') as f:
+                qontract_content = f.read()
+            print(f"    [ok] QONTRACT: {qontract_md_path} ({len(qontract_content)} chars)", flush=True)
+        except Exception as e:
+            print(f"    [!!] QONTRACT: Could not load {qontract_md_path}: {e}", flush=True)
+    else:
+        print(f"    [--] QONTRACT: Not found at {qontract_md_path}", flush=True)
+
+    # 2. Current cycle tasq (always included)
+    cycle_tasq_content = ""
+    cycle_tasq_path = tasq_dir / f"cyqle{cycle_num}_tasq.md"
+    if cycle_tasq_path.exists():
+        try:
+            with open(cycle_tasq_path, 'r', encoding='utf-8') as f:
+                cycle_tasq_content = f.read()
+            print(f"    [ok] Cycle {cycle_num} Tasq: {cycle_tasq_path} ({len(cycle_tasq_content)} chars)", flush=True)
+        except Exception as e:
+            print(f"    [!!] Cycle {cycle_num} Tasq: Could not load: {e}", flush=True)
+    else:
+        print(f"    [--] Cycle {cycle_num} Tasq: Not found", flush=True)
+
+    # 3. Cycle 1 tasq (always included as big-picture anchor)
+    cycle1_tasq_content = ""
+    cycle1_tasq_path = tasq_dir / "cyqle1_tasq.md"
+    if cycle_num != '1' and cycle1_tasq_path.exists():
+        try:
+            with open(cycle1_tasq_path, 'r', encoding='utf-8') as f:
+                cycle1_tasq_content = f.read()
+            if len(cycle1_tasq_content) > 6000:
+                cycle1_tasq_content = cycle1_tasq_content[:6000] + "\n[...truncated...]"
+            print(f"    [ok] Cycle 1 Tasq (anchor): {cycle1_tasq_path} ({len(cycle1_tasq_content)} chars)", flush=True)
+        except Exception as e:
+            print(f"    [!!] Cycle 1 Tasq: Could not load: {e}", flush=True)
+
+    # 4. QODEYARD (PRIMARY truth source for current-cycle code)
+    qodeyard_files = []
+    if qodeyard_path.is_dir():
+        for root, _, files in os.walk(qodeyard_path):
+            for file in files:
+                fpath = str(Path(root) / file)
+                qodeyard_files.append(fpath)
+        print(f"    [ok] qodeyard/*: {len(qodeyard_files)} files (PRIMARY truth — current-cycle code)", flush=True)
+        for qf in qodeyard_files[:8]:
+            print(f"       + {Path(qf).name}", flush=True)
+        if len(qodeyard_files) > 8:
+            print(f"       ... and {len(qodeyard_files) - 8} more", flush=True)
+    else:
+        print(f"    [!!] qodeyard/: Not found — no code to review", flush=True)
+
+    # 5. bloq.d/* (OPTIONAL — may be stale, qompressor runs AFTER inspeqtor)
+    bloq_files = []
+    if bloq_path.is_dir():
+        for root, _, files in os.walk(bloq_path):
+            for file in files:
+                fpath = str(Path(root) / file)
+                bloq_files.append(fpath)
+        print(f"    [ok] bloq.d/*: {len(bloq_files)} files (compact context)", flush=True)
+        print(f"         NOTE: bloq.d may be stale because qompressor runs after inspeqtor in current pipeline order.", flush=True)
+        for bf in bloq_files[:5]:
+            print(f"       + {Path(bf).name}", flush=True)
+        if len(bloq_files) > 5:
+            print(f"       ... and {len(bloq_files) - 5} more", flush=True)
+    else:
+        print(f"    [--] bloq.d/: Not found (qompressor runs after inspeqtor)", flush=True)
+
+    # 6. qontext.d/* (OPTIONAL — may be stale, qontextor runs AFTER inspeqtor)
+    qontext_files = []
+    if qontext_path.is_dir():
+        for root, _, files in os.walk(qontext_path):
+            for file in files:
+                fpath = str(Path(root) / file)
+                qontext_files.append(fpath)
+        print(f"    [ok] qontext.d/*: {len(qontext_files)} files (dependency hints)", flush=True)
+        print(f"         NOTE: qontext.d may be stale because qontextor runs after inspeqtor in current pipeline order.", flush=True)
+        for qf in qontext_files[:5]:
+            print(f"       + {Path(qf).name}", flush=True)
+        if len(qontext_files) > 5:
+            print(f"       ... and {len(qontext_files) - 5} more", flush=True)
+    else:
+        print(f"    [--] qontext.d/: Not found (qontextor runs after inspeqtor)", flush=True)
+
+    # Merge: qodeyard is primary, bloq/qontext are supplementary
+    all_inspeqtor_context = qodeyard_files + bloq_files + qontext_files
+    print(f"    Total context files for InspeQtor: {len(all_inspeqtor_context)} "
+          f"(qodeyard: {len(qodeyard_files)}, bloq: {len(bloq_files)}, qontext: {len(qontext_files)})", flush=True)
+
+    # Write context log to struqture/qonsole_inspeqtor.log
+    _write_inspeqtor_context_log(
+        struqture_dir, cycle_num, qontract_md_path, cycle_tasq_path,
+        cycle1_tasq_path, qodeyard_files, bloq_files, qontext_files, all_inspeqtor_context
     )
-    
+
     # ═══════════════════════════════════════════════════════════════════════════
-    # STAGE 2: Global Meta-Review (Aggregation)
+    # STAGE 0 (G4.6): QontractGuard (Deterministic, BEFORE AI Review)
     # ═══════════════════════════════════════════════════════════════════════════
-    print("\n--- STAGE 2: Global Meta-Review ---", flush=True)
+    guard_report = None
+    guard_passed = True
+    qontract_json_path = qontract_dir / "qontract.json"
+
+    print(f"\n--- STAGE 0: QontractGuard (Deterministic — Full Cycle) ---", flush=True)
+    if qontract_guard and qontract_json_path.exists():
+        try:
+            import json as _json
+            contract = qontract_guard.load_contract(qontract_json_path)
+            if not contract:
+                # B) Never silently skip — treat empty/missing as FAIL
+                guard_report = qontract_guard.GuardReport(passed=False)
+                guard_report.add_violation(qontract_guard.Violation(
+                    rule='CONTRACT_MISSING',
+                    file_path=str(qontract_json_path),
+                    line_number=None,
+                    message="Contract loaded but empty — cannot enforce invariants"
+                ))
+                guard_passed = False
+            else:
+                guard_report = qontract_guard.run_guard(contract, qodeyard_path)
+            guard_passed = guard_report.passed
+
+            # Write guard report (markdown + JSON)
+            guard_md_output = reqap_dir / f"cyqle{cycle_num}_qontract_guard.md"
+            guard_md_output.parent.mkdir(parents=True, exist_ok=True)
+            with open(guard_md_output, 'w', encoding='utf-8') as f:
+                f.write(guard_report.to_markdown())
+
+            guard_json_output = reqap_dir / f"cyqle{cycle_num}_qontract_guard.json"
+            with open(guard_json_output, 'w', encoding='utf-8') as f:
+                _json.dump(guard_report.to_json(), f, indent=2)
+
+            print(f"    Guard report: {guard_md_output}", flush=True)
+            print(f"    Guard JSON:   {guard_json_output}", flush=True)
+
+            if not guard_passed:
+                print(f"    QontractGuard FAILED — {len(guard_report.violations)} violations", flush=True)
+                for v in guard_report.violations[:10]:
+                    print(f"       {v}", flush=True)
+            else:
+                print(f"    QontractGuard PASSED", flush=True)
+
+        except Exception as e:
+            print(f"    [WARN] QontractGuard failed to run: {e}", flush=True)
+    else:
+        # B) Never silently skip — treat missing contract as FAIL
+        if not qontract_guard:
+            print(f"    [WARN] qontract_guard module not available", flush=True)
+        elif not qontract_json_path.exists():
+            guard_report = GuardReport(passed=False) if 'GuardReport' in dir() else None
+            try:
+                guard_report = qontract_guard.GuardReport(passed=False)
+                guard_report.add_violation(qontract_guard.Violation(
+                    rule='CONTRACT_MISSING',
+                    file_path=str(qontract_json_path),
+                    line_number=None,
+                    message=f"Contract file not found: {qontract_json_path}"
+                ))
+                guard_passed = False
+                print(f"    FAIL — Contract JSON not found at {qontract_json_path}", flush=True)
+            except Exception:
+                print(f"    FAIL — Contract JSON not found at {qontract_json_path}", flush=True)
+                guard_passed = False
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # STAGE 1 (G4.6): LoQal Verification (Deterministic, BEFORE AI Review)
+    # ═══════════════════════════════════════════════════════════════════════════
+    print(f"\n--- STAGE 1: LoQal Verification (Syntax/Import Sanity) ---", flush=True)
+
+    verification_enabled = config.get('verification', {}).get('enabled', True)
+    verification_results = None
+
+    if verification_enabled:
+        try:
+            import loqal_verifier
+
+            verification_report = loqal_verifier.run_verification(
+                qodeyard_path,
+                qontext_path,
+                cycle_num,
+                load_inspeqtor_config(worqspace_root / 'config.yaml')
+            )
+
+            verification_output = reqap_dir / f"cyqle{cycle_num}" / f"cyqle{cycle_num}_verification.md"
+            verification_output.parent.mkdir(parents=True, exist_ok=True)
+            with open(verification_output, 'w', encoding='utf-8') as f:
+                f.write(verification_report.to_markdown())
+
+            print(f"    Verification report: {verification_output}", flush=True)
+            verification_results = verification_report
+
+            if verification_report.errors > 0:
+                print(f"    Verification found {verification_report.errors} errors", flush=True)
+            else:
+                print(f"    Verification passed ({verification_report.passed} checks OK)", flush=True)
+
+        except ImportError:
+            print("    [WARN] loqal_verifier module not found — skipping", flush=True)
+        except Exception as e:
+            print(f"    [WARN] Verification failed: {e}", flush=True)
+    else:
+        print("    LoQal verification disabled in config", flush=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # DECISION: Should AI InspeQtor run?
+    # ═══════════════════════════════════════════════════════════════════════════
+    ai_review_mode = "normal"  # "normal" | "report_only" | "skipped"
+
+    if not guard_passed:
+        ai_review_mode = "report_only"
+        print(f"\n    QontractGuard FAILED — AI InspeQtor will run in REPORT-ONLY mode", flush=True)
+        print(f"    (Guard failure forces overall FAIL regardless of AI opinion)", flush=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # STAGE 2: Per-Briq Tactical Reviews (AI)
+    # ═══════════════════════════════════════════════════════════════════════════
+    if ai_review_mode != "skipped":
+        print(f"\n--- STAGE 2: Per-Briq Tactical Reviews (mode: {ai_review_mode}) ---", flush=True)
+
+        briq_results = run_per_briq_reviews(
+            cycle_num,
+            briq_dir,
+            exeq_dir,
+            qodeyard_path,
+            qontext_path,
+            reqap_dir,
+            config
+        )
+    else:
+        print(f"\n--- STAGE 2: Per-Briq Reviews SKIPPED (AI review skipped due to contract failure) ---", flush=True)
+        briq_results = []
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # STAGE 3: Global Meta-Review (AI Aggregation)
+    # ═══════════════════════════════════════════════════════════════════════════
+    if ai_review_mode != "skipped":
+        print(f"\n--- STAGE 3: Global Meta-Review ---", flush=True)
+    else:
+        print(f"\n--- STAGE 3: Meta-Review SKIPPED ---", flush=True)
     
     # Read original summary
     try:
@@ -733,20 +1002,12 @@ def main() -> None:
     except:
         summary_content = "[Summary not available]"
     
-    # Read cycle tasq (the original goal)
-    cycle_tasq_path = tasq_dir / f"cyqle{cycle_num}_tasq.md"
-    try:
-        with open(cycle_tasq_path, 'r', encoding='utf-8') as f:
-            cycle_goal = f.read()
-    except:
-        cycle_goal = "[Cycle goal not available]"
-    
-    # Aggregate briq results for meta-review
+    # Aggregate briq results
     briq_summaries = []
     success_count = 0
     partial_count = 0
     failure_count = 0
-    failed_briq_suggestions = []  # Collect ALL suggestions from failed briqs
+    failed_briq_suggestions = []
     
     for result in briq_results:
         if result['assessment'] == '[SUCCESS]':
@@ -756,16 +1017,13 @@ def main() -> None:
         else:
             failure_count += 1
         
-        # Read briq reqap content
         try:
             with open(result['reqap_path'], 'r', encoding='utf-8') as f:
                 briq_reqap = f.read()
         except:
             briq_reqap = f"Assessment: {result['assessment']}\n\nError: {result.get('error', 'Unknown')}"
         
-        # For failed/partial briqs, extract suggestions with NO truncation
         if result['assessment'] in ['[FAILURE]', '[PARTIAL]']:
-            # Extract suggestions section if present
             suggestions_match = re.search(r'## Suggestions\s*\n(.*?)(?=\n##|\Z)', briq_reqap, re.DOTALL)
             if suggestions_match:
                 failed_briq_suggestions.append({
@@ -774,7 +1032,6 @@ def main() -> None:
                     'suggestions': suggestions_match.group(1).strip()
                 })
             else:
-                # Fallback: include full content for failed briqs
                 failed_briq_suggestions.append({
                     'briq': result['briq_name'],
                     'assessment': result['assessment'],
@@ -787,13 +1044,8 @@ def main() -> None:
             'content': briq_reqap
         })
     
-    # ═══════════════════════════════════════════════════════════════════════════
-    # CROSS-BRIQ CONSISTENCY CHECK
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Detect potential integration issues by checking for file overlaps
+    # Cross-briq consistency check
     cross_briq_warnings = []
-    
-    # Build a map of which briqs touched which files
     briq_file_map = {}
     all_touched_files = set()
     
@@ -802,32 +1054,49 @@ def main() -> None:
         try:
             with open(briq_file, 'r', encoding='utf-8') as f:
                 briq_content = f.read()
-            # Extract file references
             file_refs = set(re.findall(r'`([^`]+\.\w{2,4})`', briq_content))
             briq_file_map[briq_name] = file_refs
             all_touched_files.update(file_refs)
         except:
             pass
     
-    # Check for files touched by multiple briqs (potential integration points)
     for target_file in all_touched_files:
         touching_briqs = [b for b, files in briq_file_map.items() if target_file in files]
         if len(touching_briqs) > 1:
-            cross_briq_warnings.append(f"⚠️ `{target_file}` touched by multiple briqs: {', '.join(touching_briqs)}")
+            cross_briq_warnings.append(f"`{target_file}` touched by multiple briqs: {', '.join(touching_briqs)}")
     
     print(f"\n[CROSS-BRIQ] Found {len(cross_briq_warnings)} potential integration points", flush=True)
     
     # Determine overall assessment
-    total_briqs = len(briq_results)
     if failure_count > 0:
         overall_assessment = "[FAILURE]"
     elif partial_count > 0:
         overall_assessment = "[PARTIAL]"
     else:
         overall_assessment = "[SUCCESS]"
-    
-    # Build meta-review prompt (NO CODE - only summaries and reqaps)
-    meta_prompt = f"""You are the 'inspeQtor Meta-Reviewer', synthesizing per-briq code reviews into a final cycle assessment.
+
+    # G4.6: Force FAIL if QontractGuard failed (hard enforcement)
+    if guard_report and not guard_passed:
+        overall_assessment = "[FAILURE]"
+        print(f"[QONTRACT] Guard FAILED — forcing overall assessment to FAILURE", flush=True)
+
+    # Downgrade if verification found errors
+    if verification_results and hasattr(verification_results, 'errors') and verification_results.errors > 0:
+        if overall_assessment == "[SUCCESS]":
+            overall_assessment = "[PARTIAL]"
+            print(f"[VERIFY] Verification errors found — downgrading to PARTIAL", flush=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # WRITE FINAL REQAP
+    # ═══════════════════════════════════════════════════════════════════════════
+    if ai_review_mode == "skipped" or not briq_results:
+        _write_guard_only_reqap(
+            reqap_path, cycle_num, guard_report, verification_results,
+            overall_assessment, qontract_content
+        )
+    else:
+        # Build meta-review prompt
+        meta_prompt = f"""You are the 'inspeQtor Meta-Reviewer', synthesizing per-briq code reviews into a final cycle assessment.
 
 **YOUR TASK:**
 Aggregate the individual briq reviews into a single, coherent cycle-level assessment. DO NOT re-review code - focus on patterns, themes, and overall quality.
@@ -840,272 +1109,286 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
 **INPUTS:**
 
 ## Original Cycle Goal
-{cycle_goal[:3000]}{'...[truncated]' if len(cycle_goal) > 3000 else ''}
+{cycle_tasq_content[:3000]}{'...[truncated]' if len(cycle_tasq_content) > 3000 else ''}
 
 ## ConstruQtor Execution Summary
 {summary_content[:2000]}{'...[truncated]' if len(summary_content) > 2000 else ''}
 
-## Per-Briq Review Results
-Total: {total_briqs} briqs | ✅ {success_count} SUCCESS | ⚠️ {partial_count} PARTIAL | ❌ {failure_count} FAILURE
-
+## QONTRACT (Project Constitution)
+{qontract_content[:2000] if qontract_content else '[No QONTRACT available]'}
+{'...[truncated]' if len(qontract_content) > 2000 else ''}
 """
-    
-    # Add cross-briq warnings prominently
-    if cross_briq_warnings:
-        meta_prompt += "\n## ⚠️ CROSS-BRIQ INTEGRATION WARNINGS\n"
-        meta_prompt += "These files were modified by multiple briqs - verify consistency:\n"
-        for warning in cross_briq_warnings[:20]:  # Limit to 20 warnings
-            meta_prompt += f"- {warning}\n"
-        meta_prompt += "\n"
-    
-    # Add failed briq suggestions IN FULL (no truncation for failures!)
-    if failed_briq_suggestions:
-        meta_prompt += "\n## 🚨 FAILED/PARTIAL BRIQ SUGGESTIONS (MUST ADDRESS)\n"
-        for item in failed_briq_suggestions:
-            meta_prompt += f"\n### {item['briq']} {item['assessment']}\n"
-            # Include full suggestions, but cap at 3000 chars per briq
-            suggestions = item['suggestions']
-            if len(suggestions) > 3000:
-                suggestions = suggestions[:3000] + "\n[...continued in briq reqap file...]"
-            meta_prompt += f"{suggestions}\n"
-        meta_prompt += "\n"
-    
-    # Add briq summaries (truncated to fit)
-    for briq in briq_summaries:
-        briq_section = f"\n### {briq['name']}: {briq['assessment']}\n{briq['content'][:1500]}\n"
-        if len(meta_prompt) + len(briq_section) < 50_000:  # Keep meta prompt reasonable
-            meta_prompt += briq_section
-        else:
-            meta_prompt += f"\n### {briq['name']}: {briq['assessment']}\n[Content truncated]\n"
-    
-    meta_prompt += f"""
 
----
+        if guard_report:
+            guard_status = "PASS" if guard_report.passed else "FAIL"
+            meta_prompt += f"\n## QontractGuard Results: {guard_status}\n"
+            if guard_report.violations:
+                for v in guard_report.violations[:15]:
+                    meta_prompt += f"- {v}\n"
+            else:
+                meta_prompt += "No contract violations found.\n"
 
-**OUTPUT FORMAT:**
+        if verification_results and hasattr(verification_results, 'errors'):
+            v_status = "PASS" if verification_results.errors == 0 else "ISSUES"
+            meta_prompt += f"\n## LoQal Verification: {v_status}\n"
+            meta_prompt += f"Files checked: {verification_results.files_checked}, Errors: {verification_results.errors}, Warnings: {verification_results.warnings}\n"
 
-```
-Assessment: {overall_assessment}
+        meta_prompt += f"\n## Per-Briq Results ({success_count} success, {partial_count} partial, {failure_count} failure)\n\n"
 
-## Executive Summary
-(2-3 sentence high-level summary of the entire cycle)
+        for briq in briq_summaries:
+            truncated_content = briq['content'][:600]
+            meta_prompt += f"### {briq['name']}: {briq['assessment']}\n{truncated_content}\n\n"
 
-## 🚨 Critical Issues (from Failed/Partial Briqs)
-(List ALL suggestions from failed briqs - these MUST be fixed in the next cycle)
+        if cross_briq_warnings:
+            meta_prompt += "## Cross-Briq Warnings\n"
+            for w in cross_briq_warnings:
+                meta_prompt += f"- {w}\n"
+            meta_prompt += "\n"
 
-## ⚠️ Integration Concerns  
-(Any cross-briq consistency issues detected)
+        if failed_briq_suggestions:
+            meta_prompt += "## FAILED/PARTIAL BRIQ SUGGESTIONS (MUST INCLUDE ALL IN OUTPUT)\n\n"
+            for item in failed_briq_suggestions:
+                meta_prompt += f"### {item['briq']} {item['assessment']}\n{item['suggestions'][:800]}\n\n"
 
-## Per-Briq Breakdown
-| Briq | Status | Key Finding |
-|------|--------|-------------|
-(Table summarizing each briq)
-
-## Consolidated Suggestions
-### High Priority
-- (Critical issues that block integration)
-
-### Medium Priority  
-- (Important improvements)
-
-### Low Priority
-- (Nice-to-haves and minor polish)
-
-## Patterns Observed
-(Any recurring themes across briqs - good or bad)
-```
+        meta_prompt += f"""
+## Overall Preliminary Assessment: {overall_assessment}
 
 **IMPORTANT:** Every suggestion from a FAILED briq must appear in your output. Do not drop or summarize away failure details.
 
 **Begin Meta-Review:**
 """
-    
-    # Estimate cost for meta-review
-    meta_input_tokens = estimate_tokens(meta_prompt, config['model'])
-    meta_output_tokens = 2000  # Meta-review is longer
-    meta_input_cost = calculate_cost(meta_input_tokens, config['model'], is_input=True)
-    meta_output_cost = calculate_cost(meta_output_tokens, config['model'], is_input=False)
-    meta_cost = meta_input_cost + meta_output_cost
-    print(f"Estimated cost: {format_cost(meta_cost)} (meta-review @ {config['model']})", flush=True)
-    
-    try:
-        # Meta-review doesn't need architectural context - it's purely textual aggregation
-        meta_response = lib_ai.run_ai_completion(
-            config['provider'],
-            config['model'],
-            meta_prompt,
-            context_files=[],  # No context needed for meta-review
-            max_prompt_chars=100_000  # Meta-review prompt is much smaller
-        )
-        
-        # Write final reqap
-        final_content = f"""# CyQle {cycle_num} Final ReQap
-Generated by InspeQtor v0.9.0 (Two-Stage Review)
+
+        meta_input_tokens = estimate_tokens(meta_prompt, config['model'])
+        meta_output_tokens = 2000
+        meta_input_cost = calculate_cost(meta_input_tokens, config['model'], is_input=True)
+        meta_output_cost = calculate_cost(meta_output_tokens, config['model'], is_input=False)
+        meta_cost = meta_input_cost + meta_output_cost
+        print(f"Estimated cost: {format_cost(meta_cost)} (meta-review @ {config['model']})", flush=True)
+
+        try:
+            meta_response = lib_ai.run_ai_completion(
+                config['provider'],
+                config['model'],
+                meta_prompt,
+                context_files=[],
+                max_prompt_chars=100_000
+            )
+
+            final_content = f"""# CyQle {cycle_num} Final ReQap
+Generated by InspeQtor v1.0.4 (Multi-Stage Review: Guard > Verify > AI)
 
 {meta_response}
 
 ---
 """
-        
-        # Add cross-briq warnings section
-        if cross_briq_warnings:
-            final_content += "\n## Cross-Briq Integration Points\n"
-            final_content += "These files were touched by multiple briqs - verify consistency:\n\n"
-            for warning in cross_briq_warnings:
-                final_content += f"- {warning}\n"
-            final_content += "\n---\n"
-        
-        # Add failed briq details prominently
-        if failed_briq_suggestions:
-            final_content += "\n## Failed/Partial Briq Details (Full)\n"
-            for item in failed_briq_suggestions:
-                final_content += f"\n### {item['briq']} {item['assessment']}\n"
-                final_content += f"{item['suggestions']}\n"
-            final_content += "\n---\n"
-        
-        final_content += "\n## Individual Briq ReQaps\n"
-        for briq in briq_summaries:
-            final_content += f"\n### {briq['name']}\n{briq['content']}\n"
-        
-        os.makedirs(reqap_path.parent, exist_ok=True)
-        with open(reqap_path, 'w', encoding='utf-8') as f:
-            f.write(final_content)
-        
-        print(f"\n=== Final Assessment: {overall_assessment} ===", flush=True)
-        print(f"ReQap written to {reqap_path}", flush=True)
-        
-    except Exception as e:
-        print(f"[ERROR] Meta-review failed: {e}", flush=True)
-        
-        # Fallback: write a simple aggregated reqap WITH failed briq details
-        fallback_content = f"""# CyQle {cycle_num} Final ReQap
-Generated by InspeQtor v0.8.2 (Fallback Mode - Meta-review failed)
+
+            if guard_report and guard_report.violations:
+                final_content += "\n## QontractGuard Violations\n"
+                for v in guard_report.violations:
+                    final_content += f"- {v}\n"
+                final_content += "\n---\n"
+
+            if verification_results and hasattr(verification_results, 'errors'):
+                if verification_results.errors > 0 or verification_results.warnings > 0:
+                    final_content += _format_verification_section(verification_results)
+
+            if cross_briq_warnings:
+                final_content += "\n## Cross-Briq Integration Points\n"
+                final_content += "These files were touched by multiple briqs - verify consistency:\n\n"
+                for warning in cross_briq_warnings:
+                    final_content += f"- {warning}\n"
+                final_content += "\n---\n"
+
+            if failed_briq_suggestions:
+                final_content += "\n## Failed/Partial Briq Details (Full)\n"
+                for item in failed_briq_suggestions:
+                    final_content += f"\n### {item['briq']} {item['assessment']}\n"
+                    final_content += f"{item['suggestions']}\n"
+                final_content += "\n---\n"
+
+            final_content += "\n## Individual Briq ReQaps\n"
+            for briq in briq_summaries:
+                final_content += f"\n### {briq['name']}\n{briq['content']}\n"
+
+            os.makedirs(reqap_path.parent, exist_ok=True)
+            with open(reqap_path, 'w', encoding='utf-8') as f:
+                f.write(final_content)
+
+            print(f"\n=== Final Assessment: {overall_assessment} ===", flush=True)
+            print(f"ReQap written to {reqap_path}", flush=True)
+
+        except Exception as e:
+            print(f"[ERROR] Meta-review failed: {e}", flush=True)
+            _write_fallback_reqap(
+                reqap_path, cycle_num, overall_assessment, e,
+                success_count, partial_count, failure_count,
+                guard_report, verification_results,
+                cross_briq_warnings, failed_briq_suggestions
+            )
+
+    print(f"\n=== InspeQtor v1.0.4 Complete: {overall_assessment} ===", flush=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS (v1.0.4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _write_inspeqtor_context_log(
+    struqture_dir: Path, cycle_num: str, qontract_path: Path,
+    cycle_tasq_path: Path, cycle1_tasq_path: Path,
+    qodeyard_files: list, bloq_files: list, qontext_files: list, all_context: list
+):
+    """Write detailed context log to struqture/qonsole_inspeqtor.log."""
+    struqture_dir.mkdir(parents=True, exist_ok=True)
+    log_path = struqture_dir / "qonsole_inspeqtor.log"
+
+    lines = [
+        f"=== InspeQtor Context Log — Cycle {cycle_num} ===",
+        "",
+        "--- Explicit Paths ---",
+        f"QONTRACT:      {qontract_path} (exists: {qontract_path.exists()})",
+        f"Cycle Tasq:    {cycle_tasq_path} (exists: {cycle_tasq_path.exists()})",
+        f"Cycle 1 Tasq:  {cycle1_tasq_path} (exists: {cycle1_tasq_path.exists()})",
+        "",
+        f"--- qodeyard/* ({len(qodeyard_files)} files) — PRIMARY truth source ---",
+    ]
+    for qf in qodeyard_files[:30]:
+        lines.append(f"  + {qf}")
+    if len(qodeyard_files) > 30:
+        lines.append(f"  ... and {len(qodeyard_files) - 30} more")
+
+    lines.append(f"\n--- bloq.d/* ({len(bloq_files)} files) — OPTIONAL, may be stale ---")
+    lines.append("NOTE: bloq.d may be stale because qompressor runs after inspeqtor in current pipeline order.")
+    for bf in bloq_files[:20]:
+        lines.append(f"  + {bf}")
+    if len(bloq_files) > 20:
+        lines.append(f"  ... and {len(bloq_files) - 20} more")
+
+    lines.append(f"\n--- qontext.d/* ({len(qontext_files)} files) — OPTIONAL, may be stale ---")
+    lines.append("NOTE: qontext.d may be stale because qontextor runs after inspeqtor in current pipeline order.")
+    for qf in qontext_files[:20]:
+        lines.append(f"  + {qf}")
+    if len(qontext_files) > 20:
+        lines.append(f"  ... and {len(qontext_files) - 20} more")
+
+    lines.append(f"\n--- Total Context: {len(all_context)} files ---")
+    lines.append("=== End Context Log ===\n")
+
+    with open(log_path, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines))
+    print(f"    Context log: {log_path}", flush=True)
+
+
+def _write_guard_only_reqap(
+    reqap_path: Path, cycle_num: str, guard_report, verification_results,
+    overall_assessment: str, qontract_content: str
+):
+    """Write a reqap when AI review was skipped due to guard failure."""
+    content = f"""# CyQle {cycle_num} Final ReQap
+Generated by InspeQtor v1.0.4 (Guard-Only Mode — AI review skipped due to contract failure)
+
+## Assessment: {overall_assessment}
+
+**AI review skipped due to contract failure.** The QontractGuard detected violations that must
+be fixed before AI review can provide meaningful feedback.
+
+"""
+    if guard_report and guard_report.violations:
+        content += "## QontractGuard Violations (MUST FIX)\n\n"
+        for v in guard_report.violations:
+            content += f"- {v}\n"
+        content += "\n"
+
+    if verification_results and hasattr(verification_results, 'errors') and verification_results.errors > 0:
+        content += _format_verification_section(verification_results)
+
+    content += "\n## Next Steps\n\n"
+    content += "1. Fix all QontractGuard violations listed above\n"
+    content += "2. Ensure code passes local syntax verification\n"
+    content += "3. Re-run the cycle to get full AI review\n"
+
+    os.makedirs(reqap_path.parent, exist_ok=True)
+    with open(reqap_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print(f"ReQap (guard-only): {reqap_path}", flush=True)
+
+
+def _write_fallback_reqap(
+    reqap_path: Path, cycle_num: str, overall_assessment: str, error,
+    success_count: int, partial_count: int, failure_count: int,
+    guard_report, verification_results,
+    cross_briq_warnings: list, failed_briq_suggestions: list
+):
+    """Write a fallback reqap when meta-review AI call fails."""
+    fallback_content = f"""# CyQle {cycle_num} Final ReQap
+Generated by InspeQtor v1.0.4 (Fallback Mode - Meta-review failed)
 
 Assessment: {overall_assessment}
 
 ## Summary
-Meta-review failed with error: {e}
+Meta-review failed with error: {error}
 
-Per-briq results:
-- Success: {success_count}
-- Partial: {partial_count}  
-- Failure: {failure_count}
+Per-briq results: Success: {success_count} | Partial: {partial_count} | Failure: {failure_count}
 
 """
-        # Still include cross-briq warnings even in fallback
-        if cross_briq_warnings:
-            fallback_content += "## Cross-Briq Integration Points\n"
-            for warning in cross_briq_warnings:
-                fallback_content += f"- {warning}\n"
-            fallback_content += "\n"
-        
-        # Still include failed briq suggestions even in fallback
-        if failed_briq_suggestions:
-            fallback_content += "## 🚨 Failed/Partial Briq Suggestions (MUST ADDRESS)\n"
-            for item in failed_briq_suggestions:
-                fallback_content += f"\n### {item['briq']} {item['assessment']}\n"
-                fallback_content += f"{item['suggestions']}\n"
-            fallback_content += "\n"
-        
-        fallback_content += f"## Next Steps\n- Review the individual briq reqaps in `reqap.d/cyqle{cycle_num}/` for details.\n"
-        
-        os.makedirs(reqap_path.parent, exist_ok=True)
-        with open(reqap_path, 'w', encoding='utf-8') as f:
-            f.write(fallback_content)
-    
-    # ═══════════════════════════════════════════════════════════════════════════
-    # STAGE 3: Local Verification (Deterministic, No AI)
-    # ═══════════════════════════════════════════════════════════════════════════
-    print("\n--- STAGE 3: LoQal Verification ---", flush=True)
-    
-    verification_enabled = config.get('verification', {}).get('enabled', True)
-    verification_results = None
-    
-    if verification_enabled:
-        try:
-            import loqal_verifier
-            
-            verification_report = loqal_verifier.run_verification(
-                qodeyard_path,
-                qontext_path,
-                cycle_num,
-                load_inspeqtor_config(worqspace_root / 'config.yaml')
-            )
-            
-            # Write verification report
-            verification_output = reqap_dir / f"cyqle{cycle_num}_verification.md"
-            with open(verification_output, 'w', encoding='utf-8') as f:
-                f.write(verification_report.to_markdown())
-            
-            print(f"Verification report: {verification_output}", flush=True)
-            
-            # Store for appending to reqap
-            verification_results = verification_report
-            
-            # Update overall assessment if verification found errors
-            if verification_report.errors > 0 and overall_assessment == "[SUCCESS]":
-                overall_assessment = "[PARTIAL]"
-                print(f"[WARN] Verification found {verification_report.errors} errors - downgrading to PARTIAL", flush=True)
-                
-        except ImportError:
-            print("[WARN] loqal_verifier module not found - skipping verification", flush=True)
-        except Exception as e:
-            print(f"[WARN] Verification failed: {e}", flush=True)
-    else:
-        print("LoQal verification disabled in config", flush=True)
-    
-    # ═══════════════════════════════════════════════════════════════════════════
-    # APPEND VERIFICATION RESULTS TO REQAP
-    # ═══════════════════════════════════════════════════════════════════════════
-    # The reqap gets promoted to next cycle's tasq via promote_reqap() in qrane.py
-    # So we just need to make sure ALL failure info is in the reqap!
-    
-    if verification_results and (verification_results.errors > 0 or verification_results.warnings > 0):
-        try:
-            # Read current reqap
-            with open(reqap_path, 'r', encoding='utf-8') as f:
-                current_reqap = f.read()
-            
-            # Append verification failures
-            verification_section = f"""
+    if guard_report and guard_report.violations:
+        fallback_content += "## QontractGuard Violations\n"
+        for v in guard_report.violations:
+            fallback_content += f"- {v}\n"
+        fallback_content += "\n"
 
+    if verification_results and hasattr(verification_results, 'errors') and verification_results.errors > 0:
+        fallback_content += _format_verification_section(verification_results)
+
+    if cross_briq_warnings:
+        fallback_content += "## Cross-Briq Integration Points\n"
+        for warning in cross_briq_warnings:
+            fallback_content += f"- {warning}\n"
+        fallback_content += "\n"
+
+    if failed_briq_suggestions:
+        fallback_content += "## Failed/Partial Briq Suggestions (MUST ADDRESS)\n"
+        for item in failed_briq_suggestions:
+            fallback_content += f"\n### {item['briq']} {item['assessment']}\n"
+            fallback_content += f"{item['suggestions']}\n"
+        fallback_content += "\n"
+
+    fallback_content += f"## Next Steps\n- Review individual briq reqaps in `reqap.d/cyqle{cycle_num}/`\n"
+
+    os.makedirs(reqap_path.parent, exist_ok=True)
+    with open(reqap_path, 'w', encoding='utf-8') as f:
+        f.write(fallback_content)
+
+
+def _format_verification_section(verification_results) -> str:
+    """Format verification results for inclusion in reqap."""
+    section = f"""
 ---
 
-## 🔍 LoQal Verification Results
+## LoQal Verification Results
 
 **Status:** {verification_results.overall_status}
 **Checked:** {verification_results.files_checked} files
-**Results:** ✅ {verification_results.passed} | ⚠️ {verification_results.warnings} | ❌ {verification_results.errors}
+**Results:** Passed: {verification_results.passed} | Warnings: {verification_results.warnings} | Errors: {verification_results.errors}
 
 """
-            # Add errors
-            errors = [r for r in verification_results.results if not r.passed and r.severity == 'error']
-            if errors:
-                verification_section += "### ❌ Errors (MUST FIX)\n\n"
-                for r in errors:
-                    line_info = f" (line {r.line_number})" if r.line_number else ""
-                    verification_section += f"- **{r.file_path}**{line_info}: [{r.check_type}] {r.message}\n"
-                verification_section += "\n"
-            
-            # Add warnings
-            warnings = [r for r in verification_results.results if not r.passed and r.severity == 'warning']
-            if warnings:
-                verification_section += "### ⚠️ Warnings\n\n"
-                for r in warnings:
-                    line_info = f" (line {r.line_number})" if r.line_number else ""
-                    verification_section += f"- **{r.file_path}**{line_info}: [{r.check_type}] {r.message}\n"
-                verification_section += "\n"
-            
-            # Write updated reqap
-            with open(reqap_path, 'w', encoding='utf-8') as f:
-                f.write(current_reqap + verification_section)
-            
-            print(f"Appended verification results to reqap", flush=True)
-            
-        except Exception as e:
-            print(f"[WARN] Could not append verification to reqap: {e}", flush=True)
-    
-    print(f"\n=== InspeQtor v0.9.0 Complete: {overall_assessment} ===", flush=True)
+    errors = [r for r in verification_results.results if not r.passed and r.severity == 'error']
+    if errors:
+        section += "### Errors (MUST FIX)\n\n"
+        for r in errors:
+            line_info = f" (line {r.line_number})" if r.line_number else ""
+            section += f"- **{r.file_path}**{line_info}: [{r.check_type}] {r.message}\n"
+        section += "\n"
+
+    warnings = [r for r in verification_results.results if not r.passed and r.severity == 'warning']
+    if warnings:
+        section += "### Warnings\n\n"
+        for r in warnings:
+            line_info = f" (line {r.line_number})" if r.line_number else ""
+            section += f"- **{r.file_path}**{line_info}: [{r.check_type}] {r.message}\n"
+        section += "\n"
+
+    return section
 
 
 if __name__ == '__main__':

@@ -2,6 +2,144 @@
 
 ---
 
+## [v1.0.4-stable] — Container Runtime Auto-Detect (Addition)
+
+### 🐳 MULTI-ENGINE SUPPORT — Docker, Podman, and Cross-Platform
+
+This addition extends `qonqrete.sh` with automatic container runtime detection for macOS, Windows, and Linux. No pipeline changes. Fully backward compatible.
+
+---
+
+#### 🆕 NEW FEATURES
+
+**1. Container Engine Auto-Detection**
+- Priority: `CONTAINER_ENGINE` env → `--podman`/`--docker` CLI → auto-detect
+- Auto-detect: docker first, then podman, else clear error with install links
+- New `-p`/`--podman` CLI flag alongside existing `-d`/`--docker`
+
+**2. Engine-Aware Wrappers**
+- `engine_build()` — docker build / docker buildx build / podman build / msb build
+- `engine_run()` — docker run / podman run / msb run (with security flags)
+- `engine_run_helper()` — lightweight helper for permission fix / delete operations
+- All wrappers preserve: build args, security flags, volume mounts, env vars, logging style, QONQ_VERSION injection
+
+**3. Build Backend Detection**
+- Docker: auto-detects `buildx` availability, falls back to plain `docker build`
+- Podman: uses `podman build` (no buildx requirement)
+- Override via `BUILD_BACKEND=buildx|plain` env var
+
+**4. macOS Podman Support**
+- Idempotent `podman machine init` + `podman machine start` on Darwin
+- Clear error messages if machine fails
+- No action taken if machine already running
+
+**5. Windows Support**
+- WSL2: detected via `/proc/version`, treated as Linux (no special behavior)
+- Git Bash / MSYS / MINGW: detected via `uname -s` and `OSTYPE`
+- Automatic path normalization for Docker Desktop volume mounts
+- Advisory printed: "Git Bash detected. WSL2 is recommended for best compatibility."
+
+**6. Permission & Cleanup Helpers (Engine-Aware)**
+- `fix_qage_permissions()` and `delete_qage()` now use whichever engine is available
+- Graceful fallback chain: detected engine → docker → podman → warning with manual command
+
+**7. Runtime Info Logging**
+- Prints at startup: Container engine, Build backend, OS detected
+- Uses existing QonQrete log format
+
+#### ✅ TESTED SUCCESSFULLY ON
+- Linux (Fedora 42 & 43) + docker and docker-desktop
+- Windows 11 WSL 2 ubuntu and docker desktop
+- Mac OS Sequoia 15.7.4 with podman and docker-desktop
+
+#### 📁 CHANGED FILES
+| File | Change |
+|------|--------|
+| `qonqrete.sh` | Full rewrite of container handling: OS detection, engine detection, build backend, engine wrappers, path normalization, Podman machine support |
+| `README.md` | Updated System Requirements with multi-platform table and env overrides |
+| `doc/RELEASE-NOTES.md` | Added this addition entry |
+
+#### 🚫 NOT CHANGED (confirmation)
+- Pipeline order: instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
+- Agent logic: zero modifications
+- Qontract / Qompressor / Qontextor / InspeQtor: untouched
+- MSB mode: preserved
+- All 110 tests: unaffected
+
+---
+
+## [v1.0.4-stable] - 2026-02-23
+
+### 🔒 QONTRACT LOCKDOWN — Contract-Enforced Pipeline
+
+This release implements **rocktight contract enforcement** across the entire pipeline. The QONTRACT (project constitution) is now a mandatory, fail-fast dependency with its own dedicated directory and deterministic AST-based verification.
+
+---
+
+#### 🆕 NEW FEATURES
+
+**1. qontract.d/ Migration (Section A)**
+- Contract files moved from `qontext.d/` to dedicated `qontract.d/` directory
+- `qontract.md` (human-readable) + `qontract.json` (machine-parseable)
+- All code paths updated: InstruQtor, ConstruQtor, InspeQtor, QontractGuard
+- Zero stale references to old `qontext.d/qontract.*` paths
+
+**2. Fail-Fast Contract Dependency (Section B)**
+- New `worqer/runtime_checks.py` with `ensure_qontract_present()` helper
+- ConstruQtor and InspeQtor call fail-fast check at startup (cycles > 1)
+- QontractGuard NEVER silently skips — empty contract = FAIL with `CONTRACT_MISSING`
+- Clear, actionable error messages on missing contract
+
+**3. InspeQtor Context Wiring (Section C)**
+- `qodeyard/*` is now the PRIMARY truth source for code review
+- `bloq.d/*` and `qontext.d/*` are OPTIONAL with explicit staleness warnings
+- Logs clearly state: "NOTE: bloq.d may be stale because qompressor runs after inspeqtor"
+- Context log at `struqture/qonsole_inspeqtor.log` includes all paths + totals + staleness notes
+- Pipeline order preserved: instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
+
+**4. QontractGuard Enforcement (Section D)**
+- Forbidden imports (uuid etc.) — robust AST-based detection
+- Exact schema field enforcement for named Pydantic models
+- Forbidden field names (e.g. "name") — class-level detection
+- ID type rules (int vs str) — annotation checking
+- **NEW: Monotonic ID strategy verification** — verifies `next_id=1` + increment or `max()+1` patterns exist
+- Required endpoint detection (route decorators)
+- JSON + markdown + text summary output formats
+- Per-file guard for targeted briq-level checking
+
+**5. Qompressor Indentation Fix (Section E)**
+- Fixed hardcoded 4-space indentation that broke class method skeletons
+- Summary comments and `pass` statements now use actual function body indentation
+- Correct output for module-level functions, class methods, and nested defs
+- All skeleton output guaranteed to `ast.parse()` successfully
+
+**6. TasqLeveler (Section G)**
+- Kept as implemented (commented in pipeline_config.yaml)
+- Documentation updated on how to enable without breaking stage order
+
+---
+
+#### 📁 FILES CHANGED
+
+- `worqer/runtime_checks.py` — **NEW** fail-fast contract dependency helper
+- `worqer/qontract_guard.py` — CONTRACT_MISSING violation, monotonic ID strategy, never-skip
+- `worqer/instruqtor.py` — Contract output to qontract.d/, fail-fast assertion
+- `worqer/construqtor.py` — qontract.d/ paths, fail-fast check, updated context logging
+- `worqer/inspeqtor.py` — qontract.d/ paths, fail-fast, qodeyard primary, staleness warnings
+- `worqer/qompressor.py` — Indentation-aware summary/pass insertion
+- `worqspace/pipeline_config.yaml` — Updated descriptions for v1.0.4-stable
+- `tests/test_v1_0_4_stable_smoke.py` — **NEW** 52-test comprehensive smoke suite
+- `doc/RELEASE-NOTES.md` — This entry
+
+#### 🧪 TEST RESULTS
+
+- `test_v1_0_4_stable_smoke.py`: 52 passed, 0 failed
+- `test_v1_0_4.py`: 58 passed, 0 failed
+- Total: 110 tests passing
+
+---
+
+
 ## [v1.0.3-stable] - 2026-02-06
 
 ### 🚀 BATCHED BRIQ GENERATION - Bypass Token Limits!

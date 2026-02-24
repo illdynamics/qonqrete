@@ -1,37 +1,39 @@
 # QonQrete Pipeline Configuration
-# v0.9.0 - Added TasqLeveler for automatic tasq enhancement
+# v1.0.4-stable — Contract-enforced pipeline with qontract.d/
+#
+# PIPELINE ORDER (DO NOT CHANGE):
+#   instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
+#
+# CONTRACT: qontract.d/qontract.{md,json} — generated in cycle 1, mandatory thereafter.
+# QODEYARD: Primary truth source for current-cycle code.
+# bloq.d: Skeleton cache — runs AFTER inspeqtor, may be stale during inspeqtor.
+# qontext.d: Dependency hints — runs AFTER inspeqtor, may be stale during inspeqtor.
+
 agents:
-#  - name: tasqleveler
-#    script: tasqleveler.py
-#    input: "tasq.d/cyqle{N}_tasq.md"
-#    output: "tasq.d/cyqle{N}_tasq.md"  # Enhances in-place, backs up original
-#    description: |
-#      TasqLeveler v0.9.0 - Automatic Tasq Enhancement
-#      
-#      RUNS ONCE: Only on Cycle 1
-#      
-#      Supercharges your tasq.md with:
-#      - 📦 Explicit dependency graph (prevents circular imports)
-#      - 🎯 Golden path tests (defines success criteria)
-#      - 🧪 Mock infrastructure (for testing integrations)
-#      - 📋 Global success criteria
-#      - ⏱️ Phase priority guidance
-#      
-#      Impact: +15-20% improvement in output quality
-#      
-#      Original tasq preserved as tasq_original.md
-#    cycle_1_only: true
+  - name: tasqleveler
+    script: tasqleveler.py
+    input: "tasq.d/cyqle{N}_tasq.md"
+    output: "tasq.d/cyqle{N}_tasq.md"
+    description: |
+      TasqLeveler v1.0.4-stable - Automatic Tasq Enhancement
+      RUNS ONCE: Only on Cycle 1. Supercharges tasq with dependency graph,
+      golden path tests, mock infrastructure, success criteria. +15-20% quality.
+      Original preserved as tasq_original.md.
+      To enable: uncomment this block. Does not alter relative stage order.
+    cycle_1_only: true
 
   - name: instruqtor
     script: instruqtor.py
     input: "tasq.d/cyqle{N}_tasq.md"
     output: briq.d/
-    description: "Reads the cycle-specific tasq and generates a comprehensive markdown briq."
+    description: |
+      Reads cycle tasq and generates briqs. On cycle 1, also generates
+      qontract.d/qontract.{md,json} (project constitution).
 
   - name: calqulator
     script: calqulator.py
     input: "briq.d/"
-    output: "briq.d/" # Modifies files in-place
+    output: "briq.d/"
     description: "Estimates token count and cost for each briq and annotates the files."
 
   - name: construqtor
@@ -40,59 +42,25 @@ agents:
     output: 
       - "exeq.d/cyqle{N}_summary.md"
       - "exeq.d/cyqle{N}_changed.md"
-    description: "Parses the markdown briq, executes steps, and outputs separate summaries for execution and changed files."
-
-  - name: inspeqtor
-    script: inspeqtor.py
-    input: 
-      - "exeq.d/cyqle{N}_summary.md"
-      - "exeq.d/cyqle{N}_changed.md"
-    output: "reqap.d/cyqle{N}_reqap.md"
     description: |
-      Multi-Stage Code Review System (v0.8.2):
-      
-      STAGE 1 - Per-Briq Tactical Reviews:
-      - Reviews each briq individually with filtered context
-      - Only includes .q.yaml files relevant to changed files
-      - Enforces strict budget limits to prevent 400 errors
-      - Outputs: reqap.d/cyqle{N}/briq*_reqap.md
-      
-      STAGE 2 - Global Meta-Review:
-      - Aggregates all briq reviews into single assessment
-      - Uses NO raw code - only summaries and reqaps
-      - Produces final reQap with consolidated suggestions
-      - Outputs: reqap.d/cyqle{N}_reqap.md
-      
-      STAGE 3 - LoQal Verification (NEW in v0.8.2):
-      - Deterministic syntax validation (Python compile())
-      - Import resolution checking
-      - Skeleton signature comparison
-      - Results APPENDED to reqap for next cycle
-      - Outputs: reqap.d/cyqle{N}_verification.md
-      
-      The reqap is then promoted to cyqle{N+1}_tasq.md by Qrane's
-      promote_reqap() function, carrying all fix info forward.
-    
-    budget_controlled: true
-    stages:
-      - name: per_briq
-        parallel: false
-      - name: meta_review
-        requires: per_briq
-      - name: loqal_verification
-        requires: meta_review
+      Parses briqs and generates code. Fail-fast: requires qontract.d/ for cycles > 1.
+      Per-briq QontractGuard gating with auto-retry on contract-relevant briqs.
+      Context: qontract.d/qontract.md + cycle1 tasq + qontext.d/ + qodeyard tree.
 
   - name: qontextor
     script: qontextor.py
     input: "exeq.d/cyqle{N}_changed.md"
     output: "qontext.d/"
-    description: "Updates the qontext files based on the changed files list."
+    description: "Updates qontext.d/ dependency hints based on changed files."
 
   - name: qompressor
     script: qompressor.py
     input: "qodeyard/"
     output: "bloq.d/"
-    description: "Mirrors qodeyard into bloq.d, stripping code bodies to create skeletons."
+    description: |
+      Skeletonizer: mirrors qodeyard into bloq.d with stripped bodies.
+      Deterministic summaries (AST-based). Valid Python output guaranteed.
+      Correct indentation for module-level functions AND class methods.
 
   - name: qontrabender
     script: qontrabender.py
@@ -101,11 +69,49 @@ agents:
       - "qodeyard/"
       - "qontext.d/"
     output: "qache.d/"
-    description: "The Cache Bender - assembles and manages hybrid cache payloads for Gemini context caching."
+    description: "Cache Bender — assembles hybrid cache payloads for Gemini context caching."
     triggers:
       - "post_qompressor"
       - "pre_construqtor"
       - "manual"
+
+  - name: inspeqtor
+    script: inspeqtor.py
+    input: 
+      - "exeq.d/cyqle{N}_summary.md"
+      - "exeq.d/cyqle{N}_changed.md"
+    output: "reqap.d/cyqle{N}_reqap.md"
+    description: |
+      Multi-Stage Code Review (v1.0.4-stable):
+      
+      STAGE 0 - QontractGuard (deterministic, AST-based):
+        Reads qontract.d/qontract.json, enforces against qodeyard/*.
+        FAIL = forces cycle FAIL. Never silently skips.
+      
+      STAGE 1 - LoQal Verification (deterministic):
+        Syntax/import sanity checks.
+      
+      STAGE 2 - Per-Briq Tactical Reviews (AI):
+        Reviews each briq with context. Report-only if guard failed.
+      
+      STAGE 3 - Global Meta-Review (AI aggregation):
+        Final reQap with consolidated suggestions.
+      
+      Context always includes: qontract.d/qontract.md, tasqs, qodeyard/* (primary).
+      Optional: bloq.d/*, qontext.d/* (may be stale — pipeline order).
+      Logs all paths to struqture/qonsole_inspeqtor.log with staleness notes.
+    
+    budget_controlled: true
+    stages:
+      - name: qontract_guard
+        deterministic: true
+      - name: loqal_verification
+        deterministic: true
+      - name: per_briq
+        parallel: false
+        requires: qontract_guard
+      - name: meta_review
+        requires: per_briq
 
 options:
   microsandbox: false

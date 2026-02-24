@@ -1,35 +1,35 @@
-# QonQrete Documentation
+# QonQrete Architecture
 
-**Version:** `v0.8.8-stable` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.4-stable` (See `VERSION` file for the canonical version).
 
-This document provides a comprehensive overview of the QonQrete Secure AI Construction Loop System.
+This document provides a comprehensive architectural overview of the QonQrete Secure AI Construction Loop System, including system diagrams, pipeline flows, directory structure, and cost analysis.
 
 ## Table of Contents
-- [Architecture](#architecture)
-  - [High-Level System Overview](#high-level-system-overview)
-  - [Detailed Pipeline Flow](#detailed-pipeline-flow)
-  - [ConstruQtor Build Loop (Interleaved Mode)](#construqtor-build-loop-interleaved-mode)
-  - [InspeQtor Batched Review Flow](#inspeqtor-batched-review-flow)
-  - [Directory Structure](#directory-structure)
-- [Execution Flows](#execution-flows)
-- [Agent & Orchestrator Logic](#agent--orchestrator-logic)
-- [Configuration](#configuration)
-- [Getting Started](#getting-started)
-- [Terminology](#terminology)
+- [High-Level System Overview](#high-level-system-overview)
+- [Pipeline Flow](#pipeline-flow)
+- [ConstruQtor Build Loop](#construqtor-build-loop)
+- [InspeQtor Review Flow](#inspeqtor-review-flow)
+- [Contract Enforcement Flow](#contract-enforcement-flow)
+- [Container Runtime Detection](#container-runtime-detection)
+- [Directory Structure](#directory-structure)
+- [Cost Flow](#cost-flow)
 
-## Architecture
+---
 
-This section contains Mermaid diagrams illustrating the complete architecture of the QonQrete system v0.8.8.
-
-### High-Level System Overview
+## High-Level System Overview
 
 ```mermaid
 flowchart TB
     subgraph HOST["🖥️ Host System"]
         User([👤 User])
         Shell[./qonqrete.sh]
-        EnvFile[.env<br/>API Keys]
-        Version[VERSION<br/>v0.8.8]
+        Version[VERSION<br/>v1.0.4]
+    end
+
+    subgraph DETECT["🔍 Auto-Detection Layer"]
+        OSDetect[OS Detection<br/>Linux / Darwin / WSL / MSYS]
+        EngineDetect[Engine Detection<br/>Docker / Podman / MSB]
+        BuildDetect[Build Backend<br/>buildx / plain]
     end
 
     subgraph CONTAINER["🐳 Container Runtime"]
@@ -45,19 +45,21 @@ flowchart TB
             
             subgraph LOCAL["⚡ Local Agents (Zero Cost)"]
                 Qompressor[🦴 Qompressor<br/>Skeletonizer]
-                Qontextor[🔍 Qontextor<br/>AST + Jedi + PyCG]
+                Qontextor[🔍 Qontextor<br/>AST + Jedi + Embeddings]
                 CalQulator[🧮 CalQulator<br/>Cost Estimator]
                 LoQal[✅ LoQal Verifier<br/>Syntax + Imports]
+                QontractGuard[🔒 QontractGuard<br/>AST Contract Checker]
             end
 
             subgraph AI["🧠 AI Agents"]
-                InstruQtor[📋 InstruQtor<br/>Briq Planner]
+                TasqLeveler[📊 TasqLeveler<br/>Tasq Enhancer]
+                InstruQtor[📋 InstruQtor<br/>Briq Planner + Contract Gen]
                 ConstruQtor[🔨 ConstruQtor<br/>Code Generator]
-                InspeQtor[🔎 InspeQtor<br/>Batched Reviewer]
+                InspeQtor[🔎 InspeQtor<br/>Multi-Stage Reviewer]
             end
 
             subgraph CACHE["💾 Cache Layer"]
-                Qontrabender[🌀 Qontrabender<br/>Hybrid Cache]
+                Qontrabender[🌀 Qontrabender<br/>Hybrid Cache<br/>Gemini-only]
             end
         end
 
@@ -66,7 +68,7 @@ flowchart TB
             OpenAI[(OpenAI<br/>gpt-4.1-*)]
             Gemini[(Gemini<br/>2.5-flash/pro)]
             Anthropic[(Anthropic<br/>claude-*)]
-            DeepSeek[(DeepSeek<br/>V3.2)]
+            DeepSeek[(DeepSeek<br/>chat/coder)]
             Qwen[(Qwen<br/>qwen3-coder)]
         end
     end
@@ -80,6 +82,7 @@ flowchart TB
             BriqD[briq.d/]
             BloqD[bloq.d/]
             QontextD[qontext.d/]
+            QontractD[qontract.d/<br/>qontract.md + .json]
             Qodeyard[qodeyard/]
             ExeqD[exeq.d/]
             ReqapD[reqap.d/]
@@ -88,30 +91,31 @@ flowchart TB
     end
 
     User --> Shell
-    Shell --> EnvFile
-    Shell --> Version
-    Shell --> CONTAINER
+    Shell --> DETECT
+    DETECT --> CONTAINER
     
     MainLoop --> Loader
     MainLoop --> TUI
     MainLoop --> PathMgr
     
-    Loader --> Config
-    Loader --> PipeConfig
-    
-    MainLoop --> Qompressor
-    MainLoop --> Qontextor
-    MainLoop --> CalQulator
+    MainLoop --> TasqLeveler
     MainLoop --> InstruQtor
+    MainLoop --> CalQulator
     MainLoop --> ConstruQtor
     MainLoop --> InspeQtor
+    MainLoop --> Qontextor
+    MainLoop --> Qompressor
     MainLoop --> Qontrabender
     
     ConstruQtor --> LoQal
+    ConstruQtor --> QontractGuard
+    InspeQtor --> QontractGuard
+    InspeQtor --> LoQal
     
     InstruQtor --> LibAI
     ConstruQtor --> LibAI
     InspeQtor --> LibAI
+    TasqLeveler --> LibAI
     
     LibAI --> OpenAI
     LibAI --> Gemini
@@ -119,99 +123,97 @@ flowchart TB
     LibAI --> DeepSeek
     LibAI --> Qwen
     
-    TasQ --> InstruQtor
     InstruQtor --> BriqD
-    
-    Qodeyard --> Qompressor
-    Qompressor --> BloqD
-    
-    Qodeyard --> Qontextor
-    Qontextor --> QontextD
-    
-    BriqD --> CalQulator
-    BloqD --> CalQulator
-    
-    BriqD --> ConstruQtor
-    BloqD --> ConstruQtor
+    InstruQtor --> QontractD
     ConstruQtor --> Qodeyard
     ConstruQtor --> ExeqD
-    
-    Qodeyard --> InspeQtor
-    ExeqD --> InspeQtor
     InspeQtor --> ReqapD
-    
-    Qontrabender --> BloqD
+    Qompressor --> BloqD
+    Qontextor --> QontextD
     
     classDef host fill:#2d2d2d,stroke:#888,color:#fff
-    classDef container fill:#1a3a1a,stroke:#4a4,color:#fff
+    classDef detect fill:#2a2a1a,stroke:#aa8,color:#fff
     classDef local fill:#1a1a3a,stroke:#44a,color:#fff
     classDef ai fill:#3a1a1a,stroke:#a44,color:#fff
     classDef cache fill:#3a3a1a,stroke:#aa4,color:#fff
     classDef volume fill:#2a1a2a,stroke:#a4a,color:#fff
     classDef provider fill:#1a2a2a,stroke:#4aa,color:#fff
     
-    class User,Shell,EnvFile,Version host
-    class Qompressor,Qontextor,CalQulator,LoQal local
-    class InstruQtor,ConstruQtor,InspeQtor ai
+    class User,Shell,Version host
+    class OSDetect,EngineDetect,BuildDetect detect
+    class Qompressor,Qontextor,CalQulator,LoQal,QontractGuard local
+    class InstruQtor,ConstruQtor,InspeQtor,TasqLeveler ai
     class Qontrabender cache
-    class Config,PipeConfig,TasQ,BriqD,BloqD,QontextD,Qodeyard,ExeqD,ReqapD,StruqtureD volume
+    class Config,PipeConfig,TasQ,BriqD,BloqD,QontextD,QontractD,Qodeyard,ExeqD,ReqapD,StruqtureD volume
     class OpenAI,Gemini,Anthropic,DeepSeek,Qwen provider
 ```
 
-### Detailed Pipeline Flow
+---
+
+## Pipeline Flow
 
 ```mermaid
 flowchart LR
     subgraph CYCLE["🔄 CyQle N"]
         direction TB
         
-        Start([Start CyQle]) --> Qompressor
-        
-        subgraph PREP["1️⃣ Preparation Phase"]
+        subgraph PREP["1️⃣ Warmup Phase (Cycle 1 only if sqrapyard)"]
             Qompressor[🦴 Qompressor<br/>Generate Skeletons]
             Qontextor[🔍 Qontextor<br/>Build Symbol Map]
+            Qontrabender[🌀 Qontrabender<br/>Warm Qache]
             Qompressor --> Qontextor
+            Qontextor --> Qontrabender
         end
         
         subgraph PLAN["2️⃣ Planning Phase"]
-            InstruQtor[📋 InstruQtor<br/>Decompose TasQ → BriQs]
+            TasqLeveler[📊 TasqLeveler<br/>Enhance TasQ]
+            InstruQtor[📋 InstruQtor<br/>TasQ → BriQs + QONTRACT]
             CalQulator[🧮 CalQulator<br/>Estimate Costs]
-            Qontextor --> InstruQtor
+            TasqLeveler --> InstruQtor
             InstruQtor --> CalQulator
         end
         
         subgraph BUILD["3️⃣ Build Phase (Interleaved)"]
             direction TB
             ConstruQtor[🔨 ConstruQtor<br/>Generate Code]
-            LoQal[✅ LoQal<br/>Verify Syntax]
+            ContractCheck[🔒 QontractGuard<br/>Per-Briq Check]
+            LoQalBuild[✅ LoQal<br/>Verify Syntax]
             Retry{Retry?}
             
             CalQulator --> ConstruQtor
-            ConstruQtor --> LoQal
-            LoQal -->|FAIL| Retry
+            ConstruQtor --> ContractCheck
+            ContractCheck -->|PASS| LoQalBuild
+            ContractCheck -->|FAIL| Retry
+            LoQalBuild -->|FAIL| Retry
             Retry -->|Yes| ConstruQtor
             Retry -->|No| NextBriq
-            LoQal -->|PASS| NextBriq[Next BriQ]
+            LoQalBuild -->|PASS| NextBriq[Next BriQ]
             NextBriq -->|More BriQs| ConstruQtor
         end
         
-        subgraph REVIEW["4️⃣ Review Phase (Batched)"]
-            InspeQtor[🔎 InspeQtor<br/>Batch Review All BriQs]
-            MetaReview[📊 Meta-Review<br/>Consolidate Results]
-            NextBriq -->|All Done| InspeQtor
+        subgraph REVIEW["4️⃣ Review Phase"]
+            QontractFull[🔒 QontractGuard<br/>Full Codebase Check]
+            LoQalFull[✅ LoQal Verifier<br/>Full Verification]
+            InspeQtor[🔎 InspeQtor<br/>AI Review]
+            MetaReview[📊 Meta-Review<br/>Consolidate]
+            NextBriq -->|All Done| QontractFull
+            QontractFull --> LoQalFull
+            LoQalFull --> InspeQtor
             InspeQtor --> MetaReview
         end
         
-        subgraph CACHE["5️⃣ Cache Phase"]
-            Qontrabender[🌀 Qontrabender<br/>Save to Qache]
-            MetaReview --> Qontrabender
+        subgraph POST["5️⃣ Post Phase"]
+            QontextorUpdate[🔍 Qontextor<br/>Update Index]
+            QompressorUpdate[🦴 Qompressor<br/>Update Skeletons]
+            MetaReview --> QontextorUpdate
+            QontextorUpdate --> QompressorUpdate
         end
         
         subgraph CHECKPOINT["6️⃣ CheQpoint"]
             CheQpoint{User Decision}
-            Qontrabender --> CheQpoint
+            QompressorUpdate --> CheQpoint
             CheQpoint -->|Continue| NextCycle([CyQle N+1])
-            CheQpoint -->|TweaQ| TweaQ[Modify TasQ]
+            CheQpoint -->|TweaQ| TweaQ[Edit ReQap]
             CheQpoint -->|Quit| Done([Exit])
             TweaQ --> NextCycle
         end
@@ -221,41 +223,47 @@ flowchart LR
     style PLAN fill:#2a1a2a,stroke:#a4a
     style BUILD fill:#3a1a1a,stroke:#a44
     style REVIEW fill:#1a3a1a,stroke:#4a4
-    style CACHE fill:#3a3a1a,stroke:#aa4
+    style POST fill:#3a3a1a,stroke:#aa4
     style CHECKPOINT fill:#2a2a2a,stroke:#888
 ```
 
-### ConstruQtor Build Loop (Interleaved Mode)
+---
+
+## ConstruQtor Build Loop
 
 ```mermaid
 flowchart TB
-    subgraph CONSTRUQTOR["🔨 ConstruQtor v0.8.8 - Per-BriQ Processing"]
+    subgraph CONSTRUQTOR["🔨 ConstruQtor v1.0.4 - Per-BriQ Processing"]
         Start([Start]) --> LoadBriqs[Load BriQ Files]
-        LoadBriqs --> ForEach{For Each BriQ}
+        LoadBriqs --> CheckContract{qontract.d<br/>exists?}
+        CheckContract -->|No + Cycle>1| FailFast[❌ FAIL-FAST<br/>Contract Missing]
+        CheckContract -->|Yes or Cycle 1| ForEach{For Each BriQ}
         
         ForEach --> Attempt[Attempt 1/3]
         
         subgraph ATTEMPT["Build Attempt"]
-            Attempt --> Context[Gather Context<br/>bloq.d + qontext.d]
-            Context --> Prompt[Build AI Prompt]
+            Attempt --> Context[Gather Context<br/>qontract.md + bloq.d + qontext.d]
+            Context --> Prompt[Build AI Prompt<br/>+ Cycle1 TasQ + Qodeyard Tree]
             Prompt --> AICall[🧠 AI Generate Code]
             AICall --> Parse[Parse Response<br/>Extract Files]
             Parse --> Write[Write to qodeyard/]
         end
         
-        subgraph VERIFY["LoQal Verification"]
-            Write --> Syntax[Python compile]
+        subgraph VERIFY["Per-Briq Verification"]
+            Write --> ContractGuard[🔒 QontractGuard<br/>Contract-Relevant Briqs]
+            ContractGuard -->|FAIL| ContractRetry{Contract Retry?}
+            ContractGuard -->|PASS/SKIP| Syntax[Python compile]
             Syntax -->|Error| SyntaxFail[❌ Syntax Error]
             Syntax -->|OK| Imports[Check Imports]
-            Imports -->|Warning| ImportWarn[⚠️ Import Warning]
-            Imports -->|OK| Pass[✅ Passed]
+            Imports --> Pass[✅ Passed]
         end
         
+        ContractRetry -->|Yes| Attempt
+        ContractRetry -->|No| MarkFail
         SyntaxFail --> RetryCheck{Attempts < 3?}
         RetryCheck -->|Yes| Attempt
         RetryCheck -->|No| MarkFail[Mark FAILURE]
         
-        ImportWarn --> WriteExeq
         Pass --> WriteExeq[Write exeQ Summary]
         MarkFail --> WriteExeq
         
@@ -267,122 +275,215 @@ flowchart TB
     style VERIFY fill:#1a3a1a,stroke:#4a4
 ```
 
-### InspeQtor Batched Review Flow
+---
+
+## InspeQtor Review Flow
 
 ```mermaid
 flowchart TB
-    subgraph INSPEQTOR["🔎 InspeQtor v0.8.8 - Two-Stage Batched Review"]
-        Start([Start]) --> Gather[Gather All ExeQs<br/>from exeq.d/cyqleN/]
+    subgraph INSPEQTOR["🔎 InspeQtor v1.0.4 - Multi-Stage Review"]
+        Start([Start]) --> CheckContract{qontract.d<br/>exists?}
+        CheckContract -->|No + Cycle>1| FailFast[❌ FAIL-FAST]
+        CheckContract -->|Yes| Stage0
         
-        subgraph STAGE1["Stage 1: Batched Per-BriQ Reviews"]
-            Gather --> CalcBatches[Calculate Batches<br/>max 12 briqs, 60K tokens]
-            CalcBatches --> ForBatch{For Each Batch}
-            
-            ForBatch --> BuildPrompt[Build Batch Prompt<br/>All BriQs + Code]
-            BuildPrompt --> AIReview[🧠 AI Batch Review]
-            AIReview --> ParseResults[Parse Results<br/>Extract Per-BriQ Status]
-            ParseResults --> WriteReqaps[Write Individual<br/>reqap.md Files]
-            WriteReqaps --> ForBatch
+        subgraph STAGE0["Stage 0: QontractGuard (Deterministic)"]
+            Stage0[Load qontract.json] --> RunGuard[🔒 AST-Based Check<br/>All qodeyard/* Files]
+            RunGuard -->|Violations| GuardFail[Force Cycle FAIL<br/>+ Violation Report]
+            RunGuard -->|Clean| GuardPass[✅ Contract Satisfied]
         end
         
-        subgraph STAGE2["Stage 2: Meta-Review"]
-            ForBatch -->|All Batches Done| GatherReqaps[Gather All ReQaps]
-            GatherReqaps --> MetaPrompt[Build Meta Prompt]
-            MetaPrompt --> MetaAI[🧠 AI Consolidate]
-            MetaAI --> FinalReqap[Write Final ReQap<br/>Cycle Summary]
+        subgraph STAGE1["Stage 1: LoQal Verification (Deterministic)"]
+            GuardPass --> LoQal[✅ Syntax + Import Checks]
+            GuardFail --> LoQal
         end
         
-        subgraph LOQAL["LoQal Verification"]
-            FinalReqap --> LoQalCheck[Run Full Verification<br/>All qodeyard/ Files]
-            LoQalCheck --> Report[Append to ReQap]
+        subgraph STAGE2["Stage 2: Per-BriQ AI Reviews"]
+            LoQal --> GatherBriqs[Gather ExeQs + Code]
+            GatherBriqs --> ForBatch{Batch or Individual}
+            ForBatch --> AIReview[🧠 AI Tactical Review<br/>Context: qontract.md + qodeyard]
+            AIReview --> WriteReqaps[Write Per-BriQ ReQaps]
         end
         
-        Report --> Done([Complete])
+        subgraph STAGE3["Stage 3: Meta-Review (AI)"]
+            WriteReqaps --> GatherAll[Gather All ReQaps]
+            GatherAll --> MetaAI[🧠 Consolidate Assessment]
+            MetaAI --> FinalReqap[Write Final ReQap<br/>Assessment: SUCCESS/PARTIAL/FAILURE]
+        end
+        
+        FinalReqap --> Done([Complete])
     end
     
-    style STAGE1 fill:#1a3a1a,stroke:#4a4
-    style STAGE2 fill:#3a3a1a,stroke:#aa4
-    style LOQAL fill:#1a1a3a,stroke:#44a
+    style STAGE0 fill:#3a1a1a,stroke:#a44
+    style STAGE1 fill:#1a1a3a,stroke:#44a
+    style STAGE2 fill:#1a3a1a,stroke:#4a4
+    style STAGE3 fill:#3a3a1a,stroke:#aa4
 ```
 
-### Directory Structure
+---
+
+## Contract Enforcement Flow
 
 ```mermaid
 flowchart TB
-    subgraph DIRS["📁 QonQrete Directory Structure"]
+    subgraph CONTRACT["🔒 QONTRACT Lifecycle"]
+        direction TB
+        
+        subgraph GEN["Cycle 1: Generation"]
+            TasQ[tasq.md] --> InstruQtor[InstruQtor extracts<br/>rules + invariants]
+            InstruQtor --> MD[qontract.d/qontract.md<br/>Human-readable rules]
+            InstruQtor --> JSON[qontract.d/qontract.json<br/>Machine-parseable]
+        end
+        
+        subgraph ENFORCE["Cycle 2+: Enforcement"]
+            JSON --> Guard[QontractGuard<br/>Python AST Parser]
+            
+            Guard --> ForbidImports[Forbidden Imports<br/>e.g. uuid]
+            Guard --> SchemaFields[Exact Schema Fields<br/>Pydantic models]
+            Guard --> ForbidFields[Forbidden Field Names]
+            Guard --> IDType[ID Type Rules<br/>int vs str]
+            Guard --> IDStrategy[Monotonic ID Strategy<br/>next_id + increment]
+            Guard --> Endpoints[Required Endpoints<br/>Route decorators]
+        end
+        
+        subgraph GATE["Gating"]
+            ForbidImports --> Result{Violations?}
+            SchemaFields --> Result
+            ForbidFields --> Result
+            IDType --> Result
+            IDStrategy --> Result
+            Endpoints --> Result
+            
+            Result -->|None| Pass[✅ PASS]
+            Result -->|Found| Fail[❌ FAIL<br/>+ Violation Report]
+        end
+    end
+    
+    style GEN fill:#1a3a1a,stroke:#4a4
+    style ENFORCE fill:#3a1a1a,stroke:#a44
+    style GATE fill:#3a3a1a,stroke:#aa4
+```
+
+---
+
+## Container Runtime Detection
+
+```mermaid
+flowchart TB
+    subgraph DETECTION["🔍 v1.0.4 Auto-Detection"]
+        Start([qonqrete.sh]) --> DetectOS[detect_os]
+        
+        DetectOS --> Linux[Linux]
+        DetectOS --> Darwin[macOS / Darwin]
+        DetectOS --> WSL[WSL2]
+        DetectOS --> MSYS[Git Bash / MSYS]
+        
+        Linux --> DetectEngine
+        Darwin --> DetectEngine
+        WSL --> DetectEngine
+        MSYS --> DetectEngine
+        
+        DetectEngine[detect_engine] --> EnvCheck{CONTAINER_ENGINE<br/>env set?}
+        EnvCheck -->|Yes| UseEnv[Use env value]
+        EnvCheck -->|No| CLICheck{CLI flag?}
+        CLICheck -->|--docker| UseDocker[docker]
+        CLICheck -->|--podman| UsePodman[podman]
+        CLICheck -->|--msb| UseMSB[msb]
+        CLICheck -->|None| MSBConfig{MSB in config?}
+        MSBConfig -->|Yes| UseMSB
+        MSBConfig -->|No| AutoDetect{docker available?}
+        AutoDetect -->|Yes| UseDocker
+        AutoDetect -->|No| PodmanCheck{podman available?}
+        PodmanCheck -->|Yes| UsePodman
+        PodmanCheck -->|No| Error[❌ No engine found]
+        
+        UseDocker --> BuildBackend[detect_build_backend]
+        UsePodman --> PodmanMachine[ensure_podman_machine<br/>macOS only]
+        PodmanMachine --> BuildBackend
+        
+        BuildBackend --> Buildx{buildx available?}
+        Buildx -->|Yes| UseBuildx[buildx mode]
+        Buildx -->|No| UsePlain[plain mode]
+        
+        Darwin --> PodmanMachine
+    end
+    
+    style DETECTION fill:#1a1a3a,stroke:#44a
+```
+
+---
+
+## Directory Structure
+
+```mermaid
+flowchart TB
+    subgraph DIRS["📁 QonQrete Directory Structure v1.0.4"]
         direction TB
         
         subgraph ROOT["qonqrete/"]
-            qonqrete_sh[qonqrete.sh<br/>Entry Point]
-            VERSION[VERSION<br/>0.8.8]
-            env[.env<br/>API Keys]
-            Dockerfile[Dockerfile]
+            qonqrete_sh[qonqrete.sh<br/>Entry Point + Auto-Detect]
+            VERSION[VERSION<br/>1.0.4]
+            Dockerfile[Dockerfile<br/>Security Hardened]
+            entrypoint[entrypoint.sh<br/>Root Dropping]
+            Sandboxfile[Sandboxfile<br/>MSB Config]
+            requirements[requirements.txt<br/>Pinned Deps]
+            COPYRIGHT[COPYRIGHT]
+            LICENSE[LICENSE - AGPLv3]
         end
         
         subgraph QRANE["qrane/"]
             qrane_py[qrane.py<br/>Orchestrator]
-            loader[loader.py<br/>Config]
-            paths[paths.py<br/>Paths]
-            tui[tui.py<br/>Display]
-            lib_funq[lib_funqtions.py<br/>Pricing]
+            loader[loader.py<br/>Spinner + Colors]
+            paths[paths.py<br/>Path Manager]
+            tui_py[tui.py<br/>TUI Display]
+            lib_funq[lib_funqtions.py<br/>Token Pricing]
         end
         
         subgraph WORQER["worqer/"]
-            lib_ai[lib_ai.py<br/>AI Abstraction]
-            instruqtor[instruqtor.py]
-            construqtor[construqtor.py]
-            inspeqtor[inspeqtor.py]
-            qompressor[qompressor.py]
-            qontextor[qontextor.py]
-            qontrabender[qontrabender.py]
-            calqulator[calqulator.py]
-            loqal_verifier[loqal_verifier.py]
+            lib_ai[lib_ai.py<br/>AI Abstraction + DeepSeek]
+            lib_security[lib_security.py<br/>Security Utils]
+            runtime_checks[runtime_checks.py<br/>Fail-Fast Guards]
+            tasqleveler[tasqleveler.py<br/>Optional Enhancer]
+            instruqtor[instruqtor.py<br/>Planner + Contract Gen]
+            calqulator[calqulator.py<br/>Cost Estimator]
+            construqtor[construqtor.py<br/>Code Generator]
+            inspeqtor[inspeqtor.py<br/>Multi-Stage Reviewer]
+            qontextor[qontextor.py<br/>Dual-Mode Indexer]
+            qompressor[qompressor.py<br/>Skeletonizer]
+            qontrabender[qontrabender.py<br/>Cache Bender]
+            qontract_guard[qontract_guard.py<br/>Contract Verifier]
+            loqal_verifier[loqal_verifier.py<br/>Local Verifier]
         end
         
         subgraph WORQSPACE["worqspace/"]
             config[config.yaml]
             pipeline[pipeline_config.yaml]
+            caching[caching_policy.yaml]
             tasq[tasq.md]
-            sqrapyard[sqrapyard/<br/>Persistent Storage]
+            sqrapyard[sqrapyard/<br/>Seed Files]
+            qonstructions[qonstructions/<br/>Saved Projects]
             
             subgraph QAGE["qage_YYYYMMDD_HHMMSS/"]
+                tasq_d[tasq.d/<br/>Cycle Directives]
                 briq_d[briq.d/<br/>Planned Steps]
-                bloq_d[bloq.d/<br/>Skeletons]
-                qontext_d[qontext.d/<br/>Symbol Maps]
+                qontract_d[qontract.d/<br/>Project Constitution]
                 qodeyard_g[qodeyard/<br/>Generated Code]
                 exeq_d[exeq.d/<br/>Build Summaries]
                 reqap_d[reqap.d/<br/>Reviews]
+                bloq_d[bloq.d/<br/>Skeletons]
+                qontext_d[qontext.d/<br/>Symbol Maps]
                 struqture[struqture/<br/>Logs]
             end
         end
         
         subgraph DOC["doc/"]
-            docs[DOCUMENTATION.md<br/>RELEASE-NOTES.md<br/>QUICKSTART.md<br/>etc.]
+            docs[DOCUMENTATION.md<br/>ARCHITECTURE.md<br/>QUICKSTART.md<br/>TERMINOLOGY.md<br/>RELEASE-NOTES.md<br/>QONTRABENDER.md]
+        end
+
+        subgraph TESTS["tests/"]
+            test1[test_v1_0_4.py<br/>58 tests]
+            test2[test_v1_0_4_stable_smoke.py<br/>52 tests]
         end
     end
-    
-    qonqrete_sh --> qrane_py
-    qrane_py --> loader
-    qrane_py --> paths
-    qrane_py --> tui
-    loader --> config
-    loader --> pipeline
-    
-    qrane_py --> instruqtor
-    qrane_py --> construqtor
-    qrane_py --> inspeqtor
-    
-    instruqtor --> lib_ai
-    construqtor --> lib_ai
-    construqtor --> loqal_verifier
-    inspeqtor --> lib_ai
-    
-    instruqtor --> briq_d
-    qompressor --> bloq_d
-    qontextor --> qontext_d
-    construqtor --> qodeyard_g
-    construqtor --> exeq_d
-    inspeqtor --> reqap_d
     
     style ROOT fill:#2d2d2d,stroke:#888
     style QRANE fill:#1a3a1a,stroke:#4a4
@@ -390,185 +491,41 @@ flowchart TB
     style WORQSPACE fill:#2a1a2a,stroke:#a4a
     style QAGE fill:#3a3a1a,stroke:#aa4
     style DOC fill:#1a1a3a,stroke:#44a
+    style TESTS fill:#1a2a2a,stroke:#4aa
 ```
 
-### Cost Flow Visualization
+---
+
+## Cost Flow
 
 ```mermaid
 flowchart LR
-    subgraph COSTS["💰 Token Cost Flow (v0.8.8)"]
+    subgraph COSTS["💰 Token Cost Flow (v1.0.4)"]
         
         subgraph FREE["🆓 Zero Cost"]
-            Qompressor[Qompressor<br/>Local Python]
-            Qontextor[Qontextor<br/>AST + Jedi]
+            Qompressor[Qompressor<br/>Local Python AST]
+            Qontextor[Qontextor<br/>AST + Jedi + Embeddings]
             CalQulator[CalQulator<br/>Local Math]
             LoQal[LoQal Verifier<br/>compile + imports]
+            QontractGuard[QontractGuard<br/>AST Contract Check]
             Qontrabender[Qontrabender<br/>Local Cache]
         end
         
         subgraph CHEAP["💵 Low Cost"]
-            InstruQtor[InstruQtor<br/>gpt-4.1-nano<br/>$0.10/1M in]
-            InspeQtorBatch[InspeQtor Batched<br/>gpt-4.1-mini<br/>$0.40/1M in]
+            TasqLeveler[TasqLeveler<br/>gpt-4.1-mini<br/>$0.10/1M in]
+            InstruQtor[InstruQtor<br/>gpt-4.1-mini<br/>$0.10/1M in]
+            InspeQtorBatch[InspeQtor<br/>gpt-4.1-mini<br/>$0.40/1M in]
         end
         
         subgraph MAIN["💰 Main Cost"]
-            ConstruQtor[ConstruQtor<br/>gemini-2.5-flash<br/>$0.30/1M in]
-        end
-        
-        subgraph TOTAL["📊 7 CyQle Estimate"]
-            Est[InstruQtor: ~$0.01<br/>ConstruQtor: ~$1.50<br/>InspeQtor: ~$0.30<br/>───────────<br/>TOTAL: ~$2.00]
+            ConstruQtor[ConstruQtor<br/>deepseek-chat<br/>$1.25/1M in]
         end
     end
     
     FREE --> CHEAP
     CHEAP --> MAIN
-    MAIN --> TOTAL
     
     style FREE fill:#1a3a1a,stroke:#4a4
     style CHEAP fill:#3a3a1a,stroke:#aa4
     style MAIN fill:#3a1a1a,stroke:#a44
-    style TOTAL fill:#1a1a3a,stroke:#44a
 ```
-
----
-
-## Execution Flows
-
-This section traces the end-to-end execution flows of the QonQrete system, from user command to the completion of a cycle.
-
-### 1. Initialization Flow (`./qonqrete.sh init`)
-
-1.  **User Input**: User executes `./qonqrete.sh init`. An optional `--msb` or `--docker` flag can be provided.
-2.  **`qonqrete.sh`**: The script parses the `init` command.
-3.  **Runtime Detection**: It checks for the `--msb` or `--docker` flags. If none are provided, it checks `pipeline_config.yaml` for a `microsandbox: true` setting. If not found, it defaults to Docker.
-4.  **Container Build**:
-    *   If the runtime is `docker`, it executes `docker build -t qonqrete-qage -f Dockerfile .`.
-    *   If the runtime is `msb`, it executes `msb build . -t qonqrete-qage` (or `mbx`).
-5.  **Result**: A container image named `qonqrete-qage` is created in the local registry of the selected runtime, ready for execution.
-
-### 2. Main Execution Flow (`./qonqrete.sh run`)
-
-1.  **User Input**: User executes `./qonqrete.sh run`. Optional flags like `--auto`, `--user`, and `--tui` can be included.
-2.  **`qonqrete.sh`**:
-    *   Parses the `run` command and any additional flags.
-    *   Reads the `VERSION` file and exports it as `QONQ_VERSION`.
-    *   Creates a unique timestamped run directory (`qage_<timestamp>`) inside `worqspace/`.
-    *   **Sqrapyard Initialization**: It checks the persistent `worqspace/sqrapyard` directory. If it contains files, they are copied into the new `qage_<timestamp>/qodeyard`. If `sqrapyard/tasq.md` exists, it's copied to become the initial tasq for the first cycle.
-    *   Copies configuration files into the new run directory.
-    *   Constructs the `docker run` or `msb run` command, mounting the `qage_<timestamp>` directory and passing the necessary environment variables.
-3.  **`qrane.py` (Inside the Container)**:
-    *   The orchestrator starts.
-    *   **API Key Validation**: It reads `config.yaml` to identify all unique AI providers being used for the current run. It then checks that the corresponding environment variables (e.g., `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`) are set. If a required key for a configured provider is missing, it exits with a clear error message.
-    *   It determines the UI mode (TUI/headless) and enters the main `cyQle` loop.
-4.  **The `cyQle` Loop**:
-    *   The `Qrane` dynamically loads the agent pipeline from `pipeline_config.yaml`.
-    *   It executes each agent in sequence.
-5.  **The `CheQpoint`**:
-    *   `qrane.py` reads the final `reQap.md` of the cycle.
-    .   It pauses and prompts the user for input (`[Q]ontinue`, `[T]weaQ`, `[X]Quit`), unless in autonomous mode. The default behavior (autonomous vs. user-gated) is controlled by the `cheqpoint` option in `config.yaml`, and can be overridden by the `--auto` or `--user` flags.
-6.  **Loop Continuation**:
-    *   If approved, the `reQap.md` is promoted to become the task for the next cycle.
-    *   The cycle counter increments, and the loop repeats.
-7.  **Exit**: If the user quits, the loop breaks, the container exits, and the script finishes.
-
-### 3. Cleanup Flow (`./qonqrete.sh clean`)
-
-1.  **User Input**: User executes `./qonqrete.sh clean`.
-2.  **`qonqrete.sh`**:
-    *   Searches for `qage_*` directories in `worqspace/`.
-    *   Prompts the user for confirmation.
-    *   If confirmed, it executes `rm -rf worqspace/qage_*`.
-3.  **Result**: The `worqspace` is cleared of all previous run data.
-
----
-
-## Agent & Orchestrator Logic
-
-This section details the operational logic for the QonQrete system.
-
-### Orchestrator Logic (`qrane/qrane.py`)
-
-The `Qrane` is the heart of the system.
-
--   **Dynamic Pipeline Loading**: On startup, the `Qrane` reads the `worqspace/pipeline_config.yaml` file. It iterates through the `agents` list defined in this file to build the execution pipeline for the cycle.
--   **Generic Execution**: For each agent in the pipeline, the orchestrator constructs the appropriate command-line arguments based on the `script`, `input`, and `output` fields in the config.
--   **Centralized Paths**: It utilizes the `PathManager` class to resolve all file and directory paths.
-
-### Default Agent Logic
-
-The following describes the logic of the three default agents that constitute the standard QonQrete pipeline.
-
-#### Core Abstraction: `worqer/lib_ai.py`
-
-All agents utilize this central library to interact with AI models. It uses a hybrid approach:
-- **Official Python Libraries**: Used for OpenAI, Google Gemini, and Anthropic. These libraries read their respective API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`) directly from the environment.
-- **Custom Provider**: A custom, OpenAI-compatible provider located in `sqeleton/deepseek_provider.py` is used for DeepSeek. This method is more reliable and uses the `DEEPSEEK_API_KEY` from the environment.
-- **CLI Wrapper**: A wrapper around the `@qwen-code/qwen-code` CLI tool is used for Qwen models.
-
-This provides a consistent and modular interface for all AI interactions.
-
-#### 1. `instruQtor` (The Planner)
--   **Purpose**: To decompose a high-level task (`tasQ.md`) into a series of small, actionable steps (`briQ.md` files).
--   **Logic**: It reads the task, constructs a detailed prompt for the AI, invokes the AI via `lib_ai.py`, and then parses the markdown response into individual `briQ.md` files.
--   **Sensitivity**: The level of detail in the breakdown can be controlled with the `QONQ_SENSITIVITY` environment variable, which corresponds to 10 predefined levels (0-9).
--   **Context-Aware**: It reads the contents of the `qodeyard` to provide the AI with the current state of the codebase.
-
-#### 2. `construQtor` (The Executor)
--   **Purpose**: To execute the steps from the `briQ.md` files and generate code.
--   **Logic**: It iterates through the `briQ` files sequentially. For each, it builds a prompt that includes the step's instructions and the current state of the `qodeyard` directory. It then calls the AI to execute the step and writes the generated code to the `qodeyard`.
-
-#### 3. `inspeQtor` (The Reviewer)
--   **Purpose**: To review the `construQtor`'s work and provide feedback for the next cycle.
--   **Logic**: It gathers all generated code from the `qodeyard`, constructs a prompt instructing the AI to act as a senior code reviewer, and saves the AI's assessment and suggestions to a `reQap.md` file.
-
-### Specialized Agents
-
-The following agents can be added to the pipeline in `pipeline_config.yaml` to provide additional functionality.
-
-#### 1. `qompressor` (The Skeletonizer)
--   **Purpose**: To create a low-token, high-context representation of the codebase.
--   **Logic**: It mirrors the `qodeyard` directory into a new `bloq.d` directory. During the mirroring process, it strips the implementation bodies from source code files, keeping only the architectural elements like class/function signatures, imports, and docstrings. This "skeleton" provides the AI with the overall structure of the code at a fraction of the token cost.
--   **Cost**: Zero token cost. It's a local pre-processing step.
-
-#### 2. `qontextor` (The Symbol Mapper)
--   **Purpose**: To generate a detailed, machine-readable map of the codebase's symbols and their relationships.
--   **Dual-Mode Logic**:
-    -   **Local Mode (`provider: local`)**: This is the default mode. `qontextor` performs a deterministic analysis of Python files using a sophisticated stack of local tools. It extracts classes, functions, signatures, and purposes with high accuracy and speed, incurring **zero token cost**.
-        -   **Python AST:** Extracts the fundamental structure of the code.
-        -   **Docstrings & Verb Heuristics:** Determines the purpose of functions and classes.
-        -   **Jedi:** Provides type inference and cross-file understanding.
-        -   **PyCG:** Generates a call graph for dependency analysis.
-        -   **Fast vs. Complex Mode:** Can be configured in `worqspace/config.yaml` to run in a `'fast'` (AST, Jedi, Heuristics) or `'complex'` (adds deep semantic analysis with `sentence-transformers`) mode.
-    -   **AI Mode (`provider: [ai_provider]`)**: In this legacy mode, it uses the "skeletonized" output from the `qompressor` to analyze each file. It then uses an AI call to generate a YAML file for each source file, detailing its symbols (classes, functions, etc.), their signatures, their purpose, and their dependencies.
--   **Cost**: Incurs AI token costs only when an AI provider is specified. It's best used for initial scans or when major architectural changes occur.
-
-#### 3. `calqulator` (The Cost Estimator)
--   **Purpose**: To provide a token and cost estimate for the upcoming `construqtor` cycle.
--   **Logic**: It analyzes the `briQ.md` files for the current cycle. Its calculation includes:
-    1.  A base cost for the "skeletonized" project context from `bloq.d`.
-    2.  The cost of the instructions in each `briQ.md` file.
-    3.  A "deep read" cost for any specific files that are explicitly referenced within a `briQ`.
--   **Output**: It annotates each `briQ.md` file with its estimated token count and cost, and prints a detailed report to the console.
--   **Cost**: Zero token cost. It performs local calculations.
-
----
-
-## Configuration
-
-The behavior of the QonQrete system can be configured in the `worqspace/` directory.
-
--   **`config.yaml`**:
-    -   **`cheqpoint`**: A boolean that sets the default execution mode. `true` (the default) enables user-gated `cheqpoints`. `false` makes the system autonomous by default. This can be overridden by the `--user` and `--auto` command-line flags.
-    -   **`auto_cycle_limit`**: The maximum number of `cyQle`s to run in autonomous mode. `0` means infinite.
-    -   **`agents`**: The AI models to be used by each agent. You can also set the provider to `local` for agents that do not use AI.
--   **`pipeline_config.yaml`**:
-    -   **`microsandbox`**: Set to `true` to make Microsandbox (`msb`) the default container runtime.
-    -   **`agents`**: Defines the sequence of agents in the pipeline.
-
-## Getting Started
-
-To get started with QonQrete, please see the **[QUICKSTART.md](./QUICKSTART.md)** guide.
-
-## Terminology
-
-For a complete list of the terminology used in the QonQrete system, please see the **[TERMINOLOGY.md](./TERMINOLOGY.md)** file.
