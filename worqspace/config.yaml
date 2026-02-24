@@ -1,4 +1,4 @@
-# QonQrete Configuration v1.0.3-stable
+# QonQrete Configuration v1.0.4-stable
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # v1.0.2 NEW: INVERTED BRIQ SENSITIVITY SCALE!
@@ -84,6 +84,10 @@ agents:
   tasqleveler:
     provider: openai
     model: gpt-4.1-mini
+    # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
+    enabled: true
+    min_complexity_score: 15  # Below this score, don't enhance
+    min_lines: 20             # Below this line count, don't enhance
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSTRUQTOR - Briq Planning
@@ -168,6 +172,14 @@ options:
   
   # Enable/disable Qontextor (context indexing)
   use_qontextor: true
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TASQLEVELER COMPLEXITY SCORING (v1.0.4)
+# ═══════════════════════════════════════════════════════════════════════════════
+tasqleveler:
+  enabled: true
+  min_complexity_score: 15
+  min_lines: 20
 
   # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
   # NOTE: Only works when construqtor.provider is 'gemini'!

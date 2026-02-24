@@ -1,8 +1,8 @@
-# QonQrete - Secure AI Construction Loop System
+# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
 
-![Splash](qrane/qonqrete.jpg)
+![Splash](qonqrete.jpg)
 
 
 QonQrete is a Secure AI Construction Loop System, using a Multi-Agent Pipeline Orchestrator in a Sandbox environment with YAML Configuration. In short: it spawns 3 AI agents in a sandbox/container and makes them work together on tasks. It can run with a hard requirement for user approval between steps, or in a fully autonomous mode where it keeps running until the user decides to stop it.
@@ -13,7 +13,7 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ## Version
 
-**Version:** `v1.0.3-stable` (See `VERSION` file for the canonical version).
+**Version:** `v1.0.4-stable` (See `VERSION` file for the canonical version).
 
 > **Note on Experimental Features:**
 >
@@ -25,34 +25,34 @@ This architecture ensures that AI-generated code and processes cannot affect the
 
 ---
 
-## What's New in v1.0.3 🚀
+## What's New in v1.0.4-stable 🚀
 
-### 🎯 BATCHED BRIQ GENERATION - Bypass Token Limits!
+### 🔒 QONTRACT LOCKDOWN — Contract-Enforced Pipeline
 
-**Finally:** Generate 50-250+ briqs without hitting token limits!
+The QONTRACT (project constitution) is now mandatory and enforced across the entire pipeline:
 
-High-sensitivity builds (sensitivity >= 8) now use a **2-phase approach**:
-1. **Blueprint (JSON)** - Generate complete list of briq titles/objectives
-2. **Fabrication (Batched)** - Generate full XML content in chunks of 5
+- **`qontract.d/`** — dedicated directory for `qontract.md` + `qontract.json`
+- **QontractGuard** — deterministic AST-based contract verification (forbidden imports, schema fields, ID strategies, required endpoints)
+- **Fail-fast dependency** — ConstruQtor and InspeQtor crash-stop if contract is missing on cycle 2+
+- **Per-briq gating** — contract-relevant briqs are checked after each generation attempt
+- **110 tests passing** (58 unit + 52 smoke)
 
-**Benefits:**
-- ✅ **Actually get 60+ briqs** for sensitivity 10 (previously capped ~30-40)
-- ✅ **100-200+ briqs** for sensitivity 14-16 (enterprise projects)
-- ✅ **Cost transparency** with per-batch reporting
-- ✅ **Fault tolerance** - Failed batches don't kill generation
-- ✅ **Automatic fallback** to single-shot if needed
+### 🐳 MULTI-ENGINE SUPPORT — Docker, Podman, Cross-Platform
 
-**Configuration:**
-```yaml
-instruqtor:
-  batch_mode: true         # Auto-enables for sensitivity >= 8
-  batch_size: 5            # Briqs per batch
-```
+Auto-detects everything so you don't have to:
+- **OS**: Linux, macOS, WSL2, Git Bash/MSYS
+- **Engine**: Docker → Podman → error (with install links)
+- **Build backend**: buildx → plain (auto-detected)
+- **macOS Podman**: Auto-initializes and starts the Podman machine
+- **Windows**: Volume path normalization for Docker Desktop
+- CLI flags: `--docker`, `--podman` to force engine
+- Env overrides: `CONTAINER_ENGINE`, `BUILD_BACKEND`
 
-**Example:**
-```bash
-./qonqrete.sh run -b 10 -c 4 -a  # Generates 50-75 briqs reliably!
-```
+### 📋 Also in v1.0.4
+
+- Qompressor indentation fix (correct skeleton output for class methods + nested defs)
+- TasqLeveler complexity gating (skip enhancement for simple tasqs)
+- InspeQtor context wiring: `qodeyard/*` is PRIMARY truth source, `bloq.d/*`/`qontext.d/*` are OPTIONAL with staleness warnings
 
 ---
 
@@ -410,13 +410,32 @@ QonQrete now features a **Triple-Core Memory System**:
 
 ## System Requirements
 
-### Docker (Required)
+### Container Engine (Docker or Podman)
 
--   **macOS**: [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
--   **Linux**: `sudo apt-get install docker-ce docker-ce-cli containerd.io`
--   **Windows**: [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
+QonQrete auto-detects your container engine at runtime. No `buildx` requirement.
+
+**Priority order:** `CONTAINER_ENGINE` env → `--podman` / `--docker` CLI flag → auto-detect (docker first, then podman).
+
+| Platform | Engine | Notes |
+|----------|--------|-------|
+| **Linux** | Docker CE / Podman | Works out of the box. `sudo apt-get install docker-ce docker-ce-cli containerd.io` or `sudo dnf install podman` |
+| **macOS** | Docker Desktop | [Install Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) |
+| **macOS** | Podman | `brew install podman` — QonQrete auto-runs `podman machine init` and `podman machine start` if needed |
+| **Windows** | Docker Desktop + WSL2 | [Install Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/). WSL2 backend recommended. |
+| **Windows** | Git Bash / MSYS | Supported with automatic path normalization. WSL2 is recommended for best compatibility. |
 
 > **Docker Desktop Users:** Grant Docker permission to access the project directory via **Settings > Resources > File Sharing**.
+
+**Environment overrides:**
+```bash
+export CONTAINER_ENGINE=podman   # Force podman (or docker)
+export BUILD_BACKEND=plain       # Force plain build (skip buildx detection)
+```
+
+#### Tested successfully on:
+- Linux (Fedora 42 & 43) + docker and docker-desktop
+- Windows 11 WSL 2 ubuntu and docker desktop
+- Mac OS Sequoia 15.7.4 with podman and docker-desktop
 
 ### Microsandbox (Optional) [EXPERIMENTAL]
 
@@ -590,10 +609,10 @@ Clean Options:
 
 - [QUICKSTART.md](./doc/QUICKSTART.md) - Getting started guide
 - [DOCUMENTATION.md](./doc/DOCUMENTATION.md) - Full system documentation
+- [ARCHITECTURE.md](./doc/ARCHITECTURE.md) - System architecture & diagrams
 - [QONTRABENDER.md](./doc/QONTRABENDER.md) - Cache bender documentation
-- [RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) - Version history
+- [RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) - Version history (v1.0.4-stable → v0.1.0-alpha)
 - [TERMINOLOGY.md](./doc/TERMINOLOGY.md) - QonQrete terminology
-- [TESTS_v1.0.0.md](./doc/TESTS_v1.0.0.md) - Configuration A/B testing results
 
 ---
 

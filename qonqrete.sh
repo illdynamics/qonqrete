@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v1.0.2-stable - Inverted Briq Sensitivity Scale & Non-Interactive Saves
+# v1.0.4-stable - Container Runtime Auto-Detect (Docker / Podman / MSB)
 
 set -euo pipefail
 
@@ -21,7 +21,7 @@ CONFIG_FILE="${WORKSPACE_DIR}/pipeline_config.yaml"
 CONTAINER_WORKSPACE="/qonq"
 QONSTRUCTIONS_DIR="${WORKSPACE_DIR}/qonstructions"
 
-# --- DOCKER SECURITY FLAGS ---
+# --- DOCKER/PODMAN SECURITY FLAGS ---
 # These flags harden the container runtime:
 #   --read-only         : Root filesystem is read-only (only /qonq is writable)
 #   --cap-drop=ALL      : Drop all Linux capabilities
@@ -32,7 +32,7 @@ QONSTRUCTIONS_DIR="${WORKSPACE_DIR}/qonstructions"
 #   --memory/--cpus     : Resource limits to prevent DoS
 #   --pids-limit        : Prevent fork bombs
 #   --tmpfs             : Ephemeral /tmp and cache with noexec
-DOCKER_SECURITY_FLAGS="--read-only \
+SECURITY_FLAGS="--read-only \
     --cap-drop=ALL \
     --cap-add=SETUID \
     --cap-add=SETGID \
@@ -45,6 +45,9 @@ DOCKER_SECURITY_FLAGS="--read-only \
     --pids-limit=100 \
     --tmpfs /tmp:rw,noexec,nosuid,size=100m \
     --tmpfs /home/qrane/.cache:rw,size=500m"
+
+# Legacy alias for backward compat if any external script references it
+DOCKER_SECURITY_FLAGS="$SECURITY_FLAGS"
 
 # --- STYLING & COLORS ---
 B=$'\033[1;34m'
@@ -94,8 +97,8 @@ Usage: ./qonqrete.sh [COMMAND] [OPTIONS]
 Commands:
   init              Build the Qage container image.
   run               Start fresh QonQrete session (ignores sqrapyard by default).
-  resume            Resume from a previous Qage (interactive or -q <name>).
-  clean             Remove Qage directories (interactive or -q <name> or -A/--all).
+  resume            Resume from a previous Qage (interactive or -q <n>).
+  clean             Remove Qage directories (interactive or -q <n> or -A/--all).
 
 Global Options:
   -h, --help        Show this help message.
@@ -111,17 +114,22 @@ Run Options:
   -n, --qonstruction-name <n>  Auto-save as qonstruction (non-interactive). v1.0.2
   -s, --sqrapyard              Seed from sqrapyard/ directory contents.
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
-  -d, --docker                 Force Docker.
+  -d, --docker                 Force Docker engine.
+  -p, --podman                 Force Podman engine.
   -w, --wonqrete               Enable experimental mode.
 
 Resume Options:
-  -q, --qage <name>            Resume from specific Qage directory.
+  -q, --qage <n>            Resume from specific Qage directory.
   (no args)                    Interactive Qage selection (kubectx-style).
 
 Clean Options:
-  -q, --qage <name>            Clean specific Qage directory.
+  -q, --qage <n>            Clean specific Qage directory.
   -A, --all                    Clean ALL Qage directories (current behavior).
   (no args)                    Interactive Qage selection for deletion.
+
+Environment Overrides:
+  CONTAINER_ENGINE=docker|podman   Override engine auto-detection.
+  BUILD_BACKEND=buildx|plain       Override build backend auto-detection.
 
 Examples:
   ./qonqrete.sh run                        # Fresh start, no sqrapyard
@@ -130,6 +138,7 @@ Examples:
   ./qonqrete.sh run -b 6 -c 3              # Sensitivity 6, 3 cycles (default)
   ./qonqrete.sh run -b 5 -c 6              # Complex project: sens 5, 6 cycles
   ./qonqrete.sh run -a -n myproject        # Auto-save as 'myproject' qonstruction
+  ./qonqrete.sh run --podman               # Use Podman engine explicitly
   ./qonqrete.sh resume                     # Interactive Qage picker
   ./qonqrete.sh resume -q qage_20251226    # Resume specific Qage
   ./qonqrete.sh clean                      # Interactive Qage deletion
@@ -137,7 +146,249 @@ Examples:
 EOF
 }
 
-# --- CONFIGURATION PARSER ---
+# ═══════════════════════════════════════════════════════════════════════════════
+# OS + CONTAINER ENGINE DETECTION (v1.0.4-stable)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Detected values (set by detect_os and detect_engine)
+DETECTED_OS="Linux"        # Linux | Darwin | WSL | MSYS
+CONTAINER_ENGINE=""        # docker | podman | msb
+BUILD_BACKEND_MODE=""      # buildx | plain
+
+detect_os() {
+    local uname_s
+    uname_s="$(uname -s 2>/dev/null || echo "Unknown")"
+
+    case "$uname_s" in
+        Linux)
+            # Check if running inside WSL
+            if [ -f /proc/version ] && grep -qi "Microsoft\|WSL" /proc/version 2>/dev/null; then
+                DETECTED_OS="WSL"
+            else
+                DETECTED_OS="Linux"
+            fi
+            ;;
+        Darwin)
+            DETECTED_OS="Darwin"
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            DETECTED_OS="MSYS"
+            ;;
+        *)
+            # Also check OSTYPE for Git Bash / MSYS
+            case "${OSTYPE:-}" in
+                msys*|mingw*|cygwin*)
+                    DETECTED_OS="MSYS"
+                    ;;
+                *)
+                    DETECTED_OS="Linux"
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+detect_engine() {
+    # Priority: CONTAINER_ENGINE env > CLI flag (already set) > MSB config > auto-detect
+
+    # 1. Check env override (only if CLI flag didn't already set it)
+    if [ -z "$CONTAINER_ENGINE" ] && [ -n "${CONTAINER_ENGINE_ENV:-}" ]; then
+        case "$CONTAINER_ENGINE_ENV" in
+            docker|podman)
+                CONTAINER_ENGINE="$CONTAINER_ENGINE_ENV"
+                log_qrane "Engine override: ${CONTAINER_ENGINE} (from CONTAINER_ENGINE env)"
+                return 0
+                ;;
+            *)
+                log_qrane "[WARN] Unknown CONTAINER_ENGINE='${CONTAINER_ENGINE_ENV}', auto-detecting."
+                ;;
+        esac
+    fi
+
+    # 2. CLI flag already set CONTAINER_ENGINE (handled in arg parser)
+    if [ -n "$CONTAINER_ENGINE" ]; then
+        return 0
+    fi
+
+    # 3. Check MSB config (existing behavior)
+    if [ -f "$CONFIG_FILE" ]; then
+        if grep -iq "^[[:space:]]*microsandbox:[[:space:]]*true" "$CONFIG_FILE"; then
+            CONTAINER_ENGINE="msb"
+            return 0
+        fi
+    fi
+
+    # 4. Auto-detect: docker first, then podman
+    if command -v docker >/dev/null 2>&1; then
+        CONTAINER_ENGINE="docker"
+    elif command -v podman >/dev/null 2>&1; then
+        CONTAINER_ENGINE="podman"
+    else
+        log_qrane "${Y}[ERROR]${R} No container engine found. Install Docker or Podman."
+        log_qrane "  Docker: https://docs.docker.com/get-docker/"
+        log_qrane "  Podman: https://podman.io/getting-started/installation"
+        exit 1
+    fi
+}
+
+detect_build_backend() {
+    # Priority: BUILD_BACKEND env > auto-detect
+    if [ -n "${BUILD_BACKEND:-}" ]; then
+        case "$BUILD_BACKEND" in
+            buildx|plain)
+                BUILD_BACKEND_MODE="$BUILD_BACKEND"
+                return 0
+                ;;
+            *)
+                log_qrane "[WARN] Unknown BUILD_BACKEND='${BUILD_BACKEND}', auto-detecting."
+                ;;
+        esac
+    fi
+
+    if [ "$CONTAINER_ENGINE" = "docker" ]; then
+        if docker buildx version >/dev/null 2>&1; then
+            BUILD_BACKEND_MODE="buildx"
+        else
+            BUILD_BACKEND_MODE="plain"
+        fi
+    elif [ "$CONTAINER_ENGINE" = "podman" ]; then
+        BUILD_BACKEND_MODE="plain"
+    else
+        BUILD_BACKEND_MODE="plain"
+    fi
+}
+
+# --- macOS Podman Machine Init/Start (idempotent) ---
+ensure_podman_machine() {
+    if [ "$DETECTED_OS" != "Darwin" ] || [ "$CONTAINER_ENGINE" != "podman" ]; then
+        return 0
+    fi
+
+    log_qrane "macOS + Podman detected — checking machine status..."
+
+    # Check if any machine exists
+    local machine_list
+    machine_list="$(podman machine list --format '{{.Name}}' 2>/dev/null || true)"
+
+    if [ -z "$machine_list" ]; then
+        log_qrane "No Podman machine found. Initializing default machine..."
+        if ! podman machine init 2>&1 | while IFS= read -r line; do
+            echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ}   $line"
+        done; then
+            log_qrane "${Y}[ERROR]${R} Failed to initialize Podman machine."
+            log_qrane "  Try manually: podman machine init"
+            exit 1
+        fi
+        log_qrane "Podman machine initialized."
+    fi
+
+    # Check if machine is running
+    local machine_running
+    machine_running="$(podman machine list --format '{{.Running}}' 2>/dev/null | head -1 || echo "false")"
+
+    if [ "$machine_running" != "true" ]; then
+        log_qrane "Starting Podman machine..."
+        if ! podman machine start 2>&1 | while IFS= read -r line; do
+            echo -e "${PREFIX_TPL/\{PREFIX\}/_QQ}   $line"
+        done; then
+            log_qrane "${Y}[ERROR]${R} Failed to start Podman machine."
+            log_qrane "  Try manually: podman machine start"
+            exit 1
+        fi
+        log_qrane "Podman machine started."
+    else
+        log_qrane "Podman machine already running."
+    fi
+}
+
+print_runtime_info() {
+    log_qrane "Container engine: ${G}${CONTAINER_ENGINE}${R}"
+    log_qrane "Build backend:    ${G}${BUILD_BACKEND_MODE}${R}"
+    log_qrane "OS detected:      ${G}${DETECTED_OS}${R}"
+
+    if [ "$DETECTED_OS" = "MSYS" ]; then
+        log_qrane "${Y}Git Bash detected. WSL2 is recommended for best compatibility.${R}"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENGINE-AWARE WRAPPERS (v1.0.4-stable)
+# Replace hardcoded docker/podman calls with engine-agnostic functions.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+engine_build() {
+    # Usage: engine_build [args...]
+    # Handles: docker build / docker buildx build / podman build / msb build
+    case "$CONTAINER_ENGINE" in
+        msb)
+            local cmd_bin="msb"
+            if command -v mbx >/dev/null 2>&1; then cmd_bin="mbx"; fi
+            exec_qrane $cmd_bin build "$@"
+            ;;
+        podman)
+            exec_qrane podman build "$@"
+            ;;
+        docker)
+            if [ "$BUILD_BACKEND_MODE" = "buildx" ]; then
+                exec_qrane docker buildx build --load "$@"
+            else
+                exec_qrane docker build "$@"
+            fi
+            ;;
+        *)
+            log_qrane "[ERROR] Unknown engine: ${CONTAINER_ENGINE}"
+            exit 1
+            ;;
+    esac
+}
+
+engine_run() {
+    # Usage: engine_run [args...]
+    # Handles: docker run / podman run / msb run
+    # Security flags applied for docker/podman (not msb).
+    case "$CONTAINER_ENGINE" in
+        msb)
+            local cmd_bin="msb"
+            if command -v mbx >/dev/null 2>&1; then cmd_bin="mbx"; fi
+            $cmd_bin run "$@"
+            ;;
+        podman)
+            # Podman: apply security flags. Some flags (memory-swap) may not work
+            # everywhere, so fallback to run without security flags if needed.
+            podman run $SECURITY_FLAGS "$@" 2>/dev/null || podman run "$@"
+            ;;
+        docker)
+            docker run $SECURITY_FLAGS "$@"
+            ;;
+        *)
+            log_qrane "[ERROR] Unknown engine: ${CONTAINER_ENGINE}"
+            exit 1
+            ;;
+    esac
+}
+
+engine_run_helper() {
+    # Lightweight helper run (no security flags, no tty, --rm)
+    # Used for fix_qage_permissions and delete_qage
+    case "$CONTAINER_ENGINE" in
+        docker)
+            docker run --rm "$@" 2>/dev/null || true
+            ;;
+        podman)
+            podman run --rm "$@" 2>/dev/null || true
+            ;;
+        msb)
+            local cmd_bin="msb"
+            if command -v mbx >/dev/null 2>&1; then cmd_bin="mbx"; fi
+            $cmd_bin run --rm "$@" 2>/dev/null || true
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+# --- CONFIGURATION PARSER (legacy compat — detect_runtime kept for any external callers) ---
 detect_runtime() {
     local runtime="docker"
     if [ -f "$CONFIG_FILE" ]; then
@@ -153,7 +404,6 @@ select_qage_interactive() {
     local qages=()
     local i=1
     
-    # Find all qage_* directories, sorted by date (newest first)
     for qage_dir in $(ls -1dt "${WORKSPACE_DIR}"/qage_* 2>/dev/null); do
         if [ -d "$qage_dir" ]; then
             qages+=("$(basename "$qage_dir")")
@@ -165,14 +415,12 @@ select_qage_interactive() {
         return 1
     fi
     
-    # Output menu to stderr so it shows on screen (stdout is captured)
     echo "" >&2
     echo -e "${C}┌───────────────────────────────────────────────────────────┐${R}" >&2
     echo -e "${C}│${W}            Available Qages (newest first)                 ${C}│${R}" >&2
     echo -e "${C}├───────────────────────────────────────────────────────────┤${R}" >&2
     
     for qage in "${qages[@]}"; do
-        # Extract timestamp for prettier display
         local ts="${qage#qage_}"
         local formatted_ts="${ts:0:4}-${ts:4:2}-${ts:6:2} ${ts:9:2}:${ts:11:2}:${ts:13:2}"
         echo -e "${C}│${R}  ${G}${i})${R} ${qage}  ${Y}(${formatted_ts})${R}" >&2
@@ -186,67 +434,77 @@ select_qage_interactive() {
     echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Select Qage [1-${#qages[@]}] or 'q' to quit: " >&2
     read -r selection </dev/tty
     
-    # Allow quit
     if [[ "$selection" == "q" ]] || [[ "$selection" == "Q" ]]; then
         echo "Selection cancelled." >&2
         return 1
     fi
     
-    # Validate selection
     if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#qages[@]} ]; then
         echo "Invalid selection: ${selection}" >&2
         return 1
     fi
     
-    # Return selected qage name to stdout (this is what gets captured)
     echo "${qages[$((selection-1))]}"
 }
 
-# --- PERMISSION FIX HELPER ---
-# Fix permissions on qage directory so host user can access AND modify files
-# Container creates files as qrane user, this makes them writable by host
+# --- PERMISSION FIX HELPER (engine-aware) ---
 fix_qage_permissions() {
     local qage_path="$1"
-    if [ -d "$qage_path" ] && command -v docker >/dev/null 2>&1; then
+    if [ ! -d "$qage_path" ]; then return 0; fi
+
+    if [ -n "${CONTAINER_ENGINE:-}" ] && [ "$CONTAINER_ENGINE" != "msb" ]; then
+        engine_run_helper -v "${qage_path}:/fix" \
+            --entrypoint /bin/bash "$IMAGE_NAME" \
+            -c "chmod -R a+rwX /fix 2>/dev/null || true"
+    elif command -v docker >/dev/null 2>&1; then
         docker run --rm -v "${qage_path}:/fix" \
             --entrypoint /bin/bash "$IMAGE_NAME" \
             -c "chmod -R a+rwX /fix 2>/dev/null || true" 2>/dev/null || true
+    elif command -v podman >/dev/null 2>&1; then
+        podman run --rm -v "${qage_path}:/fix" \
+            --entrypoint /bin/bash "$IMAGE_NAME" \
+            -c "chmod -R a+rwX /fix 2>/dev/null || true" 2>/dev/null || true
+    else
+        log_qrane "${Y}[WARN]${R} No engine for permission fix. Try: chmod -R a+rwX ${qage_path}"
     fi
 }
 
-# --- DELETE QAGE HELPER ---
-# Delete qage using docker if host permissions fail
+# --- DELETE QAGE HELPER (engine-aware) ---
 delete_qage() {
     local qage_path="$1"
     
-    # First try normal delete
     if rm -rf "$qage_path" 2>/dev/null; then
         return 0
     fi
     
-    # If that failed, use docker to delete (runs as root)
-    if [ -d "$qage_path" ] && command -v docker >/dev/null 2>&1; then
-        docker run --rm -v "${qage_path}:/delete" \
-            --entrypoint /bin/bash "$IMAGE_NAME" \
-            -c "rm -rf /delete/* /delete/.[!.]* 2>/dev/null || true" 2>/dev/null
-        # Now try to remove the empty directory
+    if [ -d "$qage_path" ]; then
+        if [ -n "${CONTAINER_ENGINE:-}" ] && [ "$CONTAINER_ENGINE" != "msb" ]; then
+            engine_run_helper -v "${qage_path}:/delete" \
+                --entrypoint /bin/bash "$IMAGE_NAME" \
+                -c "rm -rf /delete/* /delete/.[!.]* 2>/dev/null || true"
+        elif command -v docker >/dev/null 2>&1; then
+            docker run --rm -v "${qage_path}:/delete" \
+                --entrypoint /bin/bash "$IMAGE_NAME" \
+                -c "rm -rf /delete/* /delete/.[!.]* 2>/dev/null || true" 2>/dev/null
+        elif command -v podman >/dev/null 2>&1; then
+            podman run --rm -v "${qage_path}:/delete" \
+                --entrypoint /bin/bash "$IMAGE_NAME" \
+                -c "rm -rf /delete/* /delete/.[!.]* 2>/dev/null || true" 2>/dev/null
+        else
+            log_qrane "${Y}[WARN]${R} No engine for delete. Try: sudo rm -rf ${qage_path}"
+        fi
         rmdir "$qage_path" 2>/dev/null || rm -rf "$qage_path" 2>/dev/null || true
     fi
 }
 
 # --- NON-INTERACTIVE QONSTRUCTION SAVE (v1.0.2) ---
-# Used with -n/--qonstruction-name flag for automated runs
 save_qonstruction_non_interactive() {
     local qage_path="$1"
     local qage_name="$(basename "$qage_path")"
     local project_name="$2"
 
     log_qrane "Non-interactive save requested for Qonstruction: ${project_name}"
-    
-    # Create qonstructions directory if it doesn't exist
     mkdir -p "$QONSTRUCTIONS_DIR"
-    
-    # Sanitize name
     project_name=$(echo "$project_name" | tr -cd '[:alnum:]_-')
     
     local qonstruction_path="${QONSTRUCTIONS_DIR}/${project_name}"
@@ -257,12 +515,9 @@ save_qonstruction_non_interactive() {
     fi
     
     mkdir -p "$qonstruction_path"
-    
-    # Copy the entire qage contents
     log_qrane "Saving Qonstruction to: qonstructions/${project_name}"
     cp -r "$qage_path"/* "$qonstruction_path/"
     
-    # Create metadata file
     cat > "$qonstruction_path/meta.yaml" <<METAEOF
 # QonQrete Qonstruction Metadata
 project_name: "${project_name}"
@@ -272,8 +527,6 @@ qonqrete_version: "${QONQ_V}"
 METAEOF
     
     log_qrane "Qonstruction saved successfully!"
-    
-    # Delete the original qage
     delete_qage "$qage_path"
     log_qrane "Original Qage '${qage_name}' deleted."
 }
@@ -283,7 +536,6 @@ prompt_save_qonstruction() {
     local qage_path="$1"
     local qage_name="$(basename "$qage_path")"
     
-    # Fix permissions first so we can access files
     fix_qage_permissions "$qage_path"
     
     echo ""
@@ -292,13 +544,11 @@ prompt_save_qonstruction() {
     echo -e "${C}└─────────────────────────────────────────────────┘${R}"
     echo ""
     
-    local save_prompt="${PREFIX_TPL/\{PREFIX\}/_QQ} Save this run as a Qonstruction? [y/N] "
-    echo -ne "$save_prompt"
+    echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Save this run as a Qonstruction? [y/N] "
     read -n 1 -r save_answer
     echo ""
     
     if [[ ! $save_answer =~ ^[Yy]$ ]]; then
-        # User declined to save - ask if they want to delete the qage
         echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Delete this Qage? [y/N] "
         read -n 1 -r delete_answer
         echo ""
@@ -311,18 +561,11 @@ prompt_save_qonstruction() {
         return 0
     fi
     
-    # Create qonstructions directory if it doesn't exist
     mkdir -p "$QONSTRUCTIONS_DIR"
-    
-    # Suggest a name based on timestamp
     local default_name="project_${qage_name#qage_}"
     echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Enter project name [${default_name}]: "
     read -r project_name
-    
-    # Use default if empty
     project_name="${project_name:-$default_name}"
-    
-    # Sanitize name (remove special chars except underscore and hyphen)
     project_name=$(echo "$project_name" | tr -cd '[:alnum:]_-')
     
     local qonstruction_path="${QONSTRUCTIONS_DIR}/${project_name}"
@@ -340,12 +583,9 @@ prompt_save_qonstruction() {
     fi
     
     mkdir -p "$qonstruction_path"
-    
-    # Copy the entire qage contents to the qonstruction
     log_qrane "Saving Qonstruction to: qonstructions/${project_name}"
     cp -r "$qage_path"/* "$qonstruction_path/"
     
-    # Create metadata file
     cat > "$qonstruction_path/meta.yaml" <<METAEOF
 # QonQrete Qonstruction Metadata
 project_name: "${project_name}"
@@ -356,12 +596,11 @@ METAEOF
     
     log_qrane "Qonstruction saved successfully!"
     
-    # Ask if user wants to delete the original qage
     echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Delete original Qage? [y/N] "
-    read -n 1 -r delete_qage
+    read -n 1 -r delete_qage_answer
     echo ""
     
-    if [[ $delete_qage =~ ^[Yy]$ ]]; then
+    if [[ $delete_qage_answer =~ ^[Yy]$ ]]; then
         rm -rf "$qage_path"
         log_qrane "Original Qage deleted."
     fi
@@ -374,7 +613,6 @@ create_tasq_interactive() {
     
     log_qrane "No tasq.md found. Opening ${editor} to create one..."
     
-    # Create a template
     cat > "$tasq_path" <<'TASQTPL'
 # TasQ - Define Your Objective
 
@@ -405,10 +643,8 @@ Requirements:
 
 TASQTPL
 
-    # Open editor
     "$editor" "$tasq_path"
     
-    # Verify something was written
     local content=$(grep -v '^#' "$tasq_path" | grep -v '^<!--' | grep -v '^\s*$' | head -1 || true)
     if [ -z "$content" ]; then
         log_qrane "Warning: tasq.md appears to be empty or only contains comments."
@@ -424,14 +660,74 @@ TASQTPL
     return 0
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# VOLUME MOUNT PATH NORMALIZATION (Windows Git Bash / MSYS)
+# ═══════════════════════════════════════════════════════════════════════════════
+normalize_mount_path() {
+    local path="$1"
+    if [ "$DETECTED_OS" = "MSYS" ]; then
+        # Convert /c/Users/... to C:/Users/... for Docker Desktop on Windows
+        echo "$path" | sed 's|^/\([a-zA-Z]\)/|\1:/|'
+    else
+        echo "$path"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SHARED EXECUTION HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+build_api_env_vars() {
+    local env_vars=""
+    if [ -n "${OPENAI_API_KEY-}" ]; then env_vars="$env_vars -e OPENAI_API_KEY=${OPENAI_API_KEY}"; fi
+    if [ -n "${GOOGLE_API_KEY-}" ]; then env_vars="$env_vars -e GOOGLE_API_KEY=${GOOGLE_API_KEY} -e GEMINI_API_KEY=${GOOGLE_API_KEY}"; fi
+    if [ -n "${GEMINI_API_KEY-}" ]; then env_vars="$env_vars -e GEMINI_API_KEY=${GEMINI_API_KEY}"; fi
+    if [ -n "${ANTHROPIC_API_KEY-}" ]; then env_vars="$env_vars -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"; fi
+    if [ -n "${DEEPSEEK_API_KEY-}" ]; then env_vars="$env_vars -e DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}"; fi
+    if [ -n "${QWEN_API_KEY-}" ]; then env_vars="$env_vars -e QWEN_API_KEY=${QWEN_API_KEY}"; fi
+    echo "$env_vars"
+}
+
+build_splash_cmd() {
+    if [[ "${PY_ARGS:-}" != *"--tui"* ]]; then
+        echo "if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/qonqrete.jpg --size=128x36 --stretch; sleep 1; clear; fi;"
+    fi
+}
+
+run_container() {
+    local run_host_path="$1"
+    local norm_script_dir norm_run_path
+
+    norm_script_dir="$(normalize_mount_path "${SCRIPT_DIR}")"
+    norm_run_path="$(normalize_mount_path "${run_host_path}")"
+
+    local dev_mounts="-v ${norm_script_dir}/qrane:/qonqrete/qrane -v ${norm_script_dir}/worqer:/qonqrete/worqer"
+    local run_mounts="-v ${norm_run_path}:${CONTAINER_WORKSPACE}"
+    local splash_cmd="$(build_splash_cmd)"
+    local container_cmd="${splash_cmd} exec python3 qrane/qrane.py ${PY_ARGS}"
+    local api_env_vars="$(build_api_env_vars)"
+
+    engine_run --rm -it \
+        $run_mounts $dev_mounts \
+        $api_env_vars \
+        -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" \
+        "$IMAGE_NAME" /bin/bash -c "$container_cmd"
+}
+
 # --- MAIN ARGUMENT PARSING ---
 COMMAND=""
 PY_ARGS=""
-RUNTIME_MODE=$(detect_runtime)
 USE_SQRAPYARD=false
 QAGE_NAME=""
 CLEAN_ALL=false
 QONSTRUCTION_NAME=""
+
+# Save env override before arg parsing might interfere
+CONTAINER_ENGINE_ENV="${CONTAINER_ENGINE:-}"
+CONTAINER_ENGINE=""
+
+# Detect OS early (needed for path normalization)
+detect_os
 
 if [[ $# -eq 0 ]]; then show_help; exit 0; fi
 
@@ -463,27 +759,24 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
 
-        # Sqrapyard flag (for run command)
         -s|--sqrapyard) USE_SQRAPYARD=true; shift ;;
 
-        # Qage selection (for resume/clean)
         -q|--qage)
             QAGE_NAME="$2"
             shift 2
             ;;
         
-        # Qonstruction name (for non-interactive save) v1.0.2
         -n|--qonstruction-name)
             QONSTRUCTION_NAME="$2"
             shift 2
             ;;
 
-        # Clean all flag
         -A|--all) CLEAN_ALL=true; shift ;;
 
-        # Runtime flags
-        -M|--msb) RUNTIME_MODE="msb"; log_qrane "${Y}[EXPERIMENTAL]${R} Microsandbox mode enabled."; shift ;;
-        -d|--docker) RUNTIME_MODE="docker"; shift ;;
+        # Runtime/engine flags
+        -M|--msb) CONTAINER_ENGINE="msb"; log_qrane "${Y}[EXPERIMENTAL]${R} Microsandbox mode enabled."; shift ;;
+        -d|--docker) CONTAINER_ENGINE="docker"; shift ;;
+        -p|--podman) CONTAINER_ENGINE="podman"; shift ;;
 
         *)
             log_qrane "[WARN] Unknown argument: $1"
@@ -496,6 +789,16 @@ if [[ -z "$COMMAND" ]]; then
     log_qrane "[ERROR] No command specified."; show_help; exit 1
 fi
 
+# --- DETECT ENGINE + BUILD BACKEND ---
+detect_engine
+detect_build_backend
+
+# macOS Podman: ensure machine is running (idempotent)
+ensure_podman_machine
+
+# Print runtime info
+print_runtime_info
+
 # --- EXECUTION ---
 cd "$SCRIPT_DIR"
 
@@ -504,24 +807,14 @@ case "$COMMAND" in
         log_qrane "Initializing QonQrete..."
         BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V}"
 
-        if [ "$RUNTIME_MODE" == "msb" ]; then
-            log_qrane "Building Qage with Microsandbox..."
-            if command -v msb >/dev/null 2>&1; then exec_qrane msb build . -t "$IMAGE_NAME" $BUILD_ARGS
-            elif command -v mbx >/dev/null 2>&1; then exec_qrane mbx build . -t "$IMAGE_NAME" $BUILD_ARGS
-            else log_qrane "[ERROR] msb/mbx not found."; exit 1; fi
-        else
-            log_qrane "Building Qage with Docker..."
-            exec_qrane docker build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
-        fi
+        engine_build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
         ;;
 
     clean)
         log_qrane "QonQrete Cleanup Mode..."
         
         if [ "$CLEAN_ALL" = true ]; then
-            # Original behavior: clean all qages
             if ls "${WORKSPACE_DIR}"/qage_* 1> /dev/null 2>&1; then
-                # Count qages
                 qage_count=$(ls -1d "${WORKSPACE_DIR}"/qage_* 2>/dev/null | wc -l)
                 log_qrane "Found ${qage_count} Qage directories."
 
@@ -543,7 +836,6 @@ case "$COMMAND" in
                 log_qrane "No 'qage_*' directories found."
             fi
         elif [ -n "$QAGE_NAME" ]; then
-            # Specific qage deletion
             target_qage="${WORKSPACE_DIR}/${QAGE_NAME}"
             if [ -d "$target_qage" ]; then
                 log_qrane "Found Qage: ${QAGE_NAME}"
@@ -561,7 +853,6 @@ case "$COMMAND" in
                 exit 1
             fi
         else
-            # Interactive selection
             selected=$(select_qage_interactive)
             if [ $? -ne 0 ] || [ -z "$selected" ]; then
                 exit 1
@@ -582,11 +873,9 @@ case "$COMMAND" in
     resume)
         log_qrane "QonQrete Resume Mode..."
         
-        # Determine which qage to resume from
         if [ -n "$QAGE_NAME" ]; then
             SOURCE_QAGE="${WORKSPACE_DIR}/${QAGE_NAME}"
         else
-            # Interactive selection
             selected=$(select_qage_interactive) || exit 1
             SOURCE_QAGE="${WORKSPACE_DIR}/${selected}"
             QAGE_NAME="$selected"
@@ -599,17 +888,14 @@ case "$COMMAND" in
         
         log_qrane "Resuming from: ${QAGE_NAME}"
         
-        # Create new qage with fresh timestamp
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
         
         log_qrane "Creating new Qage: ${RUN_DIR_NAME}"
         
-        # Copy EVERYTHING from source qage (not just qodeyard)
         cp -r "$SOURCE_QAGE" "$RUN_HOST_PATH"
         
-        # Update config files from workspace (in case they changed)
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then 
             cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"
         fi
@@ -617,10 +903,8 @@ case "$COMMAND" in
             cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"
         fi
         
-        # Check if tasq.md exists in workspace (user might have updated it)
         if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
             log_qrane "Using updated tasq.md from worqspace."
-            # Find the highest cycle number in tasq.d
             max_cycle=0
             if ls "$RUN_HOST_PATH/tasq.d"/cyqle*_tasq.md 1>/dev/null 2>&1; then
                 for f in "$RUN_HOST_PATH/tasq.d"/cyqle*_tasq.md; do
@@ -639,37 +923,8 @@ case "$COMMAND" in
         log_qrane "Handing off to Qrane in 3 seconds..."
         sleep 3
 
-        DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
-        RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
-
-        SPLASH_CMD=""
-        if [[ "$PY_ARGS" != *"--tui"* ]]; then
-             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/qonqrete.jpg --size=128x36 --stretch; sleep 1; clear; fi;"
-        fi
-
-        CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
-
-        API_ENV_VARS=""
-        if [ -n "${OPENAI_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e OPENAI_API_KEY=${OPENAI_API_KEY}"; fi
-        if [ -n "${GOOGLE_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e GOOGLE_API_KEY=${GOOGLE_API_KEY} -e GEMINI_API_KEY=${GOOGLE_API_KEY}"; fi
-        if [ -n "${GEMINI_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e GEMINI_API_KEY=${GEMINI_API_KEY}"; fi
-        if [ -n "${ANTHROPIC_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"; fi
-        if [ -n "${DEEPSEEK_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}"; fi
-        if [ -n "${QWEN_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e QWEN_API_KEY=${QWEN_API_KEY}"; fi
-
-        if [ "$RUNTIME_MODE" == "msb" ]; then
-            CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
-            $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
-                $API_ENV_VARS \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
-        else
-            docker run --rm -it $DOCKER_SECURITY_FLAGS \
-                $RUN_MOUNTS $DEV_MOUNTS \
-                $API_ENV_VARS \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
-        fi
+        run_container "$RUN_HOST_PATH"
         
-        # After run completes, save qonstruction (v1.0.2: non-interactive support)
         if [ -n "$QONSTRUCTION_NAME" ]; then
             save_qonstruction_non_interactive "$RUN_HOST_PATH" "$QONSTRUCTION_NAME"
         else
@@ -688,7 +943,6 @@ case "$COMMAND" in
             exit 1
         fi
 
-        # Check for tasq.md - if not present, open editor
         if [ ! -f "${WORKSPACE_DIR}/tasq.md" ]; then
             create_tasq_interactive "${WORKSPACE_DIR}/tasq.md" || exit 1
         fi
@@ -699,12 +953,11 @@ case "$COMMAND" in
 
         log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"
 
-        mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,qontext.d,bloq.d,briq.d}
+        mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,qontext.d,bloq.d,briq.d,qontract.d}
 
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi
 
-        # Sqrapyard seeding logic - ONLY if -s/--sqrapyard flag is used
         SQRAPYARD_PATH="${WORKSPACE_DIR}/sqrapyard"
         
         if [ "$USE_SQRAPYARD" = true ]; then
@@ -713,7 +966,6 @@ case "$COMMAND" in
                 log_qrane "Found qontent in sqrapyard, seeding this run..."
                 cp -r "$SQRAPYARD_PATH"/* "$RUN_HOST_PATH/qodeyard/"
                 
-                # Check if sqrapyard has its own tasq.md
                 if [ -f "$SQRAPYARD_PATH/tasq.md" ]; then
                     log_qrane "Note: sqrapyard/tasq.md found but using worqspace/tasq.md (master tasq takes precedence)."
                 fi
@@ -727,43 +979,13 @@ case "$COMMAND" in
             fi
         fi
         
-        # Always use workspace tasq.md
         cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
 
         log_qrane "Handing off to Qrane in 3 seconds..."
         sleep 3
 
-        DEV_MOUNTS="-v ${SCRIPT_DIR}/qrane:/qonqrete/qrane -v ${SCRIPT_DIR}/worqer:/qonqrete/worqer"
-        RUN_MOUNTS="-v ${RUN_HOST_PATH}:${CONTAINER_WORKSPACE}"
-
-        SPLASH_CMD=""
-        if [[ "$PY_ARGS" != *"--tui"* ]]; then
-             SPLASH_CMD="if command -v chafa >/dev/null; then clear; chafa /qonqrete/qrane/qonqrete.jpg --size=128x36 --stretch; sleep 1; clear; fi;"
-        fi
-
-        CONTAINER_CMD="${SPLASH_CMD} exec python3 qrane/qrane.py ${PY_ARGS}"
-
-        API_ENV_VARS=""
-        if [ -n "${OPENAI_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e OPENAI_API_KEY=${OPENAI_API_KEY}"; fi
-        if [ -n "${GOOGLE_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e GOOGLE_API_KEY=${GOOGLE_API_KEY} -e GEMINI_API_KEY=${GOOGLE_API_KEY}"; fi
-        if [ -n "${GEMINI_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e GEMINI_API_KEY=${GEMINI_API_KEY}"; fi
-        if [ -n "${ANTHROPIC_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"; fi
-        if [ -n "${DEEPSEEK_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}"; fi
-        if [ -n "${QWEN_API_KEY-}" ]; then API_ENV_VARS="$API_ENV_VARS -e QWEN_API_KEY=${QWEN_API_KEY}"; fi
-
-        if [ "$RUNTIME_MODE" == "msb" ]; then
-            CMD_BIN="msb"; if command -v mbx >/dev/null 2>&1; then CMD_BIN="mbx"; fi
-            $CMD_BIN run --rm -it $RUN_MOUNTS $DEV_MOUNTS \
-                $API_ENV_VARS \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
-        else
-            docker run --rm -it $DOCKER_SECURITY_FLAGS \
-                $RUN_MOUNTS $DEV_MOUNTS \
-                $API_ENV_VARS \
-                -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" "$IMAGE_NAME" /bin/bash -c "$CONTAINER_CMD"
-        fi
+        run_container "$RUN_HOST_PATH"
         
-        # After run completes, save qonstruction (v1.0.2: non-interactive support)
         if [ -n "$QONSTRUCTION_NAME" ]; then
             save_qonstruction_non_interactive "$RUN_HOST_PATH" "$QONSTRUCTION_NAME"
         else

@@ -2,7 +2,7 @@
 # worqer/construqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # ConstruQtor Agent - Code Generation with Interleaved Per-Briq Review
-# v1.0.0-stable - PRODUCTION RELEASE
+# v1.0.4-stable - QONTRACT + Cycle1 Tasq Context Wiring
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # CHANGELOG v1.0.0-stable:
@@ -35,6 +35,12 @@ try:
 except ImportError: 
     print("CRITICAL: lib_ai.py not found.", flush=True)
     sys.exit(1)
+
+# v1.0.4: Import QontractGuard for per-briq contract gating
+try:
+    import qontract_guard
+except ImportError:
+    qontract_guard = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -787,7 +793,10 @@ def process_briq_interleaved(
     retry_config: dict,
     interleaved_config: dict,
     review_provider: str = None,
-    review_model: str = None
+    review_model: str = None,
+    constitutional_context: str = "",  # v1.0.4: QONTRACT + cycle1 tasq
+    qontract_json_path: Path = None,   # v1.0.4: Path to qontract.json for per-briq guard
+    contract_data: dict = None          # v1.0.4: Loaded contract dict
 ) -> dict:
     """
     Process a single briq with interleaved build + review.
@@ -795,9 +804,10 @@ def process_briq_interleaved(
     Flow:
     1. Build briq (generate code)
     2. Run local validation (syntax, imports)
-    3. Optionally run AI quick review
-    4. If validation/review fails and retry enabled, go back to step 1
-    5. Write per-briq exeQ summary
+    3. v1.0.4: If contract-relevant, run QontractGuard on written files
+    4. If guard fails → auto-retry with correction directive (max 2-3 attempts)
+    5. Optionally run AI quick review
+    6. Write per-briq exeQ summary
     
     Returns:
         {
@@ -806,6 +816,7 @@ def process_briq_interleaved(
             'written_files': list[str],
             'validation': dict,
             'review': dict,
+            'guard_report': dict | None,
             'attempts': int,
             'error': str | None,
             'exeq_path': str
@@ -824,6 +835,7 @@ def process_briq_interleaved(
         'written_files': [],
         'validation': {},
         'review': {},
+        'guard_report': None,
         'attempts': 0,
         'error': None,
         'exeq_path': None
@@ -837,13 +849,18 @@ def process_briq_interleaved(
         result['error'] = f"Could not read briq: {e}"
         return result
     
+    # v1.0.4: Parse Contract-Relevant header from briq
+    is_contract_relevant = False
+    if re.search(r'^Contract-Relevant:\s*yes', briq_content, re.MULTILINE | re.IGNORECASE):
+        is_contract_relevant = True
+    
     # Build prompt
     prompt = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan defined in the 'briq'.
 **CONTEXT:** You have been provided with the {context_type} of the existing codebase. Use this structural context to ensure your generated code integrates correctly with the existing project.
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
-
+{constitutional_context}
 **MANDATORY NAMING CONVENTIONS (STRICT):**
 All function and method names MUST follow these verb prefixes for deterministic mapping:
 - `get_`, `fetch_`, `load_`, `read_`, `retrieve_`, `find_`, `lookup_`, `query_`, `select_` → Data retrieval
@@ -871,6 +888,9 @@ print("Hello, World!")
 {briq_content}
 """
     
+    # v1.0.4: Track correction directive for guard retries
+    guard_correction = ""
+    
     # Retry loop with interleaved review
     for attempt in range(1, max_attempts + 1):
         result['attempts'] = attempt
@@ -881,12 +901,18 @@ print("Hello, World!")
         
         try:
             # STEP 1: Build (AI code generation)
+            # v1.0.4: Include guard correction directive if retrying due to contract violation
+            current_prompt = prompt
+            if guard_correction:
+                current_prompt = prompt + guard_correction
+                print(f"     [GUARD] Including correction directive in prompt", flush=True)
+            
             print(f"     - Sending to AI (attempt {attempt})...", flush=True)
             
             ai_result = lib_ai.run_ai_completion(
                 ai_provider, 
                 ai_model, 
-                prompt, 
+                current_prompt, 
                 context_files=all_context_files
             )
             
@@ -920,6 +946,34 @@ print("Hello, World!")
                     print(f"     [LoQal] ⚠️ Import warnings: {len(validation['import_warnings'])}", flush=True)
                 else:
                     print(f"     [LoQal] ✅ Passed", flush=True)
+            
+            # STEP 2.5 (v1.0.4): Per-Briq QontractGuard Gate
+            guard_correction = ""  # Reset for next iteration
+            if is_contract_relevant and qontract_guard and contract_data and build_passed:
+                print(f"     [GUARD] Running QontractGuard (contract-relevant briq)...", flush=True)
+                briq_guard = qontract_guard.run_guard_for_files(
+                    contract_data, qodeyard_path, written_files
+                )
+                result['guard_report'] = briq_guard.to_json()
+                
+                if not briq_guard.passed:
+                    error_count = len([v for v in briq_guard.violations if v.severity == 'error'])
+                    print(f"     [GUARD] ❌ FAIL — {error_count} contract violations", flush=True)
+                    for v in briq_guard.violations[:5]:
+                        loc = f" (line {v.line_number})" if v.line_number else ""
+                        print(f"            [{v.rule}] {v.file_path}{loc}: {v.message}", flush=True)
+                    
+                    if attempt < max_attempts:
+                        # Build correction directive for retry
+                        guard_correction = briq_guard.get_correction_directive(contract_data)
+                        result['error'] = f"QontractGuard: {error_count} contract violations"
+                        build_passed = False
+                    else:
+                        # Max retries exhausted — mark as failure
+                        result['error'] = f"QontractGuard: {error_count} violations (retries exhausted)"
+                        build_passed = False
+                else:
+                    print(f"     [GUARD] ✅ Passed", flush=True)
             
             # STEP 3: AI Quick Review (optional)
             if do_ai_review and build_passed:
@@ -986,7 +1040,7 @@ def generate_briq_exeq(briq_name: str, briq_content: str, result: dict) -> str:
     status_emoji = "✅" if result['status'] == 'success' else ("⚠️" if result['status'] == 'partial' else "❌")
     
     exeq = f"""# Briq ExeQ: {briq_name}
-Generated by ConstruQtor v0.9.0 (Interleaved Pipeline)
+Generated by ConstruQtor v1.0.4 (Interleaved Pipeline)
 
 ## Assessment: {status_emoji} [{result['status'].upper()}]
 
@@ -1039,6 +1093,20 @@ Generated by ConstruQtor v0.9.0 (Interleaved Pipeline)
             exeq += "### Suggestions\n\n"
             for sugg in review['suggestions']:
                 exeq += f"- {sugg}\n"
+            exeq += "\n"
+    
+    # v1.0.4: QontractGuard results
+    guard = result.get('guard_report')
+    if guard:
+        guard_status = guard.get('status', 'N/A')
+        guard_emoji = "✅" if guard_status == 'PASS' else "❌"
+        exeq += f"## 🛡️ QontractGuard: {guard_emoji} {guard_status}\n\n"
+        violations = guard.get('violations', [])
+        if violations:
+            exeq += f"**Violations:** {len(violations)}\n\n"
+            for v in violations:
+                loc = f" (line {v.get('line', '')})" if v.get('line') else ""
+                exeq += f"- [{v.get('rule_id', '?')}] {v.get('file', '?')}{loc}: {v.get('message', '?')}\n"
             exeq += "\n"
     
     # Original briq (truncated)
@@ -1104,6 +1172,109 @@ def main():
             for file in files:
                 all_context_files.append(str(Path(root) / file))
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # v1.0.4: QONTRACT.D + CYCLE1 TASQ + QONTEXT.D CONTEXT WIRING
+    # ═══════════════════════════════════════════════════════════════════════════
+    qontract_path = worqspace_root / "qontract.d"
+    qontext_path = worqspace_root / "qontext.d"
+    tasq_dir = worqspace_root / "tasq.d"
+
+    # B) Fail-fast: contract must exist for cycles > 1
+    cycle_num_val = os.environ.get('CYCLE_NUM', '1')
+    if cycle_num_val != '1':
+        try:
+            from runtime_checks import ensure_qontract_present
+            ensure_qontract_present(worqspace_root)
+            print(f"    ✅ Contract present (fail-fast check passed)", flush=True)
+        except RuntimeError as e:
+            print(f"    ❌ {e}", flush=True)
+            sys.exit(1)
+        except ImportError:
+            pass  # Module not yet available in some test contexts
+
+    # Load QONTRACT (always included — from qontract.d/)
+    qontract_content = ""
+    qontract_md_path = qontract_path / "qontract.md"
+    if qontract_md_path.exists():
+        try:
+            with open(qontract_md_path, 'r', encoding='utf-8') as f:
+                qontract_content = f.read()
+            print(f"    QONTRACT: Loaded ({len(qontract_content)} chars)", flush=True)
+        except Exception as e:
+            print(f"    QONTRACT: ⚠️ Could not load: {e}", flush=True)
+    else:
+        print(f"    QONTRACT: Not found at {qontract_md_path}", flush=True)
+
+    # Load cycle1 tasq (always included as big-picture anchor)
+    cycle1_tasq_content = ""
+    cycle1_tasq_path = tasq_dir / "cyqle1_tasq.md"
+    if cycle1_tasq_path.exists():
+        try:
+            with open(cycle1_tasq_path, 'r', encoding='utf-8') as f:
+                cycle1_tasq_content = f.read()
+            # Truncate if very large but keep meaningful context
+            if len(cycle1_tasq_content) > 8000:
+                cycle1_tasq_content = cycle1_tasq_content[:8000] + "\n\n[...truncated for token budget...]"
+            print(f"    Cycle1 Tasq: Loaded ({len(cycle1_tasq_content)} chars)", flush=True)
+        except Exception as e:
+            print(f"    Cycle1 Tasq: ⚠️ Could not load: {e}", flush=True)
+    else:
+        print(f"    Cycle1 Tasq: Not found (cycle 1 in progress)", flush=True)
+
+    # Load qontext.d dependency/relationship files
+    qontext_extra_files = []
+    if qontext_path.is_dir():
+        for root, _, files in os.walk(qontext_path):
+            for file in files:
+                fpath = str(Path(root) / file)
+                if fpath not in all_context_files:
+                    qontext_extra_files.append(fpath)
+
+    # Generate struqture tree summary
+    struqture_tree = ""
+    tree_path = worqspace_root / "struqture" / "tree.txt"
+    if tree_path.exists():
+        try:
+            with open(tree_path, 'r', encoding='utf-8') as f:
+                struqture_tree = f.read()
+        except:
+            pass
+    if not struqture_tree and qodeyard_path.is_dir():
+        # Generate a quick tree from qodeyard
+        tree_lines = ["qodeyard/"]
+        for root, dirs, files in os.walk(qodeyard_path):
+            level = len(Path(root).relative_to(qodeyard_path).parts)
+            indent = "  " * level
+            tree_lines.append(f"{indent}{Path(root).name}/")
+            for f in sorted(files)[:20]:
+                tree_lines.append(f"{indent}  {f}")
+        struqture_tree = "\n".join(tree_lines[:100])
+
+    # Merge all context sources for ConstruQtor
+    # Priority: qontract files + qontext.d files + bloq.d/qodeyard files
+    merged_context_files = qontext_extra_files + all_context_files
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # v1.0.4: CONTEXT LOGGING
+    # ═══════════════════════════════════════════════════════════════════════════
+    included_count = len(merged_context_files)
+    excluded_reasons = []
+    if not qontract_md_path.exists():
+        excluded_reasons.append("qontract.md: not found")
+    if not cycle1_tasq_path.exists():
+        excluded_reasons.append("cyqle1_tasq.md: not found")
+
+    print(f"    Context files: {included_count} total", flush=True)
+    if included_count > 0:
+        shown = min(10, included_count)
+        for cf in merged_context_files[:shown]:
+            print(f"      + {Path(cf).name}", flush=True)
+        if included_count > shown:
+            print(f"      ... and {included_count - shown} more", flush=True)
+    if excluded_reasons:
+        for reason in excluded_reasons:
+            print(f"      ✗ {reason}", flush=True)
+
     # Setup exeQ directory for per-briq execution summaries
     exeq_briq_dir = worqspace_root / "exeq.d" / f"cyqle{cycle_num}"
     exeq_briq_dir.mkdir(parents=True, exist_ok=True)
@@ -1118,9 +1289,30 @@ def main():
     stop_on_fail = retry_config['stop_on_briq_fail']
     stopped_early = False
 
-    print(f"--- ConstruQtor v0.9.0: Processing {len(briq_files)} Briqs (Interleaved) ---", flush=True)
+    print(f"--- ConstruQtor v1.0.4: Processing {len(briq_files)} Briqs (Interleaved) ---", flush=True)
     print(f"    Retry: {'enabled' if retry_config['enabled'] else 'disabled'} | Max attempts: {retry_config['max_attempts']}", flush=True)
     print(f"    Interleaved: {'enabled' if interleaved_config['enabled'] else 'disabled'} | Local validation: {interleaved_config['local_validation']} | AI review: {interleaved_config['ai_quick_review']}", flush=True)
+
+    # v1.0.4: Build constitutional context string for prompts
+    constitutional_parts = []
+    if qontract_content:
+        constitutional_parts.append(f"\n**PROJECT CONSTITUTION (QONTRACT — MUST OBEY):**\n{qontract_content}\n")
+    if cycle1_tasq_content:
+        constitutional_parts.append(f"\n**BIG-PICTURE CONTEXT (Cycle 1 Tasq):**\n{cycle1_tasq_content}\n")
+    if struqture_tree:
+        constitutional_parts.append(f"\n**PROJECT STRUCTURE:**\n```\n{struqture_tree}\n```\n")
+    constitutional_context = "\n".join(constitutional_parts)
+
+    # v1.0.4: Load contract data for per-briq QontractGuard gate
+    qontract_json_path = qontract_path / "qontract.json"
+    contract_data = None
+    if qontract_json_path.exists() and qontract_guard:
+        try:
+            contract_data = qontract_guard.load_contract(qontract_json_path)
+            if contract_data:
+                print(f"    QontractGuard: Loaded contract for per-briq gating", flush=True)
+        except Exception as e:
+            print(f"    QontractGuard: ⚠️ Could not load contract: {e}", flush=True)
 
     for briq_file in briq_files:
         print(f"\n-- Processing Briq: {briq_file.name} --", flush=True)
@@ -1129,7 +1321,7 @@ def main():
             briq_file,
             qodeyard_path,
             exeq_briq_dir,
-            all_context_files,
+            merged_context_files,
             context_type,
             mode,
             mode_prompt,
@@ -1138,7 +1330,10 @@ def main():
             retry_config,
             interleaved_config,
             review_provider,
-            review_model
+            review_model,
+            constitutional_context=constitutional_context,
+            qontract_json_path=qontract_json_path,
+            contract_data=contract_data
         )
         
         all_results.append(result)
@@ -1174,7 +1369,7 @@ def main():
         final_status = "Halted"
 
     # --- Write Main Summary File ---
-    summary_content = f"# Execution Summary (ConstruQtor v0.9.0 - Interleaved Pipeline)\n\n"
+    summary_content = f"# Execution Summary (ConstruQtor v1.0.4 - Interleaved Pipeline)\n\n"
     summary_content += f"**Overall Status:** {final_status}\n"
     summary_content += f"**Processed:** {len(all_results)}/{len(briq_files)} briqs\n"
     summary_content += f"**Results:** ✅ {success_count} | ⚠️ {partial_count} | ❌ {failure_count}\n\n"
@@ -1234,7 +1429,7 @@ def main():
     with open(changed_files_summary_file, 'w', encoding='utf-8') as f:
         f.write(changed_files_content)
 
-    print(f"\n--- ConstruQtor v0.9.0 Complete: {final_status} ---", flush=True)
+    print(f"\n--- ConstruQtor v1.0.4 Complete: {final_status} ---", flush=True)
     print(f"    Per-briq exeQ summaries written to: exeq.d/cyqle{cycle_num}/", flush=True)
 
 
