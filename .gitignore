@@ -29,3 +29,7 @@ worqspace/qonstructions/*
 
 # Config Backups
 **.config_backup/*
+
+# Mac Crap
+.DS_Store
+**.DS_Store**
