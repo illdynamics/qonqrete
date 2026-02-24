@@ -1,4 +1,4 @@
-# QonQrete - File-Based Local-First Secure Agentic AI System
+# The First File-Based Local-First Secure AgenticAI System
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
 
