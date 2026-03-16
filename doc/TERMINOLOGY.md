@@ -1,78 +1,75 @@
 # QonQrete Terminology
 
-**Version:** `v1.0.4-stable` (See `VERSION` file for the canonical version).
+**Version:** `v1.1.9-stable`
 
-This document defines the official vocabulary for the QonQrete Secure AI Construction Loop System.
+This document defines the main vocabulary used in the current repository.
 
-### Core Components & Roles
-- **Qrane**: The orchestrator (`qrane/qrane.py`) that manages the agent pipeline inside the container.
-- **worQer**: An AI agent that performs a specific role (`instruQtor`, `construQtor`, `inspeQtor`, etc.).
-- **Qrew**: The collection of agents that work together inside the `Qage`.
-- **tasqLeveler**: An optional agent that runs ONCE on Cycle 1 to enhance tasq.md with golden path tests, dependency graphs, mock infrastructure, and success criteria. Commented out by default in `pipeline_config.yaml`.
-- **qompressor**: A deterministic agent that "skeletonizes" the codebase into `bloq.d/`. Zero AI cost.
-- **qontextor**: A dual-mode agent that generates a machine-readable symbol map. Runs locally (AST, Jedi, heuristics, sentence-transformers) or via AI.
-- **qontrabender**: A policy-driven hybrid caching agent. Only active when ConstruQtor uses Gemini (for Gemini's context caching).
-- **calqulator**: A local agent that provides token and cost estimates. Zero AI cost.
-- **QontractGuard**: A deterministic AST-based contract verification module (`qontract_guard.py`) that enforces `qontract.json` invariants against generated code. Zero AI cost.
-- **LoQal Verifier**: A deterministic local verification agent that checks syntax and imports without AI.
-- **Local Provider**: A provider type for agents that run completely locally (e.g., `calqulator`, `qompressor`, `qontextor`).
+## Core runtime terms
 
-### Environment & Structure
-- **Qage**: The secure Docker/Podman container (or Microsandbox) that houses the `Qrew`. Named `qage_YYYYMMDD_HHMMSS`.
-- **Qodeyard**: The output directory (`qodeyard/`) — the single source of truth for current-cycle code.
-- **worQspace**: The shared volume (`worqspace/`) for configuration and agent communication.
-- **qontract.d**: The contract directory containing `qontract.md` (human-readable) and `qontract.json` (machine-parseable). Generated on Cycle 1, enforced thereafter.
-- **bloq.d**: Skeleton cache from `qompressor`.
-- **qontext.d**: Semantic index from `qontextor`.
-- **briq.d**: Planned steps (briqs) from `instruQtor`.
-- **exeq.d**: Per-briq execution summaries from `construQtor`.
-- **reqap.d**: Review summaries from `inspeQtor`.
-- **struqture**: Console/event logs per agent.
-- **sqrapyard**: Persistent seed directory (`worqspace/sqrapyard/`). Requires `-s` flag.
-- **Qonstruction**: A saved project output in `worqspace/qonstructions/`.
+- **QonQrete** — the overall system: CLI runtime + orchestrator + agents + workspace model
+- **Qrane** — the orchestrator process in `qrane/qrane.py`
+- **worqer** — a worker/agent script in `worqer/`
+- **Qrew** — the set of agents participating in a run
+- **Qage** — an isolated run environment and its corresponding `qage_YYYYMMDD_HHMMSS` directory
+- **worqspace** — shared configuration and runtime data directory
 
-### Workflow & Data
-- **cyQle**: A full Plan → Execute → Review loop.
-- **tasQ**: The high-level user request (`worqspace/tasq.md`).
-- **briQ**: A single, atomic step of the plan from `instruQtor`.
-- **exeQ**: A per-briq execution summary from `construQtor`.
-- **reQap**: A review/recap summary from `inspeQtor`.
-- **QONTRACT**: The project constitution — invariants extracted from the tasq on Cycle 1 and enforced on all subsequent cycles (forbidden imports, schema rules, ID strategies, required endpoints).
-- **Operational Mode**: Agent persona setting (`--mode`): `program`, `enterprise`, `security`, `performance`, etc.
-- **Briq Sensitivity**: Granularity setting (0-16). Higher = more briqs. Enforced with hard min/max ranges.
-- **Batched Briq Generation**: 2-phase approach (v1.0.3+) for sensitivity >= 8: Blueprint (JSON) → Fabrication (batched XML). Enables 50-250+ briqs.
-- **CheQpoint**: Pause after a cyQle. `true` = user-gated, `false` = autonomous.
-- **Universal File Rule**: If a file EXISTS → modify/extend it; if MISSING → create it.
+## Workflow terms
 
-### Container Runtime (v1.0.4)
-- **Container Engine**: Docker, Podman, or Microsandbox (MSB). Auto-detected.
-- **Build Backend**: `buildx` or `plain`. Auto-detected.
-- **OS Detection**: Linux, Darwin (macOS), WSL, MSYS (Git Bash/MinGW).
-- **Engine Wrappers**: `engine_build()`, `engine_run()`, `engine_run_helper()` — engine-agnostic.
-- **Security Flags**: `--read-only`, `--cap-drop=ALL`, resource limits, tmpfs — applied to container runs.
+- **tasq** — the high-level task description
+- **cyQle** — one full plan/build/review iteration
+- **briq** — one atomic work item produced by InstruQtor
+- **exeQ** — an execution summary emitted by ConstruQtor
+- **reQap** — a review/recap emitted by InspeQtor
+- **CheQpoint** — the point where QonQrete pauses for user continuation in user-gated mode
+- **gateQeeper** — the human operator at the checkpoint
 
-### Caching & Fidelity
-- **Variable Fidelity**: Mixing full code (MEAT) and skeletons (BONES) in cache payloads.
-- **MEAT**: Full source code from `qodeyard/`.
-- **BONES**: Skeleton code from `bloq.d/`.
-- **Volatile**: Frequently changing files excluded from cache.
-- **Caching Policy**: Configuration in `caching_policy.yaml` for Qontrabender modes.
-- **Core Score**: Computed value (0.0-1.0) indicating file importance.
+## Structural artifact terms
 
-### User Interaction
-- **gateQeeper**: The human user at the `CheQpoint`.
-- **CheQpoint Options**: `[Q]ontinue`, `[T]weaQ` (edit), `[X]Quit`.
-- **Qommander**: TUI top panel (main execution flow).
-- **Qonsole**: TUI bottom panel (raw agent logs).
+- **qodeyard** — current generated/modified code; primary truth source
+- **briq.d** — briq files
+- **exeq.d** — execution summaries
+- **reqap.d** — review summaries
+- **qontract.d** — contract material (`qontract.md` + `qontract.json`)
+- **qontext.d** — semantic / structural context output
+- **bloq.d** — compressed skeleton cache from Qompressor
+- **qache.d** — Qontrabender cache payload area
+- **struqture** — logs and event traces
+- **sqrapyard** — opt-in seed input area for bringing existing code into a run
+- **Qonstruction** — a saved output snapshot under `worqspace/qonstructions/`
 
-### Persistence & Resume
-- **Resume**: Continue from a previous Qage via `./qonqrete.sh resume`.
-- **Interactive Picker**: kubectx-style menu for Qage selection.
-- **meta.yaml**: Qonstruction metadata (project name, source qage, date, version).
+## Agent names
 
-### Security
-- **qrane (user)**: Orchestrator user, runs `qrane.py` via gosu.
-- **worqer (user)**: Agent runner user.
-- **qrew (group)**: Shared group for qrane/worqer collaboration.
-- **Root Dropping**: Start as root → fix permissions → drop to qrane via gosu.
-- **lib_security.py**: Path validation, jail enforcement, symlink prevention, structured logging.
+- **TasqLeveler** — optional cycle-1 tasq enhancer
+- **InstruQtor** — task planner and briq generator
+- **CalQulator** — local token/cost estimator
+- **ConstruQtor** — code generator / modifier
+- **InspeQtor** — reviewer
+- **Qontextor** — semantic / structural mapper
+- **Qompressor** — skeletonizer
+- **Qontrabender** — variable-fidelity cache compositor
+- **QontractGuard** — deterministic contract verifier
+- **LoQal Verifier** — deterministic syntax/import verification helper
+
+## Runtime/config terms
+
+- **Operational mode** — run persona / mode such as `program`, `enterprise`, `security`, etc.
+- **Briq sensitivity** — decomposition granularity; higher means more briqs in the current system design
+- **Autonomous mode** — continue without user cheQpoints
+- **User-gated mode** — pause at cheQpoints
+- **wonqrete** — experimental mode flag in the CLI/TUI surface
+
+## Runtime engine terms
+
+- **Container engine** — Docker, Podman, or MSB
+- **Build backend** — the backend used to build the runtime image (for example `buildx` or plain build paths)
+- **MSB / Microsandbox** — experimental alternative sandbox path
+
+## IDE integration terms
+
+- **VS Code extension** — the `vscode-extension/` project that wraps the repo-local QonQrete CLI workflow inside VS Code
+- **IntelliJ plugin** — the `intellij-plugin/` project that wraps the repo-local QonQrete CLI workflow for JetBrains IDEs
+- **repo-local workflow** — today’s actual model: the project contains `qonqrete.sh` and `worqspace/`, and the IDE integration detects that local project
+
+## Important terminology honesty note
+
+The current repository does **not** yet implement the fully centralized “single shared engine for many arbitrary repos” model. When the docs say VS Code or IntelliJ integration, they mean the bundled wrappers around the existing repo-local QonQrete workflow.

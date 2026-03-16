@@ -2,622 +2,278 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
 
-![Splash](qrane/qonqrete.jpg)
+![QonQrete](qrane/qonqrete.jpg)
 
-
-QonQrete is a Secure AI Construction Loop System, using a Multi-Agent Pipeline Orchestrator in a Sandbox environment with YAML Configuration. In short: it spawns 3 AI agents in a sandbox/container and makes them work together on tasks. It can run with a hard requirement for user approval between steps, or in a fully autonomous mode where it keeps running until the user decides to stop it.
-
-QonQrete is a multi-agent orchestration system designed for secure, observable, and human-in-the-loop software construction. It operates on the principle of a secure build environment (`Qage`), managed by a host-level orchestrator (`Qrane`).
-
-This architecture ensures that AI-generated code and processes cannot affect the host system, providing a robust framework for autonomous and semi-autonomous development.
+QonQrete is a **local-first, file-based AI software construction system** that runs a structured multi-agent build loop inside a hardened container. It plans work into briqs, generates code in a Qage, reviews the result, and iterates with either **user-gated cheQpoints** or **fully autonomous cycles**.
 
 ## Version
 
-**Version:** `v1.0.4-stable` (See `VERSION` file for the canonical version).
+**Current repository version:** `v1.1.9-stable`  
+Canonical source of truth: `VERSION`
 
-> **Note on Experimental Features:**
->
-> The following features are marked as **[EXPERIMENTAL]** and may have bugs:
-> - **TUI Mode** (`-t/--tui`): Text-based User Interface
-> - **Microsandbox** (`-M/--msb`): Alternative to Docker runtime
->
-> We welcome community contributions! If you encounter any issues or have suggestions, please report them.
+## What this repository contains
 
----
+This repository currently ships three things:
 
-## What's New in v1.0.4-stable 🚀
+1. **QonQrete core CLI/runtime**
+   - `qonqrete.sh`
+   - `qrane/`
+   - `worqer/`
+   - `worqspace/`
+2. **VS Code extension** in `vscode-extension/`
+3. **IntelliJ / JetBrains plugin** in `intellij-plugin/`
 
-### 🔒 QONTRACT LOCKDOWN — Contract-Enforced Pipeline
+The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-The QONTRACT (project constitution) is now mandatory and enforced across the entire pipeline:
+## What changed between `v1.0.4-stable` and `v1.1.9-stable`
 
-- **`qontract.d/`** — dedicated directory for `qontract.md` + `qontract.json`
-- **QontractGuard** — deterministic AST-based contract verification (forbidden imports, schema fields, ID strategies, required endpoints)
-- **Fail-fast dependency** — ConstruQtor and InspeQtor crash-stop if contract is missing on cycle 2+
-- **Per-briq gating** — contract-relevant briqs are checked after each generation attempt
-- **110 tests passing** (58 unit + 52 smoke)
+### Core platform
+- container runtime auto-detection for Docker / Podman / MSB
+- enforced contract workflow via `qontract.d/`
+- stricter deterministic run behavior and anti-drift hardening
+- resume / clean / qonstruction workflow
+- sqrapyard seeding as an explicit opt-in flow
+- QONTRACT fail-fast enforcement on later cycles
 
-### 🐳 MULTI-ENGINE SUPPORT — Docker, Podman, Cross-Platform
+### VS Code integration
+- full VS Code extension with commands, sidebar, status bar, config UI, resume and clean flows
+- shell detection / verification and honest run-state handling
+- run `worqspace/tasq.md` directly from the IDE
+- run any Markdown file temporarily as a QonQrete tasq
+- qage browsing and manual packaging as `.vsix`
 
-Auto-detects everything so you don't have to:
-- **OS**: Linux, macOS, WSL2, Git Bash/MSYS
-- **Engine**: Docker → Podman → error (with install links)
-- **Build backend**: buildx → plain (auto-detected)
-- **macOS Podman**: Auto-initializes and starts the Podman machine
-- **Windows**: Volume path normalization for Docker Desktop
-- CLI flags: `--docker`, `--podman` to force engine
-- Env overrides: `CONTAINER_ENGINE`, `BUILD_BACKEND`
+### IntelliJ / JetBrains integration
+- IntelliJ plugin project with tool window, actions, settings, status widget, qage browser, and run controls
+- manual packaging flow via Gradle
+- local/manual installation path for JetBrains IDEs
 
-### 📋 Also in v1.0.4
+## Core principles
 
-- Qompressor indentation fix (correct skeleton output for class methods + nested defs)
-- TasqLeveler complexity gating (skip enhancement for simple tasqs)
-- InspeQtor context wiring: `qodeyard/*` is PRIMARY truth source, `bloq.d/*`/`qontext.d/*` are OPTIONAL with staleness warnings
+- **Isolation by design** — AI execution happens in a Qage container, not directly on the host.
+- **File-based communication** — tasqs, briqs, reviews, skeletons, contracts, and logs are visible on disk.
+- **Structured iteration** — QonQrete works in cyQles with planning, build, review, and checkpoint phases.
+- **Human control when wanted** — autonomous mode exists, but user-gated cheQpoints remain first-class.
+- **Local-first supporting stack** — several helper agents run fully locally with zero AI-token cost.
 
----
+## Architecture in one glance
 
-## What's New in v1.0.2 🎉
+- **`qonqrete.sh`** — host entrypoint and runtime bootstrap
+- **`qrane/`** — orchestrator, TUI, path handling, cost helpers
+- **`worqer/`** — agent scripts and security/provider utilities
+- **`worqspace/`** — config, task input, sqrapyard, qages, qonstructions
+- **`vscode-extension/`** — VS Code integration
+- **`intellij-plugin/`** — JetBrains integration
 
-### 🔄 INVERTED BRIQ SENSITIVITY SCALE
+## Main workflow
 
-The briq sensitivity scale has been **INVERTED** for more intuitive usage:
-- **Higher number = MORE briqs** (no more confusion!)
-- Extended scale: **0-16** (was 0-9)
-- New enterprise-level granularity options (10-16)
+1. **Enhance** — `tasqleveler` (optional, cycle 1 only)
+2. **Plan** — `instruqtor` creates briqs and contract files
+3. **Estimate** — `calqulator` estimates token/cost usage
+4. **Build** — `construqtor` generates and updates code in `qodeyard/`
+5. **Review** — `inspeqtor` validates and reviews results
+6. **Index / compress** — `qontextor` and `qompressor` refresh context artifacts
+7. **Checkpoint** — continue, tweaQ, or quit
 
-### 📊 NEW BRIQ SENSITIVITY SCALE (INVERTED!)
+## Directory overview
 
-| Level | Name | Briq Range | Use Case |
-|-------|------|------------|----------|
-| **0** | Monolithic | 1 | Single-file scripts |
-| **1** | Very Broad | 2-3 | Backend/Frontend split |
-| **2** | Broad | 3-5 | Large components |
-| **3** | Feature | 5-8 | Feature-level |
-| **4** | Component | 8-12 | Component-level |
-| **5** | Balanced | 10-15 | **← RECOMMENDED DEFAULT** |
-| **6** | Standard | 15-20 | Most files separate |
-| **7** | High | 20-30 | Detailed split |
-| **8** | Very High | 30-40 | Fine-grained |
-| **9** | Atomic | 40-60 | Maximum detail |
-| **10-16** | Enterprise | 50-250 | Mega-projects |
-
-### 🆕 NON-INTERACTIVE QONSTRUCTION SAVE
-
-New `-n/--qonstruction-name` flag for automated pipelines:
-```bash
-./qonqrete.sh run -a -b 6 -c 3 -n myproject
+```text
+qonqrete/
+├── qonqrete.sh
+├── qrane/
+├── worqer/
+├── worqspace/
+│   ├── config.yaml
+│   ├── pipeline_config.yaml
+│   ├── caching_policy.yaml
+│   ├── tasq.md
+│   ├── sqrapyard/
+│   ├── qonstructions/
+│   └── qage_YYYYMMDD_HHMMSS/
+├── doc/
+├── vscode-extension/
+└── intellij-plugin/
 ```
 
-### 🎯 GEMINI-ONLY QONTRABENDER
+## Supported AI providers
 
-Qontrabender now only activates when using Gemini as the construqtor provider (it's for Gemini's context caching).
+The current repo supports these providers through `worqer/lib_ai.py` and config:
 
----
+- OpenAI
+- Gemini
+- Anthropic
+- DeepSeek
+- Qwen
+- `local` for non-remote helper agents
 
-## Previous Release: v1.0.0 🎉
-
-### 🚨 PRODUCTION RELEASE - ENFORCED BRIQ SENSITIVITY
-
-The first stable production release! This fixes the critical briq sensitivity inconsistency bug.
-
-**The Problem:** `briq_sensitivity` was just a "hint" to the AI, resulting in wildly inconsistent outputs (1-10 briqs with same setting).
-
-**The Fix:** Briq counts are now **ENFORCED** with hard min/max ranges:
-- Too few briqs → System retries with stronger prompt
-- Too many briqs → System merges briqs automatically
-
-### 📊 OLD BRIQ SENSITIVITY SCALE (v1.0.0 - DEPRECATED)
-
-| Level | Name | Briq Range | Use Case |
-|-------|------|------------|----------|
-| **9** | Monolithic | 1 | Single-file scripts |
-| **8** | Very Broad | 2-3 | Backend/Frontend split |
-| **7** | Broad | 3-5 | **OLD DEFAULT** |
-| **6** | Feature | 5-8 | Feature-level decomposition |
-| **5** | Component | 8-12 | Component-level |
-| **4** | Balanced | 10-15 | Medium complexity |
-| **3** | Standard | 15-20 | Standard granularity |
-| **2** | High Gran. | 20-30 | High granularity |
-| **1** | Very High | 30-40 | Very fine-grained |
-| **0** | Atomic | 40-60 | Maximum decomposition |
-
-### 🎯 RECOMMENDED CONFIGURATIONS
-
-| Project Type | Sensitivity | Cycles | Expected Result |
-|--------------|-------------|--------|-----------------|
-| **Simple** (API, web server) | 7 | 4 | B+ to A- grade |
-| **Medium** (full-stack app) | 6 | 5 | B to B+ grade |
-| **Complex** (multi-service) | 5 | 6 | Comprehensive coverage |
-
-### ⚙️ New Defaults
-
-| Setting | Old | New |
-|---------|-----|-----|
-| `briq_sensitivity` | 8 | **7** |
-| `auto_cycle_limit` | 2 | **4** |
-
----
-
-## What's New in v0.9.9-stable
-
-### 🎨 Cleaner Console Output
-
-Less noise, more signal:
-
-| Component | Change |
-|-----------|--------|
-| **TasqLeveler** | Only `[TasqLeveler]` status lines shown |
-| **InspeQtor** | Only final assessment displayed |
-| **Table dividers** | Hidden from output |
-| **pycg warnings** | Removed (package broken, using jedi instead) |
-
----
-
-## What's New in v0.9.8-stable
-
-### 🐛 Critical Bug Fixes
-
-Two critical bugs discovered during multi-cycle builds:
-
-| Issue | Fix |
-|-------|-----|
-| **Skeleton overwrites code** | ConstruQtor now detects and skips Qompressor skeleton markers |
-| **Exit code 1 after inspeqtor** | Removed duplicate loqal_verifier from pipeline |
-
-### 🔧 Technical Details
-
-The skeleton bug occurred when AI copied `bloq.d/` skeletons from context back to `qodeyard/`, overwriting working code with broken `# ... (body stripped by Qompressor) ...` stubs.
-
----
-
-## What's New in v0.9.7-stable
-
-### 🔧 Reliability Fixes
-
-Fixes discovered during real-world multi-cycle builds:
-
-| Issue | Fix |
-|-------|-----|
-| **Cache write errors** | Added `--tmpfs /home/qrane/.cache:rw,size=500m` for model caching |
-| **PATH issues** | Added `ENV PATH="/usr/local/bin:${PATH}"` to Dockerfile |
-
-### 📦 Default Configuration Updates
-
-| Setting | New Default | Previous |
-|---------|-------------|----------|
-| `briq_sensitivity` | 6 (fine-grained) | 3 |
-| `auto_cycle_limit` | 3 cycles | 7 |
-
-### 🗂️ Ignore File Updates
-
-- Added `worqspace/qonstructions/*` to `.gitignore` and `.dockerignore`
-- Qonstructions are now excluded from version control (user-specific outputs)
-
----
-
-## What's New in v0.9.6-stable
-
-### 🔄 Resume & Qonstructions - Persistent Project Workflow
-
-No more losing your work! QonQrete now supports resuming from previous runs and saving projects permanently.
-
-| Feature | Command | Description |
-|---------|---------|-------------|
-| **Resume (Interactive)** | `./qonqrete.sh resume` | kubectx-style picker for previous Qages |
-| **Resume (Direct)** | `./qonqrete.sh resume -q qage_20251226` | Resume specific Qage |
-| **Qonstructions** | Auto-prompt after run | Save completed runs to `qonstructions/` |
-| **Clean (Interactive)** | `./qonqrete.sh clean` | Pick which Qage to delete |
-| **Clean (Specific)** | `./qonqrete.sh clean -q qage_20251226` | Delete specific Qage |
-| **Clean (All)** | `./qonqrete.sh clean -A` | Delete all Qages |
-
-### 🛡️ Security Hardening
-
-QonQrete implements defense-in-depth security:
-
-#### Container Security
-| Feature | Protection |
-|---------|------------|
-| **Non-root execution** | `gosu` drops to `qrane` user after permission fix |
-| **Read-only filesystem** | Container root is read-only |
-| **Capability dropping** | `--cap-drop=ALL` then adds only required caps |
-| **Resource limits** | Memory (4GB), CPU (2 cores), PIDs (100) |
-| **Secure /tmp** | `--tmpfs /tmp:rw,noexec,nosuid,size=100m` |
-| **Writable cache** | `--tmpfs /home/qrane/.cache:rw,size=500m` |
-
-**Required Capabilities:** SETUID, SETGID, CHOWN, FOWNER, DAC_OVERRIDE
-
-#### Code Security
-| Feature | Protection |
-|---------|------------|
-| **Path jail enforcement** | All file ops validated against `/qonq` |
-| **Symlink protection** | Paths resolved before validation |
-| **API timeouts** | 5-minute timeout on all AI calls |
-| **Retry limits** | Hard cap of 10 retries |
-| **Size limits** | tasq.md: 100KB, generated files: 1MB |
-| **Config validation** | JSON Schema validation for config.yaml |
-
-#### Dependency Security
-| Feature | Protection |
-|---------|------------|
-| **Pinned base image** | Ubuntu with SHA256 digest |
-| **Pinned packages** | `requirements.txt` with exact versions |
-| **Minimal install** | `--no-install-recommends` |
-
-### 🚀 Explicit Sqrapyard Control
-
-Sqrapyard seeding is now **opt-in** to prevent accidental imports:
+Required environment variables depend on your selected providers:
 
 ```bash
-# Fresh start (default) - ignores sqrapyard
-./qonqrete.sh run
-
-# Seed from sqrapyard
-./qonqrete.sh run -s
-./qonqrete.sh run --sqrapyard
+export OPENAI_API_KEY='...'
+export GOOGLE_API_KEY='...'        # or GEMINI_API_KEY
+export ANTHROPIC_API_KEY='...'
+export DEEPSEEK_API_KEY='...'
+export QWEN_API_KEY='...'
 ```
 
-### ✏️ Interactive TasQ Editor
+## System requirements
 
-No `tasq.md`? No problem! QonQrete opens your `$EDITOR` automatically:
+### Container engine
+QonQrete auto-detects container runtime support.
+
+Supported runtime paths in the current repo:
+- Docker
+- Podman
+- Microsandbox / MSB (**experimental**)
+
+### Tested platform notes from the repo/docs
+- Linux + Docker / Docker Desktop
+- macOS + Docker Desktop / Podman
+- Windows 11 + WSL2 + Docker Desktop
+- Git Bash / MSYS support exists, but WSL2 is still the cleaner Windows experience
+
+## Quickstart
+
+### 1. Initialize the Qage image
 
 ```bash
-./qonqrete.sh run
-# -> Opens vim/nano/code with template
-# -> Write your task, save, run!
-```
-
-### 🏷️ Flag Changes
-
-| Old Flag | New Flag | Purpose |
-|----------|----------|---------|
-| `-s/--msb` | `-M/--msb` | Microsandbox mode |
-| (none) | `-s/--sqrapyard` | Seed from sqrapyard |
-
----
-
-## What's New in v0.9.0-stable
-
-### 🚀 TasqLeveler - Automatic Tasq Enhancement
-
-A new agent that supercharges your tasq.md automatically on Cycle 1:
-
-| Enhancement | Impact |
-|-------------|--------|
-| 📦 Dependency Graph | Prevents circular imports |
-| 🎯 Golden Path Tests | Defines success explicitly |
-| 🧪 Mock Infrastructure | Test without real services |
-| 📋 Success Criteria | Clear pass/fail |
-| ⏱️ Phase Priority | Better token allocation |
-
-**+15-20% improvement in output quality!**
-
-```yaml
-# config.yaml - TasqLeveler uses instruqtor's config by default
-agents:
-  tasqleveler:
-    provider: openai
-    model: gpt-4.1-mini
-```
-
-### 🔧 Universal File Rule (s00permode)
-
-One simple rule for ALL cycles:
-- 📁 File EXISTS? → MODIFY/EXTEND it (never recreate)
-- 📄 File MISSING? → CREATE it (new modules welcome!)
-
-No more rebuild-from-scratch bugs on multi-cycle builds!
-
----
-
-## What's New in v0.8.0-stable
-
-### 🌀 Qontrabender - The Cache Bender
-
-A new policy-driven hybrid caching agent with Variable Fidelity:
-
-- **Policy-Based Configuration**: All behavior controlled via `caching_policy.yaml`
-- **6 Operational Modes**: `local_fast`, `local_smart`, `cyber_bedrock`, `cyber_aggressive`, `paranoid_mincloud`, `debug_repro`
-- **Variable Fidelity**: Intelligently mixes full code (MEAT) + skeletons (BONES)
-- **Schema Validation**: Bad YAML can't brick your flow
-- **Improved Volatile Detection**: Cycle-based, diff-based, git diff, mtime fallback
-
-```yaml
-# Select mode in config.yaml
-agents:
-  qontrabender:
-    policy_file: "./caching_policy.yaml"
-    mode: "local_smart"
-```
-
-See [QONTRABENDER.md](./doc/QONTRABENDER.md) for full documentation.
-
----
-
-## The Triple-Core Memory System
-
-QonQrete now features a **Triple-Core Memory System**:
-
-| Agent | Role | Output |
-|-------|------|--------|
-| **Qompressor** | Skeletonizer | `bloq.d/` - AST-stripped code structures |
-| **Qontextor** | Symbol Mapper | `qontext.d/` - Semantic YAML maps |
-| **Qontrabender** | Cache Bender | `qache.d/` - Policy-driven cache payloads |
-
-### The Data Lake Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    THE DATA LAKE (Local)                                │
-│                                                                         │
-│   qodeyard/ (MEAT)           bloq.d/ (BONES)        qontext.d/ (SOUL)   │
-│   Full source code           AST skeletons          Semantic maps       │
-│                                                                         │
-│             │                        │                      │           │
-│             └───────────┬────────────┴──────────────────────┘           │
-│                         ▼                                               │
-│              ┌───────────────────────┐                                  │
-│              │    QONTRABENDER       │ ← Policy-driven compositor       │
-│              │   caching_policy.yaml │                                  │
-│              └──────────┬────────────┘                                  │
-│                         ▼                                               │
-│                   qache.d/ (Cache Ledger)                               │
-│                   └─ Variable fidelity payloads                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Performance Metrics
-
-**Scenario:** Medium-sized project (50 files, ~10,000 lines of code)
-
-| Metric | Old Approach | Triple-Core | Improvement |
-|--------|--------------|-------------|-------------|
-| **Context Sent** | 100,000 Tokens | ~4,000 Tokens | **96% Reduction** |
-| **Indexing Cost** | High (AI-based) | **Zero** (Local) | **∞ Cheaper** |
-| **Cost per Run** | ~$0.25 (GPT-4o) | ~$0.01 (GPT-4o) | **25x Cheaper** |
-| **Cache Reuse** | None | Hash-based dedup | **Near-zero churn** |
-
----
-
-## Core Principles
-
-1.  **Isolation by Design**: All agent execution occurs within the `Qage`, a Docker container that acts as a secure sandbox.
-2.  **Configuration-Driven**: Agent models, modes, and policies defined in YAML.
-3.  **File-Based Communication**: Agents communicate via markdown files, creating transparent audit trails.
-4.  **Human-in-the-Loop Control**: CheQpoints pause for user review. Can be configured for autonomous mode.
-5.  **Local Sovereignty**: Keep intelligence local with policy-driven caching.
-
----
-
-## Architecture Overview
-
--   `qrane/`: The **Qrane** orchestrator and CLI
--   `worqer/`: AI agent scripts (`tasqLeveler`, `instruQtor`, `construQtor`, `inspeQtor`, `qompressor`, `qontextor`, `qontrabender`)
--   `worqspace/`: Shared data plane with configuration and generated artifacts
-    - `qonstructions/`: Saved project outputs (NEW in v0.9.1)
-    - `sqrapyard/`: Input seed code for projects
-
----
-
-## The Workflow CyQle
-
-1.  **Enhance (`tasqLeveler`)**: *Cycle 1 only* - Supercharges tasq with golden paths and mocks
-2.  **Plan (`instruQtor`)**: Reads the `tasQ` and creates `briQ` files with detailed plans
-3.  **Execute (`construQtor`)**: Processes each `briQ` and generates code in `qodeyard/`
-4.  **Review (`inspeQtor`)**: Reviews generated code and produces `reQap` with assessment
-5.  **CheQpoint (`gateQeeper`)**: Pauses for user command to proceed
-
----
-
-## System Requirements
-
-### Container Engine (Docker or Podman)
-
-QonQrete auto-detects your container engine at runtime. No `buildx` requirement.
-
-**Priority order:** `CONTAINER_ENGINE` env → `--podman` / `--docker` CLI flag → auto-detect (docker first, then podman).
-
-| Platform | Engine | Notes |
-|----------|--------|-------|
-| **Linux** | Docker CE / Podman | Works out of the box. `sudo apt-get install docker-ce docker-ce-cli containerd.io` or `sudo dnf install podman` |
-| **macOS** | Docker Desktop | [Install Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) |
-| **macOS** | Podman | `brew install podman` — QonQrete auto-runs `podman machine init` and `podman machine start` if needed |
-| **Windows** | Docker Desktop + WSL2 | [Install Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/). WSL2 backend recommended. |
-| **Windows** | Git Bash / MSYS | Supported with automatic path normalization. WSL2 is recommended for best compatibility. |
-
-> **Docker Desktop Users:** Grant Docker permission to access the project directory via **Settings > Resources > File Sharing**.
-
-**Environment overrides:**
-```bash
-export CONTAINER_ENGINE=podman   # Force podman (or docker)
-export BUILD_BACKEND=plain       # Force plain build (skip buildx detection)
-```
-
-#### Tested successfully on:
-- Linux (Fedora 42 & 43) + docker and docker-desktop
-- Windows 11 WSL 2 ubuntu and docker desktop
-- Mac OS Sequoia 15.7.4 with podman and docker-desktop
-
-### Microsandbox (Optional) [EXPERIMENTAL]
-
-Lightweight alternative to Docker. See [Microsandbox repository](https://github.com/a-i-s-r/microsandbox).
-
----
-
-## Getting Started
-
-See **[QUICKSTART.md](./doc/QUICKSTART.md)** for the full guide.
-
-### API Keys
-
-Export keys for your AI providers:
-
-```bash
-export OPENAI_API_KEY='your-key'
-export GOOGLE_API_KEY='your-key'
-export ANTHROPIC_API_KEY='your-key'
-export DEEPSEEK_API_KEY='your-key'
-```
-
-### Initialize
-
-```bash
+chmod +x qonqrete.sh
 ./qonqrete.sh init
 ```
 
-### Run
+Optional engine forcing:
 
 ```bash
-# Fresh start (default)
+./qonqrete.sh init --docker
+./qonqrete.sh init --podman
+```
+
+### 2. Write your task
+
+Edit:
+
+```text
+worqspace/tasq.md
+```
+
+### 3. Run
+
+```bash
 ./qonqrete.sh run
+```
 
-# With sqrapyard seeding
-./qonqrete.sh run -s
+Useful variants:
 
-# With TUI [EXPERIMENTAL]
-./qonqrete.sh run --tui --mode security
-
-# Autonomous mode
-./qonqrete.sh run --auto --briq-sensitivity 2
-
-# User-gated mode
+```bash
+./qonqrete.sh run --auto
 ./qonqrete.sh run --user
+./qonqrete.sh run -s
+./qonqrete.sh run -a -n myproject
+./qonqrete.sh run --mode security --briq-sensitivity 6 --cyqles 3
 ```
 
-### Resume
+### 4. Resume
 
 ```bash
-# Interactive picker
 ./qonqrete.sh resume
-
-# Specific Qage
-./qonqrete.sh resume -q qage_20251226_115701
+./qonqrete.sh resume -q qage_YYYYMMDD_HHMMSS
 ```
 
-### Clean
+### 5. Clean
 
 ```bash
-# Interactive picker
 ./qonqrete.sh clean
-
-# Specific Qage
-./qonqrete.sh clean -q qage_20251226_115701
-
-# All Qages
+./qonqrete.sh clean -q qage_YYYYMMDD_HHMMSS
 ./qonqrete.sh clean -A
 ```
 
----
+## IDE integrations
 
-## Configuration
+### VS Code extension
+Location: `vscode-extension/`
 
-### config.yaml
+Main capabilities in this repo snapshot:
+- run canonical `worqspace/tasq.md`
+- run any Markdown file as a temporary tasq
+- sidebar control panel
+- status bar state reporting
+- init / run / resume / clean commands
+- qage browsing
 
-```yaml
-agents:
-  tasqleveler:
-    provider: openai
-    model: gpt-4.1-mini  # Runs once on Cycle 1
-    
-  instruqtor:
-    provider: openai
-    model: gpt-4.1-mini
+Manual build/package:
 
-  construqtor:
-    provider: gemini
-    model: gemini-2.5-pro
-
-  inspeqtor:
-    provider: openai
-    model: gpt-4.1
-
-  qontextor:
-    provider: local
-    model: qontextor
-    local_mode: complex
-
-  qompressor:
-    provider: local
-    model: qompressor
-
-  qontrabender:
-    provider: local
-    model: qontrabender
-    policy_file: "./caching_policy.yaml"
-    mode: local_smart
-
-options:
-  use_qompressor: true
-  use_qontextor: true
-  use_qontrabender: true
-  cheqpoint: false
-  auto_cycle_limit: 4      # Recommended: 4 for simple, 5-6 for complex
-  briq_sensitivity: 7      # Recommended: 7 for simple, 5-6 for complex
+```bash
+cd vscode-extension
+npm install
+npm run compile
+npx vsce package
 ```
 
-### Qontrabender Modes
+### IntelliJ / JetBrains plugin
+Location: `intellij-plugin/`
 
-| Mode | Description |
-|------|-------------|
-| `local_fast` | Ultra-fast, skeleton only |
-| `local_smart` | Variable fidelity, balanced (default) |
-| `cyber_bedrock` | Remote cache for stable bedrock |
-| `cyber_aggressive` | Aggressive remote caching |
-| `paranoid_mincloud` | Minimal cloud exposure |
-| `debug_repro` | Maximum audit logging |
+Main capabilities in this repo snapshot:
+- tool window with run controls
+- settings/config UI
+- run, resume, clean, and qage browsing actions
+- status widget / shell verification concepts
 
----
+Manual build/package:
 
-## CLI Reference
-
+```bash
+cd intellij-plugin
+./gradlew buildPlugin
 ```
+
+## Important current-state note
+
+As shipped in this repository, QonQrete is still fundamentally a **repo-local workflow**:
+- the core runtime expects `qonqrete.sh` and `worqspace/` in the project
+- the bundled IDE integrations are built around that repo-local model
+- a fully centralized “single engine outside all projects” bootstrap flow is **not** implemented in this repository snapshot
+
+## CLI reference
+
+```text
 Usage: ./qonqrete.sh [COMMAND] [OPTIONS]
 
 Commands:
-  init              Build the Qage container image.
-  run               Start fresh QonQrete session.
-  resume            Resume from a previous Qage.
-  clean             Remove Qage directories.
+  init
+  run
+  resume
+  clean
 
-Global Options:
-  -h, --help        Show help message.
-  -V, --version     Show version information.
-
-Run Options:
-  -a, --auto                   Enable Autonomous Mode.
-  -u, --user                   Force User-gated Mode.
-  -t, --tui                    Enable TUI Mode. [EXPERIMENTAL]
-  -m, --mode <n>               Set Operational Mode.
-  -b, --briq-sensitivity <N>   Set Granularity (0-9). Default: 7
-  -c, --cyqles <N>             Set max auto-cycles (1-10). Default: 4
-  -s, --sqrapyard              Seed from sqrapyard/ directory.
-  -M, --msb                    Force Microsandbox. [EXPERIMENTAL]
-  -d, --docker                 Force Docker.
-
-Resume Options:
-  -q, --qage <n>               Resume from specific Qage.
-  (no args)                    Interactive selection.
-
-Clean Options:
-  -q, --qage <n>               Clean specific Qage.
-  -A, --all                    Clean ALL Qages.
-  (no args)                    Interactive selection.
+Run options:
+  -a, --auto
+  -u, --user
+  -t, --tui
+  -m, --mode <name>
+  -b, --briq-sensitivity <0-16>
+  -c, --cyqles <1-50>
+  -n, --qonstruction-name <name>
+  -s, --sqrapyard
+  -M, --msb
+  -d, --docker
+  -p, --podman
+  -w, --wonqrete
 ```
 
----
+## Documentation map
 
-## Documentation
+- [QUICKSTART.md](./doc/QUICKSTART.md) — shortest path to first run
+- [DOCUMENTATION.md](./doc/DOCUMENTATION.md) — full technical reference
+- [ARCHITECTURE.md](./doc/ARCHITECTURE.md) — architecture and pipeline layout
+- [RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) — version history and notable changes
+- [TERMINOLOGY.md](./doc/TERMINOLOGY.md) — QonQrete vocabulary
 
-- [QUICKSTART.md](./doc/QUICKSTART.md) - Getting started guide
-- [DOCUMENTATION.md](./doc/DOCUMENTATION.md) - Full system documentation
-- [ARCHITECTURE.md](./doc/ARCHITECTURE.md) - System architecture & diagrams
-- [RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) - Version history (v1.0.4-stable → v0.1.0-alpha)
-- [TERMINOLOGY.md](./doc/TERMINOLOGY.md) - QonQrete terminology
+## Current limitations / honesty section
 
----
+- The bundled IDE integrations are present and usable, but official store publishing is a separate distribution step.
+- The repo snapshot does **not** implement a central per-user QonQrete engine installer / bootstrap flow.
+- The committed `worqspace/config.yaml` is a working configuration example, not a promise that every default value is ideal for every task.
+- `TUI` and `MSB` remain experimental paths.
+- Qontrabender only becomes relevant when the active ConstruQtor provider is Gemini.
 
 ## License
 
 QonQrete is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-See the [LICENSE](LICENSE) file for full text.
-
-![Scarf](https://static.scarf.sh/a.png?x-pxid=242de794-2b10-4e34-a6cd-eab9e46cc793)
+See [LICENSE](LICENSE).
