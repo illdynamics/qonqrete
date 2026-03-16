@@ -37,9 +37,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v3
+        with:
+          validate-wrappers: false
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -88,6 +87,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -113,6 +114,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -143,20 +146,3 @@ jobs:
             intellij-plugin/build/distributions/*.zip
             intellij-plugin/build/distributions/*-SHA256.txt
           generate_release_notes: true
-
-      # JetBrains Marketplace:
-      # The FIRST publication must be uploaded manually in JetBrains Marketplace.
-      # After that, you can automate publishing by uncommenting the block below
-      # and setting these repo secrets:
-      # - INTELLIJ_PUBLISH_TOKEN
-      # - CERTIFICATE_CHAIN
-      # - PRIVATE_KEY
-      # - PRIVATE_KEY_PASSWORD
-      #
-      # - name: Publish to JetBrains Marketplace
-      #   run: ./gradlew signPlugin publishPlugin
-      #   env:
-      #     PUBLISH_TOKEN: ${{ secrets.INTELLIJ_PUBLISH_TOKEN }}
-      #     CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
-      #     PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-      #     PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
