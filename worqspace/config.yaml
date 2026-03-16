@@ -83,7 +83,7 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   tasqleveler:
     provider: openai
-    model: gpt-4.1-mini
+    model: gpt-5.4-nano
     # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
     enabled: true
     min_complexity_score: 15  # Below this score, don't enhance
@@ -94,7 +94,7 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
     provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-5.4-mini    # $0.10/$0.40 per 1M - cheap & smart enough
 
   calqulator:
     provider: local
@@ -104,25 +104,25 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: deepseek
-    model: deepseek-chat           # $1.25/$10.00 per 1M - best for code generation
+    provider: openai
+    model: gpt-5.4-mini           # $1.25/$10.00 per 1M - best for code generation
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
     provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-5.4-mini    # $0.10/$0.40 per 1M - cheap & smart enough
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
-    batch_mode: false                 # Group briqs into batches
-    batch_token_roof: 30000          # Max input tokens per batch (~240KB)
-    batch_max_briqs: 6              # Max briqs per batch (safety cap)
+    batch_mode: true                 # Group briqs into batches
+    batch_token_roof: 60000          # Max input tokens per batch (~240KB)
+    batch_max_briqs: 12              # Max briqs per batch (safety cap)
     
     # Legacy per-briq limits (used when batch_mode=false)
-    max_prompt_chars_per_briq: 250000
-    max_context_files_per_briq: 20
-    max_chars_per_context_file: 40000
+    max_prompt_chars_per_briq: 500000
+    max_context_files_per_briq: 40
+    max_chars_per_context_file: 80000
     
     # Context filtering
     use_filtered_context: true
@@ -173,17 +173,9 @@ options:
   # Enable/disable Qontextor (context indexing)
   use_qontextor: true
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TASQLEVELER COMPLEXITY SCORING (v1.0.4)
-# ═══════════════════════════════════════════════════════════════════════════════
-tasqleveler:
-  enabled: true
-  min_complexity_score: 15
-  min_lines: 20
-
   # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
   # NOTE: Only works when construqtor.provider is 'gemini'!
-  use_qontrabender: false
+  use_qontrabender: true
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Cheqpoint Configuration
@@ -226,7 +218,7 @@ tasqleveler:
   #   Simple projects (web server, API): sens=5, cycles=3
   #   Medium projects (full-stack app):  sens=6, cycles=4
   #   Complex projects (multi-service):  sens=7, cycles=5
-  briq_sensitivity: 16
+  briq_sensitivity: 1
 
   # Operational Mode
   mode: program
