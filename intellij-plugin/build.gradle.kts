@@ -53,7 +53,6 @@ tasks {
 
     patchPluginXml {
         sinceBuild.set("233")
-        untilBuild.set("243.*")
         changeNotes.set("""
             <h2>1.1.9 - Production Hardening Pass</h2>
             <ul>
