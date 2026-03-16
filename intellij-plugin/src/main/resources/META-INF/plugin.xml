@@ -2,19 +2,18 @@
   QonQrete IntelliJ Plugin
   Plugin configuration - Production Ready
 
-  @author WoNQ
-  @version 1.1.9
+  @author QonQrete
+  @version v1.1.9
   @license AGPL-3.0
 -->
 
 <idea-plugin>
-    <id>sh.qonqrete.intellij</id>
+    <id>sh.qonqrete</id>
     <name>QonQrete</name>
+    <version>1.1.9</version>
+    <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
 
-```
-<vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
-
-<description><![CDATA[
+    <description><![CDATA[
     <h2>QonQrete</h2>
 
     <p>
@@ -43,102 +42,102 @@
     <p>
     Learn more at <a href="https://qonqrete.sh">qonqrete.sh</a>.
     </p>
-]]></description>
+    ]]></description>
 
-<depends>com.intellij.modules.platform</depends>
-<depends>org.jetbrains.plugins.terminal</depends>
+    <category>Code tools</category>
 
-<extensions defaultExtensionNs="com.intellij">
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
 
-    <projectService serviceImplementation="sh.qonqrete.intellij.services.QonQreteProjectService"/>
+    <extensions defaultExtensionNs="com.intellij">
 
-    <applicationService serviceImplementation="sh.qonqrete.intellij.services.QonQreteSettingsState"/>
+        <projectService serviceImplementation="sh.qonqrete.intellij.services.QonQreteProjectService"/>
 
-    <toolWindow
-        id="QonQrete"
-        anchor="right"
-        icon="/icons/qonqrete-13.svg"
-        factoryClass="sh.qonqrete.intellij.ui.QonQreteToolWindowFactory"/>
+        <applicationService serviceImplementation="sh.qonqrete.intellij.services.QonQreteSettingsState"/>
 
-    <statusBarWidgetFactory
-        id="QonQreteStatusWidget"
-        implementation="sh.qonqrete.intellij.ui.QonQreteStatusWidgetFactory"
-        order="after ReadOnlyAttribute"/>
+        <toolWindow
+            id="QonQrete"
+            anchor="right"
+            icon="/icons/qonqrete-13.svg"
+            factoryClass="sh.qonqrete.intellij.ui.QonQreteToolWindowFactory"/>
 
-    <projectConfigurable
-        parentId="tools"
-        instance="sh.qonqrete.intellij.ui.QonQreteSettingsConfigurable"
-        id="sh.qonqrete.intellij.settings"
-        displayName="QonQrete"
-        nonDefaultProject="true"/>
+        <statusBarWidgetFactory
+            id="QonQreteStatusWidget"
+            implementation="sh.qonqrete.intellij.ui.QonQreteStatusWidgetFactory"
+            order="after ReadOnlyAttribute"/>
 
-    <postStartupActivity
-        implementation="sh.qonqrete.intellij.services.QonQreteStartupActivity"/>
+        <projectConfigurable
+            parentId="tools"
+            instance="sh.qonqrete.intellij.ui.QonQreteSettingsConfigurable"
+            id="sh.qonqrete.intellij.settings"
+            displayName="QonQrete"
+            nonDefaultProject="true"/>
 
-    <editorNotificationProvider
-        implementation="sh.qonqrete.intellij.ui.TasqEditorNotificationProvider"/>
+        <postStartupActivity
+            implementation="sh.qonqrete.intellij.services.QonQreteStartupActivity"/>
 
-    <notificationGroup
-        id="QonQrete Notifications"
-        displayType="BALLOON"/>
-</extensions>
+        <editorNotificationProvider
+            implementation="sh.qonqrete.intellij.ui.TasqEditorNotificationProvider"/>
 
-<actions>
+        <notificationGroup
+            id="QonQrete Notifications"
+            displayType="BALLOON"/>
+    </extensions>
 
-    <action
-        id="QonQrete.RunTasq"
-        class="sh.qonqrete.intellij.actions.RunTasqAction"
-        text="QonQrete: Run Tasq"
-        description="Run QonQrete with canonical tasq.md"
-        icon="AllIcons.Actions.Execute">
-        <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt Q"/>
-        <add-to-group group-id="RunMenu" anchor="last"/>
-    </action>
+    <actions>
 
-    <action
-        id="QonQrete.RunAsQonqreteTasq"
-        class="sh.qonqrete.intellij.actions.RunAsQonqreteTasqAction"
-        text="QonQrete: Run as Tasq"
-        description="Run current markdown file as QonQrete tasq"
-        icon="AllIcons.Actions.Execute"/>
+        <action
+            id="QonQrete.RunTasq"
+            class="sh.qonqrete.intellij.actions.RunTasqAction"
+            text="QonQrete: Run Tasq"
+            description="Run QonQrete with canonical tasq.md"
+            icon="AllIcons.Actions.Execute">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt Q"/>
+            <add-to-group group-id="RunMenu" anchor="last"/>
+        </action>
 
-    <action
-        id="QonQrete.InitWorkspace"
-        class="sh.qonqrete.intellij.actions.InitWorkspaceAction"
-        text="QonQrete: Init Workspace"
-        description="Initialize QonQrete container image"
-        icon="AllIcons.Actions.Download"/>
+        <action
+            id="QonQrete.RunAsQonqreteTasq"
+            class="sh.qonqrete.intellij.actions.RunAsQonqreteTasqAction"
+            text="QonQrete: Run as Tasq"
+            description="Run current markdown file as QonQrete tasq"
+            icon="AllIcons.Actions.Execute"/>
 
-    <action
-        id="QonQrete.ResumeRun"
-        class="sh.qonqrete.intellij.actions.ResumeRunAction"
-        text="QonQrete: Resume Run"
-        description="Resume from existing qage"
-        icon="AllIcons.Actions.Resume"/>
+        <action
+            id="QonQrete.InitWorkspace"
+            class="sh.qonqrete.intellij.actions.InitWorkspaceAction"
+            text="QonQrete: Init Workspace"
+            description="Initialize QonQrete container image"
+            icon="AllIcons.Actions.Download"/>
 
-    <action
-        id="QonQrete.CleanQages"
-        class="sh.qonqrete.intellij.actions.CleanQagesAction"
-        text="QonQrete: Clean Qages"
-        description="Clean qage directories"
-        icon="AllIcons.Actions.GC"/>
+        <action
+            id="QonQrete.ResumeRun"
+            class="sh.qonqrete.intellij.actions.ResumeRunAction"
+            text="QonQrete: Resume Run"
+            description="Resume from existing qage"
+            icon="AllIcons.Actions.Resume"/>
 
-    <action
-        id="QonQrete.ShowStatus"
-        class="sh.qonqrete.intellij.actions.ShowStatusAction"
-        text="QonQrete: Show Status"
-        description="Show QonQrete status"
-        icon="AllIcons.General.Information"/>
+        <action
+            id="QonQrete.CleanQages"
+            class="sh.qonqrete.intellij.actions.CleanQagesAction"
+            text="QonQrete: Clean Qages"
+            description="Clean qage directories"
+            icon="AllIcons.Actions.GC"/>
 
-    <action
-        id="QonQrete.OpenConfigDialog"
-        class="sh.qonqrete.intellij.actions.OpenConfigDialogAction"
-        text="QonQrete: Configure Run"
-        description="Open run configuration dialog"
-        icon="AllIcons.General.Settings"/>
+        <action
+            id="QonQrete.ShowStatus"
+            class="sh.qonqrete.intellij.actions.ShowStatusAction"
+            text="QonQrete: Show Status"
+            description="Show QonQrete status"
+            icon="AllIcons.General.Information"/>
 
-</actions>
-```
+        <action
+            id="QonQrete.OpenConfigDialog"
+            class="sh.qonqrete.intellij.actions.OpenConfigDialogAction"
+            text="QonQrete: Configure Run"
+            description="Open run configuration dialog"
+            icon="AllIcons.General.Settings"/>
+
+    </actions>
 
 </idea-plugin>
-
