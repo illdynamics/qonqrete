@@ -2,15 +2,15 @@
  * QonQrete IntelliJ Plugin
  * Build configuration - Production Ready
  *
- * @author WoNQ
- * @version 1.1.9
+ * @author QonQrete
+ * @version v1.1.9
  * @license AGPL-3.0
  */
 
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.9.21"
-    id("org.jetbrains.intellij") version "1.17.2"
+    id("org.jetbrains.intellij") version "1.17.3"
 }
 
 group = "sh.qonqrete"
@@ -85,5 +85,10 @@ tasks {
 
     buildSearchableOptions {
         enabled = false
+    }
+    tasks {
+        runPluginVerifier {
+            ideVersions.set(listOf("2023.3", "2024.1"))
+        }
     }
 }
