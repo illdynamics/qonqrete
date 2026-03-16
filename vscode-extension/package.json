@@ -1,7 +1,7 @@
 {
   "name": "qonqrete",
   "displayName": "QonQrete",
-  "description": "QonQrete turns AI coding into a structured, secure software construction system you control.",
+  "description": "QonQrete is a deterministic AI coding agent for VS Code enabling autonomous code generation, local AI development, and secure sandboxed software construction workflows.",
   "version": "1.1.9",
   "publisher": "QonQrete",
   "homepage": "https://qonqrete.sh",
