@@ -58,7 +58,7 @@
         <toolWindow
             id="QonQrete"
             anchor="right"
-            icon="/icons/qonqrete-13.svg"
+            icon="/icons/qonqreteToolWindowIcon.svg"
             factoryClass="sh.qonqrete.intellij.ui.QonQreteToolWindowFactory"/>
 
         <statusBarWidgetFactory
