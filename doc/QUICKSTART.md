@@ -1,208 +1,170 @@
-# QonQrete Quickstart Guide
+# QonQrete Quickstart
 
-**Version:** `v1.0.4-stable` (See `VERSION` file for the canonical version).
+**Version:** `v1.1.9-stable`
 
-Get up and running with QonQrete in minutes. The system automatically detects your OS, container engine (Docker/Podman), and build backend — so there's one unified workflow for all platforms.
+This is the shortest accurate path to get the current repository running.
 
 ## Prerequisites
 
-- **Container Engine:** Docker or Podman installed and running.
-  - **macOS + Podman:** QonQrete auto-initializes and starts the Podman machine for you.
-  - **Windows:** WSL2 with Docker Desktop recommended. Git Bash works but WSL2 is preferred.
-- **API Keys:** Export keys for the AI providers configured in `worqspace/config.yaml`:
-  ```bash
-  export OPENAI_API_KEY='your-key'
-  export DEEPSEEK_API_KEY='your-key'
-  # Optional depending on config:
-  export GOOGLE_API_KEY='your-key'     # or GEMINI_API_KEY
-  export ANTHROPIC_API_KEY='your-key'
-  export QWEN_API_KEY='your-key'
-  ```
-  The system checks for required keys at startup and tells you exactly which ones are missing.
+You need:
+- Docker or Podman
+- Python dependencies are handled through the container build
+- at least one AI provider API key that matches your chosen config
 
-## 1. Build the Qage
+Recommended environment variables:
 
-One-time setup. QonQrete auto-detects Docker vs Podman and buildx vs plain build:
+```bash
+export OPENAI_API_KEY='...'
+export GOOGLE_API_KEY='...'      # or GEMINI_API_KEY
+export ANTHROPIC_API_KEY='...'
+export DEEPSEEK_API_KEY='...'
+export QWEN_API_KEY='...'
+```
+
+## 1. Build the runtime image
 
 ```bash
 chmod +x qonqrete.sh
 ./qonqrete.sh init
 ```
 
-You can force a specific engine if needed:
+Force a runtime engine only if needed:
+
 ```bash
-./qonqrete.sh init --docker    # Force Docker
-./qonqrete.sh init --podman    # Force Podman
+./qonqrete.sh init --docker
+./qonqrete.sh init --podman
 ```
 
-## 2. Define Your TasQ
+## 2. Edit the task
 
-Edit `worqspace/tasq.md` with your project objective:
+Edit:
+
+```text
+worqspace/tasq.md
+```
+
+Example:
 
 ```markdown
-Create a Python FastAPI server with CRUD endpoints for a todo list.
-Use SQLite for storage. Include proper error handling and input validation.
+Build a small FastAPI service with CRUD endpoints, input validation, and tests.
 ```
 
-If no `tasq.md` exists, QonQrete opens your `$EDITOR` (default: vim) with a template.
+## 3. Run QonQrete
 
-## 3. Run a CyQle
+### Basic run
 
 ```bash
-# Basic fresh start (auto-detects everything)
 ./qonqrete.sh run
+```
 
-# Autonomous mode with custom settings
-./qonqrete.sh run --auto --briq-sensitivity 6 --cyqles 3
+### Common useful variants
 
-# With sqrapyard seeding (existing code)
-./qonqrete.sh run -s
-
-# Force user-gated mode
+```bash
+./qonqrete.sh run --auto
 ./qonqrete.sh run --user
-
-# Auto-save result without prompts
+./qonqrete.sh run -s
 ./qonqrete.sh run -a -n myproject
+./qonqrete.sh run --mode security --briq-sensitivity 6 --cyqles 3
 ```
 
-At the CheQpoint, you'll be prompted: `[Q]ontinue`, `[T]weaQ` (edit), or `[X]Quit`.
-
-## 4. Saving Your Work
-
-After each run, QonQrete asks if you want to save the result as a Qonstruction:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│           QonQrete Session Complete                         │
-└─────────────────────────────────────────────────────────────┘
-
-Save this run as a Qonstruction? [y/N] y
-Enter project name [project_20260223_115701]: my-api
-Qonstruction saved successfully!
-```
-
-Qonstructions are stored in `worqspace/qonstructions/<name>/` with full context preserved.
-
-For automated pipelines, use the `-n` flag:
-```bash
-./qonqrete.sh run -a -b 6 -c 3 -n myproject
-```
-
-## 5. Resuming Previous Work
+## 4. Resume an old qage
 
 ```bash
-# Interactive picker (kubectx-style, newest first)
 ./qonqrete.sh resume
-
-# Direct selection
-./qonqrete.sh resume -q qage_20260223_115701
+./qonqrete.sh resume -q qage_YYYYMMDD_HHMMSS
 ```
 
-Resume copies all state from the selected Qage, updates configs from the workspace, and uses your latest `tasq.md` as the next cycle's task.
-
-## 6. Seeding with Sqrapyard
-
-To start from an existing codebase:
-
-1. Place your code in `worqspace/sqrapyard/`
-2. Edit `worqspace/tasq.md` with your objective
-3. Run with the `-s` flag: `./qonqrete.sh run -s`
-
-Without `-s`, sqrapyard contents are ignored (prevents accidental imports).
-
-## 7. Configuration
-
-### `worqspace/config.yaml`
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `agents.<name>.provider` | AI provider per agent (`openai`, `deepseek`, `gemini`, `anthropic`, `qwen`, `local`) | varies |
-| `agents.<name>.model` | Model name per agent | varies |
-| `options.cheqpoint` | `true` = user-gated, `false` = autonomous | `false` |
-| `options.auto_cycle_limit` | Max cycles in auto-mode (1-50) | `4` |
-| `options.briq_sensitivity` | Granularity (0-16). Higher = more briqs. | `5` recommended |
-| `options.mode` | Operational mode (`program`, `enterprise`, `security`, etc.) | `program` |
-| `options.use_qompressor` | Enable skeleton generation | `true` |
-| `options.use_qontextor` | Enable semantic indexing | `true` |
-| `options.use_qontrabender` | Enable hybrid caching (Gemini only) | `false` |
-| `retry.max_attempts` | Max attempts per briq | `3` |
-| `retry.stop_on_briq_fail` | Fail-fast vs fail-tolerant | `false` |
-| `interleaved.enabled` | Per-briq build+verify loop | `true` |
-| `interleaved.local_validation` | Local syntax check per briq | `true` |
-
-### `worqspace/pipeline_config.yaml`
-
-Defines the agent execution order. The default pipeline is:
-
-```
-instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
-```
-
-TasqLeveler is available but commented out by default. To enable, uncomment its block.
-
-### Environment Overrides
+## 5. Clean old qages
 
 ```bash
-CONTAINER_ENGINE=docker|podman   # Override engine auto-detection
-BUILD_BACKEND=buildx|plain       # Override build backend auto-detection
-```
-
-## 8. Cleaning Up
-
-```bash
-# Interactive selection (pick which Qage to delete)
 ./qonqrete.sh clean
-
-# Delete specific Qage
-./qonqrete.sh clean -q qage_20260223_115701
-
-# Delete ALL Qages
+./qonqrete.sh clean -q qage_YYYYMMDD_HHMMSS
 ./qonqrete.sh clean -A
 ```
 
-## CLI Quick Reference
+## 6. Sqrapyard seeding
 
-| Command | Description |
-|---------|-------------|
-| `./qonqrete.sh init` | Build the Qage container |
-| `./qonqrete.sh run` | Start fresh session |
-| `./qonqrete.sh run -s` | Start with sqrapyard seeding |
-| `./qonqrete.sh run -a` | Autonomous mode |
-| `./qonqrete.sh run -a -n <name>` | Auto-save as Qonstruction |
-| `./qonqrete.sh resume` | Interactive resume picker |
-| `./qonqrete.sh resume -q <qage>` | Resume specific Qage |
-| `./qonqrete.sh clean` | Interactive delete picker |
-| `./qonqrete.sh clean -A` | Delete ALL Qages |
+To start from an existing codebase:
 
-## Flags Reference
+1. place source material in `worqspace/sqrapyard/`
+2. write a tasq that explains what to build/change
+3. run with `-s`
 
-| Flag | Description |
-|------|-------------|
-| `-a, --auto` | Autonomous mode (no cheqpoints) |
-| `-u, --user` | User-gated mode (force cheqpoints) |
-| `-t, --tui` | TUI mode **[EXPERIMENTAL]** |
-| `-m, --mode <name>` | Operational mode |
-| `-b, --briq-sensitivity <N>` | Granularity (0-16). Default: 5 recommended |
-| `-c, --cyqles <N>` | Max auto-cycles (1-50) |
-| `-n, --qonstruction-name <name>` | Auto-save as Qonstruction |
-| `-s, --sqrapyard` | Seed from sqrapyard |
-| `-d, --docker` | Force Docker engine |
-| `-p, --podman` | Force Podman engine |
-| `-M, --msb` | Microsandbox mode **[EXPERIMENTAL]** |
-| `-w, --wonqrete` | Experimental mode |
-| `-q, --qage <name>` | Specify Qage (resume/clean) |
-| `-A, --all` | All Qages (clean) |
+```bash
+./qonqrete.sh run -s
+```
 
-## Briq Sensitivity Scale
+Without `-s`, sqrapyard contents are ignored.
 
-| Level | Name | Briq Range | Use Case |
-|-------|------|------------|----------|
-| 0 | Monolithic | 1 | Single-file scripts |
-| 1-2 | Broad | 2-5 | Large components |
-| 3-4 | Feature | 5-12 | Per-feature/component |
-| **5** | **Balanced** | **10-15** | **← RECOMMENDED** |
-| 6-7 | High | 15-30 | Detailed split |
-| 8-9 | Atomic | 30-60 | Fine-grained |
-| 10-16 | Enterprise | 50-250 | Mega-projects (batched) |
+## 7. VS Code quickstart
 
-Sensitivity >= 8 auto-enables batched briq generation (Blueprint → Fabrication pipeline).
+The repo includes a VS Code extension project in `vscode-extension/`.
+
+### Package it
+
+```bash
+cd vscode-extension
+npm install
+npm run compile
+npx vsce package
+```
+
+### Install locally
+
+```bash
+code --install-extension qonqrete-1.1.9.vsix
+```
+
+### What you get
+- command palette actions
+- sidebar panel
+- run / resume / clean / init helpers
+- run a Markdown file as a temporary QonQrete tasq
+
+## 8. IntelliJ / JetBrains quickstart
+
+The repo includes a JetBrains plugin project in `intellij-plugin/`.
+
+### Build it
+
+```bash
+cd intellij-plugin
+./gradlew buildPlugin
+```
+
+### Test it in sandbox
+
+```bash
+./gradlew runIde
+```
+
+### Install manually
+Use the generated ZIP from `build/distributions/` inside your JetBrains IDE via:
+
+```text
+Settings → Plugins → Install Plugin from Disk
+```
+
+## 9. Recommended first-run sanity checks
+
+After a successful run, verify these exist:
+
+```text
+worqspace/qage_YYYYMMDD_HHMMSS/
+worqspace/qage_.../qodeyard/
+worqspace/qage_.../exeq.d/
+worqspace/qage_.../reqap.d/
+```
+
+If you saved a qonstruction, also check:
+
+```text
+worqspace/qonstructions/
+```
+
+## 10. Important honesty notes
+
+- The repo currently works as a **repo-local QonQrete project**.
+- The IDE integrations do not yet implement a fully centralized engine bootstrap flow.
+- `TUI`, `MSB`, and `wonqrete` are still non-core / experimental paths.
+- The committed config file may not represent the best defaults for your exact use case; tune `mode`, `briq_sensitivity`, and `auto_cycle_limit` for the task at hand.
