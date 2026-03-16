@@ -2,7 +2,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
 
-![Splash](qonqrete.jpg)
+![Splash](qrane/qonqrete.jpg)
 
 
 QonQrete is a Secure AI Construction Loop System, using a Multi-Agent Pipeline Orchestrator in a Sandbox environment with YAML Configuration. In short: it spawns 3 AI agents in a sandbox/container and makes them work together on tasks. It can run with a hard requirement for user approval between steps, or in a fully autonomous mode where it keeps running until the user decides to stop it.
@@ -610,7 +610,6 @@ Clean Options:
 - [QUICKSTART.md](./doc/QUICKSTART.md) - Getting started guide
 - [DOCUMENTATION.md](./doc/DOCUMENTATION.md) - Full system documentation
 - [ARCHITECTURE.md](./doc/ARCHITECTURE.md) - System architecture & diagrams
-- [QONTRABENDER.md](./doc/QONTRABENDER.md) - Cache bender documentation
 - [RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) - Version history (v1.0.4-stable → v0.1.0-alpha)
 - [TERMINOLOGY.md](./doc/TERMINOLOGY.md) - QonQrete terminology
 
