@@ -35,6 +35,7 @@ intellij {
     version.set("2023.3")
     type.set("IC")
     plugins.set(listOf("terminal"))
+    updateSinceUntilBuild.set(false)
 }
 
 tasks {
