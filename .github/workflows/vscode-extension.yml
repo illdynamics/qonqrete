@@ -1,0 +1,111 @@
+# .github/workflows/vscode-extension.yml
+name: Build VS Code Extension
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'vscode-extension/**'
+      - '.github/workflows/vscode-extension.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vscode-extension/**'
+      - '.github/workflows/vscode-extension.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: vscode-extension
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile extension
+        run: npm run compile
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Build VSIX
+        run: |
+          vsce package --no-dependencies
+          ls -lh *.vsix
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qonqrete-${{ steps.version.outputs.version }}
+          path: vscode-extension/*.vsix
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile extension
+        run: npm run compile
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Build VSIX
+        run: vsce package --no-dependencies
+
+      - name: Rename artifact
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          mv *.vsix "qonqrete-${TAG}.vsix"
+          ls -lh *.vsix
+
+      - name: Generate checksum
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          sha256sum "qonqrete-${TAG}.vsix" > "qonqrete-${TAG}-SHA256.txt"
+          cat "qonqrete-${TAG}-SHA256.txt"
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            vscode-extension/*.vsix
+            vscode-extension/*SHA256.txt
+          generate_release_notes: true

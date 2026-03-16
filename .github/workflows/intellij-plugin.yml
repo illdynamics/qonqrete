@@ -1,0 +1,16 @@
+# .github/workflows/intellij-plugin.yml
+name: Build IntelliJ Plugin (DISABLED)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "IntelliJ plugin workflow currently disabled."
+          echo "Re-enable when ready to publish the JetBrains plugin."
