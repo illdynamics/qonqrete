@@ -52,7 +52,6 @@ tasks {
     }
 
     patchPluginXml {
-        sinceBuild.set("233")
         changeNotes.set("""
             <h2>1.1.9 - Production Hardening Pass</h2>
             <ul>

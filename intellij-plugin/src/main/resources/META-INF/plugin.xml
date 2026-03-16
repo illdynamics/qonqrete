@@ -6,11 +6,11 @@
   @version v1.1.9
   @license AGPL-3.0
 -->
-
 <idea-plugin>
     <id>sh.qonqrete</id>
     <name>QonQrete</name>
     <version>1.1.9</version>
+    <idea-version since-build="233"/>
     <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
 
     <description><![CDATA[
