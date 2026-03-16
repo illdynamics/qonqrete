@@ -1,8 +1,10 @@
 # Secrets
-.env
+**/**.env
+**.env
 
 # Ideas
-.ideas
+**.idea**
+**/**.idea**
 
 # Ignore generated agent files
 **bloq.d/*
@@ -31,5 +33,13 @@ worqspace/qonstructions/*
 **.config_backup/*
 
 # Mac Crap
-.DS_Store
-**.DS_Store**
+**.DS_Store
+**/**.DS_Store**
+
+# venv
+**.venv**
+**/**.venv**
+
+# asdf
+**.tool-versions**
+**/**.tool-versions**
