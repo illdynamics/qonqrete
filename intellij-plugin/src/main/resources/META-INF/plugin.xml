@@ -1,0 +1,174 @@
+<!--
+  QonQrete IntelliJ Plugin
+  Plugin configuration - Production Ready
+
+  @author WoNQ
+  @version 1.1.9
+  @license AGPL-3.0
+-->
+<idea-plugin>
+    <id>sh.qonqrete.intellij</id>
+    <name>QonQrete</name>
+    <vendor email="support@qonqrete.sh" url="https://qonqrete.sh">WoNQ / Ill Dynamics</vendor>
+
+    <description><![CDATA[
+        <h2>QonQrete - Agentic AI Build System</h2>
+        <p>IntelliJ integration for QonQrete, a local-first multi-agent AI orchestration system for autonomous code generation.</p>
+        
+        <h3>Features</h3>
+        <ul>
+            <li><b>Run Tasq</b> - Execute QonQrete builds from tasq.md</li>
+            <li><b>Run Any Markdown</b> - Run any .md file as a temporary tasq</li>
+            <li><b>Configuration</b> - Full config: sensitivity, cycles, mode, autonomous, sqrapyard, engine, TUI, wonqrete</li>
+            <li><b>Tool Window</b> - Control panel with status, config, qage browser</li>
+            <li><b>Status Widget</b> - Real-time status with version in status bar</li>
+            <li><b>Shell Verification</b> - Auto-detects and verifies bash shell</li>
+            <li><b>Run State Tracking</b> - Marker-based exit code detection</li>
+            <li><b>Qage Browser</b> - Browse artifacts with timestamps and counts</li>
+            <li><b>Auto-Refresh</b> - Tool window updates when run completes</li>
+        </ul>
+        
+        <h3>Requirements</h3>
+        <ul>
+            <li>Bash shell (Git Bash on Windows, native on macOS/Linux)</li>
+            <li>Docker or Podman for container execution</li>
+            <li>QonQrete project with qonqrete.sh</li>
+        </ul>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Project Service -->
+        <projectService 
+            serviceImplementation="sh.qonqrete.intellij.services.QonQreteProjectService"/>
+        
+        <!-- Application Service for Settings -->
+        <applicationService
+            serviceImplementation="sh.qonqrete.intellij.services.QonQreteSettingsState"/>
+
+        <!-- Tool Window -->
+        <toolWindow 
+            id="QonQrete" 
+            anchor="right"
+            icon="/icons/qonqrete-13.svg"
+            factoryClass="sh.qonqrete.intellij.ui.QonQreteToolWindowFactory"/>
+
+        <!-- Status Bar Widget -->
+        <statusBarWidgetFactory
+            id="QonQreteStatusWidget"
+            implementation="sh.qonqrete.intellij.ui.QonQreteStatusWidgetFactory"
+            order="after ReadOnlyAttribute"/>
+
+        <!-- Settings Configurable -->
+        <projectConfigurable
+            parentId="tools"
+            instance="sh.qonqrete.intellij.ui.QonQreteSettingsConfigurable"
+            id="sh.qonqrete.intellij.settings"
+            displayName="QonQrete"
+            nonDefaultProject="true"/>
+
+        <!-- Startup Activity -->
+        <postStartupActivity
+            implementation="sh.qonqrete.intellij.services.QonQreteStartupActivity"/>
+
+        <!-- Editor Notification for tasq.md -->
+        <editorNotificationProvider
+            implementation="sh.qonqrete.intellij.ui.TasqEditorNotificationProvider"/>
+
+        <!-- Notification Group -->
+        <notificationGroup 
+            id="QonQrete Notifications" 
+            displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <!-- Main Actions -->
+        <action 
+            id="QonQrete.RunTasq" 
+            class="sh.qonqrete.intellij.actions.RunTasqAction"
+            text="QonQrete: Run Tasq" 
+            description="Run QonQrete with canonical tasq.md"
+            icon="AllIcons.Actions.Execute">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt Q"/>
+            <add-to-group group-id="RunMenu" anchor="last"/>
+        </action>
+
+        <action 
+            id="QonQrete.RunAsQonqreteTasq" 
+            class="sh.qonqrete.intellij.actions.RunAsQonqreteTasqAction"
+            text="QonQrete: Run as Tasq" 
+            description="Run current markdown file as QonQrete tasq"
+            icon="AllIcons.Actions.Execute">
+        </action>
+
+        <action 
+            id="QonQrete.InitWorkspace" 
+            class="sh.qonqrete.intellij.actions.InitWorkspaceAction"
+            text="QonQrete: Init Workspace" 
+            description="Initialize QonQrete container image"
+            icon="AllIcons.Actions.Download">
+        </action>
+
+        <action 
+            id="QonQrete.ResumeRun" 
+            class="sh.qonqrete.intellij.actions.ResumeRunAction"
+            text="QonQrete: Resume Run" 
+            description="Resume from existing qage"
+            icon="AllIcons.Actions.Resume">
+        </action>
+
+        <action 
+            id="QonQrete.CleanQages" 
+            class="sh.qonqrete.intellij.actions.CleanQagesAction"
+            text="QonQrete: Clean Qages" 
+            description="Clean qage directories"
+            icon="AllIcons.Actions.GC">
+        </action>
+
+        <action 
+            id="QonQrete.ShowStatus" 
+            class="sh.qonqrete.intellij.actions.ShowStatusAction"
+            text="QonQrete: Show Status" 
+            description="Show QonQrete status"
+            icon="AllIcons.General.Information">
+        </action>
+
+        <action 
+            id="QonQrete.OpenConfigDialog" 
+            class="sh.qonqrete.intellij.actions.OpenConfigDialogAction"
+            text="QonQrete: Configure Run" 
+            description="Open run configuration dialog"
+            icon="AllIcons.General.Settings">
+        </action>
+
+        <!-- Action Group in Tools Menu -->
+        <group id="QonQrete.ActionGroup" text="QonQrete" popup="true" icon="/icons/qonqrete-13.svg">
+            <reference ref="QonQrete.RunTasq"/>
+            <reference ref="QonQrete.ResumeRun"/>
+            <separator/>
+            <reference ref="QonQrete.InitWorkspace"/>
+            <reference ref="QonQrete.CleanQages"/>
+            <separator/>
+            <reference ref="QonQrete.OpenConfigDialog"/>
+            <reference ref="QonQrete.ShowStatus"/>
+            
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </group>
+
+        <!-- Editor Context Menu -->
+        <group id="QonQrete.EditorPopup">
+            <reference ref="QonQrete.RunTasq"/>
+            <reference ref="QonQrete.RunAsQonqreteTasq"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+
+        <!-- Project View Context Menu -->
+        <group id="QonQrete.ProjectViewPopup">
+            <reference ref="QonQrete.RunTasq"/>
+            <reference ref="QonQrete.RunAsQonqreteTasq"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </group>
+    </actions>
+</idea-plugin>

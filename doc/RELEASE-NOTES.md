@@ -2,6 +2,898 @@
 
 ---
 
+## [v1.1.5-stable] — The Complete Polish Edition ✨
+
+### Summary
+
+Final polish addressing all remaining UX issues:
+
+| Issue | Fix |
+|-------|-----|
+| Sidebar didn't wait for verification | Now waits with progress indicator |
+| Failed verification cached forever | Promise clears on failure, allows retry |
+| Orphan cleanup fire-and-forget | Now awaited during activation |
+
+### All Run Paths Now Consistent
+
+| Path | Waits for Verification |
+|------|------------------------|
+| Command Palette → runTasq | ✅ |
+| Command Palette → runAsQonqreteTasq | ✅ |
+| Command Palette → openConfigDialog | ✅ |
+| Command Palette → resume | ✅ |
+| Command Palette → clean | ✅ |
+| **Sidebar → Run** | ✅ (fixed in 1.1.5) |
+
+### Verification Retry on Failure
+
+**Before (v1.1.4):**
+```
+Verification fails → Promise cached → Session stuck → No retry possible
+```
+
+**After (v1.1.5):**
+```
+Verification fails → Promise cleared → Next run attempt can retry
+```
+
+```typescript
+// Promise cleared on failure
+if (!result) {
+    this.verificationPromise = undefined;
+}
+
+// Also added explicit reverify method
+public async reverifyShell(): Promise<boolean>
+```
+
+### Awaited Orphan Cleanup
+
+**Before:**
+```typescript
+runner.cleanupOrphanedBackups();  // Fire and forget
+```
+
+**After:**
+```typescript
+await runner.cleanupOrphanedBackups();  // Completes before continuing
+```
+
+### Remaining Known Limitations
+
+These are documented and acceptable:
+
+| Limitation | Mitigation |
+|------------|------------|
+| Temp tasq restore via shell chaining | Orphan cleanup on activation |
+| Marker detection filesystem-based | fs.watch + polling fallback |
+
+---
+
+
+## [v1.1.4-stable] — The Consistent UX Edition 🎯
+
+### Summary
+
+Final UX consistency pass — all commands now behave identically:
+
+| Issue | Fix |
+|-------|-----|
+| Resume/clean didn't wait for verification | Now wait with progress indicator |
+| openConfigDialog didn't check for tasq.md | Now checks and offers to create |
+
+### All Commands Now Wait for Verification
+
+**Before (v1.1.3):**
+- `runTasq` ✅ waits for verification
+- `runAsQonqreteTasq` ✅ waits for verification  
+- `openConfigDialog` ✅ waits for verification
+- `resume` ❌ could error during verification
+- `clean` ❌ could error during verification
+
+**After (v1.1.4):**
+- All commands ✅ wait for verification with progress indicator
+
+### openConfigDialog Now Checks for tasq.md
+
+**Before:**
+```
+Config dialog → Run → CLI fails with "no tasq.md" error
+```
+
+**After:**
+```
+Check tasq.md → Missing? Show helpful dialog with "Create tasq.md" option
+```
+
+```typescript
+const hasTasq = await runner.hasTasqFile();
+if (!hasTasq) {
+    const result = await vscode.window.showWarningMessage(
+        'No tasq.md found in worqspace.',
+        'Create tasq.md',
+        'Cancel'
+    );
+    if (result === 'Create tasq.md') {
+        // Creates template and opens in editor
+    }
+    return;
+}
+```
+
+### UX Consistency Matrix (Final)
+
+| Feature | runTasq | runAsQonqreteTasq | openConfigDialog | resume | clean |
+|---------|---------|-------------------|------------------|--------|-------|
+| Wait for verification | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Qonstruction name prompt | ✅ | ✅ | ✅ | ✅ | N/A |
+| Sanitization feedback | ✅ | ✅ | ✅ | ✅ | N/A |
+| Check tasq.md | ✅ | N/A | ✅ | N/A | N/A |
+| Save before run | ✅ | ✅ | ✅ | N/A | N/A |
+
+### Remaining Known Limitations
+
+These are documented and acceptable:
+
+| Limitation | Mitigation |
+|------------|------------|
+| Temp tasq restore via shell chaining | Orphan cleanup on activation |
+| Marker detection filesystem-based | fs.watch + polling fallback |
+
+---
+
+
+## [v1.1.3-stable] — The Smooth UX Edition ✨
+
+### Summary
+
+Final UX polish addressing the last minor issues:
+
+| Issue | Fix |
+|-------|-----|
+| Verification-in-progress was blunt | Now waits with progress indicator |
+| openConfigDialog skipped qonstruction name | Now has consistent prompt flow |
+
+### Verification Waiting
+
+**Before (v1.1.2):**
+```
+User clicks Run → "Verification in progress" error → User confused
+```
+
+**After (v1.1.3):**
+```
+User clicks Run → "Verifying shell..." progress → Runs automatically
+```
+
+Implementation:
+```typescript
+if (canExec.verifying) {
+    const verified = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: 'QonQrete: Verifying shell...',
+        cancellable: false,
+    }, async () => {
+        return await runner.waitForVerification();
+    });
+    // ...continues after verification
+}
+```
+
+### Consistent Qonstruction Name Flow
+
+All run commands now have the same UX:
+1. Show config wizard
+2. Prompt for qonstruction name
+3. Show sanitization warning if needed
+4. Run
+
+This applies to:
+- `runTasq` ✓
+- `runAsQonqreteTasq` ✓
+- `openConfigDialog` ✓ (was missing, now added)
+
+### Remaining Known Limitations
+
+These are documented and acceptable:
+
+| Limitation | Status |
+|------------|--------|
+| Temp tasq restore via shell chaining | Mitigated by orphan cleanup |
+| Marker detection filesystem-based | Robust with polling fallback |
+
+---
+
+
+## [v1.1.2-stable] — The Fortress Edition 🏰
+
+### Summary
+
+Final tightening addressing all remaining weak spots:
+
+| Weak Spot | Fix |
+|-----------|-----|
+| canExecute() unclear contract | Now `canRun: false` until verified |
+| Orphaned backups from hard kills | Auto-cleanup on activation |
+| Shell detection path-based only | Added `GIT_BASH` and `$SHELL` env var support |
+
+### Clean canExecute() Contract
+
+```typescript
+canExecute(): { canRun: boolean; reason?: string; verifying?: boolean }
+
+// No bash found
+{ canRun: false, reason: 'No bash shell found...' }
+
+// Has bash, verification in progress
+{ canRun: false, verifying: true, reason: 'Shell verification in progress...' }
+
+// Verification failed
+{ canRun: false, reason: 'Shell execution failed: ...' }
+
+// Verified and ready
+{ canRun: true }
+```
+
+**Key Change:** `canRun` is now strictly `true` only after verification. No more "unverified but runnable" state.
+
+### Orphan Backup Cleanup
+
+On activation, the extension now:
+1. Checks for `.tasq.md.qonqrete-backup` in worqspace
+2. If found, restores original `tasq.md` and deletes backup
+3. Cleans up any stale `.qonqrete_run_*.marker` files
+
+This handles the edge case where a previous session was hard-killed mid-run.
+
+### Improved Shell Detection
+
+**Unix:**
+- Now checks `$SHELL` env var first (if contains "bash")
+- Falls back to `/bin/bash`
+
+**Windows:**
+- Added `GIT_BASH` env var support for custom installations
+- Existing paths still checked as fallback
+
+### Status Bar States (Now Complete)
+
+| State | When |
+|-------|------|
+| `(no bash)` | No bash found |
+| `(verifying...)` | Verification in progress |
+| `(shell error)` | Verification failed |
+| `(init needed)` | No container image |
+| `(no tasq)` | No tasq.md |
+| `Ready` | All good |
+| `Running` | Executing |
+| `Done (N)` | Completed |
+| `Failed (N)` | Failed |
+| `Timeout` | Unknown outcome |
+
+---
+
+
+## [v1.1.1-stable] — Chef's Kiss Edition 🎯
+
+### Summary
+
+Final polish release. The VS Code extension is now:
+- **Properly implemented** — coherent architecture, no duplicate registrations, clean module separation
+- **Accurately implemented** — CLI flags match real `qonqrete.sh`, no fantasy features
+- **Robustly implemented** — shell verification, marker polling fallback, honest timeout states
+
+### What's New in 1.1.1
+
+- All version strings unified to 1.1.1
+- All file headers cleaned up and standardized
+- CHANGELOG now reflects complete version history (1.0.5 → 1.1.1)
+- Documentation accuracy pass completed
+
+### Full Feature Set
+
+#### Shell Detection & Verification
+- Auto-detects Git Bash, WSL, MSYS2 on Windows
+- Verifies shell works via `bash --version` on activation
+- Status bar shows `(verifying...)` until confirmed
+- Windows without bash is **blocked** (no broken fallback)
+
+#### Run State Tracking
+- Marker file-based exit code detection
+- Dual detection: `fs.watch` + 1-second polling fallback
+- Honest `timeout` state when outcome unknown
+- Status bar shows actual exit codes: `Done (0)`, `Failed (1)`
+
+#### Temp Tasq Handling
+- Backs up `worqspace/tasq.md` before overwriting
+- Restores original via shell command chaining
+- Handles both canonical and non-canonical file locations
+
+#### Input Validation
+- Qonstruction names sanitized to `[a-zA-Z0-9_-]`
+- User sees dialog when name is modified
+- Qage names validated against `qage_YYYYMMDD_HHMMSS` pattern
+
+#### CLI Integration
+All flags map correctly to real `qonqrete.sh`:
+- `--briq-sensitivity`, `--cyqles`, `--mode`, `--auto`
+- `--qonstruction-name`, `--sqrapyard`
+- `--docker`, `--podman`, `--msb`, `--tui`, `--wonqrete`
+- `resume --qage`, `clean --qage`, `clean --all`
+
+### Platform Support
+
+| Platform | Status |
+|----------|--------|
+| Linux | ✅ Full |
+| macOS | ✅ Full |
+| Windows + Git Bash | ✅ Full |
+| Windows + WSL | ✅ Full |
+| Windows (no bash) | ❌ Blocked |
+
+### Extension Files
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `qonqreteRunner.ts` | ~750 | CLI execution, shell detection, state tracking |
+| `sidebar.ts` | ~760 | WebView sidebar with config and qage browser |
+| `runTasq.ts` | ~380 | Run tasq commands |
+| `configWizard.ts` | ~380 | Quick & full config dialogs |
+| `extension.ts` | ~250 | Main entry, status bar, watchers |
+| `resume.ts` | ~160 | Resume and clean commands |
+| `init.ts` | ~100 | Init workspace command |
+
+### Known Limitations (Documented Honestly)
+
+- Temp tasq restoration depends on shell command chaining
+- Hard terminal kills can lose marker file
+- Shell detection uses hardcoded paths (custom installs need settings)
+
+---
+
+
+## [v1.0.10-stable] — The Verification Edition
+
+### 🎯 FIXES FROM CODE REVIEW
+
+| Issue | Fix |
+|-------|-----|
+| **canExecute() didn't check verification** | Now returns `{ canRun, unverified }` — UI knows if shell is verified |
+| **Status bar showed "Ready" before verification** | Now shows `(verifying...)` until shell is confirmed |
+| **fs.watch unreliable** | Added polling fallback (1s interval) alongside fs.watch |
+| **Stale version headers** | All files updated to v1.0.10 |
+
+### Shell Verification Flow
+
+```
+Extension activates
+  → detectShell() finds bash path
+  → Status bar shows "(verifying...)"
+  → verifyShell() runs bash --version async
+  → On success: verified=true, status shows "Ready"
+  → On failure: verified=false, runs blocked with error
+```
+
+### canExecute() Now Returns Verification State
+
+```typescript
+canExecute(): { canRun: boolean; reason?: string; unverified?: boolean }
+
+// No bash
+{ canRun: false, reason: 'No bash found' }
+
+// Has bash, not verified
+{ canRun: true, unverified: true }
+
+// Has bash, verified
+{ canRun: true, unverified: false }
+```
+
+### Marker File Detection Now More Robust
+
+```typescript
+// Two detection methods:
+// 1. fs.watch (may be unreliable)
+this.markerWatcher = fs.watch(markerDir, ...);
+
+// 2. Polling fallback (always works)
+this.markerPollInterval = setInterval(() => {
+    if (fs.existsSync(markerPath)) {
+        this.readMarkerAndComplete(markerPath);
+    }
+}, 1000);
+```
+
+### Status Bar States (Accurate)
+
+| State | When | Accurate? |
+|-------|------|-----------|
+| `(verifying...)` | Shell detected, not yet verified | ✅ Honest |
+| `Ready` | Shell verified | ✅ Accurate |
+| `Running` | Command sent | ✅ Accurate |
+| `Done (N)` | Marker has exit 0 | ✅ Accurate |
+| `Failed (N)` | Marker has exit ≠0 | ✅ Accurate |
+| `Timeout` | Marker not detected | ✅ Honest unknown |
+
+---
+
+
+## [v1.0.9-stable] — The Actually Honest Edition
+
+### 🎯 FIXES FROM CODE REVIEW
+
+| Issue | Fix |
+|-------|-----|
+| **Duplicate command registration** | `showStatus` now only registered in `extension.ts`, removed from `resume.ts` |
+| **Timeout falsely claimed success** | Timeout now sets state to `'timeout'`, not `'completed'` |
+| **README overclaimed** | Docs now explicitly list what CAN and CANNOT be done with honest edge cases |
+| **No shell verification** | First run now verifies shell with `bash --version` before executing |
+
+### Run States (Honest Semantics)
+
+| State | Trigger | Meaning |
+|-------|---------|---------|
+| `idle` | Initial / reset | Not running |
+| `running` | Command sent to terminal | Execution in progress |
+| `completed` | Marker file contains `0` | Success confirmed by exit code |
+| `failed` | Marker file contains non-zero | Failure confirmed by exit code |
+| `timeout` | Marker file not detected | **Unknown outcome** - run may still be in progress, terminal may have closed |
+
+The `timeout` state is now **honest** — it does NOT claim success or failure when it doesn't know.
+
+### Code Quality Fixes
+
+- Single owner for each command (no duplicate registrations)
+- Shell verification before first run (`bash --version`)
+- README explicitly documents limitations and edge cases
+- Timeout badge (yellow/warning color) distinct from success (green) and failure (red)
+
+---
+
+
+## [v1.0.8-stable] — VS Code Extension Rocksolid Edition
+
+### 🎯 THIS IS THE WONQPROOF VERSION
+
+All remaining robustness issues have been fixed. This version has:
+- **Real exit code detection** (not heuristic)
+- **Honest platform blocking** (no fake fallbacks)
+- **User feedback on sanitization** (no silent mutations)
+- **Accurate documentation** (no overclaims)
+
+---
+
+#### 🔍 REAL EXIT CODE DETECTION
+
+**Problem:** v1.0.7 claimed to track completion/failure but only set state to "running" with no actual completion detection.
+
+**Solution:** Marker file-based exit code detection:
+
+1. Before running, creates unique marker path: `.qonqrete_run_<timestamp>.marker`
+2. Appends to command: `echo $? > /path/to/marker`
+3. Watches marker file directory with `fs.watch()`
+4. When marker appears, reads exit code from file
+5. Updates `RunStatus.state` to `completed` (exit 0) or `failed` (exit non-zero)
+6. Deletes marker file after reading
+
+This gives **real, accurate exit code tracking** — not guessing.
+
+**Status bar now shows actual exit codes:**
+- `QonQrete Done (0)` — success
+- `QonQrete Failed (1)` — failure with code
+
+#### 🚫 HONEST PLATFORM BLOCKING
+
+**Problem:** v1.0.7 attempted PowerShell fallback with `bash -c '...'` even when no bash was available, which is inherently broken.
+
+**Solution:** **Block execution entirely** on Windows without bash.
+
+- `canExecute()` method returns `{ canRun: false, reason: '...' }` if no bash found
+- All run commands check `canExecute()` before proceeding
+- Sidebar shows blocking alert with "Install Git Bash" button
+- Status bar shows `$(error) QonQrete (no bash)`
+- Error message on activation with links to install Git Bash or enable WSL
+
+**No more fake fallbacks.** If you don't have bash, the extension tells you clearly.
+
+#### 💬 USER FEEDBACK ON SANITIZATION
+
+**Problem:** v1.0.7 silently mutated qonstruction names without telling the user.
+
+**Solution:** Show explicit warning when name is sanitized:
+
+```
+Qonstruction name sanitized:
+"my project!" → "my_project_"
+
+Only alphanumeric characters, underscores, and hyphens are allowed.
+
+[Use Sanitized Name]  [Cancel]
+```
+
+- User must explicitly accept sanitized name
+- If they cancel, the run is aborted
+- `sanitizeQonstructionName()` returns `{ original, sanitized, wasModified }` for caller to handle
+
+#### 📖 ACCURATE DOCUMENTATION
+
+README now honestly describes:
+- Marker file exit code detection (how it actually works)
+- Platform blocking (not "limited support", but "blocked")
+- What the extension CAN and CANNOT do (explicit lists)
+- Windows without bash is "required, not optional"
+
+#### 📦 BETTER ACTIVATION EVENTS
+
+Added more activation triggers:
+- `workspaceContains:**/worqspace/config.yaml`
+- `onCommand:qonqrete.*` for all main commands
+
+This ensures the extension activates when needed.
+
+---
+
+### 📁 CHANGED FILES
+
+| File | Change |
+|------|--------|
+| `src/cli/qonqreteRunner.ts` | Complete rewrite: marker file watching, `canExecute()`, `sanitizeQonstructionName()` |
+| `src/commands/runTasq.ts` | Added `checkCanExecute()`, `processQonstructionName()` with user feedback |
+| `src/ui/sidebar.ts` | Shows blocked state, exit codes, sanitization warning |
+| `src/extension.ts` | Blocking error on activation, accurate state handling |
+| `README.md` | Completely honest capability documentation |
+| `package.json` | Version 1.0.8, expanded activation events |
+| `VERSION` | 1.0.8 |
+
+### 🔢 CODE STATS
+
+| File | Lines |
+|------|-------|
+| qonqreteRunner.ts | 742 |
+| sidebar.ts | 514 |
+| runTasq.ts | 278 |
+| extension.ts | 233 |
+| configWizard.ts | 376 |
+| resume.ts | 188 |
+| init.ts | 97 |
+
+### ✅ ROBUSTNESS CHECKLIST
+
+- [x] Real exit code detection via marker file
+- [x] Honest Windows blocking (no fake PowerShell fallback)
+- [x] User feedback on sanitization (no silent mutation)
+- [x] README matches actual capabilities
+- [x] Qage names validated against pattern
+- [x] Multiple activation events for discoverability
+- [x] All run commands check `canExecute()` first
+
+### 🚫 NOT CHANGED
+- Core QonQrete pipeline: untouched
+- CLI behavior: fully preserved
+- All existing CLI flags: unchanged
+
+---
+
+**This is the rocksolid version.** 🔧
+
+
+---
+
+## [v1.0.7-stable] — VS Code Extension Production Hardening
+
+### 🔧 MAJOR IMPROVEMENTS
+
+This release addresses all remaining robustness issues from the v1.0.6 code review, focusing on cross-platform reliability and honest capability claims.
+
+---
+
+#### 🖥️ WINDOWS SUPPORT (Major Fix)
+
+**Problem:** v1.0.6 used terminal commands assuming bash, but VS Code on Windows often defaults to PowerShell/CMD.
+
+**Solution:**
+- **Shell auto-detection**: Extension now searches for Git Bash, WSL bash, and MSYS2 bash on Windows
+- **Explicit shell path**: Terminal is created with detected bash shell (`shellPath` option)
+- **Path conversion**: Windows paths are converted to Unix-style (`C:\foo` → `/c/foo`) for Git Bash
+- **User warnings**: If no bash found, shows warning with link to install Git Bash
+- **Status bar indicator**: Shows shell type and warns if no bash available
+
+**Detected shell locations:**
+1. `C:\Program Files\Git\bin\bash.exe` (Git Bash)
+2. `C:\Windows\System32\bash.exe` (WSL)
+3. `C:\msys64\usr\bin\bash.exe` (MSYS2)
+
+#### 🔄 CROSS-PLATFORM TEMP FILE RESTORATION (Major Fix)
+
+**Problem:** v1.0.6 chained restoration only on non-Windows, leaving Windows users with permanent file changes.
+
+**Solution:**
+- Same shell command chaining now works on Windows with Git Bash/WSL
+- Backup uses hidden file `.tasq.md.qonqrete-backup`
+- Restoration runs regardless of QonQrete exit status (using `; ` not `&& `)
+- PowerShell fallback uses try/finally for restoration
+
+#### 🛡️ ARGUMENT ESCAPING (Security Fix)
+
+**Problem:** v1.0.6 concatenated user input directly into shell commands.
+
+**Solution:**
+- **Qonstruction names**: Sanitized to `[a-zA-Z0-9_-]` only
+- **Qage names**: Validated against `qage_YYYYMMDD_HHMMSS` regex before use
+- **Shell arguments**: Proper escaping with single quotes (bash) or backtick escaping (PowerShell)
+- **Path escaping**: Handles spaces and special characters in file paths
+
+#### 📊 RUN STATE TRACKING (Improvement)
+
+**Problem:** v1.0.6 set state to "running" but never transitioned to "completed" or "failed".
+
+**Solution:**
+- **Terminal close listener**: Tracks when QonQrete terminal closes
+- **State transitions**: `idle → running → completed/failed/unknown`
+- **Status bar updates**: Shows spinning icon during run, check/error after
+- **Unknown state**: If terminal closes unexpectedly, shows "unknown" status
+- **Auto-reset**: Status bar returns to "Ready" after 3-5 seconds
+
+#### 🗂️ QAGE SORTING (Fix)
+
+**Problem:** v1.0.6 sorted qages by string comparison, not actual timestamp.
+
+**Solution:**
+- **Timestamp parsing**: Extracts date from `qage_YYYYMMDD_HHMMSS` format
+- **Proper sorting**: Sorts by parsed Date objects, most recent first
+- **Fallback**: If parsing fails, falls back to string sort
+
+#### 🎨 SIDEBAR ENHANCEMENTS
+
+- **Shell info display**: Shows detected shell type (Bash, Git Bash, WSL, PowerShell)
+- **Shell warning**: Visible warning if no bash detected
+- **Expandable qages**: Click qage to expand and see artifact tree
+- **File links**: Click artifact files to open in editor
+- **Artifact counts**: Shows counts for qodeyard, briqs, exeq, reqap, bloqs
+
+#### 📖 DOCUMENTATION ACCURACY
+
+README now honestly describes:
+- Platform support matrix with clear status indicators
+- Shell detection mechanism
+- Argument escaping approach
+- Actual limitations of terminal-based execution
+- Windows requirements (Git Bash/WSL recommended)
+
+---
+
+### 📁 CHANGED FILES
+
+| File | Change |
+|------|--------|
+| `vscode-extension/src/cli/qonqreteRunner.ts` | Complete rewrite: shell detection, path escaping, argument sanitization, terminal lifecycle |
+| `vscode-extension/src/ui/sidebar.ts` | Shell info display, expandable qage tree, file opening |
+| `vscode-extension/src/extension.ts` | Shell warning on activation, better state handling |
+| `vscode-extension/README.md` | Honest platform support matrix, accurate limitations |
+| `vscode-extension/package.json` | Version bump to 1.0.7 |
+| `VERSION` | 1.0.7 |
+
+### 🔢 CODE STATS
+
+| File | Lines |
+|------|-------|
+| qonqreteRunner.ts | 840 |
+| sidebar.ts | 657 |
+| configWizard.ts | 376 |
+| runTasq.ts | 365 |
+| extension.ts | 225 |
+| resume.ts | 188 |
+| init.ts | 97 |
+
+### 🚫 NOT CHANGED
+- Core QonQrete pipeline: untouched
+- CLI behavior: fully preserved  
+- All existing CLI flags: unchanged
+
+---
+
+
+---
+
+## [v1.0.6-stable] — VS Code Extension Hardening
+
+### 🔧 BUG FIXES AND IMPROVEMENTS
+
+This release fixes correctness and UX issues identified in the v1.0.5 VS Code extension code review.
+
+---
+
+#### 🐛 BUGS FIXED
+
+**1. Temporary tasq.md is now actually temporary**
+- "Run as QonQrete Tasq" properly restores the original tasq.md after the run completes
+- Uses shell command chaining so restoration works even if VS Code closes
+- Backup stored as `.tasq.md.qonqrete-backup` (hidden file)
+
+**2. Unsaved editor changes are now saved before run**
+- All run commands save dirty documents before execution
+- If save fails, user is prompted to run anyway or cancel
+- Prevents stale file content being processed
+
+**3. Right-click on any tasq.md now runs THAT file**
+- Previously always ran canonical `worqspace/tasq.md` regardless of selection
+- Now properly uses the selected file's location
+- Canonical locations (`worqspace/tasq.md`) run directly
+- Non-canonical locations are copied temporarily
+
+**4. Init detection actually checks for container image**
+- Now runs `docker image inspect` / `podman image inspect` to verify image exists
+- Having a Dockerfile alone no longer triggers "already initialized"
+- Displays which engine found the image (docker/podman)
+
+**5. Multi-root workspace support**
+- Searches all workspace folders for `qonqrete.sh`, not just the first
+- Prefers the folder containing the selected file when applicable
+- Path cache cleared when workspace changes
+
+#### 🆕 NEW FEATURES
+
+**1. Complete sidebar configuration**
+- All config options now exposed (was missing: qonstruction name, engine, TUI, wonqrete)
+- Advanced options section (collapsed by default)
+- Matches full config wizard capabilities
+
+**2. Qage browser with artifact counts**
+- Shows recent qages with timestamps
+- Displays file counts (qodeyard, briqs, exeq)
+- Click to reveal qage in file explorer
+
+**3. Run state tracking**
+- Status bar shows "Running" state with spinner
+- Sidebar disables run button while running
+- Run button re-enables when terminal command completes
+
+**4. Output log button**
+- Quick access to QonQrete output channel
+- Shows all extension log messages
+
+#### 📝 DOCUMENTATION FIXES
+
+**README now accurately describes:**
+- Terminal-based execution (not spawn-based subprocess capture)
+- Actual limitations (no programmatic exit code capture)
+- How temporary file restoration works
+- Multi-root workspace behavior
+
+#### 📁 CHANGED FILES
+
+| File | Change |
+|------|--------|
+| `vscode-extension/src/cli/qonqreteRunner.ts` | Rewritten: proper temp file handling, image detection, multi-root support, state tracking |
+| `vscode-extension/src/commands/runTasq.ts` | Fixed: save before run, use selected file correctly |
+| `vscode-extension/src/commands/init.ts` | Fixed: proper image existence check |
+| `vscode-extension/src/ui/sidebar.ts` | Enhanced: all config options, qage browser, state display |
+| `vscode-extension/src/extension.ts` | Fixed: workspace change handling, state subscription |
+| `vscode-extension/README.md` | Rewritten: accurate description without overstated claims |
+| `vscode-extension/package.json` | Version bump to 1.0.6 |
+| `VERSION` | 1.0.6 |
+
+#### 🚫 NOT CHANGED
+- Core QonQrete pipeline: untouched
+- CLI behavior: fully preserved
+- All existing CLI flags: unchanged
+
+---
+
+
+---
+
+## [v1.0.5-stable] — VS Code Extension (Addition)
+
+### 🎮 VS CODE INTEGRATION — Run QonQrete Without the Terminal
+
+This release adds a complete VS Code extension that integrates the QonQrete workflow directly into the VS Code development environment. No CLI required — run everything from the GUI.
+
+---
+
+#### 🆕 NEW FEATURES
+
+**1. Command Palette Integration**
+- `QonQrete: Init Workspace` — Build the container image
+- `QonQrete: Run Tasq` — Start a fresh QonQrete session
+- `QonQrete: Resume Run` — Resume from a previous Qage
+- `QonQrete: Clean Qages` — Remove Qage directories
+- `QonQrete: Configure Run` — Open the full configuration wizard
+- `QonQrete: Show Status` — Display current QonQrete status
+
+**2. Context Menu Integration**
+- Right-click `tasq.md` → "Run QonQrete Tasq"
+- Right-click any `.md` file → "Run as QonQrete Tasq" (uses it temporarily)
+- Editor title button on tasq.md files
+
+**3. Sidebar Control Panel (WebView)**
+- Briq Sensitivity slider (0-16)
+- Cycles input (1-50)
+- Mode selector (program, enterprise, security, data, devops, web)
+- Autonomous mode toggle
+- Sqrapyard toggle
+- Quick action buttons (Run, Resume, Init, Clean)
+- Real-time status display (version, Qage count, tasq.md status)
+
+**4. Status Bar Integration**
+- Shows `QonQrete Ready` (green) — script found, tasq.md present
+- Shows `QonQrete (no tasq.md)` (yellow) — script found, no task file
+- Shows `QonQrete` (red) — script not found
+- Click to run with current configuration
+
+**5. Configuration Wizard**
+- **Quick Config**: Essential options only (4 steps)
+- **Full Config**: All options with interactive editing
+- **Use Defaults**: Run immediately with saved settings
+- Optionally name the qonstruction for auto-save
+
+**6. VS Code Settings**
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `qonqrete.defaultSensitivity` | number | 6 | Default briq sensitivity (0-16) |
+| `qonqrete.defaultCycles` | number | 3 | Default execution cycles (1-50) |
+| `qonqrete.defaultMode` | string | "program" | Default operational mode |
+| `qonqrete.defaultAutonomous` | boolean | false | Enable autonomous by default |
+| `qonqrete.containerEngine` | string | "auto" | Container engine (auto/docker/podman/msb) |
+| `qonqrete.useSqrapyard` | boolean | false | Seed from sqrapyard by default |
+| `qonqrete.enableTui` | boolean | false | Enable TUI mode (experimental) |
+| `qonqrete.qonqretePath` | string | "" | Custom path to qonqrete.sh |
+
+**7. Terminal Integration**
+- Dedicated "QonQrete Engine" terminal
+- Full streaming output from CLI
+- Never hides logs — developers see everything
+
+**8. Cross-Platform Support**
+- Linux: Native shell execution
+- macOS: Handles Podman machine management
+- Windows: Git Bash / WSL support with path normalization
+
+#### 📁 NEW FILES
+
+| Path | Description |
+|------|-------------|
+| `vscode-extension/` | Complete VS Code extension |
+| `vscode-extension/package.json` | Extension manifest with commands, menus, views, settings |
+| `vscode-extension/tsconfig.json` | TypeScript configuration (strict mode) |
+| `vscode-extension/src/extension.ts` | Main entry point |
+| `vscode-extension/src/cli/qonqreteRunner.ts` | CLI execution module |
+| `vscode-extension/src/commands/init.ts` | Init command implementation |
+| `vscode-extension/src/commands/runTasq.ts` | Run tasq command implementation |
+| `vscode-extension/src/commands/resume.ts` | Resume command implementation |
+| `vscode-extension/src/ui/configWizard.ts` | Configuration wizard UI |
+| `vscode-extension/src/ui/sidebar.ts` | Sidebar webview panel |
+| `vscode-extension/README.md` | Extension documentation |
+| `vscode-extension/CHANGELOG.md` | Extension changelog |
+| `vscode-extension/assets/qonqrete-icon.svg` | Extension icon |
+
+#### 🔧 INSTALLATION
+
+```bash
+# Build the extension
+cd vscode-extension
+npm install
+npm run compile
+
+# Package as VSIX
+npx vsce package
+
+# Install locally
+code --install-extension qonqrete-vscode-1.0.5.vsix
+```
+
+#### 🚫 NOT CHANGED (confirmation)
+- Core pipeline: completely untouched
+- CLI behavior: fully preserved
+- All existing functionality: backward compatible
+- Container runtime detection: unchanged
+- All agent logic: unaffected
+
+---
+
+
+---
+
 ## [v1.0.4-stable] — Container Runtime Auto-Detect (Addition)
 
 ### 🐳 MULTI-ENGINE SUPPORT — Docker, Podman, and Cross-Platform

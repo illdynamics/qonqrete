@@ -1,0 +1,380 @@
+"use strict";
+/**
+ * QonQrete Configuration Wizard
+ * Provides VS Code UI dialogs for configuring QonQrete runs
+ *
+ * @author WoNQ
+ * @version 1.1.9
+ * @license AGPL-3.0
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.showQuickConfigWizard = showQuickConfigWizard;
+exports.showFullConfigWizard = showFullConfigWizard;
+exports.showQonstructionNameDialog = showQonstructionNameDialog;
+exports.showQageSelectionDialog = showQageSelectionDialog;
+exports.showCleanConfirmDialog = showCleanConfirmDialog;
+const vscode = __importStar(require("vscode"));
+/**
+ * Mode descriptions for the mode selection QuickPick
+ */
+const MODE_OPTIONS = [
+    { label: 'program', description: 'General programming mode', picked: true },
+    { label: 'enterprise', description: 'Enterprise application development' },
+    { label: 'security', description: 'Security-focused development' },
+    { label: 'data', description: 'Data processing and analysis' },
+    { label: 'devops', description: 'DevOps and infrastructure' },
+    { label: 'web', description: 'Web development' },
+];
+/**
+ * Container engine options
+ */
+const ENGINE_OPTIONS = [
+    { label: 'auto', description: 'Auto-detect available engine', picked: true },
+    { label: 'docker', description: 'Use Docker' },
+    { label: 'podman', description: 'Use Podman' },
+    { label: 'msb', description: 'Use MicroSandbox (experimental)' },
+];
+/**
+ * Get default configuration from VS Code settings
+ */
+function getDefaultConfig() {
+    const config = vscode.workspace.getConfiguration('qonqrete');
+    return {
+        sensitivity: config.get('defaultSensitivity', 6),
+        cycles: config.get('defaultCycles', 3),
+        mode: config.get('defaultMode', 'program'),
+        autonomous: config.get('defaultAutonomous', false),
+        useSqrapyard: config.get('useSqrapyard', false),
+        containerEngine: config.get('containerEngine', 'auto'),
+        enableTui: config.get('enableTui', false),
+    };
+}
+/**
+ * Show the quick configuration wizard
+ * Returns the configuration or undefined if cancelled
+ */
+async function showQuickConfigWizard() {
+    const defaults = getDefaultConfig();
+    // Step 1: Briq Sensitivity
+    const sensitivityInput = await vscode.window.showInputBox({
+        title: 'QonQrete Configuration (1/4)',
+        prompt: 'Briq Sensitivity (0-16). Higher = more granular briqs',
+        value: defaults.sensitivity.toString(),
+        validateInput: (value) => {
+            const num = parseInt(value, 10);
+            if (isNaN(num) || num < 0 || num > 16) {
+                return 'Please enter a number between 0 and 16';
+            }
+            return undefined;
+        },
+    });
+    if (sensitivityInput === undefined) {
+        return undefined;
+    }
+    // Step 2: Cycles
+    const cyclesInput = await vscode.window.showInputBox({
+        title: 'QonQrete Configuration (2/4)',
+        prompt: 'Number of execution cycles (1-50)',
+        value: defaults.cycles.toString(),
+        validateInput: (value) => {
+            const num = parseInt(value, 10);
+            if (isNaN(num) || num < 1 || num > 50) {
+                return 'Please enter a number between 1 and 50';
+            }
+            return undefined;
+        },
+    });
+    if (cyclesInput === undefined) {
+        return undefined;
+    }
+    // Step 3: Mode
+    const modeOptions = MODE_OPTIONS.map(opt => ({
+        ...opt,
+        picked: opt.label === defaults.mode,
+    }));
+    const modeSelection = await vscode.window.showQuickPick(modeOptions, {
+        title: 'QonQrete Configuration (3/4)',
+        placeHolder: 'Select operational mode',
+    });
+    if (!modeSelection) {
+        return undefined;
+    }
+    // Step 4: Autonomous Mode
+    const autonomousSelection = await vscode.window.showQuickPick([
+        { label: 'Interactive', description: 'User confirms each cycle', picked: !defaults.autonomous },
+        { label: 'Autonomous', description: 'Run without user confirmations', picked: defaults.autonomous },
+    ], {
+        title: 'QonQrete Configuration (4/4)',
+        placeHolder: 'Select execution mode',
+    });
+    if (!autonomousSelection) {
+        return undefined;
+    }
+    return {
+        sensitivity: parseInt(sensitivityInput, 10),
+        cycles: parseInt(cyclesInput, 10),
+        mode: modeSelection.label,
+        autonomous: autonomousSelection.label === 'Autonomous',
+        useSqrapyard: defaults.useSqrapyard,
+        containerEngine: defaults.containerEngine,
+        enableTui: defaults.enableTui,
+    };
+}
+/**
+ * Show the full configuration wizard with all options
+ */
+async function showFullConfigWizard() {
+    const defaults = getDefaultConfig();
+    // Create multi-step input using QuickPick
+    const configItems = [
+        {
+            label: `$(symbol-number) Sensitivity: ${defaults.sensitivity}`,
+            description: 'Briq granularity (0-16)',
+            detail: 'Higher values create more granular, smaller briqs',
+        },
+        {
+            label: `$(symbol-number) Cycles: ${defaults.cycles}`,
+            description: 'Execution cycles (1-50)',
+            detail: 'Number of build/review cycles to run',
+        },
+        {
+            label: `$(symbol-misc) Mode: ${defaults.mode}`,
+            description: 'Operational mode',
+            detail: 'Specialized mode for different project types',
+        },
+        {
+            label: `$(robot) Autonomous: ${defaults.autonomous ? 'Yes' : 'No'}`,
+            description: 'Auto-run without confirmations',
+            detail: 'When enabled, QonQrete runs without user intervention',
+        },
+        {
+            label: `$(package) Sqrapyard: ${defaults.useSqrapyard ? 'Yes' : 'No'}`,
+            description: 'Seed from sqrapyard',
+            detail: 'Use existing code from sqrapyard directory',
+        },
+        {
+            label: `$(vm) Container: ${defaults.containerEngine}`,
+            description: 'Container engine',
+            detail: 'Docker, Podman, or auto-detect',
+        },
+        {
+            label: `$(terminal) TUI: ${defaults.enableTui ? 'Yes' : 'No'}`,
+            description: 'Terminal UI mode (experimental)',
+            detail: 'Enable text-based user interface',
+        },
+    ];
+    let config = { ...defaults };
+    let continueEditing = true;
+    while (continueEditing) {
+        // Update labels with current values
+        configItems[0].label = `$(symbol-number) Sensitivity: ${config.sensitivity}`;
+        configItems[1].label = `$(symbol-number) Cycles: ${config.cycles}`;
+        configItems[2].label = `$(symbol-misc) Mode: ${config.mode}`;
+        configItems[3].label = `$(robot) Autonomous: ${config.autonomous ? 'Yes' : 'No'}`;
+        configItems[4].label = `$(package) Sqrapyard: ${config.useSqrapyard ? 'Yes' : 'No'}`;
+        configItems[5].label = `$(vm) Container: ${config.containerEngine}`;
+        configItems[6].label = `$(terminal) TUI: ${config.enableTui ? 'Yes' : 'No'}`;
+        const selected = await vscode.window.showQuickPick([
+            ...configItems,
+            { label: '', kind: vscode.QuickPickItemKind.Separator },
+            { label: '$(play) Run QonQrete', description: 'Start with current configuration' },
+            { label: '$(close) Cancel', description: 'Abort configuration' },
+        ], {
+            title: 'QonQrete Configuration',
+            placeHolder: 'Select an option to configure or run',
+        });
+        if (!selected) {
+            return undefined;
+        }
+        if (selected.label.includes('Run QonQrete')) {
+            return config;
+        }
+        if (selected.label.includes('Cancel')) {
+            return undefined;
+        }
+        // Handle configuration changes
+        if (selected.label.includes('Sensitivity')) {
+            const input = await vscode.window.showInputBox({
+                prompt: 'Briq Sensitivity (0-16)',
+                value: config.sensitivity.toString(),
+                validateInput: (v) => {
+                    const n = parseInt(v, 10);
+                    return (isNaN(n) || n < 0 || n > 16) ? 'Enter 0-16' : undefined;
+                },
+            });
+            if (input !== undefined) {
+                config.sensitivity = parseInt(input, 10);
+            }
+        }
+        else if (selected.label.includes('Cycles')) {
+            const input = await vscode.window.showInputBox({
+                prompt: 'Execution Cycles (1-50)',
+                value: config.cycles.toString(),
+                validateInput: (v) => {
+                    const n = parseInt(v, 10);
+                    return (isNaN(n) || n < 1 || n > 50) ? 'Enter 1-50' : undefined;
+                },
+            });
+            if (input !== undefined) {
+                config.cycles = parseInt(input, 10);
+            }
+        }
+        else if (selected.label.includes('Mode')) {
+            const modeOptions = MODE_OPTIONS.map(opt => ({
+                ...opt,
+                picked: opt.label === config.mode,
+            }));
+            const modeSelection = await vscode.window.showQuickPick(modeOptions, {
+                placeHolder: 'Select operational mode',
+            });
+            if (modeSelection) {
+                config.mode = modeSelection.label;
+            }
+        }
+        else if (selected.label.includes('Autonomous')) {
+            config.autonomous = !config.autonomous;
+        }
+        else if (selected.label.includes('Sqrapyard')) {
+            config.useSqrapyard = !config.useSqrapyard;
+        }
+        else if (selected.label.includes('Container')) {
+            const engineOptions = ENGINE_OPTIONS.map(opt => ({
+                ...opt,
+                picked: opt.label === config.containerEngine,
+            }));
+            const engineSelection = await vscode.window.showQuickPick(engineOptions, {
+                placeHolder: 'Select container engine',
+            });
+            if (engineSelection) {
+                config.containerEngine = engineSelection.label;
+            }
+        }
+        else if (selected.label.includes('TUI')) {
+            config.enableTui = !config.enableTui;
+        }
+    }
+    return config;
+}
+/**
+ * Show qonstruction name input dialog
+ */
+async function showQonstructionNameDialog() {
+    return await vscode.window.showInputBox({
+        title: 'Save Qonstruction',
+        prompt: 'Enter a name for this qonstruction (leave empty to skip)',
+        placeHolder: 'my_project',
+        validateInput: (value) => {
+            if (value && !/^[a-zA-Z0-9_-]+$/.test(value)) {
+                return 'Name must contain only letters, numbers, underscores, and hyphens';
+            }
+            return undefined;
+        },
+    });
+}
+/**
+ * Show Qage selection dialog
+ */
+async function showQageSelectionDialog(qages) {
+    if (qages.length === 0) {
+        vscode.window.showInformationMessage('No Qages found to resume from.');
+        return undefined;
+    }
+    const items = qages.map(qage => {
+        // Parse timestamp from qage name (format: qage_YYYYMMDD_HHMMSS)
+        const match = qage.match(/qage_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+        let description = '';
+        if (match) {
+            const [, year, month, day, hour, minute, second] = match;
+            description = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+        }
+        return {
+            label: qage,
+            description,
+        };
+    });
+    const selected = await vscode.window.showQuickPick(items, {
+        title: 'Select Qage to Resume',
+        placeHolder: 'Choose a Qage directory',
+    });
+    return selected?.label;
+}
+/**
+ * Show clean confirmation dialog
+ */
+async function showCleanConfirmDialog(qages) {
+    if (qages.length === 0) {
+        vscode.window.showInformationMessage('No Qages found to clean.');
+        return undefined;
+    }
+    const items = [
+        { label: '$(trash) Clean All Qages', description: `Delete all ${qages.length} Qage directories` },
+        { label: '', kind: vscode.QuickPickItemKind.Separator },
+        ...qages.map(qage => {
+            const match = qage.match(/qage_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+            let description = '';
+            if (match) {
+                const [, year, month, day, hour, minute, second] = match;
+                description = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+            }
+            return {
+                label: `$(file-directory) ${qage}`,
+                description,
+            };
+        }),
+    ];
+    const selected = await vscode.window.showQuickPick(items, {
+        title: 'Select Qage to Clean',
+        placeHolder: 'Choose a Qage to delete or clean all',
+    });
+    if (!selected) {
+        return undefined;
+    }
+    if (selected.label.includes('Clean All')) {
+        const confirm = await vscode.window.showWarningMessage(`Are you sure you want to delete all ${qages.length} Qage directories?`, { modal: true }, 'Yes, Delete All');
+        if (confirm === 'Yes, Delete All') {
+            return { cleanAll: true };
+        }
+        return undefined;
+    }
+    // Extract qage name from label
+    const qageName = selected.label.replace('$(file-directory) ', '');
+    const confirm = await vscode.window.showWarningMessage(`Are you sure you want to delete ${qageName}?`, { modal: true }, 'Yes, Delete');
+    if (confirm === 'Yes, Delete') {
+        return { qageName, cleanAll: false };
+    }
+    return undefined;
+}
+//# sourceMappingURL=configWizard.js.map
