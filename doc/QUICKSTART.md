@@ -107,3 +107,15 @@ After a successful run, verify these exist:
 .qonqrete/worqspace/qage_.../exeq.d/
 .qonqrete/worqspace/qage_.../reqap.d/
 ```
+
+## Cost Confirmation Gate
+
+To require confirmation before running after cost estimation:
+
+```yaml
+# In worqspace/config.yaml
+options:
+  cost_confirmation_gate: true
+```
+
+The GateQeeper will prompt you to confirm after CalQulator shows the cost estimate.

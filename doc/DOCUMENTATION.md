@@ -422,3 +422,55 @@ Container images are now tagged with the version:
 - `qonqrete-qage:1.2.0` (primary)
 - `qonqrete-qage:latest` (convenience alias)
 - `qonqrete-qage` (legacy untagged, backward compat)
+
+## 13. Cost Confirmation Gate (GateQeeper)
+
+QonQrete supports an optional cost confirmation gate after CalQulator estimates the run cost.
+
+### Configuration
+
+In `worqspace/config.yaml`:
+
+```yaml
+options:
+  cost_confirmation_gate: false   # default: false
+```
+
+When set to `true`, after CalQulator finishes, the GateQeeper prompts:
+
+```
+GateQeeper: Cost estimate above. Proceed with this run? [y/N]
+```
+
+The user must confirm before ConstruQtor begins. This prevents accidental expensive runs.
+
+### Behavior
+- Only triggers after CalQulator completes successfully
+- Skipped if CalQulator is skipped (e.g., local construqtor)
+- In TUI mode, shows as a log message (non-interactive in TUI)
+
+## 14. OpenRouter Provider Support
+
+OpenRouter is supported as a provider through its OpenAI-compatible API endpoint.
+
+### Configuration
+
+```yaml
+agents:
+  construqtor:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4
+```
+
+### Environment variable
+
+```bash
+export OPENROUTER_API_KEY='...'
+```
+
+### Supported models (via OpenRouter)
+- `anthropic/claude-sonnet-4`
+- `openai/gpt-4.1`
+- `google/gemini-2.5-pro`
+- `deepseek/deepseek-chat-v3`
+- Any model available on OpenRouter's platform

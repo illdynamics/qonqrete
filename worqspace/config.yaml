@@ -189,6 +189,15 @@ options:
   auto_cycle_limit: 1
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Cost Confirmation Gate (GateQeeper)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  # When true, after CalQulator estimates the run cost, QonQrete will prompt
+  # you to confirm before proceeding. You must answer yes/no.
+  # When false (default), runs proceed without cost confirmation.
+  cost_confirmation_gate: false
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Generation Settings (v1.0.2 - INVERTED ENFORCED Briq Ranges)
   # ═══════════════════════════════════════════════════════════════════════════
   

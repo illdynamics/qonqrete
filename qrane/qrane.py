@@ -731,6 +731,26 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
                 previous_log_path = qonsole_log_path
 
+                # ═══════════════════════════════════════════════════════════════
+                # GateQeeper — Cost Confirmation Gate
+                # After CalQulator estimates costs, optionally prompt user
+                # ═══════════════════════════════════════════════════════════════
+                if name == 'calqulator' and config.get('options', {}).get('cost_confirmation_gate', False):
+                    gate_prefix = f"{Colors.B}〘{prefix}〙『{Colors.YELLOW}GateQeeper{Colors.B}』      ⸎{Colors.R}"
+                    if ui:
+                        ui.log_main("GateQeeper: Cost estimate above. Confirm to proceed?")
+                    else:
+                        print(f"\n{gate_prefix} Cost estimate above. Proceed with this run? [y/N] ", end="", flush=True)
+                        try:
+                            answer = input().strip().lower()
+                        except EOFError:
+                            answer = "n"
+                        if answer not in ('y', 'yes'):
+                            print(f"{gate_prefix} Run cancelled by GateQeeper.")
+                            session_failed = True
+                            break
+                        print(f"{gate_prefix} Confirmed. Proceeding...")
+
             if session_failed: break
 
             res = handle_cheqpoint(cycle, is_autonomous, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)

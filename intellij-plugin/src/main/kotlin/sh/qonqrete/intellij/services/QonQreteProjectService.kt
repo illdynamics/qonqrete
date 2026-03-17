@@ -35,7 +35,6 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.wm.ToolWindowManager
-import org.jetbrains.plugins.terminal.TerminalToolWindowManager
 import sh.qonqrete.intellij.util.CommandBuilder
 import sh.qonqrete.intellij.util.QonQreteValidation
 import sh.qonqrete.intellij.util.ShellEscape
@@ -509,15 +508,7 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         val markerPath = createMarkerPath(workingDir)
         currentMarkerPath = markerPath
 
-        // SECURE: Write API keys to temp file, source + delete in command (never in scrollback)
-        val envFile = writeTempEnvFile(workingDir)
-        val envPrefix = if (envFile != null) {
-            val envPath = ShellEscape.toUnixPath(envFile.absolutePath, shellInfo.isWindows)
-            "source ${ShellEscape.escape(envPath)} && rm -f ${ShellEscape.escape(envPath)} && "
-        } else ""
-        val fullCommand = "$envPrefix$command"
-
-        val bashScript = CommandBuilder.buildBashScript(workingDir, fullCommand, markerPath.toString(), null, shellInfo.isWindows)
+        val bashScript = CommandBuilder.buildBashScript(workingDir, command, markerPath.toString(), null, shellInfo.isWindows)
         updateRunStatus(RunStatus(state = RunState.RUNNING, startTime = System.currentTimeMillis(), command = command))
         startMarkerWatch(markerPath)
 
@@ -530,66 +521,69 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
         ApplicationManager.getApplication().invokeLater {
             try {
-                val terminalManager = TerminalToolWindowManager.getInstance(project)
-                val terminalWidget = terminalManager.createLocalShellWidget(workingDir, TERMINAL_NAME, true)
-                val bashWrappedCommand = CommandBuilder.wrapForBash(shellInfo.shellPath, bashScript)
-                log.info("$description: $command")
-                terminalWidget.executeCommand(bashWrappedCommand)
+                // SECURE: Build process with API keys in process environment table
+                // Secrets never appear in command text, terminal scrollback, or temp files
+                val cmdLine = com.intellij.execution.configurations.PtyCommandLine(
+                    listOf(shellInfo.shellPath, "-c", bashScript)
+                )
+                cmdLine.directory = File(workingDir)
+                cmdLine.charset = Charsets.UTF_8
+                buildSecureEnvMap().forEach { (k, v) -> cmdLine.environment[k] = v }
+
+                val handler = com.intellij.execution.process.KillableColoredProcessHandler(cmdLine)
+                handler.addProcessListener(object : ProcessAdapter() {
+                    override fun processTerminated(event: ProcessEvent) {
+                        // Marker file handles completion detection
+                    }
+                })
+
+                // Show in Run tool window with terminal-capable console
+                val consoleView = com.intellij.execution.impl.ConsoleViewImpl(project, true)
+                consoleView.attachToProcess(handler)
+
+                val descriptor = com.intellij.execution.ui.RunContentDescriptor(
+                    consoleView, handler, consoleView.component, TERMINAL_NAME
+                )
+                com.intellij.execution.ui.RunContentManager.getInstance(project).showRunContent(
+                    com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance(),
+                    descriptor
+                )
+
+                handler.startNotify()
+                log.info("$description: $command (secure process-env injection)")
             } catch (e: Exception) {
-                log.error("Failed to execute in terminal", e)
+                log.error("Failed to execute", e)
                 updateRunStatus(RunStatus(state = RunState.FAILED, error = e.message, endTime = System.currentTimeMillis()))
             }
         }
     }
 
     /**
-     * Write stored API keys (from PasswordSafe) to a temporary env file.
-     * Only includes keys NOT already in process environment (env takes precedence).
-     * Returns the file, or null if no keys need injection.
+     * Build a secure environment map from PasswordSafe.
+     * Only includes keys NOT already in the real process environment.
+     * Handles GOOGLE_API_KEY / GEMINI_API_KEY equivalence.
+     * Returns a map suitable for PtyCommandLine.environment injection.
      */
-    private fun writeTempEnvFile(workingDir: String): java.io.File? {
-        val lines = mutableListOf<String>()
+    private fun buildSecureEnvMap(): Map<String, String> {
+        val env = mutableMapOf<String, String>()
         val allKeys = listOf(
-            "OPENAI_API_KEY",
-            "ANTHROPIC_API_KEY",
-            "OPENROUTER_API_KEY",
-            "GOOGLE_API_KEY",
-            "DEEPSEEK_API_KEY",
-            "QWEN_API_KEY"
+            "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY",
+            "GOOGLE_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY"
         )
         for (envKey in allKeys) {
-            // Skip if already in real environment
             if (!System.getenv(envKey).isNullOrEmpty()) continue
-            // Gemini/Google equivalence: skip GOOGLE if GEMINI already in env (and vice versa)
             if (envKey == "GOOGLE_API_KEY" && !System.getenv("GEMINI_API_KEY").isNullOrEmpty()) continue
 
-            // Try stored secret, with Gemini/Google fallback
             var stored = sh.qonqrete.intellij.actions.SetAIConfigAction.getApiKey(envKey)
             if (stored.isNullOrEmpty() && envKey == "GOOGLE_API_KEY") {
                 stored = sh.qonqrete.intellij.actions.SetAIConfigAction.getApiKey("GEMINI_API_KEY")
             }
-
             if (!stored.isNullOrEmpty()) {
-                val escaped = stored.replace("'", "'\\''")
-                lines.add("export $envKey='$escaped'")
-                // Double-map Google → Gemini
-                if (envKey == "GOOGLE_API_KEY") {
-                    lines.add("export GEMINI_API_KEY='$escaped'")
-                }
+                env[envKey] = stored
+                if (envKey == "GOOGLE_API_KEY") env["GEMINI_API_KEY"] = stored
             }
         }
-        if (lines.isEmpty()) return null
-
-        val envFile = java.io.File(workingDir, ".qonqrete_env_${System.currentTimeMillis()}.tmp")
-        envFile.writeText(lines.joinToString("\n") + "\n")
-        // Restrict to owner-only read/write (chmod 600)
-        envFile.setReadable(false, false)
-        envFile.setReadable(true, true)
-        envFile.setWritable(false, false)
-        envFile.setWritable(true, true)
-        envFile.setExecutable(false, false)
-        envFile.deleteOnExit() // safety net — JVM removes on exit
-        return envFile
+        return env
     }
 
     private fun startMarkerWatch(markerPath: Path) {
@@ -688,15 +682,8 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         currentMarkerPath = markerPath
         
         val runCommand = CommandBuilder.qonqrete().run(config).build()
-        // SECURE: use temp env file for API keys (never in command text)
-        val envFile = writeTempEnvFile(workingDir)
-        val envPrefix = if (envFile != null) {
-            val envPath = ShellEscape.toUnixPath(envFile.absolutePath, shellInfo.isWindows)
-            "source ${ShellEscape.escape(envPath)} && rm -f ${ShellEscape.escape(envPath)} && "
-        } else ""
-        val fullRunCommand = "$envPrefix$runCommand"
         val restoreCommand = CommandBuilder.buildRestoreCommand(backupPath.absolutePath, worqspaceTasq.absolutePath, hadOriginal, shellInfo.isWindows)
-        val bashScript = CommandBuilder.buildBashScript(workingDir, fullRunCommand, markerPath.toString(), restoreCommand, shellInfo.isWindows)
+        val bashScript = CommandBuilder.buildBashScript(workingDir, runCommand, markerPath.toString(), restoreCommand, shellInfo.isWindows)
 
         updateRunStatus(RunStatus(state = RunState.RUNNING, startTime = System.currentTimeMillis(), command = runCommand))
         startMarkerWatch(markerPath)
@@ -710,9 +697,27 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
         ApplicationManager.getApplication().invokeLater {
             try {
-                val terminalManager = TerminalToolWindowManager.getInstance(project)
-                val terminalWidget = terminalManager.createLocalShellWidget(workingDir, TERMINAL_NAME, true)
-                terminalWidget.executeCommand(CommandBuilder.wrapForBash(shellInfo.shellPath, bashScript))
+                // SECURE: PtyCommandLine with process-env injection (no temp files, no shell text)
+                val cmdLine = com.intellij.execution.configurations.PtyCommandLine(
+                    listOf(shellInfo.shellPath, "-c", bashScript)
+                )
+                cmdLine.directory = File(workingDir)
+                cmdLine.charset = Charsets.UTF_8
+                buildSecureEnvMap().forEach { (k, v) -> cmdLine.environment[k] = v }
+
+                val handler = com.intellij.execution.process.KillableColoredProcessHandler(cmdLine)
+                val consoleView = com.intellij.execution.impl.ConsoleViewImpl(project, true)
+                consoleView.attachToProcess(handler)
+
+                val descriptor = com.intellij.execution.ui.RunContentDescriptor(
+                    consoleView, handler, consoleView.component, TERMINAL_NAME
+                )
+                com.intellij.execution.ui.RunContentManager.getInstance(project).showRunContent(
+                    com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance(),
+                    descriptor
+                )
+
+                handler.startNotify()
             } catch (e: Exception) {
                 updateRunStatus(RunStatus(state = RunState.FAILED, error = e.message, endTime = System.currentTimeMillis()))
             }
