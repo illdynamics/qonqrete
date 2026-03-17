@@ -11,7 +11,7 @@ QonQrete is a **local-first, file-based AI software construction system** that r
 
 ## Version
 
-**Current repository version:** `v1.2.0-stable`  
+**Current repository version:** `v1.2.0`  
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
@@ -28,7 +28,7 @@ This repository currently ships three things:
 
 The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-> **v1.2.0-stable** — Workspace Deployment & Hassle-Free Bootstrap
+> **v1.2.0** — Workspace Deployment & Hassle-Free Bootstrap
 
 QonQrete is a deterministic AI coding agent that builds software inside hardened containers. It takes a high-level task, decomposes it into briqs, generates code, reviews the result, and optionally continues into more cycles — all locally, all file-based, all yours.
 
@@ -118,6 +118,7 @@ qonqrete/
 | Anthropic | `ANTHROPIC_API_KEY` |
 | DeepSeek | `DEEPSEEK_API_KEY` |
 | Qwen | `QWEN_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
 
 ## Container Engines
 
@@ -154,6 +155,7 @@ Both VS Code and IntelliJ support identical commands:
 | **Resume Run** | Continue from previous qage |
 | **Clean Qages** | Delete old qage directories |
 | **Init Workspace** | Manually build container image |
+| **Set AI Configuration** | Configure providers, models, and API keys |
 | **Show Status** | Display full status info |
 
 ## Modes
@@ -180,6 +182,56 @@ Both VS Code and IntelliJ support identical commands:
 - **Website:** [qonqrete.sh](https://qonqrete.sh)
 - **Author:** [Ill Dynamics](https://illdynamics.com) / WoNQ
 - **License:** [AGPL-3.0](LICENSE)
+
+## Secure API Key Handling
+
+API keys are **never** stored in plain-text settings files, terminal commands, or logs.
+
+### VS Code
+Keys are stored in the **OS keychain** via VS Code's `SecretStorage` API. They are injected into the QonQrete process via the terminal's environment map — never in command text.
+
+### IntelliJ / JetBrains
+Keys are stored in IntelliJ's **PasswordSafe** (encrypted credential store). They are injected via `PtyCommandLine.environment` — directly into the OS process environment table, never in shell text or temp files.
+
+### Environment variable precedence
+1. **Real shell environment** (`OPENAI_API_KEY=...` in your terminal) — always wins
+2. **IDE secure storage** — injected only if the env var is not already set
+3. **Neither** — the IDE prompts you to enter the key
+
+### Gemini / Google equivalence
+`GOOGLE_API_KEY` and `GEMINI_API_KEY` are treated as equivalent. If either is set, the Gemini provider is considered configured.
+
+## AI Configuration Panel
+
+Both IDEs include a **"Set AI Configuration"** command that lets you:
+- Set the **provider** and **model** for each agent (TasqLeveler, InstruQtor, ConstruQtor, InspeQtor)
+- Set **API keys** for each provider (stored securely)
+- See at a glance which keys are set and which are missing
+
+Changes are written directly to `.qonqrete/worqspace/config.yaml`.
+
+After deploying QonQrete to a workspace, the IDE will prompt you to configure AI providers and API keys.
+
+## Cost Confirmation Gate (GateQeeper)
+
+QonQrete can optionally prompt you to confirm a run after the CalQulator estimates cost.
+
+In `worqspace/config.yaml`:
+
+```yaml
+options:
+  cost_confirmation_gate: false   # set to true to enable
+```
+
+When enabled, after CalQulator runs, QonQrete will display the cost estimate and ask:
+
+```
+GateQeeper: Cost estimate above. Proceed with this run? [y/N]
+```
+
+You must answer `y` or `yes` to continue. Any other answer cancels the run.
+
+This is useful for preventing accidental expensive runs with high sensitivity or many cycles.
 
 ## v1.2.0 Highlights
 
@@ -278,6 +330,7 @@ export GOOGLE_API_KEY='...'        # or GEMINI_API_KEY
 export ANTHROPIC_API_KEY='...'
 export DEEPSEEK_API_KEY='...'
 export QWEN_API_KEY='...'
+export OPENROUTER_API_KEY='...'
 ```
 
 ## System requirements
