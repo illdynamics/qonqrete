@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v1.2.0-stable - Container Runtime Auto-Detect + Versioned Images (Docker / Podman / MSB)
+# v1.2.0 - Container Runtime Auto-Detect + Versioned Images (Docker / Podman / MSB)
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ else
     QONQ_V="0.0.0"
 fi
 
-VERSION="QonQrete v${QONQ_V}-stable"
+VERSION="QonQrete v${QONQ_V}"
 IMAGE_NAME="qonqrete-qage:${QONQ_V}"
 IMAGE_NAME_LATEST="qonqrete-qage:latest"
 IMAGE_NAME_LEGACY="qonqrete-qage"
@@ -149,7 +149,7 @@ EOF
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# OS + CONTAINER ENGINE DETECTION (v1.0.4-stable)
+# OS + CONTAINER ENGINE DETECTION (v1.0.4)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Detected values (set by detect_os and detect_engine)
@@ -314,7 +314,7 @@ print_runtime_info() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ENGINE-AWARE WRAPPERS (v1.0.4-stable)
+# ENGINE-AWARE WRAPPERS (v1.0.4)
 # Replace hardcoded docker/podman calls with engine-agnostic functions.
 # ═══════════════════════════════════════════════════════════════════════════════
 

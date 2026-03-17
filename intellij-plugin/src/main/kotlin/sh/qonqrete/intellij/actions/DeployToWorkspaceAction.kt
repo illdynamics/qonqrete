@@ -118,7 +118,7 @@ class DeployToWorkspaceAction : AnAction() {
                     indicator.text = "Downloading runtime v$version..."
                     indicator.fraction = 0.1
 
-                    val zipUrl = "$GITHUB_RELEASE_BASE/v$version/qonqrete-v$version-stable.zip"
+                    val zipUrl = "$GITHUB_RELEASE_BASE/v$version/qonqrete-v$version.zip"
                     val tmpDir = File(basePath, ".qonqrete-tmp-${System.currentTimeMillis()}")
                     tmpDir.mkdirs()
                     val zipFile = File(tmpDir, "qonqrete.zip")

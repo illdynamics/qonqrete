@@ -1,6 +1,6 @@
 # QonQrete Release Notes
 
-## v1.2.0-stable — Workspace Deployment & Hassle-Free Bootstrap
+## v1.2.0 — Workspace Deployment & Hassle-Free Bootstrap
 
 This is the **first globally-publishable release** of both the VS Code extension and IntelliJ plugin. Users can now install QonQrete from the IDE marketplace and be productive in under a minute — no manual cloning, no command line setup.
 

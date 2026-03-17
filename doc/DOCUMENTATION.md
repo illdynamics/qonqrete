@@ -1,8 +1,8 @@
 # QonQrete Documentation
 
-**Version:** `v1.2.0-stable`
+**Version:** `v1.2.0`
 
-This document is the synced technical reference for the current `v1.2.0-stable` repository snapshot.
+This document is the synced technical reference for the current `v1.2.0` repository snapshot.
 
 ## Table of contents
 - [1. What QonQrete is](#1-what-qonqrete-is)
@@ -373,7 +373,7 @@ Implemented helper concepts include:
 
 ## 11. Current limitations
 
-These limitations should be documented honestly for `v1.2.0-stable`:
+These limitations should be documented honestly for `v1.2.0`:
 
 1. **Repo-local workflow remains the active implementation model.**
    The central engine / per-project metadata architecture is a future/product direction, not the current repo behavior.

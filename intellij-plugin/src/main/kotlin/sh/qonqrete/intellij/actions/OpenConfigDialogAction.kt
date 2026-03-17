@@ -55,7 +55,7 @@ class OpenConfigDialogAction : AnAction() {
         if (!service.hasTasqFile()) {
             Messages.showErrorDialog(
                 project,
-                "No tasq.md found.\n\nUse "Create tasq.md" to create one at the project root.",
+                "No tasq.md found.\n\nUse 'Create tasq.md' to create one at the project root.",
                 "QonQrete: No Tasq File"
             )
             return

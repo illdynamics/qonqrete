@@ -1,8 +1,8 @@
 # QonQrete Architecture
 
-**Version:** `v1.2.0-stable`
+**Version:** `v1.2.0`
 
-This document describes the current repository architecture as shipped in the `v1.2.0-stable` snapshot.
+This document describes the current repository architecture as shipped in the `v1.2.0` snapshot.
 
 ## High-level model
 
@@ -287,5 +287,5 @@ my-project/
 
 ### Deployment source
 
-Primary: versioned GitHub release zip (`qonqrete-v1.2.0-stable.zip`)
+Primary: versioned GitHub release zip (`qonqrete-v1.2.0.zip`)
 Fallback: shallow git clone if zip download fails
