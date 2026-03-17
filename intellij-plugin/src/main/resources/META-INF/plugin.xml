@@ -9,7 +9,7 @@
 <idea-plugin>
     <id>sh.qonqrete</id>
     <name>QonQrete</name>
-    <version>1.1.9</version>
+    <version>1.2.0</version>
     <idea-version since-build="233"/>
     <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
 
@@ -23,12 +23,13 @@
 
     <h3>Features</h3>
     <ul>
-        <li><b>Run Tasq</b> – Execute QonQrete builds directly from <code>tasq.md</code></li>
+        <li><b>Deploy to Workspace</b> – One-click runtime deployment into any project</li>
+        <li><b>Create tasq.md</b> – Starter template at project root</li>
+        <li><b>Run Tasq</b> – Execute QonQrete builds with auto-init and root tasq sync</li>
         <li><b>Run Any Markdown</b> – Run any markdown file as a temporary tasq</li>
         <li><b>Tool Window</b> – Control panel with status, config and qage browser</li>
         <li><b>Status Widget</b> – Real-time status indicator in the IntelliJ status bar</li>
-        <li><b>Qage Browser</b> – Browse generated artifacts with timestamps</li>
-        <li><b>Run State Tracking</b> – Marker-based exit detection and auto refresh</li>
+        <li><b>Auto-Init</b> – Automatically builds container image on first run</li>
         <li><b>Local-First Execution</b> – Runs fully local using your QonQrete runtime</li>
     </ul>
 
@@ -36,7 +37,6 @@
     <ul>
         <li>Bash shell (Git Bash on Windows, native on macOS/Linux)</li>
         <li>Docker or Podman for container execution</li>
-        <li>A QonQrete project with <code>qonqrete.sh</code></li>
     </ul>
 
     <p>
@@ -85,6 +85,20 @@
     </extensions>
 
     <actions>
+
+        <action
+            id="QonQrete.DeployToWorkspace"
+            class="sh.qonqrete.intellij.actions.DeployToWorkspaceAction"
+            text="QonQrete: Deploy to Workspace"
+            description="Deploy QonQrete runtime into the current project"
+            icon="AllIcons.Actions.Download"/>
+
+        <action
+            id="QonQrete.CreateTasq"
+            class="sh.qonqrete.intellij.actions.CreateTasqAction"
+            text="QonQrete: Create tasq.md"
+            description="Create a starter tasq.md at project root"
+            icon="AllIcons.Actions.New"/>
 
         <action
             id="QonQrete.RunTasq"

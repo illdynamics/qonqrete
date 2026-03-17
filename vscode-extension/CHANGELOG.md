@@ -1,35 +1,40 @@
-# QonQrete Changelog
+# QonQrete VS Code Extension - Changelog
 
-## [1.1.9] - 2026-03-13 - Production Hardening Pass
+## 1.2.0 - Workspace Deployment & Hassle-Free Bootstrap
 
-### IntelliJ Plugin
-- **Fixed**: Gradle wrapper now ships VALID jar (builds from clean checkout)
-- **Fixed**: Marker watcher uses daemon thread (proper JVM shutdown)
-- **Fixed**: Auto-refresh when run completes
-- **Fixed**: Status widget shows version + state
-- **Added**: CommandBuilder utility for centralized command assembly
-- **Added**: QonQreteValidation utility for input validation
-- **Added**: ShellEscape utility for proper bash escaping
-- **Added**: "Clean All" button with confirmation
-- **Added**: "Open Tasq" button for quick editing
-- **Added**: Tooltips on all config controls
-- **Added**: Qage timestamps in list display
-- **Added**: 40+ comprehensive unit tests
+### Added
+- **Deploy to Workspace** command — one-click runtime install into `.qonqrete/`
+- **Create tasq.md** command — starter template at workspace root
+- **Auto-init** on first Run Tasq (builds container image automatically)
+- **Root tasq.md sync** — user-facing tasq at workspace root, auto-synced to runtime before runs
+- **.gitignore management** — auto-adds `.qonqrete/` on deploy
+- `.qonqrete/qonqrete.sh` added to path discovery (preferred over legacy paths)
+- Sidebar Deploy + Create Tasq buttons
+- Activation event for `workspaceContains:**/.qonqrete/qonqrete.sh`
 
-### VS Code Extension
-- Version bump to 1.1.9
+### Changed
+- Status bar suggests Deploy when runtime not found (instead of Configure)
+- Welcome message offers Deploy to Workspace
+- Run Tasq offers Deploy when runtime missing, Create tasq when tasq missing
+- Versioned container image detection (`qonqrete-qage:<version>`)
 
-## [1.1.8] - 2026-03-13
+### Backward Compatible
+- Legacy paths (root `qonqrete.sh`, `qonqrete/qonqrete.sh`) remain as fallback
+- Legacy untagged `qonqrete-qage` image still detected
+- Existing worqspace-only workflows continue to work
 
-### IntelliJ Plugin
-- Fixed: Unix execution now ALWAYS uses verified bash
-- Fixed: Command construction with proper shell escaping
-- Fixed: autoOpenToolWindowOnRun now works
-- Added: Full artifact browser with per-file click-to-open
-- Added: Repo discovery with ambiguity handling
-- Added: gradle-wrapper.jar for clean builds
+## 1.1.9 - Production Hardening
 
-## [1.1.7] - 2026-03-12
+- Shell detection with verification
+- Marker-based run state tracking
+- Orphan backup recovery
+- Qage browser with artifact details
+- Full config wizard (quick + full modes)
+- Status bar with run state display
+- Windows Git Bash / WSL support
 
-### IntelliJ Plugin
-- Initial production-ready release
+## 1.0.5 - Initial Extension
+
+- Basic run/resume/clean/init commands
+- Sidebar control panel
+- Terminal-based execution

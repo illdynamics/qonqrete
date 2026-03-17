@@ -1,8 +1,8 @@
 # QonQrete Architecture
 
-**Version:** `v1.1.9-stable`
+**Version:** `v1.2.0-stable`
 
-This document describes the current repository architecture as shipped in the `v1.1.9-stable` snapshot.
+This document describes the current repository architecture as shipped in the `v1.2.0-stable` snapshot.
 
 ## High-level model
 
@@ -252,3 +252,40 @@ flowchart TD
 - [QUICKSTART.md](./QUICKSTART.md)
 - [TERMINOLOGY.md](./TERMINOLOGY.md)
 - [RELEASE-NOTES.md](./RELEASE-NOTES.md)
+
+## Workspace Deployment Model (v1.2.0)
+
+Starting with v1.2.0, the IDE integrations implement a **workspace-local hidden runtime** deployment model:
+
+```text
+my-project/
+  tasq.md                    ← user-facing task file
+  .qonqrete/                 ← hidden runtime (gitignored)
+    qonqrete.sh
+    VERSION
+    Dockerfile
+    qrane/
+    worqer/
+    worqspace/
+      config.yaml
+      pipeline_config.yaml
+      tasq.md                ← synced from root before each run
+      qage_YYYYMMDD_HHMMSS/
+```
+
+### Key design decisions
+
+1. **Script-relative runtime preserved**: `qonqrete.sh` still derives `SCRIPT_DIR` and sets `WORKSPACE_DIR` relative to itself. Deploying the full repo structure into `.qonqrete/` means everything works without any runtime architecture changes.
+
+2. **User-facing tasq at workspace root**: The IDE syncs `<workspace>/tasq.md` → `.qonqrete/worqspace/tasq.md` before each run. Users never need to edit hidden files.
+
+3. **Auto-init on first run**: If the container image doesn't exist, the IDE runs `./qonqrete.sh init` automatically.
+
+4. **Versioned images**: Container images are now tagged `qonqrete-qage:<version>` (e.g., `qonqrete-qage:1.2.0`), with `:latest` and legacy untagged aliases for backward compat.
+
+5. **Identical behavior in both IDEs**: VS Code and IntelliJ implement the same commands, same deployment model, same sync behavior.
+
+### Deployment source
+
+Primary: versioned GitHub release zip (`qonqrete-v1.2.0-stable.zip`)
+Fallback: shallow git clone if zip download fails

@@ -3,7 +3,7 @@
  * Open the full run configuration dialog
  *
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -55,7 +55,7 @@ class OpenConfigDialogAction : AnAction() {
         if (!service.hasTasqFile()) {
             Messages.showErrorDialog(
                 project,
-                "No tasq.md found in worqspace/.\n\nCreate a tasq.md file first.",
+                "No tasq.md found.\n\nUse "Create tasq.md" to create one at the project root.",
                 "QonQrete: No Tasq File"
             )
             return

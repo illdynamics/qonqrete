@@ -3,7 +3,7 @@
  * WebView-based control panel
  * 
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -73,6 +73,12 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 case 'installBash':
                     await vscode.env.openExternal(vscode.Uri.parse('https://git-scm.com/download/win'));
                     break;
+                case 'deployWorkspace':
+                    await vscode.commands.executeCommand('qonqrete.deployToWorkspace');
+                    break;
+                case 'createTasq':
+                    await vscode.commands.executeCommand('qonqrete.createTasq');
+                    break;
             }
         });
 
@@ -111,7 +117,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         try {
             const hasTasq = await runner.hasTasqFile();
             if (!hasTasq) {
-                vscode.window.showWarningMessage('No tasq.md found. Create one in worqspace/ first.');
+                vscode.window.showWarningMessage('No tasq.md found. Use "Create tasq.md" first.');
                 return;
             }
 
@@ -398,7 +404,8 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
 
     <div id="notInstalled" class="section hidden">
         <p>QonQrete not found in workspace.</p>
-        <button class="btn-primary" onclick="openSettings()">Configure Path</button>
+        <button class="btn-primary" onclick="deployWorkspace()">⬡ Deploy to Workspace</button>
+        <button class="btn-secondary" onclick="openSettings()">Configure Path</button>
     </div>
 
     <div id="mainContent">
@@ -473,8 +480,10 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         <div class="section">
             <div class="section-title">Actions</div>
             <button class="btn-primary" id="runBtn" onclick="runTasq()">▶ Run Tasq</button>
+            <button class="btn-secondary" onclick="deployWorkspace()">⬡ Deploy</button>
+            <button class="btn-secondary" onclick="createTasq()">+ Create tasq.md</button>
             <button class="btn-secondary" onclick="resumeRun()">⟳ Resume</button>
-            <button class="btn-secondary" onclick="initWorkspace()">⬡ Init</button>
+            <button class="btn-secondary" onclick="initWorkspace()">⚙ Init</button>
             <button class="btn-danger" onclick="cleanQages()">🗑 Clean</button>
         </div>
 
@@ -763,6 +772,8 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         function openQage(name) { vscode.postMessage({ type: 'openQage', qageName: name }); }
         function openFile(path) { vscode.postMessage({ type: 'openFile', filePath: path }); }
         function installBash() { vscode.postMessage({ type: 'installBash' }); }
+        function deployWorkspace() { vscode.postMessage({ type: 'deployWorkspace' }); }
+        function createTasq() { vscode.postMessage({ type: 'createTasq' }); }
     </script>
 </body>
 </html>`;

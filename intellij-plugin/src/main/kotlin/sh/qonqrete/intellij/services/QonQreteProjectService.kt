@@ -10,7 +10,7 @@
  * - All settings properly implemented and used
  *
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -249,12 +249,20 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         
         val basePath = project.basePath ?: return paths
         
+        // NEW: .qonqrete workspace-local deployment (preferred)
+        val qonqreteDotPath = "$basePath/.qonqrete/qonqrete.sh"
+        if (File(qonqreteDotPath).exists() && qonqreteDotPath !in paths) paths.add(qonqreteDotPath)
+        
         val directPath = "$basePath/qonqrete.sh"
         if (File(directPath).exists() && directPath !in paths) paths.add(directPath)
         
         val contentRoots = ProjectRootManager.getInstance(project).contentRoots
         for (root in contentRoots) {
-            listOf("${root.path}/qonqrete.sh", "${root.path}/qonqrete/qonqrete.sh").forEach { path ->
+            listOf(
+                "${root.path}/.qonqrete/qonqrete.sh",
+                "${root.path}/qonqrete.sh",
+                "${root.path}/qonqrete/qonqrete.sh"
+            ).forEach { path ->
                 if (File(path).exists() && path !in paths) paths.add(path)
             }
         }
@@ -317,8 +325,73 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
     fun clearPathCache() { persistedQonqretePath = null; cachedVersion = null }
     fun getQonQreteWorkingDir(): String? = getQonQretePath()?.let { File(it).parent }
-    fun hasTasqFile(): Boolean = getQonQreteWorkingDir()?.let { File(it, "worqspace/tasq.md").exists() } ?: false
-    fun getTasqPath(): String? = getQonQreteWorkingDir()?.let { "$it/worqspace/tasq.md" }
+
+    fun hasTasqFile(): Boolean {
+        // Check workspace root first (new canonical location)
+        val rootTasq = getRootTasqPath()
+        if (rootTasq != null && File(rootTasq).exists()) return true
+        // Fallback: internal worqspace tasq
+        return getQonQreteWorkingDir()?.let { File(it, "worqspace/tasq.md").exists() } ?: false
+    }
+
+    fun getTasqPath(): String? {
+        // Prefer workspace root tasq.md
+        val rootTasq = getRootTasqPath()
+        if (rootTasq != null && File(rootTasq).exists()) return rootTasq
+        // Fallback: internal worqspace tasq
+        return getQonQreteWorkingDir()?.let { "$it/worqspace/tasq.md" }
+    }
+
+    fun getRootTasqPath(): String? {
+        val basePath = project.basePath ?: return null
+        return "$basePath/tasq.md"
+    }
+
+    fun getInternalTasqPath(): String? {
+        return getQonQreteWorkingDir()?.let { "$it/worqspace/tasq.md" }
+    }
+
+    fun isDeployed(): Boolean {
+        val basePath = project.basePath ?: return false
+        return File(basePath, ".qonqrete/qonqrete.sh").exists()
+    }
+
+    fun syncRootTasqToInternal(): Boolean {
+        val rootTasq = getRootTasqPath() ?: return false
+        val internalTasq = getInternalTasqPath() ?: return false
+        val rootFile = File(rootTasq)
+        if (!rootFile.exists()) return false
+        try {
+            val worqspaceDir = File(internalTasq).parentFile
+            if (!worqspaceDir.exists()) worqspaceDir.mkdirs()
+            rootFile.copyTo(File(internalTasq), overwrite = true)
+            log.info("Synced tasq.md → .qonqrete/worqspace/tasq.md")
+            return true
+        } catch (e: Exception) {
+            log.warn("Failed to sync tasq: ${e.message}")
+            return false
+        }
+    }
+
+    fun ensureGitignore() {
+        val basePath = project.basePath ?: return
+        val gitignorePath = File(basePath, ".gitignore")
+        val entry = ".qonqrete/"
+        try {
+            if (gitignorePath.exists()) {
+                val content = gitignorePath.readText()
+                if (!content.lines().any { it.trim() == entry || it.trim() == ".qonqrete" }) {
+                    gitignorePath.appendText("\n# QonQrete runtime\n$entry\n")
+                    log.info("Added .qonqrete/ to .gitignore")
+                }
+            } else {
+                gitignorePath.writeText("# QonQrete runtime\n$entry\n")
+                log.info("Created .gitignore with .qonqrete/")
+            }
+        } catch (e: Exception) {
+            log.warn("Could not update .gitignore: ${e.message}")
+        }
+    }
 
     // ========================================================================
     // STATUS CHECKS
@@ -329,11 +402,21 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         val workingDir = File(scriptPath).parent
         if (!File(workingDir, "Dockerfile").exists()) return InitStatus(false, false, null)
         
+        // Check versioned image first, then legacy
+        val version = getVersion()
+        val imageNames = listOfNotNull(
+            version?.let { "qonqrete-qage:$it" },
+            "qonqrete-qage:latest",
+            "qonqrete-qage"
+        )
+        
         for (engine in listOf("docker", "podman")) {
-            try {
-                val result = runCommandSync(engine, listOf("image", "inspect", "qonqrete-qage"))
-                if (result.first == 0) return InitStatus(true, true, engine)
-            } catch (_: Exception) {}
+            for (imageName in imageNames) {
+                try {
+                    val result = runCommandSync(engine, listOf("image", "inspect", imageName))
+                    if (result.first == 0) return InitStatus(true, true, engine)
+                } catch (_: Exception) {}
+            }
         }
         return InitStatus(true, false, null)
     }

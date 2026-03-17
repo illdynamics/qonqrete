@@ -3,7 +3,7 @@
  * Main entry point
  * 
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -12,6 +12,8 @@ import { getRunner, disposeRunner, RunStatus } from './cli/qonqreteRunner';
 import { registerInitCommand } from './commands/init';
 import { registerRunTasqCommands } from './commands/runTasq';
 import { registerResumeCommands } from './commands/resume';
+import { registerDeployCommand } from './commands/deploy';
+import { registerCreateTasqCommand } from './commands/createTasq';
 import { QonQreteSidebarProvider } from './ui/sidebar';
 
 let statusBarItem: vscode.StatusBarItem;
@@ -48,6 +50,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(registerInitCommand(context));
     context.subscriptions.push(...registerRunTasqCommands(context));
     context.subscriptions.push(...registerResumeCommands(context));
+    context.subscriptions.push(registerDeployCommand(context));
+    context.subscriptions.push(registerCreateTasqCommand(context));
 
     // Register show status command (single registration point)
     context.subscriptions.push(
@@ -256,7 +260,7 @@ async function updateStatusBar(): Promise<void> {
         } else if (!hasTasq) {
             statusBarItem.text = '$(beaker) QonQrete (no tasq)';
             statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-            statusBarItem.tooltip = 'Create worqspace/tasq.md to get started';
+            statusBarItem.tooltip = 'No tasq.md found. Click to create one.';
             statusBarItem.command = 'qonqrete.runTasq';
         } else {
             // Fully ready and verified
@@ -271,9 +275,9 @@ async function updateStatusBar(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders && workspaceFolders.length > 0) {
             statusBarItem.text = '$(beaker) QonQrete';
-            statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-            statusBarItem.tooltip = 'qonqrete.sh not found. Click to configure.';
-            statusBarItem.command = 'workbench.action.openSettings';
+            statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            statusBarItem.tooltip = 'QonQrete not found. Click to deploy.';
+            statusBarItem.command = 'qonqrete.deployToWorkspace';
             statusBarItem.show();
         } else {
             statusBarItem.hide();
@@ -286,14 +290,14 @@ async function updateStatusBar(): Promise<void> {
  */
 function showWelcomeMessage(): void {
     vscode.window.showInformationMessage(
-        'Welcome to QonQrete! Open a workspace with qonqrete.sh to get started.',
-        'Documentation',
-        'Settings'
+        'Welcome to QonQrete! Use "Deploy to Workspace" to get started',
+        'Deploy to Workspace',
+        'Documentation'
     ).then(result => {
-        if (result === 'Documentation') {
+        if (result === 'Deploy to Workspace') {
+            vscode.commands.executeCommand('qonqrete.deployToWorkspace');
+        } else if (result === 'Documentation') {
             vscode.env.openExternal(vscode.Uri.parse('https://qonqrete.sh'));
-        } else if (result === 'Settings') {
-            vscode.commands.executeCommand('workbench.action.openSettings', 'qonqrete');
         }
     });
 }

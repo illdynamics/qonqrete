@@ -11,7 +11,7 @@
  * - Implements Disposable for proper cleanup
  *
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -84,11 +84,17 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private val initButton = JButton("⚙ Init")
     private val resumeButton = JButton("↻ Resume")
     private val cleanButton = JButton("🗑 Clean")
+    private val deployButton = JButton("⬡ Deploy").apply {
+        toolTipText = "Deploy QonQrete runtime to this project (.qonqrete/)"
+    }
+    private val createTasqButton = JButton("+ Create Tasq").apply {
+        toolTipText = "Create a starter tasq.md at project root"
+    }
     private val cleanAllButton = JButton("🗑 Clean All").apply {
         toolTipText = "Delete ALL qages (with confirmation)"
     }
     private val openTasqButton = JButton("📝 Open Tasq").apply {
-        toolTipText = "Open worqspace/tasq.md in editor"
+        toolTipText = "Open tasq.md in editor"
     }
     private val refreshButton = JButton("↺ Refresh")
 
@@ -195,6 +201,8 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         // === ACTION BUTTONS (2 rows) ===
         val buttonPanel1 = JPanel(FlowLayout(FlowLayout.LEFT))
         buttonPanel1.add(runButton)
+        buttonPanel1.add(deployButton)
+        buttonPanel1.add(createTasqButton)
         buttonPanel1.add(initButton)
         buttonPanel1.add(resumeButton)
         buttonPanel1.add(openTasqButton)
@@ -301,6 +309,8 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
 
     private fun setupListeners() {
         runButton.addActionListener { executeRun() }
+        deployButton.addActionListener { executeDeploy() }
+        createTasqButton.addActionListener { executeCreateTasq() }
         initButton.addActionListener { executeInit() }
         resumeButton.addActionListener { executeResume() }
         cleanButton.addActionListener { executeClean() }
@@ -382,6 +392,8 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         cleanButton.isEnabled = canRun && hasQonqrete && hasQages && !isRunning
         cleanAllButton.isEnabled = canRun && hasQonqrete && hasQages && !isRunning
         openTasqButton.isEnabled = hasQonqrete && hasTasq
+        deployButton.isEnabled = !isRunning
+        createTasqButton.isEnabled = !isRunning
         refreshButton.isEnabled = !isRunning
         runButton.text = if (isRunning) "⏳ Running..." else "▶ Run Tasq"
     }
@@ -512,6 +524,36 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         if (!canRun) { service.notify("QonQrete", reason ?: "Cannot init", NotificationType.WARNING); return }
         try { service.init() }
         catch (e: Exception) { service.notify("QonQrete Error", e.message ?: "Unknown error", NotificationType.ERROR) }
+    }
+
+    private fun executeDeploy() {
+        com.intellij.openapi.actionSystem.ActionManager.getInstance()
+            .getAction("QonQrete.DeployToWorkspace")?.actionPerformed(
+                com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
+                    "QonQrete", null,
+                    com.intellij.openapi.actionSystem.DataContext { dataId ->
+                        when {
+                            com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                            else -> null
+                        }
+                    }
+                )
+            )
+    }
+
+    private fun executeCreateTasq() {
+        com.intellij.openapi.actionSystem.ActionManager.getInstance()
+            .getAction("QonQrete.CreateTasq")?.actionPerformed(
+                com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
+                    "QonQrete", null,
+                    com.intellij.openapi.actionSystem.DataContext { dataId ->
+                        when {
+                            com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                            else -> null
+                        }
+                    }
+                )
+            )
     }
 
     private fun executeResume() {

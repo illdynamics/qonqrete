@@ -4,7 +4,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 
 ## Features
 
-- **Run Tasq** - Execute QonQrete builds from `worqspace/tasq.md`
+- **Run Tasq** - Execute QonQrete builds from your project root `tasq.md`
 - **Run Any Markdown** - Run any `.md` file as a temporary tasq
 - **Configuration** - Full config: sensitivity, cycles, mode, autonomous, sqrapyard, engine, TUI, wonqrete
 - **Tool Window** - Control panel with status, config, qage browser
@@ -39,7 +39,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 
 ### Quick Start
 1. Open a QonQrete project in IntelliJ
-2. Create or edit `worqspace/tasq.md`
+2. Create or edit `tasq.md` at the project root
 3. Press `Ctrl+Alt+Q` or use Tools → QonQrete → Run Tasq
 
 ### Tool Window

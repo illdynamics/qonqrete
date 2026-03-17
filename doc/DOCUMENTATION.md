@@ -1,8 +1,8 @@
 # QonQrete Documentation
 
-**Version:** `v1.1.9-stable`
+**Version:** `v1.2.0-stable`
 
-This document is the synced technical reference for the current `v1.1.9-stable` repository snapshot.
+This document is the synced technical reference for the current `v1.2.0-stable` repository snapshot.
 
 ## Table of contents
 - [1. What QonQrete is](#1-what-qonqrete-is)
@@ -45,7 +45,7 @@ The current repo includes:
 ### Documentation
 - `doc/`
 
-Important honesty note: the current codebase still operates as a **repo-local runtime**. The bundled IDE integrations wrap that repo-local runtime; they do not yet implement a centralized shared-engine installer.
+Starting with v1.2.0, both IDE integrations implement a workspace-local deployment model. Users run "Deploy to Workspace" to install the runtime into `.qonqrete/`. The runtime remains script-relative and repo-shaped, deployed locally per workspace.
 
 ## 3. Core execution flows
 
@@ -373,7 +373,7 @@ Implemented helper concepts include:
 
 ## 11. Current limitations
 
-These limitations should be documented honestly for `v1.1.9-stable`:
+These limitations should be documented honestly for `v1.2.0-stable`:
 
 1. **Repo-local workflow remains the active implementation model.**
    The central engine / per-project metadata architecture is a future/product direction, not the current repo behavior.
@@ -396,3 +396,29 @@ These limitations should be documented honestly for `v1.1.9-stable`:
 - [QUICKSTART.md](./QUICKSTART.md)
 - [RELEASE-NOTES.md](./RELEASE-NOTES.md)
 - [TERMINOLOGY.md](./TERMINOLOGY.md)
+
+## 12. Workspace Deployment (v1.2.0)
+
+### Deployment model
+The IDE integrations now support one-click workspace deployment:
+
+1. **Deploy to Workspace** downloads a versioned release zip and extracts it into `<workspace>/.qonqrete/`
+2. The runtime remains fully script-relative — `qonqrete.sh` derives `SCRIPT_DIR` from its own location
+3. User-facing `tasq.md` lives at workspace root; the IDE syncs it into `.qonqrete/worqspace/tasq.md` before runs
+4. Auto-init builds the container image on first run if missing
+5. `.qonqrete/` is automatically added to `.gitignore`
+
+### Command flow
+```text
+Install extension/plugin
+  → Deploy to Workspace
+  → Create tasq.md
+  → Configure Run (optional)
+  → Run Tasq (auto-init if needed, auto-sync tasq)
+```
+
+### Image versioning
+Container images are now tagged with the version:
+- `qonqrete-qage:1.2.0` (primary)
+- `qonqrete-qage:latest` (convenience alias)
+- `qonqrete-qage` (legacy untagged, backward compat)

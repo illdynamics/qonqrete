@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v1.0.4-stable - Container Runtime Auto-Detect (Docker / Podman / MSB)
+# v1.2.0-stable - Container Runtime Auto-Detect + Versioned Images (Docker / Podman / MSB)
 
 set -euo pipefail
 
@@ -15,7 +15,9 @@ else
 fi
 
 VERSION="QonQrete v${QONQ_V}-stable"
-IMAGE_NAME="qonqrete-qage"
+IMAGE_NAME="qonqrete-qage:${QONQ_V}"
+IMAGE_NAME_LATEST="qonqrete-qage:latest"
+IMAGE_NAME_LEGACY="qonqrete-qage"
 WORKSPACE_DIR="${SCRIPT_DIR}/worqspace"
 CONFIG_FILE="${WORKSPACE_DIR}/pipeline_config.yaml"
 CONTAINER_WORKSPACE="/qonq"
@@ -808,6 +810,19 @@ case "$COMMAND" in
         BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V}"
 
         engine_build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
+
+        # Also tag as :latest and legacy untagged name for backward compat
+        case "$CONTAINER_ENGINE" in
+            docker)
+                docker tag "$IMAGE_NAME" "$IMAGE_NAME_LATEST" 2>/dev/null || true
+                docker tag "$IMAGE_NAME" "$IMAGE_NAME_LEGACY" 2>/dev/null || true
+                ;;
+            podman)
+                podman tag "$IMAGE_NAME" "$IMAGE_NAME_LATEST" 2>/dev/null || true
+                podman tag "$IMAGE_NAME" "$IMAGE_NAME_LEGACY" 2>/dev/null || true
+                ;;
+        esac
+        log_qrane "Image tagged: ${IMAGE_NAME}, ${IMAGE_NAME_LATEST}, ${IMAGE_NAME_LEGACY}"
         ;;
 
     clean)

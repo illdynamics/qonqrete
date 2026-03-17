@@ -1,47 +1,33 @@
-# Changelog
+# QonQrete IntelliJ Plugin - Changelog
 
-All notable changes to the QonQrete IntelliJ Plugin.
-
-## [1.1.9] - 2026-03-13 - Production Hardening Pass
-
-### Fixed
-- **Gradle wrapper**: Now ships a VALID gradle-wrapper.jar that actually works from clean checkout
-- **Marker watcher**: Uses daemon thread (proper JVM shutdown, no blocking)
-- **Auto-refresh**: Tool window auto-refreshes when run completes
-- **Status widget**: Now shows version + run state
-- **Resume popup**: Shows timestamps and artifact counts
-- **Config files path**: Fixed double-slash issue for root-level config files
+## 1.2.0 - Workspace Deployment & Hassle-Free Bootstrap
 
 ### Added
-- **CommandBuilder utility**: Centralized command assembly with proper shell escaping
-- **QonQreteValidation utility**: Centralized input validation
-- **ShellEscape utility**: Single source of truth for bash escaping
-- **"Clean All" button**: In tool window for bulk cleanup with confirmation
-- **"Open Tasq" button**: Quick access to tasq.md from tool window
-- **Tooltips**: All config controls have helpful tooltips
-- **Qage timestamps**: Displayed in qage list with artifact counts
-- **Comprehensive tests**: 40+ tests covering actual utility implementations
-- **Disposable**: Tool window panel properly implements Disposable
+- **Deploy to Workspace** action — one-click runtime install into `.qonqrete/`
+- **Create tasq.md** action — starter template at project root
+- **Auto-init** on first Run Tasq (builds container image automatically)
+- **Root tasq.md sync** — user-facing tasq at project root, auto-synced to runtime before runs
+- **.gitignore management** — auto-adds `.qonqrete/` on deploy
+- `.qonqrete/qonqrete.sh` added to path discovery (preferred over legacy paths)
+- Tool window Deploy + Create Tasq buttons
 
 ### Changed
-- **Deterministic repo discovery**: Persists choice when multiple paths found
-- **Structured command building**: No more ad-hoc shell string concatenation
-- **Settings properly used**: All settings actually affect behavior
+- Run Tasq offers Deploy when runtime missing, Create tasq when tasq missing
+- Versioned container image detection (`qonqrete-qage:<version>`)
+- Identical behavior with VS Code extension
 
-## [1.1.8] - 2026-03-13
+### Backward Compatible
+- Legacy paths remain as fallback detection
+- Legacy untagged image still detected
+- Existing worqspace-only workflows continue to work
 
-### Fixed
-- Unix execution now ALWAYS uses verified bash (not system default)
-- Command construction with proper shell escaping
-- autoOpenToolWindowOnRun now works
-- Full artifact browser with per-file click-to-open
-- Repo discovery with ambiguity handling
+## 1.1.9 - Production Hardening
 
-### Added
-- gradle-wrapper.jar for clean builds (was invalid HTML)
-- Comprehensive unit tests (were weak)
-
-## [1.1.7] - 2026-03-13
-
-### Added
-- Initial production-ready release
+- CommandBuilder utility for centralized command assembly
+- QonQreteValidation utility for input validation
+- ShellEscape utility for proper bash escaping
+- Daemon thread marker watcher
+- Auto-refresh on run complete
+- Tool window with qage browser and artifact tree
+- Status bar widget with version display
+- 40+ unit tests
