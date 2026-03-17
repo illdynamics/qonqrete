@@ -508,8 +508,16 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
         val markerPath = createMarkerPath(workingDir)
         currentMarkerPath = markerPath
-        
-        val bashScript = CommandBuilder.buildBashScript(workingDir, command, markerPath.toString(), null, shellInfo.isWindows)
+
+        // SECURE: Write API keys to temp file, source + delete in command (never in scrollback)
+        val envFile = writeTempEnvFile(workingDir)
+        val envPrefix = if (envFile != null) {
+            val envPath = ShellEscape.toUnixPath(envFile.absolutePath, shellInfo.isWindows)
+            "source ${ShellEscape.escape(envPath)} && rm -f ${ShellEscape.escape(envPath)} && "
+        } else ""
+        val fullCommand = "$envPrefix$command"
+
+        val bashScript = CommandBuilder.buildBashScript(workingDir, fullCommand, markerPath.toString(), null, shellInfo.isWindows)
         updateRunStatus(RunStatus(state = RunState.RUNNING, startTime = System.currentTimeMillis(), command = command))
         startMarkerWatch(markerPath)
 
@@ -532,6 +540,46 @@ class QonQreteProjectService(private val project: Project) : Disposable {
                 updateRunStatus(RunStatus(state = RunState.FAILED, error = e.message, endTime = System.currentTimeMillis()))
             }
         }
+    }
+
+    /**
+     * Write stored API keys (from PasswordSafe) to a temporary env file.
+     * Only includes keys NOT already in process environment (env takes precedence).
+     * Returns the file, or null if no keys need injection.
+     */
+    private fun writeTempEnvFile(workingDir: String): java.io.File? {
+        val lines = mutableListOf<String>()
+        val keyMap = mapOf(
+            "OPENAI_API_KEY" to "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY" to "ANTHROPIC_API_KEY",
+            "OPENROUTER_API_KEY" to "OPENROUTER_API_KEY",
+            "GOOGLE_API_KEY" to "GOOGLE_API_KEY",
+            "DEEPSEEK_API_KEY" to "DEEPSEEK_API_KEY",
+            "QWEN_API_KEY" to "QWEN_API_KEY"
+        )
+        for ((envKey, _) in keyMap) {
+            // Skip if already in real environment
+            if (!System.getenv(envKey).isNullOrEmpty()) continue
+            // Gemini equivalence
+            if (envKey == "GOOGLE_API_KEY" && !System.getenv("GEMINI_API_KEY").isNullOrEmpty()) continue
+
+            val stored = sh.qonqrete.intellij.actions.SetAIConfigAction.getApiKey(envKey)
+            if (!stored.isNullOrEmpty()) {
+                val escaped = stored.replace("'", "'\\''")
+                lines.add("export $envKey='$escaped'")
+                if (envKey == "GOOGLE_API_KEY") {
+                    lines.add("export GEMINI_API_KEY='$escaped'")
+                }
+            }
+        }
+        if (lines.isEmpty()) return null
+
+        val envFile = java.io.File(workingDir, ".qonqrete_env_${System.currentTimeMillis()}.tmp")
+        envFile.writeText(lines.joinToString("\n") + "\n")
+        envFile.setReadable(true, true) // owner-only read
+        envFile.setWritable(true, true)
+        envFile.deleteOnExit() // safety net
+        return envFile
     }
 
     private fun startMarkerWatch(markerPath: Path) {
@@ -630,8 +678,15 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         currentMarkerPath = markerPath
         
         val runCommand = CommandBuilder.qonqrete().run(config).build()
+        // SECURE: use temp env file for API keys (never in command text)
+        val envFile = writeTempEnvFile(workingDir)
+        val envPrefix = if (envFile != null) {
+            val envPath = ShellEscape.toUnixPath(envFile.absolutePath, shellInfo.isWindows)
+            "source ${ShellEscape.escape(envPath)} && rm -f ${ShellEscape.escape(envPath)} && "
+        } else ""
+        val fullRunCommand = "$envPrefix$runCommand"
         val restoreCommand = CommandBuilder.buildRestoreCommand(backupPath.absolutePath, worqspaceTasq.absolutePath, hadOriginal, shellInfo.isWindows)
-        val bashScript = CommandBuilder.buildBashScript(workingDir, runCommand, markerPath.toString(), restoreCommand, shellInfo.isWindows)
+        val bashScript = CommandBuilder.buildBashScript(workingDir, fullRunCommand, markerPath.toString(), restoreCommand, shellInfo.isWindows)
 
         updateRunStatus(RunStatus(state = RunState.RUNNING, startTime = System.currentTimeMillis(), command = runCommand))
         startMarkerWatch(markerPath)

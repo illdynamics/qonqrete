@@ -14,6 +14,7 @@ import {
     showFullConfigWizard, 
     showQonstructionNameDialog 
 } from '../ui/configWizard';
+import { promptForMissingApiKeys } from './aiConfig';
 
 /**
  * Save the document if it's dirty
@@ -189,6 +190,14 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
             'Show Terminal'
         ).then(r => { if (r) vscode.commands.executeCommand('workbench.action.terminal.focus'); });
         return;
+    }
+
+    // Check for missing API keys
+    const workingDir = await runner.getQonQreteWorkingDir();
+    if (workingDir) {
+        const configYaml = path.join(workingDir, 'worqspace', 'config.yaml');
+        const keysOk = await promptForMissingApiKeys(configYaml);
+        if (!keysOk) return;
     }
 
     // Show configuration wizard

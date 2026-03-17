@@ -287,6 +287,16 @@ async function finalizeDeploy(
     } else {
         vscode.window.showInformationMessage('QonQrete deployed successfully to .qonqrete/');
     }
+
+    // Prompt for AI configuration
+    const configAI = await vscode.window.showInformationMessage(
+        'Set up AI providers and API keys now?',
+        'Set AI Configuration',
+        'Later'
+    );
+    if (configAI === 'Set AI Configuration') {
+        await vscode.commands.executeCommand('qonqrete.setAIConfig');
+    }
 }
 
 /**

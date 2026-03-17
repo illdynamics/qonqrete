@@ -195,6 +195,18 @@ class DeployToWorkspaceAction : AnAction() {
                                     .getAction("QonQrete.CreateTasq")?.actionPerformed(e)
                             }
                         }
+
+                        // Prompt for AI configuration
+                        val configAI = Messages.showYesNoDialog(
+                            project,
+                            "Set up AI providers and API keys now?",
+                            "QonQrete: AI Configuration",
+                            Messages.getQuestionIcon()
+                        )
+                        if (configAI == Messages.YES) {
+                            com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                                .getAction("QonQrete.SetAIConfig")?.actionPerformed(e)
+                        }
                     }
 
                 } catch (ex: Exception) {

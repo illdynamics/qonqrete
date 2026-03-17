@@ -83,18 +83,18 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   tasqleveler:
     provider: openai
-    model: gpt-5.4-nano
+    model: gpt-5.3-nano
     # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
     enabled: true
-    min_complexity_score: 30  # Below this score, don't enhance
-    min_lines: 50             # Below this line count, don't enhance
+    min_complexity_score: 200  # Below this score, don't enhance
+    min_lines: 200             # Below this line count, don't enhance
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSTRUQTOR - Briq Planning
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
     provider: openai
-    model: gpt-5.4-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-5.3-mini    # $0.10/$0.40 per 1M - cheap & smart enough
 
   calqulator:
     provider: local
@@ -105,14 +105,14 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
     provider: openai
-    model: gpt-5.4-mini           # $1.25/$10.00 per 1M - best for code generation
+    model: gpt-5.3-mini           # $1.25/$10.00 per 1M - best for code generation
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
     provider: openai
-    model: gpt-5.4-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-5.3-mini    # $0.10/$0.40 per 1M - cheap & smart enough
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
     batch_mode: true                 # Group briqs into batches

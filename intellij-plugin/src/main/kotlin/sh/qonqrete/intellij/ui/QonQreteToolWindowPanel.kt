@@ -90,6 +90,9 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private val createTasqButton = JButton("+ Create Tasq").apply {
         toolTipText = "Create a starter tasq.md at project root"
     }
+    private val aiConfigButton = JButton("🤖 AI Config").apply {
+        toolTipText = "Set AI providers, models, and API keys"
+    }
     private val cleanAllButton = JButton("🗑 Clean All").apply {
         toolTipText = "Delete ALL qages (with confirmation)"
     }
@@ -203,6 +206,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         buttonPanel1.add(runButton)
         buttonPanel1.add(deployButton)
         buttonPanel1.add(createTasqButton)
+        buttonPanel1.add(aiConfigButton)
         buttonPanel1.add(initButton)
         buttonPanel1.add(resumeButton)
         buttonPanel1.add(openTasqButton)
@@ -311,6 +315,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         runButton.addActionListener { executeRun() }
         deployButton.addActionListener { executeDeploy() }
         createTasqButton.addActionListener { executeCreateTasq() }
+        aiConfigButton.addActionListener { executeAIConfig() }
         initButton.addActionListener { executeInit() }
         resumeButton.addActionListener { executeResume() }
         cleanButton.addActionListener { executeClean() }
@@ -394,6 +399,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         openTasqButton.isEnabled = hasQonqrete && hasTasq
         deployButton.isEnabled = !isRunning
         createTasqButton.isEnabled = !isRunning
+        aiConfigButton.isEnabled = hasQonqrete && !isRunning
         refreshButton.isEnabled = !isRunning
         runButton.text = if (isRunning) "⏳ Running..." else "▶ Run Tasq"
     }
@@ -544,6 +550,21 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private fun executeCreateTasq() {
         com.intellij.openapi.actionSystem.ActionManager.getInstance()
             .getAction("QonQrete.CreateTasq")?.actionPerformed(
+                com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
+                    "QonQrete", null,
+                    com.intellij.openapi.actionSystem.DataContext { dataId ->
+                        when {
+                            com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                            else -> null
+                        }
+                    }
+                )
+            )
+    }
+
+    private fun executeAIConfig() {
+        com.intellij.openapi.actionSystem.ActionManager.getInstance()
+            .getAction("QonQrete.SetAIConfig")?.actionPerformed(
                 com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
                     "QonQrete", null,
                     com.intellij.openapi.actionSystem.DataContext { dataId ->

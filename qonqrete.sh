@@ -687,6 +687,7 @@ build_api_env_vars() {
     if [ -n "${ANTHROPIC_API_KEY-}" ]; then env_vars="$env_vars -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"; fi
     if [ -n "${DEEPSEEK_API_KEY-}" ]; then env_vars="$env_vars -e DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}"; fi
     if [ -n "${QWEN_API_KEY-}" ]; then env_vars="$env_vars -e QWEN_API_KEY=${QWEN_API_KEY}"; fi
+    if [ -n "${OPENROUTER_API_KEY-}" ]; then env_vars="$env_vars -e OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"; fi
     echo "$env_vars"
 }
 
