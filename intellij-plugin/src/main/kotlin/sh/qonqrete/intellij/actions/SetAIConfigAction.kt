@@ -141,23 +141,27 @@ class SetAIConfigAction : AnAction() {
                 val lines = file.readLines()
                 var currentAgent: String? = null
                 for (line in lines) {
+                    // Detect any 2-space-indented section header (e.g. "  instruqtor:", "  calqulator:")
                     val agentMatch = Regex("^\\s{2}(\\w+):\\s*$").find(line)
-                    if (agentMatch != null && agentMatch.groupValues[1] in AI_AGENTS) {
-                        currentAgent = agentMatch.groupValues[1]
+                    if (agentMatch != null) {
+                        val name = agentMatch.groupValues[1]
+                        // Only track AI agents we care about; clear for everything else
+                        currentAgent = if (name in AI_AGENTS) name else null
                         continue
                     }
-                    if (currentAgent != null && currentAgent in AI_AGENTS) {
+                    if (currentAgent != null) {
                         val provMatch = Regex("^\\s{4}provider:\\s*(\\S+)").find(line)
                         if (provMatch != null) {
-                            defaults[currentAgent] = defaults[currentAgent]!!.copy(first = provMatch.groupValues[1])
+                            defaults[currentAgent!!] = defaults[currentAgent!!]!!.copy(first = provMatch.groupValues[1])
                             continue
                         }
                         val modelMatch = Regex("^\\s{4}model:\\s*(\\S+)").find(line)
                         if (modelMatch != null) {
-                            defaults[currentAgent] = defaults[currentAgent]!!.copy(second = modelMatch.groupValues[1])
+                            defaults[currentAgent!!] = defaults[currentAgent!!]!!.copy(second = modelMatch.groupValues[1])
                             continue
                         }
-                        if (Regex("^\\s{0,2}\\S").matches(line)) currentAgent = null
+                        // Exit section on top-level or agents-level key
+                        if (Regex("^\\s{0,2}\\S").containsMatchIn(line)) currentAgent = null
                     }
                 }
             } catch (_: Exception) {}
@@ -173,17 +177,21 @@ class SetAIConfigAction : AnAction() {
                 var providerSet = false
                 var modelSet = false
                 for (i in lines.indices) {
-                    if (Regex("^\\s{2}$agent:\\s*$").matches(lines[i])) {
+                    if (Regex("^\\s{2}$agent:\\s*$").containsMatchIn(lines[i])) {
                         inAgent = true; providerSet = false; modelSet = false; continue
                     }
+                    // Exit agent on any other 2-space section header
+                    if (inAgent && Regex("^\\s{2}\\w+:\\s*$").containsMatchIn(lines[i])) {
+                        inAgent = false
+                    }
                     if (inAgent) {
-                        if (!providerSet && Regex("^\\s{4}provider:\\s*\\S+").matches(lines[i])) {
+                        if (!providerSet && Regex("^\\s{4}provider:\\s*\\S+").containsMatchIn(lines[i])) {
                             lines[i] = "    provider: $provider"; providerSet = true; continue
                         }
-                        if (!modelSet && Regex("^\\s{4}model:\\s*\\S+").matches(lines[i])) {
+                        if (!modelSet && Regex("^\\s{4}model:\\s*\\S+").containsMatchIn(lines[i])) {
                             lines[i] = "    model: $model"; modelSet = true; continue
                         }
-                        if (Regex("^\\s{0,2}\\S").matches(lines[i])) inAgent = false
+                        if (Regex("^\\s{0,2}\\S").containsMatchIn(lines[i])) inAgent = false
                     }
                 }
                 file.writeText(lines.joinToString("\n"))
