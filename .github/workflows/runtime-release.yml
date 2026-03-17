@@ -1,0 +1,61 @@
+name: Build Runtime Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  runtime-zip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Runtime version: $VERSION"
+
+      - name: Package runtime zip
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          STAGING="qonqrete-v${VERSION}-stable"
+
+          mkdir -p "$STAGING"
+
+          # Copy runtime files (everything except IDE projects, CI, and dev-only files)
+          cp -r qonqrete.sh VERSION Dockerfile entrypoint.sh Sandboxfile \
+                requirements.txt LICENSE COPYRIGHT README.md \
+                qonqrete.jpg \
+                qrane/ worqer/ worqspace/ doc/ \
+                "$STAGING/"
+
+          # Build the zip
+          zip -r "qonqrete-v${VERSION}-stable.zip" "$STAGING/" \
+            -x "*/.DS_Store" "*/__MACOSX/*" "*/__pycache__/*"
+
+          ls -lh "qonqrete-v${VERSION}-stable.zip"
+          sha256sum "qonqrete-v${VERSION}-stable.zip" > "qonqrete-v${VERSION}-stable-SHA256.txt"
+          cat "qonqrete-v${VERSION}-stable-SHA256.txt"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qonqrete-runtime-${{ steps.version.outputs.version }}
+          path: qonqrete-v*-stable.zip
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            qonqrete-v*-stable.zip
+            qonqrete-v*-stable-SHA256.txt
+          generate_release_notes: true

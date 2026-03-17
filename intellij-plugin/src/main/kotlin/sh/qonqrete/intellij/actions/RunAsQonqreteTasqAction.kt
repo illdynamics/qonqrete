@@ -3,7 +3,7 @@
  * Execute a non-canonical markdown file as a temporary tasq
  *
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -53,13 +53,20 @@ class RunAsQonqreteTasqAction : AnAction() {
             return
         }
 
-        // Check if QonQrete is available
+        // Check if QonQrete is available — offer deploy if not
         if (service.getQonQretePath() == null) {
-            Messages.showErrorDialog(
+            val choice = Messages.showDialog(
                 project,
-                "Could not find qonqrete.sh in this project.\n\nMake sure you have opened a QonQrete workspace.",
-                "QonQrete Not Found"
+                "QonQrete runtime not found in this project.",
+                "QonQrete Not Found",
+                arrayOf("Deploy to Workspace", "Cancel"),
+                0,
+                Messages.getQuestionIcon()
             )
+            if (choice == 0) {
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                    .getAction("QonQrete.DeployToWorkspace")?.actionPerformed(e)
+            }
             return
         }
 
@@ -69,12 +76,31 @@ class RunAsQonqreteTasqAction : AnAction() {
         val confirm = Messages.showYesNoDialog(
             project,
             "Run '${virtualFile.name}' as a QonQrete tasq?\n\n" +
-            "This will temporarily replace worqspace/tasq.md and restore it after the run.",
+            "This will temporarily replace the internal tasq.md and restore it after the run.",
             "Run as QonQrete Tasq",
             Messages.getQuestionIcon()
         )
 
         if (confirm != Messages.YES) {
+            return
+        }
+
+        // Auto-init if image is missing
+        val initStatus = service.isInitialized()
+        if (!initStatus.hasImage && initStatus.hasDockerfile) {
+            val initChoice = Messages.showYesNoDialog(
+                project,
+                "Container image not built yet. Build it now?\n\nThis may take a few minutes.",
+                "QonQrete: Init Required",
+                Messages.getQuestionIcon()
+            )
+            if (initChoice != Messages.YES) return
+            try {
+                service.init()
+                service.notify("QonQrete", "Building container image... Run again when init completes.", com.intellij.notification.NotificationType.INFORMATION)
+            } catch (ex: Exception) {
+                service.notify("QonQrete Error", "Init failed: ${ex.message}", com.intellij.notification.NotificationType.ERROR)
+            }
             return
         }
 

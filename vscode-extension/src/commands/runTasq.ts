@@ -2,7 +2,7 @@
  * QonQrete Run Tasq Commands
  * 
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -124,37 +124,33 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
         return executeRunSpecificTasq(fileUri);
     }
 
-    // No file specified - run canonical worqspace/tasq.md
+    // Check if runtime is deployed
     const scriptPath = await runner.getQonQretePath();
     if (!scriptPath) {
-        const result = await vscode.window.showErrorMessage(
-            'QonQrete script (qonqrete.sh) not found.',
+        const result = await vscode.window.showWarningMessage(
+            'QonQrete runtime not found in this workspace.',
+            'Deploy to Workspace',
             'Configure Path',
-            'Init Workspace'
+            'Cancel'
         );
-
-        if (result === 'Configure Path') {
+        if (result === 'Deploy to Workspace') {
+            await vscode.commands.executeCommand('qonqrete.deployToWorkspace');
+        } else if (result === 'Configure Path') {
             await vscode.commands.executeCommand('workbench.action.openSettings', 'qonqrete.qonqretePath');
-        } else if (result === 'Init Workspace') {
-            await vscode.commands.executeCommand('qonqrete.initWorkspace');
         }
         return;
     }
 
-    // Check if tasq.md exists
+    // Check if tasq.md exists (workspace root or internal)
     const hasTasq = await runner.hasTasqFile();
     if (!hasTasq) {
         const result = await vscode.window.showWarningMessage(
-            'No tasq.md found in worqspace. Please create one first.',
-            'Open worqspace folder'
+            'No tasq.md found. Create one to define your build task.',
+            'Create tasq.md',
+            'Cancel'
         );
-        
-        if (result === 'Open worqspace folder') {
-            const workingDir = await runner.getQonQreteWorkingDir();
-            if (workingDir) {
-                const worqspacePath = path.join(workingDir, 'worqspace');
-                await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(worqspacePath));
-            }
+        if (result === 'Create tasq.md') {
+            await vscode.commands.executeCommand('qonqrete.createTasq');
         }
         return;
     }
@@ -165,6 +161,34 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
         if (!await saveDocumentIfNeeded(vscode.Uri.file(tasqPath))) {
             return;
         }
+    }
+
+    // Sync workspace-root tasq.md into internal runtime location
+    await runner.syncRootTasqToInternal();
+
+    // Auto-init if image is missing
+    const initStatus = await runner.isInitialized();
+    if (!initStatus.hasImage) {
+        const initChoice = await vscode.window.showInformationMessage(
+            'Container image not built yet. Build it now? (This may take a few minutes)',
+            'Build & Run',
+            'Cancel'
+        );
+        if (initChoice !== 'Build & Run') return;
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'QonQrete: Building container image...',
+            cancellable: false,
+        }, async () => {
+            await runner.init();
+        });
+
+        vscode.window.showInformationMessage(
+            'Container image building in terminal. Run Tasq again when init completes.',
+            'Show Terminal'
+        ).then(r => { if (r) vscode.commands.executeCommand('workbench.action.terminal.focus'); });
+        return;
     }
 
     // Show configuration wizard
@@ -185,7 +209,7 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
 
     try {
         await runner.run(config);
-        
+
         vscode.window.showInformationMessage(
             'QonQrete run started. Check the terminal for output.',
             'Show Terminal'
@@ -293,11 +317,36 @@ export async function executeRunAsQonqreteTasq(fileUri?: vscode.Uri): Promise<vo
         return;
     }
 
-    // Check if qonqrete.sh exists
+    // Check if qonqrete.sh exists — offer deploy if not
     const folder = runner.getWorkspaceFolderForFile(filePath);
     const scriptPath = await runner.getQonQretePath(folder);
     if (!scriptPath) {
-        vscode.window.showErrorMessage('QonQrete script not found in workspace.');
+        const deployChoice = await vscode.window.showWarningMessage(
+            'QonQrete runtime not found in this workspace.',
+            'Deploy to Workspace',
+            'Cancel'
+        );
+        if (deployChoice === 'Deploy to Workspace') {
+            await vscode.commands.executeCommand('qonqrete.deployToWorkspace');
+        }
+        return;
+    }
+
+    // Auto-init if image is missing
+    const initStatus = await runner.isInitialized(folder);
+    if (!initStatus.hasImage) {
+        const initChoice = await vscode.window.showInformationMessage(
+            'Container image not built yet. Build it now? (This may take a few minutes)',
+            'Build & Run',
+            'Cancel'
+        );
+        if (initChoice !== 'Build & Run') return;
+
+        await runner.init(folder);
+        vscode.window.showInformationMessage(
+            'Container image building in terminal. Run again when init completes.',
+            'Show Terminal'
+        ).then(r => { if (r) vscode.commands.executeCommand('workbench.action.terminal.focus'); });
         return;
     }
 
@@ -396,7 +445,7 @@ export function registerRunTasqCommands(context: vscode.ExtensionContext): vscod
             const hasTasq = await runner.hasTasqFile();
             if (!hasTasq) {
                 const result = await vscode.window.showWarningMessage(
-                    'No tasq.md found in worqspace. Create one or use "Run as QonQrete Tasq" on a markdown file.',
+                    'No tasq.md found. Create one at the workspace root or use "Run as QonQrete Tasq" on a markdown file.',
                     'Create tasq.md',
                     'Cancel'
                 );

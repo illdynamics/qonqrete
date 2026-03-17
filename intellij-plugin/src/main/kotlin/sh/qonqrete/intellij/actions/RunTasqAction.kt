@@ -1,9 +1,9 @@
 /**
  * Run Tasq Action
- * Execute QonQrete with canonical worqspace/tasq.md
+ * Execute QonQrete with tasq.md (synced from workspace root)
  *
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -51,28 +51,66 @@ class RunTasqAction : AnAction() {
             return
         }
 
-        // Check if QonQrete is available
+        // Check if QonQrete is available - offer deploy if not
         if (service.getQonQretePath() == null) {
-            Messages.showErrorDialog(
+            val choice = Messages.showDialog(
                 project,
-                "Could not find qonqrete.sh in this project.\n\nMake sure you have opened a QonQrete workspace.",
-                "QonQrete Not Found"
+                "QonQrete runtime not found in this project.",
+                "QonQrete Not Found",
+                arrayOf("Deploy to Workspace", "Configure Path", "Cancel"),
+                0,
+                Messages.getQuestionIcon()
             )
+            when (choice) {
+                0 -> com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                    .getAction("QonQrete.DeployToWorkspace")?.actionPerformed(e)
+                1 -> com.intellij.openapi.options.ShowSettingsUtil.getInstance()
+                    .showSettingsDialog(project, "QonQrete")
+            }
             return
         }
 
-        // Check if tasq.md exists
+        // Check if tasq.md exists - offer create if not
         if (!service.hasTasqFile()) {
-            Messages.showErrorDialog(
+            val choice = Messages.showDialog(
                 project,
-                "No tasq.md found in worqspace/.\n\nCreate a tasq.md file to define your build task.",
-                "QonQrete: No Tasq File"
+                "No tasq.md found. Create one to define your build task.",
+                "QonQrete: No Tasq File",
+                arrayOf("Create tasq.md", "Cancel"),
+                0,
+                Messages.getQuestionIcon()
             )
+            if (choice == 0) {
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                    .getAction("QonQrete.CreateTasq")?.actionPerformed(e)
+            }
             return
         }
 
         // Save all documents before running
         FileDocumentManager.getInstance().saveAllDocuments()
+
+        // Sync workspace-root tasq.md into internal runtime location
+        service.syncRootTasqToInternal()
+
+        // Auto-init if image is missing
+        val initStatus = service.isInitialized()
+        if (!initStatus.hasImage && initStatus.hasDockerfile) {
+            val choice = Messages.showYesNoDialog(
+                project,
+                "Container image not built yet. Build it now?\n\nThis may take a few minutes.",
+                "QonQrete: Init Required",
+                Messages.getQuestionIcon()
+            )
+            if (choice != Messages.YES) return
+            try {
+                service.init()
+                service.notify("QonQrete", "Building container image... Run Tasq again when init completes.", NotificationType.INFORMATION)
+            } catch (ex: Exception) {
+                service.notify("QonQrete Error", "Init failed: ${ex.message}", NotificationType.ERROR)
+            }
+            return
+        }
 
         // Get configuration
         val config = promptForConfig(project, service) ?: return

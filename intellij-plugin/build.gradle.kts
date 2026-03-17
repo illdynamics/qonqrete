@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "sh.qonqrete"
-version = "1.1.9"
+version = "1.2.0"
 
 repositories {
     mavenCentral()
@@ -54,21 +54,17 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
-            <h2>1.1.9 - Production Hardening Pass</h2>
+            <h2>1.2.0 - Workspace Deployment &amp; Hassle-Free Bootstrap</h2>
             <ul>
-                <li><b>Fixed:</b> Gradle wrapper now ships VALID jar (builds from clean checkout)</li>
-                <li><b>Fixed:</b> Marker watcher uses daemon thread (proper JVM shutdown)</li>
-                <li><b>Fixed:</b> Auto-refresh when run completes</li>
-                <li><b>Fixed:</b> Status widget shows version + state</li>
-                <li><b>Fixed:</b> Resume popup shows timestamps and artifact counts</li>
-                <li><b>Added:</b> CommandBuilder utility for centralized command assembly</li>
-                <li><b>Added:</b> QonQreteValidation utility for input validation</li>
-                <li><b>Added:</b> ShellEscape utility for proper bash escaping</li>
-                <li><b>Added:</b> "Clean All" button in tool window</li>
-                <li><b>Added:</b> "Open Tasq" button for quick editing</li>
-                <li><b>Added:</b> Tooltips on all config controls</li>
-                <li><b>Added:</b> Qage timestamps in list display</li>
-                <li><b>Added:</b> 40+ comprehensive unit tests</li>
+                <li><b>NEW:</b> "Deploy to Workspace" — one-click runtime install into any project (.qonqrete/)</li>
+                <li><b>NEW:</b> "Create tasq.md" — starter template at project root</li>
+                <li><b>NEW:</b> Auto-init on first run (builds container image automatically)</li>
+                <li><b>NEW:</b> Root tasq.md sync — user-facing tasq at project root, auto-synced to runtime</li>
+                <li><b>NEW:</b> .gitignore management — auto-adds .qonqrete/ on deploy</li>
+                <li><b>NEW:</b> Versioned container images (qonqrete-qage:1.2.0)</li>
+                <li><b>Improved:</b> Path discovery now checks .qonqrete/ first</li>
+                <li><b>Improved:</b> Deploy-first UX flow when runtime not found</li>
+                <li><b>Improved:</b> Identical behavior with VS Code extension</li>
             </ul>
         """.trimIndent())
     }

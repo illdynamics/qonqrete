@@ -3,7 +3,7 @@
  * Creates the main tool window
  *
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 

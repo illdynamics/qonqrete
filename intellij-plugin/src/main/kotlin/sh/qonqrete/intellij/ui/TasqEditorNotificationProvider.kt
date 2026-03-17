@@ -2,8 +2,11 @@
  * Tasq Editor Notification Provider
  * Shows banner for tasq.md files with run action
  *
+ * v1.2.0: Canonical tasq is now <project>/tasq.md (workspace root),
+ * NOT the internal .qonqrete/worqspace/tasq.md
+ *
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -26,40 +29,26 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
         project: Project,
         file: VirtualFile
     ): Function<in FileEditor, out JComponent?>? {
-        // Only show for .md files
-        if (file.extension?.lowercase() != "md") {
-            return null
-        }
+        if (file.extension?.lowercase() != "md") return null
 
         val service = QonQreteProjectService.getInstance(project)
-        
-        // Check if QonQrete is available in this project
-        val qonqretePath = service.getQonQretePath() ?: return null
-        val workingDir = File(qonqretePath).parent
-        val canonicalTasqPath = "$workingDir/worqspace/tasq.md"
+        service.getQonQretePath() ?: return null
+        val basePath = project.basePath ?: return null
 
-        // Check if this is the canonical tasq.md
-        val isCanonicalTasq = try {
-            File(file.path).canonicalPath == File(canonicalTasqPath).canonicalPath
-        } catch (_: Exception) {
-            false
-        }
+        // Canonical tasq is the ROOT tasq.md
+        val rootTasqPath = "$basePath/tasq.md"
+        val isRootTasq = try {
+            File(file.path).canonicalPath == File(rootTasqPath).canonicalPath
+        } catch (_: Exception) { false }
 
-        // Check if this is any tasq.md in the worqspace
-        val isInWorqspace = file.path.contains("worqspace")
-        val isTasqMd = file.name == "tasq.md"
+        val isInternalTasq = file.path.contains(".qonqrete") && file.path.contains("worqspace") && file.name == "tasq.md"
+        val isOtherWorqspaceTasq = !isRootTasq && !isInternalTasq && file.name == "tasq.md" && file.path.contains("worqspace")
 
         return when {
-            isCanonicalTasq -> Function { editor ->
-                createCanonicalTasqPanel(project, service, editor)
-            }
-            isTasqMd && isInWorqspace -> Function { editor ->
-                createNonCanonicalTasqPanel(project, service, file, editor)
-            }
-            file.extension?.lowercase() == "md" && service.getQonQretePath() != null -> Function { editor ->
-                createMarkdownPanel(project, service, file, editor)
-            }
-            else -> null
+            isRootTasq -> Function { editor -> createCanonicalTasqPanel(project, service, editor) }
+            isInternalTasq -> Function { editor -> createInternalTasqPanel(project, editor, rootTasqPath) }
+            isOtherWorqspaceTasq -> Function { editor -> createNonCanonicalTasqPanel(project, editor, rootTasqPath) }
+            else -> Function { editor -> createMarkdownPanel(project, service, file, editor) }
         }
     }
 
@@ -69,35 +58,25 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
         editor: FileEditor
     ): EditorNotificationPanel {
         val panel = EditorNotificationPanel(editor, EditorNotificationPanel.Status.Info)
-        panel.text = "QonQrete canonical tasq.md"
+        panel.text = "QonQrete tasq.md \u2014 edit your task here"
 
         val (canRun, _, state) = service.canExecute()
         val isRunning = service.getRunStatus().state == RunState.RUNNING
 
         when {
-            state == ShellState.VERIFYING -> {
-                panel.text = "QonQrete: Verifying shell..."
-            }
-            state == ShellState.NO_BASH -> {
-                panel.text = "QonQrete: No bash shell available"
-            }
+            state == ShellState.VERIFYING -> panel.text = "QonQrete: Verifying shell..."
+            state == ShellState.NO_BASH -> panel.text = "QonQrete: No bash shell available"
             state == ShellState.SHELL_ERROR -> {
                 panel.text = "QonQrete: Shell error"
-                panel.createActionLabel("Retry") {
-                    service.reverifyShell()
-                }
+                panel.createActionLabel("Retry") { service.reverifyShell() }
             }
-            isRunning -> {
-                panel.text = "QonQrete: Running..."
-            }
+            isRunning -> panel.text = "QonQrete: Running..."
             canRun -> {
                 panel.createActionLabel("Run Tasq") {
                     com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                        .getAction("QonQrete.RunTasq")
-                        ?.actionPerformed(
+                        .getAction("QonQrete.RunTasq")?.actionPerformed(
                             com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
-                                "QonQrete",
-                                null,
+                                "QonQrete", null,
                                 com.intellij.openapi.actionSystem.DataContext { dataId ->
                                     when {
                                         com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
@@ -109,31 +88,55 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
                 }
             }
         }
+        return panel
+    }
 
+    private fun createInternalTasqPanel(
+        project: Project,
+        editor: FileEditor,
+        rootTasqPath: String
+    ): EditorNotificationPanel {
+        val panel = EditorNotificationPanel(editor, EditorNotificationPanel.Status.Warning)
+        panel.text = "This is the internal runtime copy \u2014 edit the root tasq.md instead"
+
+        if (File(rootTasqPath).exists()) {
+            panel.createActionLabel("Open root tasq.md") {
+                val vf = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(rootTasqPath)
+                if (vf != null) com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(vf, true)
+            }
+        } else {
+            panel.createActionLabel("Create root tasq.md") {
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                    .getAction("QonQrete.CreateTasq")?.actionPerformed(
+                        com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
+                            "QonQrete", null,
+                            com.intellij.openapi.actionSystem.DataContext { dataId ->
+                                when {
+                                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                                    else -> null
+                                }
+                            }
+                        )
+                    )
+            }
+        }
         return panel
     }
 
     private fun createNonCanonicalTasqPanel(
         project: Project,
-        service: QonQreteProjectService,
-        file: VirtualFile,
-        editor: FileEditor
+        editor: FileEditor,
+        rootTasqPath: String
     ): EditorNotificationPanel {
         val panel = EditorNotificationPanel(editor, EditorNotificationPanel.Status.Warning)
-        panel.text = "This is not the canonical worqspace/tasq.md"
+        panel.text = "This is not the project root tasq.md"
 
-        val canonicalPath = service.getTasqPath()
-        if (canonicalPath != null) {
-            panel.createActionLabel("Open canonical tasq.md") {
-                val vf = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-                    .refreshAndFindFileByPath(canonicalPath)
-                if (vf != null) {
-                    com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
-                        .openFile(vf, true)
-                }
+        if (File(rootTasqPath).exists()) {
+            panel.createActionLabel("Open root tasq.md") {
+                val vf = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(rootTasqPath)
+                if (vf != null) com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(vf, true)
             }
         }
-
         return panel
     }
 
@@ -143,23 +146,17 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
         file: VirtualFile,
         editor: FileEditor
     ): EditorNotificationPanel? {
-        // Only show for markdown files in QonQrete projects
-        val (canRun, _, state) = service.canExecute()
+        val (canRun, _, _) = service.canExecute()
         val isRunning = service.getRunStatus().state == RunState.RUNNING
-
-        if (!canRun || isRunning) {
-            return null
-        }
+        if (!canRun || isRunning) return null
 
         val panel = EditorNotificationPanel(editor, EditorNotificationPanel.Status.Info)
-        panel.text = "QonQrete workspace detected"
+        panel.text = "QonQrete project detected"
         panel.createActionLabel("Run as QonQrete Tasq") {
             com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                .getAction("QonQrete.RunAsQonqreteTasq")
-                ?.actionPerformed(
+                .getAction("QonQrete.RunAsQonqreteTasq")?.actionPerformed(
                     com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
-                        "QonQrete",
-                        null,
+                        "QonQrete", null,
                         com.intellij.openapi.actionSystem.DataContext { dataId ->
                             when {
                                 com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
@@ -170,7 +167,6 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
                     )
                 )
         }
-
         return panel
     }
 }

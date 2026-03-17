@@ -3,7 +3,7 @@
  * Handles execution of qonqrete.sh commands
  * 
  * @author WoNQ
- * @version 1.1.9
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -402,7 +402,11 @@ export class QonQreteRunner {
 
     private async findQonQreteInFolder(folderPath: string): Promise<string | undefined> {
         const possiblePaths = [
+            // NEW: .qonqrete workspace-local deployment (preferred)
+            path.join(folderPath, '.qonqrete', 'qonqrete.sh'),
+            // Legacy: root-level
             path.join(folderPath, 'qonqrete.sh'),
+            // Legacy: subdirectory
             path.join(folderPath, 'qonqrete', 'qonqrete.sh'),
         ];
 
@@ -436,14 +440,94 @@ export class QonQreteRunner {
     }
 
     public async hasTasqFile(preferredFolder?: vscode.WorkspaceFolder): Promise<boolean> {
+        // Check workspace root first (new canonical location)
+        const rootTasq = await this.getRootTasqPath(preferredFolder);
+        if (rootTasq && fs.existsSync(rootTasq)) return true;
+        // Fallback: internal worqspace tasq
         const workingDir = await this.getQonQreteWorkingDir(preferredFolder);
         if (!workingDir) return false;
         return fs.existsSync(path.join(workingDir, 'worqspace', 'tasq.md'));
     }
 
     public async getTasqPath(preferredFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
+        // Prefer workspace root tasq.md
+        const rootTasq = await this.getRootTasqPath(preferredFolder);
+        if (rootTasq && fs.existsSync(rootTasq)) return rootTasq;
+        // Fallback: internal worqspace tasq
         const workingDir = await this.getQonQreteWorkingDir(preferredFolder);
         return workingDir ? path.join(workingDir, 'worqspace', 'tasq.md') : undefined;
+    }
+
+    /**
+     * Get the workspace-root tasq.md path (new v1.2.0 canonical location)
+     */
+    public async getRootTasqPath(preferredFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
+        const wsFolder = preferredFolder || vscode.workspace.workspaceFolders?.[0];
+        if (!wsFolder) return undefined;
+        return path.join(wsFolder.uri.fsPath, 'tasq.md');
+    }
+
+    /**
+     * Get the internal worqspace tasq path (.qonqrete/worqspace/tasq.md)
+     */
+    public async getInternalTasqPath(preferredFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
+        const workingDir = await this.getQonQreteWorkingDir(preferredFolder);
+        return workingDir ? path.join(workingDir, 'worqspace', 'tasq.md') : undefined;
+    }
+
+    /**
+     * Check if .qonqrete runtime is deployed in the workspace
+     */
+    public async isDeployed(preferredFolder?: vscode.WorkspaceFolder): Promise<boolean> {
+        const wsFolder = preferredFolder || vscode.workspace.workspaceFolders?.[0];
+        if (!wsFolder) return false;
+        return fs.existsSync(path.join(wsFolder.uri.fsPath, '.qonqrete', 'qonqrete.sh'));
+    }
+
+    /**
+     * Sync workspace-root tasq.md into internal .qonqrete/worqspace/tasq.md before run
+     */
+    public async syncRootTasqToInternal(preferredFolder?: vscode.WorkspaceFolder): Promise<boolean> {
+        const rootTasq = await this.getRootTasqPath(preferredFolder);
+        const internalTasq = await this.getInternalTasqPath(preferredFolder);
+        if (!rootTasq || !internalTasq) return false;
+        if (!fs.existsSync(rootTasq)) return false;
+        try {
+            const worqspaceDir = path.dirname(internalTasq);
+            if (!fs.existsSync(worqspaceDir)) {
+                fs.mkdirSync(worqspaceDir, { recursive: true });
+            }
+            fs.copyFileSync(rootTasq, internalTasq);
+            this.outputChannel.appendLine(`[QonQrete] Synced tasq.md → .qonqrete/worqspace/tasq.md`);
+            return true;
+        } catch (err) {
+            this.outputChannel.appendLine(`[QonQrete] Failed to sync tasq: ${err}`);
+            return false;
+        }
+    }
+
+    /**
+     * Ensure .qonqrete/ is in .gitignore
+     */
+    public async ensureGitignore(preferredFolder?: vscode.WorkspaceFolder): Promise<void> {
+        const wsFolder = preferredFolder || vscode.workspace.workspaceFolders?.[0];
+        if (!wsFolder) return;
+        const gitignorePath = path.join(wsFolder.uri.fsPath, '.gitignore');
+        const entry = '.qonqrete/';
+        try {
+            if (fs.existsSync(gitignorePath)) {
+                const content = fs.readFileSync(gitignorePath, 'utf8');
+                if (!content.split('\n').some(line => line.trim() === entry || line.trim() === '.qonqrete')) {
+                    fs.appendFileSync(gitignorePath, `\n# QonQrete runtime\n${entry}\n`);
+                    this.outputChannel.appendLine('[QonQrete] Added .qonqrete/ to .gitignore');
+                }
+            } else {
+                fs.writeFileSync(gitignorePath, `# QonQrete runtime\n${entry}\n`);
+                this.outputChannel.appendLine('[QonQrete] Created .gitignore with .qonqrete/');
+            }
+        } catch (err) {
+            this.outputChannel.appendLine(`[QonQrete] Warning: Could not update .gitignore: ${err}`);
+        }
     }
 
     public async isInitialized(preferredFolder?: vscode.WorkspaceFolder): Promise<{
@@ -463,8 +547,19 @@ export class QonQreteRunner {
             return { hasDockerfile: false, hasImage: false, engine: null };
         }
 
-        const imageCheck = await this.checkImageExists('qonqrete-qage');
-        return { hasDockerfile: true, ...imageCheck };
+        // Check versioned image first, then legacy untagged
+        const version = await this.getVersion(preferredFolder);
+        const imageNames = [
+            version ? `qonqrete-qage:${version}` : null,
+            'qonqrete-qage:latest',
+            'qonqrete-qage',
+        ].filter(Boolean) as string[];
+
+        for (const imageName of imageNames) {
+            const imageCheck = await this.checkImageExists(imageName);
+            if (imageCheck.hasImage) return { hasDockerfile: true, ...imageCheck };
+        }
+        return { hasDockerfile: true, hasImage: false, engine: null };
     }
 
     private async checkImageExists(imageName: string): Promise<{ hasImage: boolean; engine: string | null }> {
