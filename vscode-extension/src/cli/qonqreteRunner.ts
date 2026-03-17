@@ -364,6 +364,16 @@ export class QonQreteRunner {
             .replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`);
     }
 
+    /**
+     * Build a SAFE environment map for terminal injection.
+     * Uses secure secret storage — never exposes keys in commands/logs.
+     * Returns a promise since secret retrieval is async.
+     */
+    public async buildSecureEnvMap(): Promise<Record<string, string>> {
+        const { buildSecureEnvMap } = require('../secrets');
+        return await buildSecureEnvMap();
+    }
+
     public async getQonQretePath(preferredFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
         const config = vscode.workspace.getConfiguration('qonqrete');
         const customPath = config.get<string>('qonqretePath');
@@ -597,7 +607,14 @@ export class QonQreteRunner {
         });
     }
 
-    private getOrCreateTerminal(): vscode.Terminal {
+    private getOrCreateTerminal(envMap?: Record<string, string>): vscode.Terminal {
+        // If env map provided, always create fresh terminal (env is set at creation time)
+        if (envMap && Object.keys(envMap).length > 0) {
+            this.terminal?.dispose();
+            this.terminal = undefined;
+            this.terminalCloseListener?.dispose();
+        }
+
         if (this.terminal) {
             const existingTerminals = vscode.window.terminals;
             if (!existingTerminals.some(t => t.name === this.terminalName)) {
@@ -614,6 +631,12 @@ export class QonQreteRunner {
 
             if (this.shellInfo.hasBash) {
                 terminalOptions.shellPath = this.shellInfo.shellPath;
+            }
+
+            // SECURE: inject API keys via terminal env (never in command text)
+            if (envMap && Object.keys(envMap).length > 0) {
+                terminalOptions.env = envMap;
+                this.outputChannel.appendLine(`[QonQrete] API keys injected via secure terminal env (${Object.keys(envMap).length} keys)`);
             }
 
             this.terminal = vscode.window.createTerminal(terminalOptions);
@@ -784,7 +807,7 @@ export class QonQreteRunner {
         const markerPath = this.createMarkerPath(workingDir);
         const unixMarkerPath = this.toUnixPath(markerPath);
         const unixWorkingDir = this.toUnixPath(workingDir);
-
+        // SECURE: no secrets in command text
         const fullCommand = `cd ${this.escapeShellArg(unixWorkingDir)} && ${qonqreteCommand}; _qexit=$?; echo $_qexit > ${this.escapeShellArg(unixMarkerPath)}; echo "[QonQrete exit code: $_qexit]"`;
 
         this.updateRunStatus({
@@ -798,7 +821,9 @@ export class QonQreteRunner {
 
         this.watchMarkerFile(markerPath);
 
-        const terminal = this.getOrCreateTerminal();
+        // Build secure env map and inject via terminal env (never in command text)
+        const secureEnv = await this.buildSecureEnvMap();
+        const terminal = this.getOrCreateTerminal(secureEnv);
         terminal.show();
         terminal.sendText(fullCommand);
 
@@ -888,7 +913,8 @@ export class QonQreteRunner {
 
         this.watchMarkerFile(markerPath);
 
-        const terminal = this.getOrCreateTerminal();
+        const secureEnv = await this.buildSecureEnvMap();
+        const terminal = this.getOrCreateTerminal(secureEnv);
         terminal.show();
         terminal.sendText(fullCommand);
 

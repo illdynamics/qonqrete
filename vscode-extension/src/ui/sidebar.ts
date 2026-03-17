@@ -79,6 +79,9 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 case 'createTasq':
                     await vscode.commands.executeCommand('qonqrete.createTasq');
                     break;
+                case 'setAIConfig':
+                    await vscode.commands.executeCommand('qonqrete.setAIConfig');
+                    break;
             }
         });
 
@@ -482,6 +485,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             <button class="btn-primary" id="runBtn" onclick="runTasq()">▶ Run Tasq</button>
             <button class="btn-secondary" onclick="deployWorkspace()">⬡ Deploy</button>
             <button class="btn-secondary" onclick="createTasq()">+ Create tasq.md</button>
+            <button class="btn-secondary" onclick="setAIConfig()">🤖 AI Config</button>
             <button class="btn-secondary" onclick="resumeRun()">⟳ Resume</button>
             <button class="btn-secondary" onclick="initWorkspace()">⚙ Init</button>
             <button class="btn-danger" onclick="cleanQages()">🗑 Clean</button>
@@ -774,6 +778,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         function installBash() { vscode.postMessage({ type: 'installBash' }); }
         function deployWorkspace() { vscode.postMessage({ type: 'deployWorkspace' }); }
         function createTasq() { vscode.postMessage({ type: 'createTasq' }); }
+        function setAIConfig() { vscode.postMessage({ type: 'setAIConfig' }); }
     </script>
 </body>
 </html>`;

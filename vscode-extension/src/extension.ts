@@ -14,6 +14,8 @@ import { registerRunTasqCommands } from './commands/runTasq';
 import { registerResumeCommands } from './commands/resume';
 import { registerDeployCommand } from './commands/deploy';
 import { registerCreateTasqCommand } from './commands/createTasq';
+import { registerAIConfigCommand } from './commands/aiConfig';
+import { initSecrets, migrateFromSettings } from './secrets';
 import { QonQreteSidebarProvider } from './ui/sidebar';
 
 let statusBarItem: vscode.StatusBarItem;
@@ -25,6 +27,12 @@ let runStateDisposable: vscode.Disposable | undefined;
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     console.log('QonQrete extension activating...');
+
+    // Initialize secure secret storage
+    initSecrets(context);
+
+    // Migrate any API keys from old settings to secure storage
+    migrateFromSettings().catch(err => console.warn('[QonQrete] Migration warning:', err));
 
     const runner = getRunner();
     const shellInfo = runner.getShellInfo();
@@ -52,6 +60,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(...registerResumeCommands(context));
     context.subscriptions.push(registerDeployCommand(context));
     context.subscriptions.push(registerCreateTasqCommand(context));
+    context.subscriptions.push(registerAIConfigCommand(context));
 
     // Register show status command (single registration point)
     context.subscriptions.push(

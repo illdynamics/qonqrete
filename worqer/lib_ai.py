@@ -152,6 +152,10 @@ def run_ai_completion(
             return _run_anthropic(model, full_prompt)
         elif provider.lower() == 'deepseek':
             return _run_deepseek(model, full_prompt)
+        elif provider.lower() == 'qwen':
+            return _run_qwen(model, full_prompt)
+        elif provider.lower() == 'openrouter':
+            return _run_openrouter(model, full_prompt)
         else:
             raise ValueError(f"Unknown AI Provider: {provider}")
     except Exception as e:
@@ -472,3 +476,63 @@ def _run_deepseek(model, prompt, timeout=DEFAULT_API_TIMEOUT):
         sys.stderr.write(chunk)
         sys.stderr.flush()
     return "".join(captured_chunks).strip()
+
+
+def _run_qwen(model, prompt, timeout=DEFAULT_API_TIMEOUT):
+    """Qwen provider via DashScope OpenAI-compatible endpoint with streaming."""
+    api_key = os.environ.get("QWEN_API_KEY")
+    if not api_key:
+        raise ValueError("QWEN_API_KEY not found in environment.")
+    try:
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            timeout=timeout,
+        )
+        response_stream = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+        )
+        captured_chunks = []
+        for chunk in response_stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                captured_chunks.append(content)
+                sys.stderr.write(content)
+                sys.stderr.flush()
+        return "".join(captured_chunks).strip()
+    except openai.APITimeoutError as e:
+        raise TimeoutError(f"Qwen API timeout after {timeout}s") from e
+    except openai.APIError as e:
+        raise RuntimeError(f"Qwen API error: {e}") from e
+
+
+def _run_openrouter(model, prompt, timeout=DEFAULT_API_TIMEOUT):
+    """OpenRouter provider via OpenAI-compatible endpoint with streaming."""
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY not found in environment.")
+    try:
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            timeout=timeout,
+        )
+        response_stream = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+        )
+        captured_chunks = []
+        for chunk in response_stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                captured_chunks.append(content)
+                sys.stderr.write(content)
+                sys.stderr.flush()
+        return "".join(captured_chunks).strip()
+    except openai.APITimeoutError as e:
+        raise TimeoutError(f"OpenRouter API timeout after {timeout}s") from e
+    except openai.APIError as e:
+        raise RuntimeError(f"OpenRouter API error: {e}") from e

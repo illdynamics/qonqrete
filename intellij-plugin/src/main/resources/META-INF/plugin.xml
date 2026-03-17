@@ -101,6 +101,13 @@
             icon="AllIcons.Actions.New"/>
 
         <action
+            id="QonQrete.SetAIConfig"
+            class="sh.qonqrete.intellij.actions.SetAIConfigAction"
+            text="QonQrete: Set AI Configuration"
+            description="Configure AI providers, models, and API keys"
+            icon="AllIcons.General.Settings"/>
+
+        <action
             id="QonQrete.RunTasq"
             class="sh.qonqrete.intellij.actions.RunTasqAction"
             text="QonQrete: Run Tasq"
