@@ -109,3 +109,27 @@ jobs:
             vscode-extension/*.vsix
             vscode-extension/*SHA256.txt
           generate_release_notes: true
+
+      # ================================================================
+      # AUTO-PUBLISH TO VS CODE MARKETPLACE
+      # Uncomment the section below and add VSCE_PAT as a GitHub secret
+      # to enable automatic publishing on tagged releases.
+      #
+      # To get a PAT:
+      #   1. Go to https://dev.azure.com → User Settings → Personal Access Tokens
+      #   2. Create token with "Marketplace (Manage)" scope
+      #   3. Add as GitHub secret: Settings → Secrets → VSCE_PAT
+      # ================================================================
+      # - name: Publish to VS Code Marketplace
+      #   run: vsce publish --no-dependencies -p ${{ secrets.VSCE_PAT }}
+
+      # ================================================================
+      # AUTO-PUBLISH TO OPEN VSX REGISTRY (optional)
+      # Uncomment and add OVSX_PAT as a GitHub secret.
+      #
+      # To get a PAT:
+      #   1. Go to https://open-vsx.org → Settings → Access Tokens
+      #   2. Add as GitHub secret: Settings → Secrets → OVSX_PAT
+      # ================================================================
+      # - name: Publish to Open VSX
+      #   run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}

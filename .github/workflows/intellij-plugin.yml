@@ -146,3 +146,32 @@ jobs:
             intellij-plugin/build/distributions/*.zip
             intellij-plugin/build/distributions/*-SHA256.txt
           generate_release_notes: true
+
+      # ================================================================
+      # AUTO-PUBLISH TO JETBRAINS MARKETPLACE
+      # Uncomment the section below and add these GitHub secrets:
+      #   PUBLISH_TOKEN     - JetBrains Marketplace token
+      #   CERTIFICATE_CHAIN - Plugin signing certificate (optional)
+      #   PRIVATE_KEY        - Plugin signing private key (optional)
+      #   PRIVATE_KEY_PASSWORD - Private key password (optional)
+      #
+      # To get a token:
+      #   1. Go to https://plugins.jetbrains.com → Profile → My Tokens
+      #   2. Create a new token
+      #   3. Add as GitHub secret: Settings → Secrets → PUBLISH_TOKEN
+      #
+      # Signing is optional but recommended for verified publisher status.
+      # See: https://plugins.jetbrains.com/docs/intellij/plugin-signing.html
+      # ================================================================
+      # - name: Sign plugin
+      #   if: env.CERTIFICATE_CHAIN != null
+      #   run: ./gradlew signPlugin
+      #   env:
+      #     CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+      #     PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      #     PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+      #
+      # - name: Publish to JetBrains Marketplace
+      #   run: ./gradlew publishPlugin
+      #   env:
+      #     PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}

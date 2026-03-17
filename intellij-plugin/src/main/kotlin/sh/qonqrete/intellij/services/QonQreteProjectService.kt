@@ -526,8 +526,8 @@ class QonQreteProjectService(private val project: Project) : Disposable {
                 val cmdLine = com.intellij.execution.configurations.PtyCommandLine(
                     listOf(shellInfo.shellPath, "-c", bashScript)
                 )
-                cmdLine.directory = File(workingDir)
-                cmdLine.charset = Charsets.UTF_8
+                cmdLine.setWorkDirectory(workingDir)
+                cmdLine.withCharset(Charsets.UTF_8)
                 buildSecureEnvMap().forEach { (k, v) -> cmdLine.environment[k] = v }
 
                 val handler = com.intellij.execution.process.KillableColoredProcessHandler(cmdLine)
@@ -701,8 +701,8 @@ class QonQreteProjectService(private val project: Project) : Disposable {
                 val cmdLine = com.intellij.execution.configurations.PtyCommandLine(
                     listOf(shellInfo.shellPath, "-c", bashScript)
                 )
-                cmdLine.directory = File(workingDir)
-                cmdLine.charset = Charsets.UTF_8
+                cmdLine.setWorkDirectory(workingDir)
+                cmdLine.withCharset(Charsets.UTF_8)
                 buildSecureEnvMap().forEach { (k, v) -> cmdLine.environment[k] = v }
 
                 val handler = com.intellij.execution.process.KillableColoredProcessHandler(cmdLine)
