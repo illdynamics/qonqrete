@@ -549,24 +549,30 @@ class QonQreteProjectService(private val project: Project) : Disposable {
      */
     private fun writeTempEnvFile(workingDir: String): java.io.File? {
         val lines = mutableListOf<String>()
-        val keyMap = mapOf(
-            "OPENAI_API_KEY" to "OPENAI_API_KEY",
-            "ANTHROPIC_API_KEY" to "ANTHROPIC_API_KEY",
-            "OPENROUTER_API_KEY" to "OPENROUTER_API_KEY",
-            "GOOGLE_API_KEY" to "GOOGLE_API_KEY",
-            "DEEPSEEK_API_KEY" to "DEEPSEEK_API_KEY",
-            "QWEN_API_KEY" to "QWEN_API_KEY"
+        val allKeys = listOf(
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "OPENROUTER_API_KEY",
+            "GOOGLE_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "QWEN_API_KEY"
         )
-        for ((envKey, _) in keyMap) {
+        for (envKey in allKeys) {
             // Skip if already in real environment
             if (!System.getenv(envKey).isNullOrEmpty()) continue
-            // Gemini equivalence
+            // Gemini/Google equivalence: skip GOOGLE if GEMINI already in env (and vice versa)
             if (envKey == "GOOGLE_API_KEY" && !System.getenv("GEMINI_API_KEY").isNullOrEmpty()) continue
 
-            val stored = sh.qonqrete.intellij.actions.SetAIConfigAction.getApiKey(envKey)
+            // Try stored secret, with Gemini/Google fallback
+            var stored = sh.qonqrete.intellij.actions.SetAIConfigAction.getApiKey(envKey)
+            if (stored.isNullOrEmpty() && envKey == "GOOGLE_API_KEY") {
+                stored = sh.qonqrete.intellij.actions.SetAIConfigAction.getApiKey("GEMINI_API_KEY")
+            }
+
             if (!stored.isNullOrEmpty()) {
                 val escaped = stored.replace("'", "'\\''")
                 lines.add("export $envKey='$escaped'")
+                // Double-map Google → Gemini
                 if (envKey == "GOOGLE_API_KEY") {
                     lines.add("export GEMINI_API_KEY='$escaped'")
                 }
@@ -576,9 +582,13 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
         val envFile = java.io.File(workingDir, ".qonqrete_env_${System.currentTimeMillis()}.tmp")
         envFile.writeText(lines.joinToString("\n") + "\n")
-        envFile.setReadable(true, true) // owner-only read
+        // Restrict to owner-only read/write (chmod 600)
+        envFile.setReadable(false, false)
+        envFile.setReadable(true, true)
+        envFile.setWritable(false, false)
         envFile.setWritable(true, true)
-        envFile.deleteOnExit() // safety net
+        envFile.setExecutable(false, false)
+        envFile.deleteOnExit() // safety net — JVM removes on exit
         return envFile
     }
 

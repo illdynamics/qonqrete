@@ -104,6 +104,37 @@ class RunAsQonqreteTasqAction : AnAction() {
             return
         }
 
+        // Check for missing API keys
+        val workingDir = service.getQonQreteWorkingDir()
+        if (workingDir != null) {
+            val configYaml = "$workingDir/worqspace/config.yaml"
+            val missing = SetAIConfigAction.getMissingApiKeys(configYaml)
+            if (missing.isNotEmpty()) {
+                val providerNames = missing.mapNotNull { key ->
+                    when (key) {
+                        "OPENAI_API_KEY" -> "OpenAI"
+                        "GOOGLE_API_KEY" -> "Gemini"
+                        "ANTHROPIC_API_KEY" -> "Anthropic"
+                        "OPENROUTER_API_KEY" -> "OpenRouter"
+                        "DEEPSEEK_API_KEY" -> "DeepSeek"
+                        "QWEN_API_KEY" -> "Qwen"
+                        else -> key
+                    }
+                }
+                val choice = Messages.showYesNoDialog(
+                    project,
+                    "API keys needed for: ${providerNames.joinToString(", ")}.\nSet them now?",
+                    "QonQrete: Missing API Keys",
+                    Messages.getWarningIcon()
+                )
+                if (choice == Messages.YES) {
+                    com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("QonQrete.SetAIConfig")?.actionPerformed(e)
+                    return
+                }
+            }
+        }
+
         // Save all documents before running
         FileDocumentManager.getInstance().saveAllDocuments()
 
