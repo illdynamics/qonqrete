@@ -30,10 +30,10 @@ interface AgentConfig { provider: string; model: string; }
 
 function readAgentConfigs(configPath: string): Record<AgentName, AgentConfig> {
     const defaults: Record<AgentName, AgentConfig> = {
-        tasqleveler: { provider: 'openai', model: 'gpt-4o-mini' },
-        instruqtor: { provider: 'openai', model: 'gpt-4o-mini' },
-        construqtor: { provider: 'openai', model: 'gpt-4o-mini' },
-        inspeqtor: { provider: 'openai', model: 'gpt-4o-mini' },
+        tasqleveler: { provider: 'openai', model: 'gpt-4.1-mini' },
+        instruqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
+        construqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
+        inspeqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
     };
     if (!fs.existsSync(configPath)) return defaults;
     try {

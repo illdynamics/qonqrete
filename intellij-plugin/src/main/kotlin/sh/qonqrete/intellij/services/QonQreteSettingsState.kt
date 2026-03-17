@@ -23,10 +23,10 @@ import com.intellij.openapi.components.Storage
 class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.State> {
 
     data class State(
-        var defaultSensitivity: Int = 6,
-        var defaultCycles: Int = 3,
+        var defaultSensitivity: Int = 1,
+        var defaultCycles: Int = 1,
         var defaultMode: String = "program",
-        var defaultAutonomous: Boolean = false,
+        var defaultAutonomous: Boolean = true,
         var useSqrapyard: Boolean = false,
         var containerEngine: String = "auto",
         var enableTui: Boolean = false,
