@@ -516,9 +516,62 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private fun executeRun() {
         val (canRun, reason, _) = service.canExecute()
         if (!canRun) { service.notify("QonQrete", reason ?: "Cannot run", NotificationType.WARNING); return }
-        if (!service.hasTasqFile()) { service.notify("QonQrete", "No tasq.md found", NotificationType.WARNING); return }
+        if (!service.hasTasqFile()) { service.notify("QonQrete", "No tasq.md found. Use 'Create tasq.md' first.", NotificationType.WARNING); return }
 
         FileDocumentManager.getInstance().saveAllDocuments()
+
+        // Sync workspace-root tasq.md into internal runtime location
+        service.syncRootTasqToInternal()
+
+        // Auto-init if image is missing
+        val initStatus = service.isInitialized()
+        if (!initStatus.hasImage && initStatus.hasDockerfile) {
+            val choice = Messages.showYesNoDialog(
+                project,
+                "Container image not built yet. Build it now?",
+                "QonQrete: Init Required",
+                Messages.getQuestionIcon()
+            )
+            if (choice != Messages.YES) return
+            try {
+                service.init()
+                service.notify("QonQrete", "Building container image... Run Tasq again when init completes.", NotificationType.INFORMATION)
+            } catch (e: Exception) {
+                service.notify("QonQrete Error", "Init failed: ${e.message}", NotificationType.ERROR)
+            }
+            return
+        }
+
+        // Check for missing API keys
+        val workingDir = service.getQonQreteWorkingDir()
+        if (workingDir != null) {
+            val configYaml = "$workingDir/worqspace/config.yaml"
+            val missing = sh.qonqrete.intellij.actions.SetAIConfigAction.getMissingApiKeys(configYaml)
+            if (missing.isNotEmpty()) {
+                val providerNames = missing.mapNotNull { key ->
+                    when (key) {
+                        "OPENAI_API_KEY" -> "OpenAI"
+                        "GOOGLE_API_KEY" -> "Gemini"
+                        "ANTHROPIC_API_KEY" -> "Anthropic"
+                        "OPENROUTER_API_KEY" -> "OpenRouter"
+                        "DEEPSEEK_API_KEY" -> "DeepSeek"
+                        "QWEN_API_KEY" -> "Qwen"
+                        else -> key
+                    }
+                }
+                val choice = Messages.showYesNoDialog(
+                    project,
+                    "API keys needed for: ${providerNames.joinToString(", ")}.\nSet them now?",
+                    "QonQrete: Missing API Keys",
+                    Messages.getWarningIcon()
+                )
+                if (choice == Messages.YES) {
+                    executeAIConfig()
+                    return
+                }
+            }
+        }
+
         val config = getConfigFromUI() ?: return
 
         try { service.run(config) }

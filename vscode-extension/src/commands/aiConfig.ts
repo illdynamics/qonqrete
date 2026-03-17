@@ -40,9 +40,12 @@ function readAgentConfigs(configPath: string): Record<AgentName, AgentConfig> {
         const lines = fs.readFileSync(configPath, 'utf8').split('\n');
         let currentAgent: string | null = null;
         for (const line of lines) {
+            // Detect any 2-space-indented section header
             const agentMatch = line.match(/^\s{2}(\w+):\s*$/);
-            if (agentMatch && AI_AGENTS.includes(agentMatch[1] as AgentName)) {
-                currentAgent = agentMatch[1]; continue;
+            if (agentMatch) {
+                // Only track AI agents we care about; clear for everything else
+                currentAgent = AI_AGENTS.includes(agentMatch[1] as AgentName) ? agentMatch[1] : null;
+                continue;
             }
             if (currentAgent && AI_AGENTS.includes(currentAgent as AgentName)) {
                 const pm = line.match(/^\s{4}provider:\s*(\S+)/);
@@ -67,10 +70,14 @@ function writeAgentConfig(configPath: string, agent: AgentName, provider: string
                 inAgent = true; providerSet = false; modelSet = false; result.push(line); continue;
             }
             if (inAgent) {
-                if (line.match(/^\s{4}provider:\s*\S+/) && !providerSet) {
+                // Exit agent on any other 2-space section header
+                if (line.match(/^\s{2}\w+:\s*$/) && !line.match(new RegExp(`^\\s{2}${agent}:\\s*$`))) {
+                    inAgent = false;
+                }
+                if (inAgent && line.match(/^\s{4}provider:\s*\S+/) && !providerSet) {
                     result.push(`    provider: ${provider}`); providerSet = true; continue;
                 }
-                if (line.match(/^\s{4}model:\s*\S+/) && !modelSet) {
+                if (inAgent && line.match(/^\s{4}model:\s*\S+/) && !modelSet) {
                     result.push(`    model: ${model}`); modelSet = true; continue;
                 }
                 if (line.match(/^\s{0,2}\S/)) inAgent = false;
