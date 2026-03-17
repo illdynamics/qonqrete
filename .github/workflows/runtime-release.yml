@@ -25,7 +25,7 @@ jobs:
       - name: Package runtime zip
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          STAGING="qonqrete-v${VERSION}-stable"
+          STAGING="qonqrete-v${VERSION}"
 
           mkdir -p "$STAGING"
 
@@ -37,18 +37,18 @@ jobs:
                 "$STAGING/"
 
           # Build the zip
-          zip -r "qonqrete-v${VERSION}-stable.zip" "$STAGING/" \
+          zip -r "qonqrete-v${VERSION}.zip" "$STAGING/" \
             -x "*/.DS_Store" "*/__MACOSX/*" "*/__pycache__/*"
 
-          ls -lh "qonqrete-v${VERSION}-stable.zip"
-          sha256sum "qonqrete-v${VERSION}-stable.zip" > "qonqrete-v${VERSION}-stable-SHA256.txt"
-          cat "qonqrete-v${VERSION}-stable-SHA256.txt"
+          ls -lh "qonqrete-v${VERSION}.zip"
+          sha256sum "qonqrete-v${VERSION}.zip" > "qonqrete-v${VERSION}-SHA256.txt"
+          cat "qonqrete-v${VERSION}-SHA256.txt"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: qonqrete-runtime-${{ steps.version.outputs.version }}
-          path: qonqrete-v*-stable.zip
+          path: qonqrete-v*.zip
           retention-days: 30
 
       - name: Attach to GitHub Release
@@ -56,6 +56,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            qonqrete-v*-stable.zip
-            qonqrete-v*-stable-SHA256.txt
+            qonqrete-v*.zip
+            qonqrete-v*-SHA256.txt
           generate_release_notes: true

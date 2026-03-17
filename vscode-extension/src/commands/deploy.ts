@@ -121,7 +121,7 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
 
 /**
  * Flatten a single top-level directory from extraction
- * e.g., .qonqrete/qonqrete-vX.Y.Z-stable/qonqrete.sh → .qonqrete/qonqrete.sh
+ * e.g., .qonqrete/qonqrete-vX.Y.Z/qonqrete.sh → .qonqrete/qonqrete.sh
  */
 function flattenTopLevel(dirPath: string): void {
     const entries = fs.readdirSync(dirPath);
@@ -191,7 +191,7 @@ export async function executeDeploy(): Promise<void> {
 
             // Step 1: Download
             progress.report({ message: `Downloading runtime v${version}...`, increment: 10 });
-            const zipUrl = `${GITHUB_RELEASE_BASE}/v${version}/qonqrete-v${version}-stable.zip`;
+            const zipUrl = `${GITHUB_RELEASE_BASE}/v${version}/qonqrete-v${version}.zip`;
             const tmpDir = path.join(wsRoot, '.qonqrete-tmp-' + Date.now());
             fs.mkdirSync(tmpDir, { recursive: true });
             const zipPath = path.join(tmpDir, 'qonqrete.zip');

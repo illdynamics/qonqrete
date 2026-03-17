@@ -1,6 +1,6 @@
 # QonQrete Quickstart
 
-**Version:** `v1.2.0-stable`
+**Version:** `v1.2.0`
 
 This is the shortest accurate path to get QonQrete running.
 
