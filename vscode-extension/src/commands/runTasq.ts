@@ -359,6 +359,14 @@ export async function executeRunAsQonqreteTasq(fileUri?: vscode.Uri): Promise<vo
         return;
     }
 
+    // Check for missing API keys
+    const runAsWorkingDir = await runner.getQonQreteWorkingDir(folder);
+    if (runAsWorkingDir) {
+        const runAsConfigYaml = path.join(runAsWorkingDir, 'worqspace', 'config.yaml');
+        const runAsKeysOk = await promptForMissingApiKeys(runAsConfigYaml);
+        if (!runAsKeysOk) return;
+    }
+
     // Show configuration wizard
     const config = await showConfigurationDialog();
     if (!config) {

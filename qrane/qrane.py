@@ -422,12 +422,13 @@ def check_api_keys(config, qrane_prefix):
         'openai': 'OPENAI_API_KEY',
         'anthropic': 'ANTHROPIC_API_KEY',
         'deepseek': 'DEEPSEEK_API_KEY',
-        'qwen': 'QWEN_API_KEY'
+        'qwen': 'QWEN_API_KEY',
+        'openrouter': 'OPENROUTER_API_KEY'
     }
 
     missing_keys = []
     for provider in providers:
-        if provider == 'gemini':
+        if provider in ('gemini', 'google'):
             if not (os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')):
                 missing_keys.append('GOOGLE_API_KEY/GEMINI_API_KEY')
         elif provider in key_mapping:

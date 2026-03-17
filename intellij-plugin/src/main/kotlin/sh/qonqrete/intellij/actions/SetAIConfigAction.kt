@@ -109,9 +109,25 @@ class SetAIConfigAction : AnAction() {
             val configs = readAgentConfigs(configPath)
             val providers = configs.values.map { it.first }.filter { it != "local" }.toSet()
             return providers.mapNotNull { PROVIDERS[it]?.envKey }
-                .filter { envKey ->
-                    System.getenv(envKey).isNullOrEmpty() && getApiKey(envKey).isNullOrEmpty()
-                }
+                .distinct()
+                .filter { envKey -> !hasApiKeyAvailable(envKey) }
+        }
+
+        /**
+         * Check if an API key is available via env var OR PasswordSafe.
+         * Handles GOOGLE_API_KEY / GEMINI_API_KEY equivalence.
+         */
+        private fun hasApiKeyAvailable(envKey: String): Boolean {
+            // Check real env var
+            if (!System.getenv(envKey).isNullOrEmpty()) return true
+            // Gemini/Google equivalence
+            if (envKey == "GOOGLE_API_KEY" && !System.getenv("GEMINI_API_KEY").isNullOrEmpty()) return true
+            if (envKey == "GEMINI_API_KEY" && !System.getenv("GOOGLE_API_KEY").isNullOrEmpty()) return true
+            // Check PasswordSafe
+            if (!getApiKey(envKey).isNullOrEmpty()) return true
+            // Gemini/Google equivalence in store
+            if (envKey == "GOOGLE_API_KEY" && !getApiKey("GEMINI_API_KEY").isNullOrEmpty()) return true
+            return false
         }
 
         private data class AgentConfig(val provider: String, val model: String)
