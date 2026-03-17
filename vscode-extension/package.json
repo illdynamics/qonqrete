@@ -185,21 +185,21 @@
       "properties": {
         "qonqrete.defaultSensitivity": {
           "type": "number",
-          "default": 6,
+          "default": 1,
           "minimum": 0,
           "maximum": 16,
           "description": "Default briq sensitivity level (0-16). Higher values create more granular briqs."
         },
         "qonqrete.defaultCycles": {
           "type": "number",
-          "default": 3,
+          "default": 1,
           "minimum": 1,
           "maximum": 50,
           "description": "Default number of execution cycles (1-50)."
         },
         "qonqrete.defaultAutonomous": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable autonomous mode by default (no user confirmations)."
         },
         "qonqrete.defaultMode": {

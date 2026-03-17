@@ -133,7 +133,7 @@ class SetAIConfigAction : AnAction() {
         private data class AgentConfig(val provider: String, val model: String)
 
         private fun readAgentConfigs(configPath: String): Map<String, Pair<String, String>> {
-            val defaults = AI_AGENTS.associateWith { Pair("openai", "gpt-4o-mini") }.toMutableMap()
+            val defaults = AI_AGENTS.associateWith { Pair("openai", "gpt-4.1-mini") }.toMutableMap()
             val file = File(configPath)
             if (!file.exists()) return defaults
 
@@ -259,7 +259,7 @@ class SetAIConfigAction : AnAction() {
             builder.addSeparator()
 
             for (agent in AI_AGENTS) {
-                val (currentProv, currentModel) = configs[agent] ?: Pair("openai", "gpt-4o-mini")
+                val (currentProv, currentModel) = configs[agent] ?: Pair("openai", "gpt-4.1-mini")
 
                 val providerCombo = ComboBox(providerIds.toTypedArray())
                 providerCombo.selectedItem = currentProv

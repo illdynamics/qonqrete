@@ -83,7 +83,7 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   tasqleveler:
     provider: openai
-    model: gpt-5.3-nano
+    model: gpt-4.1-nano
     # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
     enabled: true
     min_complexity_score: 200  # Below this score, don't enhance
@@ -94,7 +94,7 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
     provider: openai
-    model: gpt-5.3-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
 
   calqulator:
     provider: local
@@ -105,14 +105,14 @@ agents:
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
     provider: openai
-    model: gpt-5.3-mini           # $1.25/$10.00 per 1M - best for code generation
+    model: gpt-4.1           # $1.25/$10.00 per 1M - best for code generation
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
     provider: openai
-    model: gpt-5.3-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
     batch_mode: true                 # Group briqs into batches
