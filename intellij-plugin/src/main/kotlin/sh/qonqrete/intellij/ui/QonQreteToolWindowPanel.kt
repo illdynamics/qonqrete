@@ -411,7 +411,24 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         artifactTreeModel.reload()
 
         service.getAvailableQages().forEach { qageName ->
-            val timestamp = service.formatQageTimestamp(qageName)
+            // Determine a human-friendly timestamp. For standard qages, use the formatted
+            // timestamp derived from the name. For named qonstructions (parse returns null),
+            // fall back to the last modified time of the directory. If both fail, just
+            // display the name as the timestamp.
+            val parsedTs = service.parseQageTimestamp(qageName)
+            val timestamp: String = if (parsedTs != null) {
+                service.formatQageTimestamp(qageName)
+            } else {
+                val details = service.getQageDetails(qageName)
+                if (details != null) {
+                    try {
+                        val df = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                        df.format(java.util.Date(java.io.File(details.path).lastModified()))
+                    } catch (_: Exception) {
+                        qageName
+                    }
+                } else qageName
+            }
             val details = service.getQageDetails(qageName)
             val artifactCount = details?.artifacts?.totalCount ?: 0
             qageListModel.addElement(QageListItem(qageName, timestamp, artifactCount))
@@ -463,6 +480,15 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         // Expand all nodes
         for (i in 0 until artifactTree.rowCount) {
             artifactTree.expandRow(i)
+        }
+
+        // Automatically select the first category (typically qodeyard) so that the user
+        // sees the generated code immediately. Row 0 is the (hidden) root, so select row 1
+        // if available.
+        if (artifactTree.rowCount > 1) {
+            try {
+                artifactTree.selectionRow = 1
+            } catch (_: Exception) { /* ignore */ }
         }
     }
 

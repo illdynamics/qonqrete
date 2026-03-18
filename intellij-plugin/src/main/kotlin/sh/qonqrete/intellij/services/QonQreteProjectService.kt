@@ -437,25 +437,45 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         val workingDir = getQonQreteWorkingDir() ?: return emptyList()
         val worqspacePath = File(workingDir, "worqspace")
         if (!worqspacePath.exists()) return emptyList()
-        
+
         val settings = QonQreteSettingsState.getInstance()
         return try {
-            worqspacePath.listFiles { file ->
-                file.isDirectory && QonQreteValidation.isValidQageName(file.name)
-            }?.map { QageInfo(it.name, parseQageTimestamp(it.name)) }
-                ?.sortedByDescending { it.timestamp ?: 0L }
-                ?.map { it.name }
-                ?.take(settings.qageListLimit)
-                ?: emptyList()
+            val qages = mutableListOf<QageInfo>()
+            // Include root-level qage directories matching the pattern
+            worqspacePath.listFiles()?.forEach { file ->
+                if (file.isDirectory) {
+                    if (QonQreteValidation.isValidQageName(file.name)) {
+                        qages.add(QageInfo(file.name, parseQageTimestamp(file.name)))
+                    } else if (file.name == "qonstructions") {
+                        // Also include named qonstructions under worqspace/qonstructions
+                        file.listFiles()?.forEach { sub ->
+                            if (sub.isDirectory) {
+                                // Use lastModified timestamp for sorting since no intrinsic timestamp
+                                qages.add(QageInfo(sub.name, sub.lastModified()))
+                            }
+                        }
+                    }
+                }
+            }
+            qages.sortedByDescending { it.timestamp ?: 0L }
+                .map { it.name }
+                .take(settings.qageListLimit)
         } catch (e: Exception) { emptyList() }
     }
 
     private data class QageInfo(val name: String, val timestamp: Long?)
 
     fun getQageDetails(qageName: String): QageDetails? {
-        if (!QonQreteValidation.isValidQageName(qageName)) return null
         val workingDir = getQonQreteWorkingDir() ?: return null
-        val qagePath = File(workingDir, "worqspace/$qageName")
+        // Determine the location of this qage or named qonstruction. If the name matches
+        // the qage pattern, look in worqspace/<name>. Otherwise, look in
+        // worqspace/qonstructions/<name>. If neither exists, return null.
+        val basePath = File(workingDir, "worqspace")
+        val qagePath: File = if (QonQreteValidation.isValidQageName(qageName)) {
+            File(basePath, qageName)
+        } else {
+            File(basePath, "qonstructions/$qageName")
+        }
         if (!qagePath.exists()) return null
         
         fun listDir(subdir: String): List<String> {
