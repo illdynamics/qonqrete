@@ -181,16 +181,18 @@ class RunTasqAction : AnAction() {
     }
 
     private fun promptForConfig(project: com.intellij.openapi.project.Project, service: QonQreteProjectService): QonQreteRunConfig? {
-        val settings = QonQreteSettingsState.getInstance()
+        // Determine whether to use a quick-run configuration. Currently always true,
+        // but could be toggled based on modifier keys in the future.
+        val useQuickRun = true
 
-        // Quick run with defaults, or show config dialog based on modifier keys
-        val useQuickRun = true // Could check for shift key to show full dialog
-
-        if (useQuickRun) {
+        return if (useQuickRun) {
+            // Start with defaults from settings
             var config = QonQreteRunConfig.fromSettings()
 
-            // Prompt for qonstruction name if not in autonomous mode
-            if (!config.autonomous) {
+            // Always prompt for a qonstruction name if none has been provided. This ensures
+            // that the CLI receives a -n argument and the resulting qage directory is renamed
+            // appropriately. If the user cancels the dialog, abort the run.
+            if (config.qonstructionName == null) {
                 val nameDialog = QonQreteQonstructionNameDialog(project, service)
                 if (!nameDialog.showAndGet()) {
                     return null
@@ -200,14 +202,15 @@ class RunTasqAction : AnAction() {
                     config = config.copy(qonstructionName = name)
                 }
             }
-
-            return config
+            config
         } else {
+            // When not using quick-run, show the full configuration dialog
             val dialog = QonQreteConfigDialog(project, service)
             if (dialog.showAndGet()) {
-                return dialog.getConfig()
+                dialog.getConfig()
+            } else {
+                null
             }
-            return null
         }
     }
 }

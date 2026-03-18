@@ -141,8 +141,10 @@ class RunAsQonqreteTasqAction : AnAction() {
         // Get configuration
         var config = QonQreteRunConfig.fromSettings()
 
-        // Prompt for qonstruction name if not in autonomous mode
-        if (!config.autonomous) {
+        // Always prompt for a qonstruction name if none has been provided. This ensures the
+        // resulting qage directory is renamed to the provided name. If the user cancels
+        // the dialog, abort the run. Do not prompt again if a name is already set.
+        if (config.qonstructionName == null) {
             val nameDialog = QonQreteQonstructionNameDialog(project, service)
             if (!nameDialog.showAndGet()) {
                 return
