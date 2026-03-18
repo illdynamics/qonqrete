@@ -29,11 +29,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      # Use Java 21 for building and testing the IntelliJ plugin.  
+      # JetBrains IDEs released in 2024 and newer are built on JDK 21.  
+      # Older versions can still run plugins compiled with a newer JDK as long as 
+      # you target the appropriate IntelliJ SDK in build.gradle.  
+      # See https://plugins.jetbrains.com/docs/intellij/jdk-requirements.html for details.
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -79,11 +84,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      # Use JDK 21 when verifying plugin compatibility.  
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -106,11 +112,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      # Use JDK 21 when building release artifacts.  
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
