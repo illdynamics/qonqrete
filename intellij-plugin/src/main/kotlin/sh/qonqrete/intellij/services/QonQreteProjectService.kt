@@ -566,6 +566,10 @@ class QonQreteProjectService(private val project: Project) : Disposable {
      */
     private fun buildSecureEnvMap(): Map<String, String> {
         val env = mutableMapOf<String, String>()
+
+        // IDE-driven runs are always non-interactive
+        env["QONQ_NON_INTERACTIVE"] = "1"
+
         val allKeys = listOf(
             "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY",
             "GOOGLE_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY"

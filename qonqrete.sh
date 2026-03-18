@@ -943,6 +943,9 @@ case "$COMMAND" in
         
         if [ -n "$QONSTRUCTION_NAME" ]; then
             save_qonstruction_non_interactive "$RUN_HOST_PATH" "$QONSTRUCTION_NAME"
+        elif [ -n "${QONQ_NON_INTERACTIVE-}" ]; then
+            log_qrane "Non-interactive mode: Qage preserved at $(basename "$RUN_HOST_PATH")"
+            fix_qage_permissions "$RUN_HOST_PATH"
         else
             prompt_save_qonstruction "$RUN_HOST_PATH"
         fi
@@ -1004,6 +1007,9 @@ case "$COMMAND" in
         
         if [ -n "$QONSTRUCTION_NAME" ]; then
             save_qonstruction_non_interactive "$RUN_HOST_PATH" "$QONSTRUCTION_NAME"
+        elif [ -n "${QONQ_NON_INTERACTIVE-}" ]; then
+            log_qrane "Non-interactive mode: Qage preserved at $(basename "$RUN_HOST_PATH")"
+            fix_qage_permissions "$RUN_HOST_PATH"
         else
             prompt_save_qonstruction "$RUN_HOST_PATH"
         fi

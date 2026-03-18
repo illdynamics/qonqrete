@@ -191,10 +191,10 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                     verified: shellInfo.verified,
                 },
                 defaultConfig: {
-                    sensitivity: config.get<number>('defaultSensitivity', 6),
-                    cycles: config.get<number>('defaultCycles', 3),
+                    sensitivity: config.get<number>('defaultSensitivity', 1),
+                    cycles: config.get<number>('defaultCycles', 1),
                     mode: config.get<string>('defaultMode', 'program'),
-                    autonomous: config.get<boolean>('defaultAutonomous', false),
+                    autonomous: config.get<boolean>('defaultAutonomous', true),
                     useSqrapyard: config.get<boolean>('useSqrapyard', false),
                     containerEngine: config.get<string>('containerEngine', 'auto'),
                     enableTui: config.get<boolean>('enableTui', false),
@@ -418,14 +418,14 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             <div class="form-group">
                 <label>Briq Sensitivity (0-16)</label>
                 <div class="slider-row">
-                    <input type="range" id="sensitivity" min="0" max="16" value="6" oninput="updateSlider('sensitivity')">
-                    <span id="sensitivityValue" class="slider-value">6</span>
+                    <input type="range" id="sensitivity" min="0" max="16" value="1" oninput="updateSlider('sensitivity')">
+                    <span id="sensitivityValue" class="slider-value">1</span>
                 </div>
             </div>
 
             <div class="form-group">
                 <label>Cycles</label>
-                <input type="number" id="cycles" min="1" max="50" value="3">
+                <input type="number" id="cycles" min="1" max="50" value="1">
             </div>
 
             <div class="form-group">

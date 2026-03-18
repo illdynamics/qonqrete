@@ -116,10 +116,10 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
  * Run configuration for QonQrete
  */
 data class QonQreteRunConfig(
-    val sensitivity: Int = 6,
-    val cycles: Int = 3,
+    val sensitivity: Int = 1,
+    val cycles: Int = 1,
     val mode: String = "program",
-    val autonomous: Boolean = false,
+    val autonomous: Boolean = true,
     val qonstructionName: String? = null,
     val useSqrapyard: Boolean = false,
     val containerEngine: String = "auto",

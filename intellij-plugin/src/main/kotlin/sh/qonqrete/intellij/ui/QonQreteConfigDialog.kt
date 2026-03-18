@@ -58,7 +58,7 @@ class QonQreteConfigDialog(
     override fun createCenterPanel(): JComponent {
         val sensitivityPanel = JPanel(BorderLayout())
         sensitivityPanel.add(sensitivitySpinner, BorderLayout.CENTER)
-        sensitivityPanel.add(JBLabel("(0=highest, 16=lowest)"), BorderLayout.EAST)
+        sensitivityPanel.add(JBLabel("(0=monolithic, 16=max granularity)"), BorderLayout.EAST)
 
         val cyclesPanel = JPanel(BorderLayout())
         cyclesPanel.add(cyclesSpinner, BorderLayout.CENTER)

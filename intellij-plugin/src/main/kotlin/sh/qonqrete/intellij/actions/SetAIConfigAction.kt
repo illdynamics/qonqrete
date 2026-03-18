@@ -133,7 +133,9 @@ class SetAIConfigAction : AnAction() {
         private data class AgentConfig(val provider: String, val model: String)
 
         private fun readAgentConfigs(configPath: String): Map<String, Pair<String, String>> {
-            val defaults = AI_AGENTS.associateWith { Pair("openai", "gpt-4.1-mini") }.toMutableMap()
+            val defaults = AI_AGENTS.associateWith {
+                if (it == "tasqleveler") Pair("openai", "gpt-4.1-nano") else Pair("openai", "gpt-4.1-mini")
+            }.toMutableMap()
             val file = File(configPath)
             if (!file.exists()) return defaults
 
