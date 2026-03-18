@@ -220,9 +220,12 @@ class CommandBuilder private constructor() {
         }
         
         // Qonstruction name (MUST be sanitized first)
+        // Pass the sanitized name using the short '-n' flag expected by the CLI.
         config.qonstructionName?.let { name ->
             val sanitized = QonQreteValidation.sanitizeQonstructionName(name)
-            parts.add("--qonstruction-name")
+            // Use '-n' instead of the deprecated '--qonstruction-name' to ensure the
+            // runtime correctly renames the resulting qage directory to the provided name.
+            parts.add("-n")
             parts.add(ShellEscape.escape(sanitized.sanitized))
         }
         
@@ -270,7 +273,8 @@ class CommandBuilder private constructor() {
             }
             cfg.qonstructionName?.let { name ->
                 val sanitized = QonQreteValidation.sanitizeQonstructionName(name)
-                parts.add("--qonstruction-name")
+                // Use '-n' instead of '--qonstruction-name' for resuming with a name
+                parts.add("-n")
                 parts.add(ShellEscape.escape(sanitized.sanitized))
             }
         }

@@ -32,6 +32,7 @@ import com.intellij.ui.components.*
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
 import sh.qonqrete.intellij.services.*
+import sh.qonqrete.intellij.ui.QonQreteQonstructionNameDialog
 import java.awt.*
 import java.io.File
 import javax.swing.*
@@ -487,8 +488,23 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     }
 
     private fun getConfigFromUI(): QonQreteRunConfig? {
-        val qonstructionName = qonstructionNameField.text.trim().takeIf { it.isNotEmpty() }?.let {
-            val result = service.sanitizeQonstructionName(it)
+        // Determine the final qonstruction name. First check the text field; if empty,
+        // prompt the user for a name via dialog. Otherwise sanitize the provided name.
+        val rawName = qonstructionNameField.text.trim()
+        var finalName: String? = null
+
+        if (rawName.isEmpty()) {
+            // No name entered in the field. Prompt the user for a name. If the user
+            // cancels the dialog, abort the configuration by returning null. When the
+            // user provides a name, it will be sanitized within the dialog itself.
+            val nameDialog = QonQreteQonstructionNameDialog(project, service)
+            if (!nameDialog.showAndGet()) {
+                return null
+            }
+            finalName = nameDialog.getQonstructionName()
+        } else {
+            // Sanitize the entered name and confirm if modifications are required
+            val result = service.sanitizeQonstructionName(rawName)
             if (result.wasModified) {
                 val confirm = Messages.showYesNoDialog(
                     project,
@@ -497,7 +513,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
                 )
                 if (confirm != Messages.YES) return null
             }
-            result.sanitized
+            finalName = result.sanitized
         }
 
         return QonQreteRunConfig(
@@ -505,7 +521,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
             cycles = cyclesSpinner.value as Int,
             mode = modeCombo.selectedItem as String,
             autonomous = autonomousCheckbox.isSelected,
-            qonstructionName = qonstructionName,
+            qonstructionName = finalName,
             useSqrapyard = sqrapyardCheckbox.isSelected,
             containerEngine = engineCombo.selectedItem as String,
             enableTui = tuiCheckbox.isSelected,
