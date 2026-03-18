@@ -39,10 +39,10 @@ function getDefaultConfig(): QonQreteRunConfig {
     const config = vscode.workspace.getConfiguration('qonqrete');
     
     return {
-        sensitivity: config.get<number>('defaultSensitivity', 6),
-        cycles: config.get<number>('defaultCycles', 3),
+        sensitivity: config.get<number>('defaultSensitivity', 1),
+        cycles: config.get<number>('defaultCycles', 1),
         mode: config.get<string>('defaultMode', 'program'),
-        autonomous: config.get<boolean>('defaultAutonomous', false),
+        autonomous: config.get<boolean>('defaultAutonomous', true),
         useSqrapyard: config.get<boolean>('useSqrapyard', false),
         containerEngine: config.get<'auto' | 'docker' | 'podman' | 'msb'>('containerEngine', 'auto'),
         enableTui: config.get<boolean>('enableTui', false),

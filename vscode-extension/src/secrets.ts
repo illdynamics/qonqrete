@@ -141,6 +141,9 @@ export async function resolveApiKey(envKey: string): Promise<string | undefined>
 export async function buildSecureEnvMap(): Promise<Record<string, string>> {
     const env: Record<string, string> = {};
 
+    // IDE-driven runs are always non-interactive
+    env['QONQ_NON_INTERACTIVE'] = '1';
+
     for (const envKey of ALL_API_KEYS) {
         // Skip if already in real environment
         if (process.env[envKey]) continue;

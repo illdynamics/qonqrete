@@ -30,7 +30,7 @@ interface AgentConfig { provider: string; model: string; }
 
 function readAgentConfigs(configPath: string): Record<AgentName, AgentConfig> {
     const defaults: Record<AgentName, AgentConfig> = {
-        tasqleveler: { provider: 'openai', model: 'gpt-4.1-mini' },
+        tasqleveler: { provider: 'openai', model: 'gpt-4.1-nano' },
         instruqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
         construqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
         inspeqtor: { provider: 'openai', model: 'gpt-4.1-mini' },

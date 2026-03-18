@@ -434,10 +434,10 @@ async function showConfigurationDialog(): Promise<QonQreteRunConfig | undefined>
 function getDefaultConfig(): QonQreteRunConfig {
     const vsConfig = vscode.workspace.getConfiguration('qonqrete');
     return {
-        sensitivity: vsConfig.get<number>('defaultSensitivity', 6),
-        cycles: vsConfig.get<number>('defaultCycles', 3),
+        sensitivity: vsConfig.get<number>('defaultSensitivity', 1),
+        cycles: vsConfig.get<number>('defaultCycles', 1),
         mode: vsConfig.get<string>('defaultMode', 'program'),
-        autonomous: vsConfig.get<boolean>('defaultAutonomous', false),
+        autonomous: vsConfig.get<boolean>('defaultAutonomous', true),
         useSqrapyard: vsConfig.get<boolean>('useSqrapyard', false),
         containerEngine: vsConfig.get<'auto' | 'docker' | 'podman' | 'msb'>('containerEngine', 'auto'),
         enableTui: vsConfig.get<boolean>('enableTui', false),
