@@ -487,8 +487,13 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         // if available.
         if (artifactTree.rowCount > 1) {
             try {
-                artifactTree.selectionRow = 1
-            } catch (_: Exception) { /* ignore */ }
+                // Use the setter method instead of the property to avoid unresolved reference
+                // errors on older Swing APIs. Row 0 is the hidden root; row 1 is the first
+                // child (qodeyard). Selecting it immediately shows the code to the user.
+                artifactTree.setSelectionRow(1)
+            } catch (_: Exception) {
+                // Ignore any selection errors – the tree will still display its nodes
+            }
         }
     }
 
