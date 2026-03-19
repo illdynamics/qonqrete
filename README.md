@@ -1,7 +1,7 @@
 # QonQrete - The First 100% File-Based Local-First Secure Agentic AI System
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Visitors](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Visitors&color=ff3c00)
-![Release Version](https://img.shields.io/github/v/release/illdynamics/qonqrete?label=Release)
+![Main Version](https://img.shields.io/github/v/release/illdynamics/qonqrete?label=Main)
 ![VS Code Version](https://img.shields.io/visual-studio-marketplace/v/QonQrete.qonqrete?label=VS%20Code)
 ![JetBrains Version](https://img.shields.io/jetbrains/plugin/v/30764-qonqrete?label=JetBrains)
 [![Main Runtime](https://img.shields.io/badge/Main-Runtime-ff3c00)](https://github.com/illdynamics/qonqrete/releases)
