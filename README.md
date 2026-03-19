@@ -4,10 +4,9 @@
 ![Release Version](https://img.shields.io/github/v/release/illdynamics/qonqrete)
 ![VS Code Version](https://img.shields.io/visual-studio-marketplace/v/QonQrete.qonqrete)
 ![JetBrains Version](https://img.shields.io/jetbrains/plugin/v/30764-qonqrete)
+[![Download Runtime](https://img.shields.io/github/downloads/illdynamics/qonqrete/total?label=Runtime%20Downloads)](https://github.com/illdynamics/qonqrete/releases)
 [![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=QonQrete.qonqrete)
-[![VS Code Downloads](https://img.shields.io/visual-studio-marketplace/d/QonQrete.qonqrete)](https://marketplace.visualstudio.com/items?itemName=QonQrete.qonqrete)
 [![JetBrains Plugin](https://img.shields.io/jetbrains/plugin/d/30764-qonqrete?label=JetBrains%20Installs&color=orange)](https://plugins.jetbrains.com/plugin/30764-qonqrete)
-[![JetBrains Downloads](https://img.shields.io/jetbrains/plugin/d/30764-qonqrete)](https://plugins.jetbrains.com/plugin/30764-qonqrete)
 [![VS Code Build](https://github.com/illdynamics/qonqrete/actions/workflows/vscode-extension.yml/badge.svg)](https://github.com/illdynamics/qonqrete/actions/workflows/vscode-extension.yml)
 [![JetBrains Build](https://github.com/illdynamics/qonqrete/actions/workflows/intellij-plugin.yml/badge.svg)](https://github.com/illdynamics/qonqrete/actions/workflows/intellij-plugin.yml)
 
