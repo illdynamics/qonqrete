@@ -4,7 +4,7 @@
 ![Main Version](https://img.shields.io/github/v/release/illdynamics/qonqrete?label=Main)
 ![VS Code Version](https://img.shields.io/visual-studio-marketplace/v/QonQrete.qonqrete?label=VS%20Code)
 ![JetBrains Version](https://img.shields.io/jetbrains/plugin/v/30764-qonqrete?label=JetBrains)
-[![Main Runtime](https://img.shields.io/badge/Main-Runtime-ff3c00)](https://github.com/illdynamics/qonqrete/releases)
+[![Main Zip](https://img.shields.io/badge/Main-Zip-ff3c00)](https://github.com/illdynamics/qonqrete/releases)
 [![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=QonQrete.qonqrete)
 [![JetBrains Plugin](https://img.shields.io/badge/JetBrains-Plugin-orange?logo=jetbrains)](https://plugins.jetbrains.com/plugin/30764-qonqrete)
 [![VS Code Build](https://github.com/illdynamics/qonqrete/actions/workflows/vscode-extension.yml/badge.svg)](https://github.com/illdynamics/qonqrete/actions/workflows/vscode-extension.yml)
