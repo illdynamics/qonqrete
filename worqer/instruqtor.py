@@ -711,6 +711,7 @@ def generate_briqs_with_enforcement(
     Will retry with stronger prompts if AI doesn't comply.
     """
     min_briqs, max_briqs, target_briqs, sens_prompt = get_sensitivity_config(sensitivity)
+    provider_options = provider_options or {}
     
     for attempt in range(max_retries + 1):
         # Build enforcement prompt
@@ -926,7 +927,8 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
             batch_size=batch_size,
             task_content=task_content,
             qodeyard_tree=qodeyard_tree,
-            universal_file_rule=universal_file_rule
+            universal_file_rule=universal_file_rule,
+            provider_options=provider_options,
         )
         
         # Fallback to single-shot if batched fails
@@ -938,7 +940,8 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
                 base_prompt=planner_prompt,
                 sensitivity=sensitivity,
                 task_content=task_content,
-                qodeyard_tree=qodeyard_tree
+                qodeyard_tree=qodeyard_tree,
+                provider_options=provider_options,
             )
     else:
         # Use traditional single-shot enforcement
@@ -948,7 +951,8 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
             base_prompt=planner_prompt,
             sensitivity=sensitivity,
             task_content=task_content,
-            qodeyard_tree=qodeyard_tree
+            qodeyard_tree=qodeyard_tree,
+            provider_options=provider_options,
         )
 
     print(f"--- Architect Generated {len(briqs)} Build Phases (Sens:{sensitivity}, Range:{min_briqs}-{max_briqs}) ---", flush=True)

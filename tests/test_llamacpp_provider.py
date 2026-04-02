@@ -176,5 +176,33 @@ class LlamacppProviderTests(unittest.TestCase):
         self.assertEqual(resolved, '/Users/name/Qoding/ai/model.gguf')
 
 
+class InstruqtorProviderOptionRegressionTests(unittest.TestCase):
+    def test_generate_briqs_with_enforcement_accepts_missing_provider_options(self):
+        import worqer.instruqtor as instruqtor
+
+        with mock.patch.object(instruqtor.lib_ai, 'run_ai_completion', return_value='<briq title="One">Do it</briq>') as mock_run:
+            briqs = instruqtor.generate_briqs_with_enforcement(
+                ai_provider='llamacpp',
+                ai_model='~/Qoding/ai/model.gguf',
+                base_prompt='{SENSITIVITY_PROMPT}\nTask body',
+                sensitivity=1,
+                task_content='Task body',
+                qodeyard_tree='qodeyard/',
+                provider_options=None,
+            )
+
+        self.assertEqual(len(briqs), 1)
+        self.assertEqual(briqs[0]['title'], 'One')
+        _, kwargs = mock_run.call_args
+        self.assertEqual(kwargs.get('request_options'), {})
+        self.assertIsNone(kwargs.get('timeout'))
+
+    @mock.patch('worqer.lib_ai._fetch_llamacpp_models')
+    def test_model_id_selection_ignores_malformed_model_entries(self, mock_fetch):
+        mock_fetch.return_value = [None, 'junk', {'id': '/Users/name/Qoding/ai/model.gguf'}]
+        resolved = _select_llamacpp_model_id('model.gguf', 'http://host.docker.internal:8080/v1', 30, 'sk-no-key-required')
+        self.assertEqual(resolved, '/Users/name/Qoding/ai/model.gguf')
+
+
 if __name__ == '__main__':
     unittest.main()

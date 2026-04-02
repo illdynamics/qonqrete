@@ -636,7 +636,10 @@ def _llamacpp_endpoint_help(candidate: str | None = None) -> str:
     return ' '.join(parts)
 
 
-def _iter_llamacpp_entry_candidates(entry: dict) -> list[str]:
+def _iter_llamacpp_entry_candidates(entry: dict | None) -> list[str]:
+    if not isinstance(entry, dict):
+        return []
+
     values = []
     for key in ('id', 'root', 'parent', 'alias'):
         value = entry.get(key)
@@ -689,6 +692,9 @@ def _select_llamacpp_model_id(configured_model: str, endpoint: str, timeout: int
     alias_matches = []
     basename_matches = []
     for entry in server_models:
+        if not isinstance(entry, dict):
+            continue
+
         model_id = str(entry.get('id', '')).strip()
         if model_id:
             ids.append(model_id)
