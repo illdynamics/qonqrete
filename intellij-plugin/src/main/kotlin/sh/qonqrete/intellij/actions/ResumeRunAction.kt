@@ -5,7 +5,7 @@
  * v1.1.9: Shows timestamps and artifact counts in selection popup
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -84,7 +84,7 @@ class ResumeRunAction : AnAction() {
             .setTitle("Resume from Qage")
             .setMovable(true)
             .setResizable(true)
-            .setItemChosenCallback {
+            .setItemChoosenCallback {
                 val selected = list.selectedValue as? QageListItem
                 if (selected != null) {
                     try {

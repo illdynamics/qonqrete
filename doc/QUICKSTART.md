@@ -1,26 +1,28 @@
 # QonQrete Quickstart
 
-**Version:** `v1.2.4`
+**Version:** `v1.2.0`
 
-This guide gets you from zero to your first Qage using the workspace deployment model in `v1.2.4`.
+This is the shortest accurate path to get QonQrete running.
 
-## Option A: IDE-first
+## Option A: IDE-First (Recommended)
 
 ### VS Code
-1. Install the **QonQrete** extension.
-2. Open a project folder.
-3. Run **QonQrete: Deploy to Workspace**.
-4. Run **QonQrete: Create tasq.md** and describe the task.
-5. Run **QonQrete: Run Tasq**.
+
+1. Install the **QonQrete** extension from the VS Code Marketplace
+2. Open any project folder
+3. Run **"QonQrete: Deploy to Workspace"** from the Command Palette (`Ctrl+Shift+P`)
+4. Run **"QonQrete: Create tasq.md"** — edit the file to describe your build task
+5. Run **"QonQrete: Run Tasq"** — auto-init handles the container image build on first run
 
 ### IntelliJ / JetBrains
-1. Install the **QonQrete** plugin.
-2. Open a project.
-3. Run **QonQrete: Deploy to Workspace**.
-4. Run **QonQrete: Create tasq.md** and edit it.
-5. Run **QonQrete: Run Tasq**.
 
-### What gets created
+1. Install the **QonQrete** plugin from the JetBrains Marketplace
+2. Open any project
+3. Run **"QonQrete: Deploy to Workspace"** from the action search (`Ctrl+Shift+A`)
+4. Run **"QonQrete: Create tasq.md"** — edit the file
+5. Run **"QonQrete: Run Tasq"** (`Ctrl+Alt+Q`) — auto-init on first run
+
+### What happens
 
 ```text
 my-project/
@@ -34,107 +36,86 @@ my-project/
     ...
 ```
 
-The IDE syncs your root `tasq.md` into `.qonqrete/worqspace/tasq.md` before each run.
+The IDE syncs your root `tasq.md` into `.qonqrete/worqspace/tasq.md` before each run. You never need to touch the hidden directory.
 
-## Option B: CLI
+## Option B: CLI (Power Users)
 
 ### Prerequisites
-- Docker or Podman
-- either a cloud-provider API key **or** an external `llamacpp`-compatible HTTP endpoint
 
-### Cloud provider example
+- Docker or Podman
+- At least one AI provider API key
+
 ```bash
 export OPENAI_API_KEY='...'
+export GOOGLE_API_KEY='...'      # or GEMINI_API_KEY
+export ANTHROPIC_API_KEY='...'
+export DEEPSEEK_API_KEY='...'
+export QWEN_API_KEY='...'
+```
+
+### 1. Build the runtime image
+
+```bash
 chmod +x qonqrete.sh
 ./qonqrete.sh init
-./qonqrete.sh run --auto --cyqles 0
 ```
 
-### External llama.cpp example
-Configure `worqspace/config.yaml`:
-
-```yaml
-agents:
-  construqtor:
-    provider: llamacpp
-    model: qwen3-coder-14b
-    timeout: 1800
-    llamacpp:
-      base_url: http://host.docker.internal:8080/v1
-```
-
-Then run:
-
-```bash
-./qonqrete.sh init
-./qonqrete.sh run --auto --cyqles 0
-```
-
-`llamacpp` is an **external HTTP runtime**. It is not the same thing as `provider: local`.
-
-## Core runtime flow
+### 2. Edit the task
 
 ```text
-Qrystallizer → InstruQtor → ConstruQtor → Qualifier → InspeQtor → Qrane
+worqspace/tasq.md
 ```
 
-- **ConstruQtor** builds code only.
-- **Qualifier** runs all validation and writes `quality.d/`.
-- **InspeQtor** evaluates results and writes reqap markdown plus verdict JSON.
-- **Qrane** stops or continues from the structured verdict.
-
-## Auto-cycles
-
-Use `--cyqles 0` for auto mode.
+### 3. Run QonQrete
 
 ```bash
-./qonqrete.sh run --auto --cyqles 0
+./qonqrete.sh run
+./qonqrete.sh run --auto
+./qonqrete.sh run --auto --mode security --briq-sensitivity 6 --cyqles 3
+./qonqrete.sh run -a -n myproject
 ```
 
-Manual fixed cycles still work:
+### 4. Resume / Clean
 
 ```bash
-./qonqrete.sh run --cyqles 3
+./qonqrete.sh resume
+./qonqrete.sh clean
+./qonqrete.sh clean -A
 ```
 
-`auto_cycle_limit` in config is the hard safety cap for auto mode.
+## IDE Commands Reference
 
-## Modes
+Both VS Code and IntelliJ support the same commands:
 
-- **`program`** — freeze execution scope to the original tasq plus canonical requirement ledger
-- **`innovative`** — finish mandatory ledger work first, then keep improvements in an optional enhancement backlog
+| Command | What it does |
+|---------|-------------|
+| Deploy to Workspace | Install runtime into `.qonqrete/` |
+| Create tasq.md | Create starter template at project root |
+| Configure Run | Set sensitivity, cycles, mode, engine |
+| Run Tasq | Sync tasq → auto-init → execute |
+| Run as QonQrete Tasq | Run any markdown as a temp tasq |
+| Resume Run | Continue from a previous qage |
+| Clean Qages | Delete old qage directories |
 
-Optional enhancement briqs are labeled `Scope-Class: OPTIONAL_ENHANCEMENT` and do not extend the stop condition.
+## Recommended first-run sanity checks
 
-## What to inspect after a run
-
-After a successful run, inspect these artifacts:
+After a successful run, verify these exist:
 
 ```text
 .qonqrete/worqspace/qage_YYYYMMDD_HHMMSS/
-.qonqrete/worqspace/qage_.../qrystal.d/
 .qonqrete/worqspace/qage_.../qodeyard/
-.qonqrete/worqspace/qage_.../quality.d/
+.qonqrete/worqspace/qage_.../exeq.d/
 .qonqrete/worqspace/qage_.../reqap.d/
 ```
 
-Important machine-readable files:
-- `quality.d/cyqleN/report.json`
-- `reqap.d/cyqleN_verdict.json`
-- `reqap.d/latest_verdict.json`
+## Cost Confirmation Gate
 
-## Quality and completion
-
-QonQrete cannot finish successfully if required quality checks failed.
-That includes failed builds, failed tests, or failed builtin checks.
-
-The verdict JSON is the source of truth for completion. Reqap markdown is the human-readable companion.
-
-## Cost confirmation gate
-
-To require confirmation after CalQulator estimates cost:
+To require confirmation before running after cost estimation:
 
 ```yaml
+# In worqspace/config.yaml
 options:
   cost_confirmation_gate: true
 ```
+
+The GateQeeper will prompt you to confirm after CalQulator shows the cost estimate.

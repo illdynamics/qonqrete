@@ -10,14 +10,13 @@
  * - All settings properly implemented and used
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
 package sh.qonqrete.intellij.services
 
 import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
@@ -733,7 +732,7 @@ class QonQreteProjectService(private val project: Project) : Disposable {
                 buildSecureEnvMap().forEach { (k, v) -> cmdLine.environment[k] = v }
 
                 val handler = com.intellij.execution.process.KillableColoredProcessHandler(cmdLine)
-                val consoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
+                val consoleView = com.intellij.execution.impl.ConsoleViewImpl(project, true)
                 consoleView.attachToProcess(handler)
 
                 val descriptor = com.intellij.execution.ui.RunContentDescriptor(

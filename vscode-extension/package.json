@@ -2,7 +2,7 @@
   "name": "qonqrete",
   "displayName": "QonQrete",
   "description": "QonQrete is a deterministic AI coding agent for VS Code enabling autonomous code generation, local AI development, and secure sandboxed software construction workflows.",
-  "version": "1.2.4",
+  "version": "1.2.0",
   "publisher": "QonQrete",
   "homepage": "https://qonqrete.sh",
   "icon": "assets/qonqrete-icon.png",
@@ -193,9 +193,9 @@
         "qonqrete.defaultCycles": {
           "type": "number",
           "default": 1,
-          "minimum": 0,
+          "minimum": 1,
           "maximum": 50,
-          "description": "Default number of execution cycles (0-50). Use 0 for auto-cycles."
+          "description": "Default number of execution cycles (1-50)."
         },
         "qonqrete.defaultAutonomous": {
           "type": "boolean",
@@ -207,7 +207,6 @@
           "default": "program",
           "enum": [
             "program",
-            "innovative",
             "enterprise",
             "security",
             "data",
@@ -215,8 +214,7 @@
             "web"
           ],
           "enumDescriptions": [
-            "Strict requirement compliance",
-            "Core requirements first, optional architecture/UX improvements",
+            "General programming mode",
             "Enterprise application development",
             "Security-focused development",
             "Data processing and analysis",

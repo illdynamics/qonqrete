@@ -108,7 +108,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
 
         task_instruction_tokens = lib.estimate_tokens(content, model)
         total_briq_tokens = base_context_tokens + tokens_for_files + task_instruction_tokens
-        cost = lib.calculate_cost(total_briq_tokens, model, is_input=True)
+        cost = lib.calculate_cost(total_briq_tokens, model, is_input=True, provider=provider)
         grand_total_tokens += total_briq_tokens
 
         # Annotate File
@@ -126,7 +126,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
         print(f"{briq_file.name:<{col_width}} | {total_briq_tokens:<12,} | {lib.format_cost(cost):<15}", flush=True)
 
     # --- Print Footer ---
-    total_cost_formatted = lib.format_cost(lib.calculate_cost(grand_total_tokens, model, is_input=True))
+    total_cost_formatted = lib.format_cost(lib.calculate_cost(grand_total_tokens, model, is_input=True, provider=provider))
     print(separator, flush=True)
     print(f"{'TOTAL CYCLE ESTIMATE':<{col_width}} | {grand_total_tokens:<12,} | {total_cost_formatted:<15}", flush=True)
     print(separator + "\n", flush=True)

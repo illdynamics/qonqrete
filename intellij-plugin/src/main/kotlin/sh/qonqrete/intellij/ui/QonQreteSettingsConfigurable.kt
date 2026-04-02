@@ -3,7 +3,7 @@
  * Settings panel in Tools → QonQrete
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -30,8 +30,8 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
     private val settings = QonQreteSettingsState.getInstance()
 
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1))
-    private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 0, 50, 1))
-    private val modeCombo = ComboBox(arrayOf("program", "innovative", "enterprise", "security", "data", "devops", "web"))
+    private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1))
+    private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web"))
     private val autonomousCheckbox = JBCheckBox("Autonomous mode by default")
     private val sqrapyardCheckbox = JBCheckBox("Use Sqrapyard by default")
     private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman", "msb"))

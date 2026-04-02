@@ -8,7 +8,7 @@
  * - Env vars take precedence over stored secrets
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -23,6 +23,7 @@ export const PROVIDER_ENV_MAP: Record<string, string> = {
     gemini: 'GOOGLE_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY',
     qwen: 'QWEN_API_KEY',
+    llamacpp: 'LLAMACPP_API_KEY',
 };
 
 /** All supported env key names */
@@ -33,44 +34,62 @@ export const ALL_API_KEYS = [
     'GOOGLE_API_KEY',
     'DEEPSEEK_API_KEY',
     'QWEN_API_KEY',
+    'LLAMACPP_API_KEY',
 ] as const;
 
+export interface ProviderInfo {
+    label: string;
+    envKey?: string;
+    models: string[];
+    requiresApiKey: boolean;
+}
+
 /** Provider metadata */
-export const PROVIDERS: Record<string, { label: string; envKey: string; models: string[] }> = {
+export const PROVIDERS: Record<string, ProviderInfo> = {
     openai: {
         label: 'OpenAI',
         envKey: 'OPENAI_API_KEY',
         models: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o4-mini'],
+        requiresApiKey: true,
     },
     gemini: {
         label: 'Google Gemini',
         envKey: 'GOOGLE_API_KEY',
         models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
+        requiresApiKey: true,
     },
     anthropic: {
         label: 'Anthropic',
         envKey: 'ANTHROPIC_API_KEY',
         models: ['claude-sonnet-4-20250514', 'claude-haiku-4-5-20251001', 'claude-opus-4-20250514'],
+        requiresApiKey: true,
     },
     deepseek: {
         label: 'DeepSeek',
         envKey: 'DEEPSEEK_API_KEY',
         models: ['deepseek-chat', 'deepseek-reasoner'],
+        requiresApiKey: true,
     },
     qwen: {
         label: 'Qwen',
         envKey: 'QWEN_API_KEY',
         models: ['qwen-plus', 'qwen-turbo', 'qwen-max'],
+        requiresApiKey: true,
     },
     openrouter: {
         label: 'OpenRouter',
         envKey: 'OPENROUTER_API_KEY',
         models: ['anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'deepseek/deepseek-chat-v3'],
+        requiresApiKey: true,
     },
     llamacpp: {
-        label: 'llama.cpp (external HTTP)',
-        envKey: '', // No key required
-        models: ['qwen3-coder-14b', 'qwen3-coder-7b', 'deepseek-r1-distill-qwen-14b', 'custom model...'],
+        label: 'llama.cpp',
+        envKey: 'LLAMACPP_API_KEY',
+        models: [
+            '/Users/ricky/Qoding/ai/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q6_K.gguf',
+            '/absolute/path/to/model.gguf',
+        ],
+        requiresApiKey: false,
     },
 };
 

@@ -3,7 +3,7 @@
  * Provides VS Code UI dialogs for configuring QonQrete runs
  * 
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -14,8 +14,7 @@ import { QonQreteRunConfig } from '../cli/qonqreteRunner';
  * Mode descriptions for the mode selection QuickPick
  */
 const MODE_OPTIONS: vscode.QuickPickItem[] = [
-    { label: 'program', description: 'Strict requirement compliance', picked: true },
-    { label: 'innovative', description: 'Core requirements first, optional architecture/UX improvements' },
+    { label: 'program', description: 'General programming mode', picked: true },
     { label: 'enterprise', description: 'Enterprise application development' },
     { label: 'security', description: 'Security-focused development' },
     { label: 'data', description: 'Data processing and analysis' },
@@ -78,12 +77,12 @@ export async function showQuickConfigWizard(): Promise<QonQreteRunConfig | undef
     // Step 2: Cycles
     const cyclesInput = await vscode.window.showInputBox({
         title: 'QonQrete Configuration (2/4)',
-        prompt: 'Number of execution cycles (0-50, where 0 = auto)',
+        prompt: 'Number of execution cycles (1-50)',
         value: defaults.cycles.toString(),
         validateInput: (value) => {
             const num = parseInt(value, 10);
-            if (isNaN(num) || num < 0 || num > 50) {
-                return 'Please enter a number between 0 and 50';
+            if (isNaN(num) || num < 1 || num > 50) {
+                return 'Please enter a number between 1 and 50';
             }
             return undefined;
         },
@@ -147,7 +146,7 @@ export async function showFullConfigWizard(): Promise<QonQreteRunConfig | undefi
         },
         {
             label: `$(symbol-number) Cycles: ${defaults.cycles}`,
-            description: 'Execution cycles (0-50, 0 = auto)',
+            description: 'Execution cycles (1-50)',
             detail: 'Number of build/review cycles to run',
         },
         {
@@ -227,11 +226,11 @@ export async function showFullConfigWizard(): Promise<QonQreteRunConfig | undefi
             }
         } else if (selected.label.includes('Cycles')) {
             const input = await vscode.window.showInputBox({
-                prompt: 'Execution Cycles (0-50, 0 = auto)',
+                prompt: 'Execution Cycles (1-50)',
                 value: config.cycles.toString(),
                 validateInput: (v) => {
                     const n = parseInt(v, 10);
-                    return (isNaN(n) || n < 0 || n > 50) ? 'Enter 0-50' : undefined;
+                    return (isNaN(n) || n < 1 || n > 50) ? 'Enter 1-50' : undefined;
                 },
             });
             if (input !== undefined) {

@@ -11,7 +11,7 @@
  * - Implements Disposable for proper cleanup
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -55,11 +55,11 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1)).apply {
         toolTipText = "Briq sensitivity (0-16). Lower = more briqs generated. Default: 6"
     }
-    private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 0, 50, 1)).apply {
-        toolTipText = "Number of AI cycles (0-50, 0 = auto). More cycles = more refinement. Default: 3"
+    private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1)).apply {
+        toolTipText = "Number of AI cycles (1-50). More cycles = more refinement. Default: 3"
     }
-    private val modeCombo = ComboBox(arrayOf("program", "innovative", "enterprise", "security", "data", "devops", "web")).apply {
-        toolTipText = "QonQrete mode: program (strict), innovative (optional improvements), plus legacy style modes"
+    private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web")).apply {
+        toolTipText = "QonQrete mode: program (general), enterprise, security, data, devops, or web"
     }
     private val autonomousCheckbox = JBCheckBox("Autonomous", settings.defaultAutonomous).apply {
         toolTipText = "Enable autonomous mode (--auto). AI makes decisions without prompts."
@@ -169,7 +169,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         configPanel.add(sensitivitySpinner, cgbc)
 
         cgbc.gridx = 0; cgbc.gridy = 1; cgbc.weightx = 0.0
-        configPanel.add(JBLabel("Cycles:").apply { toolTipText = "AI iteration cycles (0-50, 0 = auto)" }, cgbc)
+        configPanel.add(JBLabel("Cycles:").apply { toolTipText = "AI iteration cycles (1-50)" }, cgbc)
         cgbc.gridx = 1; cgbc.weightx = 1.0
         configPanel.add(cyclesSpinner, cgbc)
 

@@ -2,7 +2,7 @@
 # worqer/qontract_guard.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # QontractGuard - Deterministic Contract Verification (No LLM)
-# v1.2.4-stable - QONTRACT enforcement via Python AST parsing
+# v1.0.4-stable - QONTRACT enforcement via Python AST parsing
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # Verifies generated code against qontract.json invariants:

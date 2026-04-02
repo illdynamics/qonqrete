@@ -30,6 +30,21 @@ PRICING = {
     "deepseek-coder":        {"input": 0.14,  "output": 0.28,  "char_per_token": 4.0},
 }
 
+ZERO_COST_PROVIDERS = {"llamacpp", "local"}
+
+
+def _looks_like_local_model(model: str | None) -> bool:
+    if not model:
+        return False
+    value = str(model).strip().lower()
+    return value.endswith('.gguf') or '/.gguf' in value or '.gguf/' in value
+
+
+def is_zero_cost(provider: str | None = None, model: str | None = None) -> bool:
+    provider_lc = (provider or '').strip().lower()
+    return provider_lc in ZERO_COST_PROVIDERS or _looks_like_local_model(model)
+
+
 def estimate_tokens(text: str, model: str = "gemini-2.5-flash-lite") -> int:
     """
     Returns an estimated token count based on character length.
@@ -44,13 +59,15 @@ def estimate_tokens(text: str, model: str = "gemini-2.5-flash-lite") -> int:
     
     return math.ceil(len(text) / ratio)
 
-def calculate_cost(tokens: int, model: str = "gemini-2.5-flash-lite", is_input: bool = True) -> float:
+def calculate_cost(tokens: int, model: str = "gemini-2.5-flash-lite", is_input: bool = True, provider: str | None = None) -> float:
     """Calculates USD cost for a given token count."""
+    if is_zero_cost(provider, model):
+        return 0.0
     specs = PRICING.get(model, PRICING["gemini-2.5-flash-lite"])
     price_per_million = specs["input"] if is_input else specs["output"]
     return (tokens / 1_000_000) * price_per_million
 
-def estimate_call_cost(input_text: str, estimated_output_tokens: int, model: str) -> tuple[float, int, int]:
+def estimate_call_cost(input_text: str, estimated_output_tokens: int, model: str, provider: str | None = None) -> tuple[float, int, int]:
     """
     Estimate cost for an AI call.
     
@@ -58,8 +75,8 @@ def estimate_call_cost(input_text: str, estimated_output_tokens: int, model: str
         (total_cost, input_tokens, output_tokens)
     """
     input_tokens = estimate_tokens(input_text, model)
-    input_cost = calculate_cost(input_tokens, model, is_input=True)
-    output_cost = calculate_cost(estimated_output_tokens, model, is_input=False)
+    input_cost = calculate_cost(input_tokens, model, is_input=True, provider=provider)
+    output_cost = calculate_cost(estimated_output_tokens, model, is_input=False, provider=provider)
     return (input_cost + output_cost, input_tokens, estimated_output_tokens)
 
 def format_cost(cost: float) -> str:

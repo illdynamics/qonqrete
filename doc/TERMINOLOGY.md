@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v1.2.4`
+**Version:** `v1.2.0`
 
 This document defines the main vocabulary used in the current repository.
 
@@ -48,11 +48,11 @@ This document defines the main vocabulary used in the current repository.
 - **Qompressor** — skeletonizer
 - **Qontrabender** — variable-fidelity cache compositor
 - **QontractGuard** — deterministic contract verifier
-- **Qualifier builtins** — deterministic syntax/import/qontext checks run before external quality commands
+- **LoQal Verifier** — deterministic syntax/import verification helper
 
 ## Runtime/config terms
 
-- **Operational mode** — `program` freezes execution scope to the canonical task and requirement ledger, while `innovative` separates mandatory scope from an optional enhancement backlog.
+- **Operational mode** — run persona / mode such as `program`, `enterprise`, `security`, etc.
 - **Briq sensitivity** — decomposition granularity; higher means more briqs in the current system design
 - **Autonomous mode** — continue without user cheQpoints
 - **User-gated mode** — pause at cheQpoints

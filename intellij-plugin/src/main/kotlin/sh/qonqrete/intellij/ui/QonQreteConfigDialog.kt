@@ -3,7 +3,7 @@
  * Full run configuration dialog
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -31,8 +31,8 @@ class QonQreteConfigDialog(
     private val settings = QonQreteSettingsState.getInstance()
 
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1))
-    private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 0, 50, 1))
-    private val modeCombo = ComboBox(arrayOf("program", "innovative", "enterprise", "security", "data", "devops", "web"))
+    private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1))
+    private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web"))
     private val autonomousCheckbox = JBCheckBox("Autonomous mode (no human-in-the-loop)")
     private val sqrapyardCheckbox = JBCheckBox("Use Sqrapyard (cache)")
     private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman", "msb"))
@@ -62,7 +62,7 @@ class QonQreteConfigDialog(
 
         val cyclesPanel = JPanel(BorderLayout())
         cyclesPanel.add(cyclesSpinner, BorderLayout.CENTER)
-        cyclesPanel.add(JBLabel("(0-50, 0 = auto)"), BorderLayout.EAST)
+        cyclesPanel.add(JBLabel("(1-50)"), BorderLayout.EAST)
 
         val builder = FormBuilder.createFormBuilder()
             .addLabeledComponent("Briq Sensitivity:", sensitivityPanel)

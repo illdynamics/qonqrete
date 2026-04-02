@@ -1,25 +1,25 @@
 # QonQrete Pipeline Configuration
-# v1.2.4-stable — Qualifier-Centralized Validation
+# v1.0.4-stable — Contract-enforced pipeline with qontract.d/
 #
-# CORE COMPLETION PATH:
-#   qrystallizer → instruqtor → construqtor → qualifier → inspeqtor → qrane
-# SUPPORT PASSES THAT MAY ALSO RUN:
-#   calqulator before generation; qontextor/qompressor after review
+# PIPELINE ORDER (DO NOT CHANGE):
+#   instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
 #
-# QRYSTAL: Requirements and readiness (Cycle 1 only).
-# CONTRACT: Project invariants (generated in cycle 1, mandatory thereafter).
-# QUALITY: Build/test artifacts (Qualifier).
-# VERDICT: Structured decision JSON (InspeQtor).
+# CONTRACT: qontract.d/qontract.{md,json} — generated in cycle 1, mandatory thereafter.
+# QODEYARD: Primary truth source for current-cycle code.
+# bloq.d: Skeleton cache — runs AFTER inspeqtor, may be stale during inspeqtor.
+# qontext.d: Dependency hints — runs AFTER inspeqtor, may be stale during inspeqtor.
 
 agents:
-  - name: qrystallizer
-    script: qrystallizer.py
+  - name: tasqleveler
+    script: tasqleveler.py
     input: "tasq.d/cyqle{N}_tasq.md"
     output: "tasq.d/cyqle{N}_tasq.md"
     description: |
-      Qrystallizer v1.2.4 - Cycle-1 Preflight Agent.
-      Analyzes tasq and generates requirements.json in qrystal.d/.
-      Crucial for Auto-Cycle Mode cycle estimation.
+      TasqLeveler v1.0.4-stable - Automatic Tasq Enhancement
+      RUNS ONCE: Only on Cycle 1. Supercharges tasq with dependency graph,
+      golden path tests, mock infrastructure, success criteria. +15-20% quality.
+      Original preserved as tasq_original.md.
+      To enable: uncomment this block. Does not alter relative stage order.
     cycle_1_only: true
 
   - name: instruqtor
@@ -27,14 +27,14 @@ agents:
     input: "tasq.d/cyqle{N}_tasq.md"
     output: briq.d/
     description: |
-      Architect Agent. Breaks requirements into briqs.
-      Generates qontract.json on Cycle 1. Respects QONQ_MODE.
+      Reads cycle tasq and generates briqs. On cycle 1, also generates
+      qontract.d/qontract.{md,json} (project constitution).
 
   - name: calqulator
     script: calqulator.py
     input: "briq.d/"
     output: "briq.d/"
-    description: "Token and cost estimator."
+    description: "Estimates token count and cost for each briq and annotates the files."
 
   - name: construqtor
     script: construqtor.py
@@ -43,16 +43,37 @@ agents:
       - "exeq.d/cyqle{N}_summary.md"
       - "exeq.d/cyqle{N}_changed.md"
     description: |
-      Code Generation Agent. Writes source to qodeyard/.
-      Generates code, records exeQ artifacts, and leaves deterministic validation to Qualifier.
+      Parses briqs and generates code. Fail-fast: requires qontract.d/ for cycles > 1.
+      Per-briq QontractGuard gating with auto-retry on contract-relevant briqs.
+      Context: qontract.d/qontract.md + cycle1 tasq + qontext.d/ + qodeyard tree.
 
-  - name: qualifier
-    script: qualifier.py
+  - name: qontextor
+    script: qontextor.py
+    input: "exeq.d/cyqle{N}_changed.md"
+    output: "qontext.d/"
+    description: "Updates qontext.d/ dependency hints based on changed files."
+
+  - name: qompressor
+    script: qompressor.py
     input: "qodeyard/"
-    output: "quality.d/cyqle{N}/"
+    output: "bloq.d/"
     description: |
-      Execution Gate Agent. ONLY agent allowed to run project code.
-      Runs build/test commands and writes quality.d/ logs.
+      Skeletonizer: mirrors qodeyard into bloq.d with stripped bodies.
+      Deterministic summaries (AST-based). Valid Python output guaranteed.
+      Correct indentation for module-level functions AND class methods.
+
+  - name: qontrabender
+    script: qontrabender.py
+    input: 
+      - "bloq.d/"
+      - "qodeyard/"
+      - "qontext.d/"
+    output: "qache.d/"
+    description: "Cache Bender — assembles hybrid cache payloads for Gemini context caching."
+    triggers:
+      - "post_qompressor"
+      - "pre_construqtor"
+      - "manual"
 
   - name: inspeqtor
     script: inspeqtor.py
@@ -61,28 +82,36 @@ agents:
       - "exeq.d/cyqle{N}_changed.md"
     output: "reqap.d/cyqle{N}_reqap.md"
     description: |
-      Review Agent. Produces structured verdict.json.
-      Integrates Guard, Quality, and AI meta-review status.
+      Multi-Stage Code Review (v1.0.4-stable):
+      
+      STAGE 0 - QontractGuard (deterministic, AST-based):
+        Reads qontract.d/qontract.json, enforces against qodeyard/*.
+        FAIL = forces cycle FAIL. Never silently skips.
+      
+      STAGE 1 - LoQal Verification (deterministic):
+        Syntax/import sanity checks.
+      
+      STAGE 2 - Per-Briq Tactical Reviews (AI):
+        Reviews each briq with context. Report-only if guard failed.
+      
+      STAGE 3 - Global Meta-Review (AI aggregation):
+        Final reQap with consolidated suggestions.
+      
+      Context always includes: qontract.d/qontract.md, tasqs, qodeyard/* (primary).
+      Optional: bloq.d/*, qontext.d/* (may be stale — pipeline order).
+      Logs all paths to struqture/qonsole_inspeqtor.log with staleness notes.
     
+    budget_controlled: true
     stages:
       - name: qontract_guard
         deterministic: true
+      - name: loqal_verification
+        deterministic: true
       - name: per_briq
         parallel: false
+        requires: qontract_guard
       - name: meta_review
         requires: per_briq
-
-  - name: qontextor
-    script: qontextor.py
-    input: "exeq.d/cyqle{N}_changed.md"
-    output: "qontext.d/"
-    description: "Semantic context indexer."
-
-  - name: qompressor
-    script: qompressor.py
-    input: "qodeyard/"
-    output: "bloq.d/"
-    description: "Skeletonizer agent."
 
 options:
   microsandbox: false

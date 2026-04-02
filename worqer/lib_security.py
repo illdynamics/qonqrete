@@ -38,7 +38,9 @@ DEFAULT_JAIL = Path("/qonq")
 
 # Retry hard limits
 MAX_RETRIES_HARD_LIMIT = 10
-MAX_TIMEOUT_SECONDS = 300  # 5 minutes
+MAX_TIMEOUT_SECONDS = 300  # 5 minutes for standard/cloud providers
+MAX_LLAMACPP_TIMEOUT_SECONDS = 900  # 15 minutes for host-side llama.cpp endpoints
+MAX_CONFIG_TIMEOUT_SECONDS = max(MAX_TIMEOUT_SECONDS, MAX_LLAMACPP_TIMEOUT_SECONDS)
 
 # =============================================================================
 # STRUCTURED LOGGING
@@ -273,15 +275,38 @@ def safe_read_file(path: Path, max_size: int = MAX_GENERATED_FILE_SIZE,
 CONFIG_SCHEMA = {
     "type": "object",
     "properties": {
+        "providers": {
+            "type": "object",
+            "properties": {
+                "llamacpp": {
+                    "type": "object",
+                    "properties": {
+                        "endpoint": {"type": "string"},
+                        "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_LLAMACPP_TIMEOUT_SECONDS},
+                        "max_tokens": {"type": "integer", "minimum": 1},
+                        "temperature": {"type": "number"},
+                        "top_p": {"type": "number"},
+                        "top_k": {"type": "integer"},
+                        "min_p": {"type": "number"},
+                        "seed": {"type": "integer"},
+                        "repeat_penalty": {"type": "number"},
+                        "presence_penalty": {"type": "number"},
+                        "frequency_penalty": {"type": "number"},
+                        "stop": {"type": "array"}
+                    }
+                }
+            },
+            "additionalProperties": True
+        },
         "agents": {
             "type": "object",
             "additionalProperties": {
                 "type": "object",
                 "properties": {
-                    "provider": {"type": "string", "enum": ["openai", "anthropic", "gemini", "deepseek", "qwen"]},
+                    "provider": {"type": "string", "enum": ["openai", "anthropic", "gemini", "deepseek", "qwen", "openrouter", "local", "llamacpp"]},
                     "model": {"type": "string"},
                     "max_retries": {"type": "integer", "minimum": 0, "maximum": MAX_RETRIES_HARD_LIMIT},
-                    "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT_SECONDS}
+                    "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_CONFIG_TIMEOUT_SECONDS}
                 }
             }
         },
@@ -296,6 +321,34 @@ CONFIG_SCHEMA = {
         }
     }
 }
+
+
+def _provider_timeout_limit(provider: str | None) -> int:
+    provider_name = str(provider or '').strip().lower()
+    if provider_name == 'llamacpp':
+        return MAX_LLAMACPP_TIMEOUT_SECONDS
+    return MAX_TIMEOUT_SECONDS
+
+
+def _validate_timeout_value(errors: List[str], path_name: str, timeout: Any, provider: str | None) -> None:
+    max_timeout = _provider_timeout_limit(provider)
+    provider_name = str(provider or 'default').strip().lower() or 'default'
+    if not isinstance(timeout, int) or timeout < 1 or timeout > max_timeout:
+        errors.append(f"{path_name} must be 1-{max_timeout} for provider '{provider_name}'")
+
+
+def _validate_provider_specific_timeouts(config: Dict[str, Any], errors: List[str]) -> None:
+    providers = config.get('providers', {}) or {}
+    llamacpp_cfg = providers.get('llamacpp', {}) or {}
+    if 'timeout' in llamacpp_cfg:
+        _validate_timeout_value(errors, 'providers.llamacpp.timeout', llamacpp_cfg.get('timeout'), 'llamacpp')
+
+    for agent_name, agent_config in (config.get('agents', {}) or {}).items():
+        if not isinstance(agent_config, dict):
+            continue
+        provider_name = agent_config.get('provider', 'openai')
+        if 'timeout' in agent_config:
+            _validate_timeout_value(errors, f'agents.{agent_name}.timeout', agent_config.get('timeout'), provider_name)
 
 
 def validate_config(config: Dict[str, Any]) -> List[str]:
@@ -317,12 +370,10 @@ def validate_config(config: Dict[str, Any]) -> List[str]:
                     retries = agent_config["max_retries"]
                     if not isinstance(retries, int) or retries < 0 or retries > MAX_RETRIES_HARD_LIMIT:
                         errors.append(f"agents.{agent_name}.max_retries must be 0-{MAX_RETRIES_HARD_LIMIT}")
-                if "timeout" in agent_config:
-                    timeout = agent_config["timeout"]
-                    if not isinstance(timeout, int) or timeout < 1 or timeout > MAX_TIMEOUT_SECONDS:
-                        errors.append(f"agents.{agent_name}.timeout must be 1-{MAX_TIMEOUT_SECONDS}")
     except Exception as e:
         errors.append(f"Schema validation error: {e}")
+
+    _validate_provider_specific_timeouts(config, errors)
     
     return errors
 
@@ -468,5 +519,7 @@ def init_security(log_path: Optional[Path] = None) -> None:
         "max_tasq_size": MAX_TASQ_SIZE,
         "max_file_size": MAX_GENERATED_FILE_SIZE,
         "max_retries": MAX_RETRIES_HARD_LIMIT,
-        "max_timeout": MAX_TIMEOUT_SECONDS
+        "max_timeout_default": MAX_TIMEOUT_SECONDS,
+        "max_timeout_llamacpp": MAX_LLAMACPP_TIMEOUT_SECONDS,
+        "max_timeout_config_schema": MAX_CONFIG_TIMEOUT_SECONDS
     })

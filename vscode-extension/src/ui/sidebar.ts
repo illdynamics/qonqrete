@@ -3,7 +3,7 @@
  * WebView-based control panel
  * 
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -425,15 +425,13 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
 
             <div class="form-group">
                 <label>Cycles</label>
-                <input type="number" id="cycles" min="0" max="50" value="1">
-                <div class="name-hint">0 = auto-cycles</div>
+                <input type="number" id="cycles" min="1" max="50" value="1">
             </div>
 
             <div class="form-group">
                 <label>Mode</label>
                 <select id="mode">
                     <option value="program">Program</option>
-                    <option value="innovative">Innovative</option>
                     <option value="enterprise">Enterprise</option>
                     <option value="security">Security</option>
                     <option value="data">Data</option>

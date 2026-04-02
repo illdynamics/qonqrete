@@ -2,7 +2,7 @@
 # worqer/inspeqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # InspeQtor Agent - Multi-Stage Code Review System
-# v1.2.4-stable - QONTRACT Enforcement + QontractGuard Integration
+# v1.0.4-stable - QONTRACT Enforcement + QontractGuard Integration
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # STAGE 1 (This File): Per-briq tactical reviews (batched or individual)
@@ -18,24 +18,17 @@ import sys
 import yaml
 import re
 import glob
-import json
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
+try: 
     import lib_ai
-    from mode_policy import (
-        MANDATORY_SCOPE_CLASS,
-        extract_scope_class,
-        is_optional_scope,
-        load_mode_policy_from_env,
-        render_inspeqtor_directives,
-    )
-except ImportError:
+    import lib_provider_config
+except ImportError: 
     print("CRITICAL: lib_ai.py not found.", flush=True)
     sys.exit(1)
 
-# v1.2.4: Import QontractGuard
+# v1.0.4: Import QontractGuard
 try:
     import qontract_guard
 except ImportError:
@@ -80,6 +73,7 @@ def load_inspeqtor_config(config_path: Path) -> dict:
     except:
         pass
     
+    provider_options = lib_provider_config.resolve_agent_provider_options(config, 'inspeqtor')
     agent_cfg = config.get('agents', {}).get('inspeqtor', {})
     
     # Merge with defaults
@@ -88,15 +82,10 @@ def load_inspeqtor_config(config_path: Path) -> dict:
         if key in agent_cfg:
             result[key] = agent_cfg[key]
     
-    # Add provider/model
-    result['provider'] = agent_cfg.get('provider', 'openai')
-    result['model'] = agent_cfg.get('model', 'gpt-4o')
-    result['timeout'] = agent_cfg.get('timeout')
-    
-    # Include llamacpp options if applicable
-    if result['provider'] == 'llamacpp':
-        result['llamacpp'] = agent_cfg.get('llamacpp', {})
-        
+    # Add provider/model/runtime options
+    result['provider'] = provider_options.get('provider') or agent_cfg.get('provider', 'openai')
+    result['model'] = provider_options.get('model') or agent_cfg.get('model', 'gpt-4o')
+    result['provider_options'] = provider_options
     result['use_qontextor'] = config.get('options', {}).get('use_qontextor', True)
     
     return result
@@ -192,33 +181,29 @@ def group_briqs_into_batches(
 
 
 def build_batched_review_prompt(
-    briqs_data: list[dict],  # [{'name': str, 'content': str, 'changed': list, 'scope_class': str}]
-    mode_directives: str,
+    briqs_data: list[dict],  # [{'name': str, 'content': str, 'changed': list}]
 ) -> str:
     """Build a prompt for reviewing multiple briqs at once."""
-
+    
     briq_sections = []
     for i, briq in enumerate(briqs_data):
         changed_section = ""
         if briq['changed']:
             changed_files = "\n".join([
-                f"**{fname}:**\n```\n{content[:8000]}\n```"
-                for fname, content in briq['changed'][:3]
+                f"**{fname}:**\n```\n{content[:8000]}\n```"  # Limit per file
+                for fname, content in briq['changed'][:3]  # Max 3 files per briq in batch
             ])
             changed_section = f"\n**Changed Files:**\n{changed_files}"
-
+        
         briq_sections.append(f"""
 ### BRIQ {i+1}: {briq['name']}
-**Scope-Class:** {briq.get('scope_class', MANDATORY_SCOPE_CLASS)}
 
 **Instructions:**
 {briq['content'][:4000]}
 {changed_section}
 """)
-
+    
     return f"""You are a senior code reviewer. Review the following {len(briqs_data)} briqs and provide an assessment for EACH one.
-
-{mode_directives}
 
 **CRITICAL:** You must provide a separate assessment for EACH briq using this EXACT format:
 
@@ -233,8 +218,7 @@ Issues: List any issues found (or "None")
 Review each briq for:
 1. Does the code match the architect's instructions?
 2. Are there any syntax errors or obvious bugs?
-3. Is the implementation complete for that briq's declared `Scope-Class`?
-4. OPTIONAL_ENHANCEMENT briqs should still be reviewed honestly, but they are suggestion backlog items and do not redefine mandatory completion.
+3. Is the implementation complete?
 
 **BRIQS TO REVIEW:**
 {"".join(briq_sections)}
@@ -371,22 +355,23 @@ def build_briq_review_prompt(
     briq_content: str,
     changed_files: list[tuple[str, str]],
     cycle_goal: str = "",
-    qontract_context: str = "",  # v1.2.4
-    mode_directives: str = "",
-    scope_class: str = MANDATORY_SCOPE_CLASS,
+    qontract_context: str = ""  # v1.0.4
 ) -> str:
     """Build the prompt for reviewing a single briq."""
-
+    
+    # Build changed code section
     changed_code_section = ""
     if changed_files:
         changed_code_section = "\n## Changed Code Artifacts\n"
         for filename, content in changed_files:
+            # Truncate very large files in the prompt itself
             if len(content) > 50_000:
                 content = content[:50_000] + "\n\n[...TRUNCATED for review...]"
             changed_code_section += f"\n### File: `{filename}`\n```\n{content}\n```\n"
     else:
         changed_code_section = "\n_No changed code artifacts for this briq._\n"
-
+    
+    # v1.0.4: QONTRACT section
     qontract_section = ""
     if qontract_context:
         qontract_section = f"""
@@ -399,8 +384,6 @@ def build_briq_review_prompt(
     prompt = f"""You are the 'inspeQtor', a senior software quality engineer performing a focused code review.
 
 **SCOPE:** You are reviewing a SINGLE briq (task unit) from a larger cycle. Focus only on this specific unit.
-**MODE POLICY:** {mode_directives}
-**BRIQ SCOPE CLASS:** {scope_class}
 {qontract_section}
 **YOUR TASK:**
 Determine if the code changes for this briq are complete, correct, and consistent with the existing architecture.
@@ -410,7 +393,6 @@ Determine if the code changes for this briq are complete, correct, and consisten
 2. **Completeness:** Did the code fully implement what the briq specified?
 3. **Consistency:** Do the changes integrate properly with existing code patterns and conventions?
 4. **Contract Compliance:** Does the code comply with QONTRACT invariants?
-5. **Scope Discipline:** OPTIONAL_ENHANCEMENT briqs are backlog suggestions, not mandatory completion gates.
 
 **OUTPUT FORMAT (Strict Markdown):**
 
@@ -462,8 +444,6 @@ def run_per_briq_reviews(
         List of briq review results: [{briq_name, assessment, reqap_path, error}]
     """
     results = []
-    mode_policy = load_mode_policy_from_env()
-    mode_directives = render_inspeqtor_directives(mode_policy)
     
     # Find all briqs for this cycle
     briq_pattern = f"cyqle{cycle_num}_*.md"
@@ -536,41 +516,34 @@ def run_per_briq_reviews(
                     if not briq_changed and all_changed:
                         briq_changed = all_changed[:3]  # Limit in batch mode
                     
-                    scope_class = extract_scope_class(briq_content, briq_name)
                     briqs_data.append({
                         'name': briq_name,
                         'content': briq_content,
-                        'changed': briq_changed,
-                        'scope_class': scope_class,
+                        'changed': briq_changed
                     })
                 
-                batch_scope_map = {item['name']: item['scope_class'] for item in briqs_data}
-
                 # Build batched prompt
-                prompt = build_batched_review_prompt(briqs_data, mode_directives)
+                prompt = build_batched_review_prompt(briqs_data)
                 
                 # Estimate cost
                 input_tokens = estimate_tokens(prompt, config['model'])
                 estimated_output_tokens = len(batch) * 150  # ~150 tokens per briq assessment
-                input_cost = calculate_cost(input_tokens, config['model'], is_input=True)
-                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False)
+                input_cost = calculate_cost(input_tokens, config['model'], is_input=True, provider=config['provider'])
+                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False, provider=config['provider'])
                 batch_cost = input_cost + output_cost
                 total_review_cost += batch_cost
                 
                 print(f"   Estimated batch cost: {format_cost(batch_cost)}", flush=True)
                 
                 # Call AI for batched review
-                ai_timeout = config.get('timeout')
-                ai_provider_options = config.get(config['provider']) if config['provider'] == 'llamacpp' else None
-
                 response = lib_ai.run_ai_completion(
                     config['provider'],
                     config['model'],
                     prompt,
                     context_files=[],  # Context embedded in prompt for batched
                     max_prompt_chars=config.get('batch_token_roof', 60000) * 4,  # chars
-                    timeout=ai_timeout,
-                    provider_options=ai_provider_options
+                    timeout=config.get('provider_options', {}).get('timeout'),
+                    request_options=config.get('provider_options'),
                 )
                 
                 # Parse batch response
@@ -596,7 +569,6 @@ def run_per_briq_reviews(
                         'briq_name': briq_name,
                         'assessment': parsed['assessment'],
                         'reqap_path': str(reqap_path),
-                        'scope_class': batch_scope_map.get(briq_name, MANDATORY_SCOPE_CLASS),
                         'error': None
                     })
                 
@@ -620,7 +592,6 @@ def run_per_briq_reviews(
                         'briq_name': briq_name,
                         'assessment': '[FAILURE]',
                         'reqap_path': str(reqap_path),
-                        'scope_class': extract_scope_class(briq_file.read_text(encoding='utf-8', errors='ignore'), briq_name),
                         'error': str(e)
                     })
     
@@ -663,30 +634,19 @@ def run_per_briq_reviews(
                 else:
                     context_files = all_context_files[:config['max_context_files_per_briq']]
                 
-                scope_class = extract_scope_class(briq_content, briq_name)
-
                 # Build prompt
-                prompt = build_briq_review_prompt(
-                    briq_name,
-                    briq_content,
-                    briq_changed,
-                    mode_directives=mode_directives,
-                    scope_class=scope_class,
-                )
+                prompt = build_briq_review_prompt(briq_name, briq_content, briq_changed)
                 
                 # Estimate cost
                 context_size = sum(len(Path(f).read_text(encoding='utf-8', errors='ignore')) for f in context_files if Path(f).exists())
                 input_tokens = estimate_tokens(prompt, config['model']) + (context_size // 4)
                 estimated_output_tokens = 500
-                input_cost = calculate_cost(input_tokens, config['model'], is_input=True)
-                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False)
+                input_cost = calculate_cost(input_tokens, config['model'], is_input=True, provider=config['provider'])
+                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False, provider=config['provider'])
                 review_cost = input_cost + output_cost
                 total_review_cost += review_cost
                 
                 # Call AI
-                ai_timeout = config.get('timeout')
-                ai_provider_options = config.get(config['provider']) if config['provider'] == 'llamacpp' else None
-
                 response = lib_ai.run_ai_completion(
                     config['provider'],
                     config['model'],
@@ -695,8 +655,8 @@ def run_per_briq_reviews(
                     max_prompt_chars=config['max_prompt_chars_per_briq'],
                     max_context_files=config['max_context_files_per_briq'],
                     max_chars_per_file=config['max_chars_per_context_file'],
-                    timeout=ai_timeout,
-                    provider_options=ai_provider_options
+                    timeout=config.get('provider_options', {}).get('timeout'),
+                    request_options=config.get('provider_options'),
                 )
                 
                 # Extract assessment
@@ -719,7 +679,6 @@ def run_per_briq_reviews(
                     'briq_name': briq_name,
                     'assessment': assessment,
                     'reqap_path': str(reqap_path),
-                    'scope_class': scope_class,
                     'error': None
                 })
                 
@@ -734,7 +693,6 @@ def run_per_briq_reviews(
                     'briq_name': briq_name,
                     'assessment': '[FAILURE]',
                     'reqap_path': str(reqap_path),
-                    'scope_class': extract_scope_class(briq_content, briq_name),
                     'error': str(e)
                 })
     
@@ -748,11 +706,11 @@ def run_per_briq_reviews(
 def main() -> None:
     """
     InspeQtor main entry point.
-    v1.2.4-stable: Reordered stages per G4.5/G4.6 spec.
+    v1.0.4-stable: Reordered stages per G4.5/G4.6 spec.
     
     Stage order:
       STAGE 0: QontractGuard (deterministic, BEFORE AI)
-      STAGE 1: Qualifier deterministic quality results (BEFORE AI)
+      STAGE 1: LoQal Verification (syntax/import sanity, BEFORE AI)
       STAGE 2: Per-Briq Tactical Reviews (AI, only if guard passes or report-only)
       STAGE 3: Global Meta-Review (AI aggregation)
     
@@ -777,7 +735,7 @@ def main() -> None:
     tasq_dir = worqspace_root / "tasq.d"
     struqture_dir = worqspace_root / "struqture"
     
-    print(f"=== InspeQtor v1.2.4: Multi-Stage Review for cyQle {cycle_num} ===", flush=True)
+    print(f"=== InspeQtor v1.0.4: Multi-Stage Review for cyQle {cycle_num} ===", flush=True)
 
     # Load configuration
     config = load_inspeqtor_config(worqspace_root / 'config.yaml')
@@ -798,7 +756,7 @@ def main() -> None:
             pass
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # v1.2.4 (C): CONTEXT ASSEMBLY — Contract + Tasqs + Qodeyard (primary)
+    # v1.0.4 (C): CONTEXT ASSEMBLY — Contract + Tasqs + Qodeyard (primary)
     # bloq.d and qontext.d are optional and may be stale
     # ═══════════════════════════════════════════════════════════════════════════
     print(f"\n--- Context Assembly ---", flush=True)
@@ -910,6 +868,7 @@ def main() -> None:
     print(f"\n--- STAGE 0: QontractGuard (Deterministic — Full Cycle) ---", flush=True)
     if qontract_guard and qontract_json_path.exists():
         try:
+            import json as _json
             contract = qontract_guard.load_contract(qontract_json_path)
             if not contract:
                 # B) Never silently skip — treat empty/missing as FAIL
@@ -933,7 +892,7 @@ def main() -> None:
 
             guard_json_output = reqap_dir / f"cyqle{cycle_num}_qontract_guard.json"
             with open(guard_json_output, 'w', encoding='utf-8') as f:
-                json.dump(guard_report.to_json(), f, indent=2)
+                _json.dump(guard_report.to_json(), f, indent=2)
 
             print(f"    Guard report: {guard_md_output}", flush=True)
             print(f"    Guard JSON:   {guard_json_output}", flush=True)
@@ -968,64 +927,53 @@ def main() -> None:
                 guard_passed = False
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # STAGE 1: Qualifier Results (Deterministic, BEFORE AI Review)
+    # STAGE 1 (G4.6): LoQal Verification (Deterministic, BEFORE AI Review)
     # ═══════════════════════════════════════════════════════════════════════════
-    print(f"\n--- STAGE 1: Qualifier Results (from quality.d) ---", flush=True)
+    print(f"\n--- STAGE 1: LoQal Verification (Syntax/Import Sanity) ---", flush=True)
 
-    quality_report_path = worqspace_root / "quality.d" / f"cyqle{cycle_num}" / "report.json"
-    quality_results = None
-    quality_passed = True
-    quality_failures = []
-    quality_warnings = []
+    verification_enabled = config.get('verification', {}).get('enabled', True)
+    verification_results = None
 
-    if quality_report_path.exists():
+    if verification_enabled:
         try:
-            with open(quality_report_path, 'r', encoding='utf-8') as f:
-                quality_results = json.load(f)
-            
-            # STRICTOR quality check: overall_status MUST be PASS 
-            # AND summary.required_failed MUST be 0
-            q_status = quality_results.get('overall_status')
-            q_summary = quality_results.get('summary', {})
-            req_failed = q_summary.get('required_failed', 0)
-            
-            quality_passed = (q_status == 'PASS' and req_failed == 0)
-            
-            quality_failures = [res for res in quality_results.get('results', []) if not res.get('passed')]
-            quality_warnings = [res for res in quality_results.get('results', []) if res.get('status') == 'WARN']
+            import loqal_verifier
 
-            print(f"    Quality status: {q_status} (req_failed: {req_failed})", flush=True)
-            print(f"    Checks: {q_summary.get('passed')}/{q_summary.get('total')} passed", flush=True)
-            if quality_failures:
-                print(f"    Failed quality checks: {', '.join(res.get('name', '?') for res in quality_failures)}", flush=True)
-            elif quality_warnings:
-                print(f"    Quality warnings: {', '.join(res.get('name', '?') for res in quality_warnings)}", flush=True)
+            verification_report = loqal_verifier.run_verification(
+                qodeyard_path,
+                qontext_path,
+                cycle_num,
+                load_inspeqtor_config(worqspace_root / 'config.yaml')
+            )
 
-            # Write quality summary to reqap_dir for traceability
-            cycle_reqap_subdir = reqap_dir / f"cyqle{cycle_num}"
-            cycle_reqap_subdir.mkdir(parents=True, exist_ok=True)
-            with open(cycle_reqap_subdir / f"cyqle{cycle_num}_quality.json", 'w') as f:
-                json.dump(quality_results, f, indent=2)
+            verification_output = reqap_dir / f"cyqle{cycle_num}" / f"cyqle{cycle_num}_verification.md"
+            verification_output.parent.mkdir(parents=True, exist_ok=True)
+            with open(verification_output, 'w', encoding='utf-8') as f:
+                f.write(verification_report.to_markdown())
 
+            print(f"    Verification report: {verification_output}", flush=True)
+            verification_results = verification_report
+
+            if verification_report.errors > 0:
+                print(f"    Verification found {verification_report.errors} errors", flush=True)
+            else:
+                print(f"    Verification passed ({verification_report.passed} checks OK)", flush=True)
+
+        except ImportError:
+            print("    [WARN] loqal_verifier module not found — skipping", flush=True)
         except Exception as e:
-            print(f"    [WARN] Could not load quality report: {e}", flush=True)
-            quality_passed = False # Fail safe
+            print(f"    [WARN] Verification failed: {e}", flush=True)
     else:
-        print(f"    [WARN] Quality report NOT FOUND at {quality_report_path}", flush=True)
-        # We might want to allow this for cycle 1 if qualifier is skipped, 
-        # but generally it should exist.
-        quality_passed = False
+        print("    LoQal verification disabled in config", flush=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # DECISION: Should AI InspeQtor run?
     # ═══════════════════════════════════════════════════════════════════════════
     ai_review_mode = "normal"  # "normal" | "report_only" | "skipped"
 
-    if not guard_passed or not quality_passed:
+    if not guard_passed:
         ai_review_mode = "report_only"
-        reason = "QontractGuard" if not guard_passed else "Qualifier"
-        print(f"\n    {reason} FAILED — AI InspeQtor will run in REPORT-ONLY mode", flush=True)
-        print(f"    (Hard failure forces overall FAIL regardless of AI opinion)", flush=True)
+        print(f"\n    QontractGuard FAILED — AI InspeQtor will run in REPORT-ONLY mode", flush=True)
+        print(f"    (Guard failure forces overall FAIL regardless of AI opinion)", flush=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # STAGE 2: Per-Briq Tactical Reviews (AI)
@@ -1062,73 +1010,47 @@ def main() -> None:
         summary_content = "[Summary not available]"
     
     # Aggregate briq results
-    mode_policy = load_mode_policy_from_env()
     briq_summaries = []
-    mandatory_success_count = 0
-    mandatory_partial_count = 0
-    mandatory_failure_count = 0
-    optional_success_count = 0
-    optional_partial_count = 0
-    optional_failure_count = 0
+    success_count = 0
+    partial_count = 0
+    failure_count = 0
     failed_briq_suggestions = []
-    optional_failed_briq_suggestions = []
-    open_blockers = []
-    optional_enhancement_backlog = []
-
+    
     for result in briq_results:
-        scope_class = result.get('scope_class', MANDATORY_SCOPE_CLASS)
-        optional_scope = is_optional_scope(scope_class)
-        result['scope_class'] = scope_class
-
         if result['assessment'] == '[SUCCESS]':
-            if optional_scope:
-                optional_success_count += 1
-            else:
-                mandatory_success_count += 1
+            success_count += 1
         elif result['assessment'] == '[PARTIAL]':
-            if optional_scope:
-                optional_partial_count += 1
-            else:
-                mandatory_partial_count += 1
+            partial_count += 1
         else:
-            if optional_scope:
-                optional_failure_count += 1
-            else:
-                mandatory_failure_count += 1
-
+            failure_count += 1
+        
         try:
             with open(result['reqap_path'], 'r', encoding='utf-8') as f:
                 briq_reqap = f.read()
-        except Exception:
+        except:
             briq_reqap = f"Assessment: {result['assessment']}\n\nError: {result.get('error', 'Unknown')}"
-
+        
         if result['assessment'] in ['[FAILURE]', '[PARTIAL]']:
             suggestions_match = re.search(r'## Suggestions\s*\n(.*?)(?=\n##|\Z)', briq_reqap, re.DOTALL)
-            suggestion_text = suggestions_match.group(1).strip() if suggestions_match else briq_reqap
-            item = {
-                'briq': result['briq_name'],
-                'assessment': result['assessment'],
-                'scope_class': scope_class,
-                'suggestions': suggestion_text,
-            }
-            if optional_scope:
-                optional_failed_briq_suggestions.append(item)
-                optional_enhancement_backlog.append(item)
+            if suggestions_match:
+                failed_briq_suggestions.append({
+                    'briq': result['briq_name'],
+                    'assessment': result['assessment'],
+                    'suggestions': suggestions_match.group(1).strip()
+                })
             else:
-                failed_briq_suggestions.append(item)
-                open_blockers.append(f"{result['briq_name']} {result['assessment']}")
-
+                failed_briq_suggestions.append({
+                    'briq': result['briq_name'],
+                    'assessment': result['assessment'],
+                    'suggestions': briq_reqap
+                })
+        
         briq_summaries.append({
             'name': result['briq_name'],
             'assessment': result['assessment'],
-            'scope_class': scope_class,
-            'optional': optional_scope,
-            'content': briq_reqap,
+            'content': briq_reqap
         })
-
-    success_count = mandatory_success_count
-    partial_count = mandatory_partial_count
-    failure_count = mandatory_failure_count
+    
     # Cross-briq consistency check
     cross_briq_warnings = []
     briq_file_map = {}
@@ -1152,51 +1074,44 @@ def main() -> None:
     
     print(f"\n[CROSS-BRIQ] Found {len(cross_briq_warnings)} potential integration points", flush=True)
     
-    # Determine overall assessment from MANDATORY scope only.
-    if mandatory_failure_count > 0:
+    # Determine overall assessment
+    if failure_count > 0:
         overall_assessment = "[FAILURE]"
-    elif mandatory_partial_count > 0:
+    elif partial_count > 0:
         overall_assessment = "[PARTIAL]"
     else:
         overall_assessment = "[SUCCESS]"
 
-    print(
-        f"[MODE] Mandatory briqs → ✅{mandatory_success_count} ⚠️{mandatory_partial_count} ❌{mandatory_failure_count} | "
-        f"Optional enhancements → ✅{optional_success_count} ⚠️{optional_partial_count} ❌{optional_failure_count}",
-        flush=True,
-    )
-    if overall_assessment == "[SUCCESS]" and (optional_partial_count > 0 or optional_failure_count > 0):
-        print("[MODE] Optional enhancement issues recorded as backlog only; they do not block completion.", flush=True)
-
-    # G4.6: Force FAIL if QontractGuard or Quality failed (hard enforcement)
-    if (guard_report and not guard_passed) or not quality_passed:
+    # G4.6: Force FAIL if QontractGuard failed (hard enforcement)
+    if guard_report and not guard_passed:
         overall_assessment = "[FAILURE]"
-        reason = "QontractGuard" if not guard_passed else "Quality (Qualifier)"
-        print(f"[REJECT] {reason} FAILED — forcing overall assessment to FAILURE", flush=True)
+        print(f"[QONTRACT] Guard FAILED — forcing overall assessment to FAILURE", flush=True)
+
+    # Downgrade if verification found errors
+    if verification_results and hasattr(verification_results, 'errors') and verification_results.errors > 0:
+        if overall_assessment == "[SUCCESS]":
+            overall_assessment = "[PARTIAL]"
+            print(f"[VERIFY] Verification errors found — downgrading to PARTIAL", flush=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # WRITE FINAL REQAP
     # ═══════════════════════════════════════════════════════════════════════════
     if ai_review_mode == "skipped" or not briq_results:
         _write_guard_only_reqap(
-            reqap_path, cycle_num, guard_report, quality_results,
+            reqap_path, cycle_num, guard_report, verification_results,
             overall_assessment, qontract_content
         )
     else:
         # Build meta-review prompt
-        mode_directives = render_inspeqtor_directives(mode_policy)
         meta_prompt = f"""You are the 'inspeQtor Meta-Reviewer', synthesizing per-briq code reviews into a final cycle assessment.
 
 **YOUR TASK:**
 Aggregate the individual briq reviews into a single, coherent cycle-level assessment. DO NOT re-review code - focus on patterns, themes, and overall quality.
 
-**MODE POLICY:**
-{mode_directives}
-
-**CRITICAL:**
-1. Mandatory-scope failures and partials are blockers until fixed.
-2. Optional enhancement failures must be preserved as backlog suggestions, but they do NOT downgrade mandatory success to failure.
-3. Cross-briq integration warnings still matter and should be surfaced clearly.
+**CRITICAL:** Pay special attention to:
+1. FAILED and PARTIAL briqs - their suggestions MUST be prominently included in your output
+2. Cross-briq integration warnings - files touched by multiple briqs may have consistency issues
+3. Patterns across briqs - recurring problems indicate systemic issues
 
 **INPUTS:**
 
@@ -1220,26 +1135,16 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
             else:
                 meta_prompt += "No contract violations found.\n"
 
-        if quality_results:
-            q_status = quality_results.get('overall_status', 'UNKNOWN')
-            meta_prompt += f"\n## Quality (Qualifier) Results: {q_status}\n"
-            for res in quality_results.get('results', []):
-                res_status = "PASS" if res.get('passed') else "FAIL"
-                meta_prompt += f"- {res.get('name')}: {res_status}\n"
+        if verification_results and hasattr(verification_results, 'errors'):
+            v_status = "PASS" if verification_results.errors == 0 else "ISSUES"
+            meta_prompt += f"\n## LoQal Verification: {v_status}\n"
+            meta_prompt += f"Files checked: {verification_results.files_checked}, Errors: {verification_results.errors}, Warnings: {verification_results.warnings}\n"
 
-        meta_prompt += (
-            f"\n## Mandatory Briq Results (✅ {mandatory_success_count} | ⚠️ {mandatory_partial_count} | ❌ {mandatory_failure_count})\n\n"
-        )
-        for briq in [b for b in briq_summaries if not b.get('optional')]:
-            truncated_content = briq['content'][:600]
-            meta_prompt += f"### {briq['name']} [{briq['scope_class']}]: {briq['assessment']}\n{truncated_content}\n\n"
+        meta_prompt += f"\n## Per-Briq Results ({success_count} success, {partial_count} partial, {failure_count} failure)\n\n"
 
-        meta_prompt += (
-            f"\n## Optional Enhancement Results (✅ {optional_success_count} | ⚠️ {optional_partial_count} | ❌ {optional_failure_count})\n\n"
-        )
-        for briq in [b for b in briq_summaries if b.get('optional')]:
+        for briq in briq_summaries:
             truncated_content = briq['content'][:600]
-            meta_prompt += f"### {briq['name']} [{briq['scope_class']}]: {briq['assessment']}\n{truncated_content}\n\n"
+            meta_prompt += f"### {briq['name']}: {briq['assessment']}\n{truncated_content}\n\n"
 
         if cross_briq_warnings:
             meta_prompt += "## Cross-Briq Warnings\n"
@@ -1248,58 +1153,38 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
             meta_prompt += "\n"
 
         if failed_briq_suggestions:
-            meta_prompt += "## MANDATORY BLOCKERS (MUST INCLUDE ALL IN OUTPUT)\n\n"
+            meta_prompt += "## FAILED/PARTIAL BRIQ SUGGESTIONS (MUST INCLUDE ALL IN OUTPUT)\n\n"
             for item in failed_briq_suggestions:
-                meta_prompt += f"### {item['briq']} {item['assessment']}\n{item['suggestions'][:800]}\n\n"
-
-        if optional_failed_briq_suggestions:
-            meta_prompt += "## OPTIONAL ENHANCEMENT BACKLOG (KEEP OPTIONAL IN OUTPUT)\n\n"
-            for item in optional_failed_briq_suggestions:
                 meta_prompt += f"### {item['briq']} {item['assessment']}\n{item['suggestions'][:800]}\n\n"
 
         meta_prompt += f"""
 ## Overall Preliminary Assessment: {overall_assessment}
 
-**IMPORTANT:**
-- Mandatory blocker suggestions must appear in your output.
-- Optional enhancement items must be clearly labeled as optional backlog and must NOT be presented as required for completion.
-- If mandatory scope is complete and required deterministic gates passed, keep the cycle-level judgment at SUCCESS even when optional enhancement items remain open.
+**IMPORTANT:** Every suggestion from a FAILED briq must appear in your output. Do not drop or summarize away failure details.
 
 **Begin Meta-Review:**
 """
 
         meta_input_tokens = estimate_tokens(meta_prompt, config['model'])
         meta_output_tokens = 2000
-        meta_input_cost = calculate_cost(meta_input_tokens, config['model'], is_input=True)
-        meta_output_cost = calculate_cost(meta_output_tokens, config['model'], is_input=False)
+        meta_input_cost = calculate_cost(meta_input_tokens, config['model'], is_input=True, provider=config['provider'])
+        meta_output_cost = calculate_cost(meta_output_tokens, config['model'], is_input=False, provider=config['provider'])
         meta_cost = meta_input_cost + meta_output_cost
         print(f"Estimated cost: {format_cost(meta_cost)} (meta-review @ {config['model']})", flush=True)
 
         try:
-            ai_timeout = config.get('timeout')
-            ai_provider_options = config.get(config['provider']) if config['provider'] == 'llamacpp' else None
-
             meta_response = lib_ai.run_ai_completion(
                 config['provider'],
                 config['model'],
                 meta_prompt,
                 context_files=[],
                 max_prompt_chars=100_000,
-                timeout=ai_timeout,
-                provider_options=ai_provider_options
+                timeout=config.get('provider_options', {}).get('timeout'),
+                request_options=config.get('provider_options'),
             )
 
-            # NORMALIZED ASSESSMENT LINE (REQUIRED BY QRANE)
-            clean_assessment = overall_assessment.replace('[', '').replace(']', '').upper()
-
             final_content = f"""# CyQle {cycle_num} Final ReQap
-Generated by InspeQtor v1.2.4 (Multi-Stage Review: Guard > Qualifier > AI)
-
-Assessment: {clean_assessment}
-
-**Mode Policy:** {mode_policy.semantic_mode}
-- Mandatory briqs: ✅ {mandatory_success_count} / ⚠️ {mandatory_partial_count} / ❌ {mandatory_failure_count}
-- Optional enhancements: ✅ {optional_success_count} / ⚠️ {optional_partial_count} / ❌ {optional_failure_count}
+Generated by InspeQtor v1.0.4 (Multi-Stage Review: Guard > Verify > AI)
 
 {meta_response}
 
@@ -1312,8 +1197,9 @@ Assessment: {clean_assessment}
                     final_content += f"- {v}\n"
                 final_content += "\n---\n"
 
-            if quality_results:
-                final_content += _format_quality_section(quality_results)
+            if verification_results and hasattr(verification_results, 'errors'):
+                if verification_results.errors > 0 or verification_results.warnings > 0:
+                    final_content += _format_verification_section(verification_results)
 
             if cross_briq_warnings:
                 final_content += "\n## Cross-Briq Integration Points\n"
@@ -1323,284 +1209,38 @@ Assessment: {clean_assessment}
                 final_content += "\n---\n"
 
             if failed_briq_suggestions:
-                final_content += "\n## Mandatory Blockers / Partials (Full)\n"
+                final_content += "\n## Failed/Partial Briq Details (Full)\n"
                 for item in failed_briq_suggestions:
-                    final_content += f"\n### {item['briq']} {item['assessment']} [{item['scope_class']}]\n"
-                    final_content += f"{item['suggestions']}\n"
-                final_content += "\n---\n"
-
-            if optional_failed_briq_suggestions:
-                final_content += "\n## Optional Enhancement Backlog\n"
-                final_content += "These items stay optional and do not extend the mandatory stop condition.\n\n"
-                for item in optional_failed_briq_suggestions:
-                    final_content += f"\n### {item['briq']} {item['assessment']} [{item['scope_class']}]\n"
+                    final_content += f"\n### {item['briq']} {item['assessment']}\n"
                     final_content += f"{item['suggestions']}\n"
                 final_content += "\n---\n"
 
             final_content += "\n## Individual Briq ReQaps\n"
             for briq in briq_summaries:
-                final_content += f"\n### {briq['name']} [{briq['scope_class']}]\n{briq['content']}\n"
+                final_content += f"\n### {briq['name']}\n{briq['content']}\n"
 
             os.makedirs(reqap_path.parent, exist_ok=True)
             with open(reqap_path, 'w', encoding='utf-8') as f:
                 f.write(final_content)
 
-            # ═══════════════════════════════════════════════════════════════════════════
-            # v1.2.4: WRITE STRUCTURED VERDICT JSON
-            # ═══════════════════════════════════════════════════════════════════════════
-            verdict_path = reqap_dir / f"cyqle{cycle_num}_verdict.json"
-            latest_verdict_path = reqap_dir / "latest_verdict.json"
-            
-            _write_verdict_json(
-                verdict_path, cycle_num, overall_assessment,
-                guard_report, quality_results, briq_results,
-                worqspace_root, latest_verdict_path,
-                mode_policy=mode_policy,
-                open_blockers=open_blockers,
-                optional_enhancement_backlog=optional_enhancement_backlog,
-            )
-
             print(f"\n=== Final Assessment: {overall_assessment} ===", flush=True)
             print(f"ReQap written to {reqap_path}", flush=True)
-            print(f"Verdict JSON written to {verdict_path}", flush=True)
 
         except Exception as e:
             print(f"[ERROR] Meta-review failed: {e}", flush=True)
             _write_fallback_reqap(
                 reqap_path, cycle_num, overall_assessment, e,
                 success_count, partial_count, failure_count,
-                guard_report, quality_results,
+                guard_report, verification_results,
                 cross_briq_warnings, failed_briq_suggestions
             )
-            
-            # Write fallback verdict JSON
-            verdict_path = reqap_dir / f"cyqle{cycle_num}_verdict.json"
-            _write_verdict_json(
-                verdict_path, cycle_num, overall_assessment,
-                guard_report, quality_results, briq_results, worqspace_root,
-                mode_policy=mode_policy,
-                open_blockers=open_blockers,
-                optional_enhancement_backlog=optional_enhancement_backlog,
-            )
 
-    print(f"\n=== InspeQtor v1.2.4 Complete: {overall_assessment} ===", flush=True)
+    print(f"\n=== InspeQtor v1.0.4 Complete: {overall_assessment} ===", flush=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS (v1.2.4)
-# ═══════════════════════════════════════════════════════════════════════════
-
-
-def _format_quality_section(quality_results: dict | None) -> str:
-    """Render a human-readable quality summary from Qualifier artifacts."""
-    if not quality_results:
-        return ''
-
-    lines = [
-        '\n## Qualifier Quality Summary',
-        f"- Overall Status: {quality_results.get('overall_status', 'UNKNOWN')}",
-    ]
-
-    summary = quality_results.get('summary', {})
-    if summary:
-        lines.append(
-            f"- Checks: {summary.get('passed', 0)}/{summary.get('total', 0)} passed "
-            f"(required failed: {summary.get('required_failed', 0)})"
-        )
-
-    for result in quality_results.get('results', []):
-        icon = '✅' if result.get('passed') else ('⚠️' if result.get('status') == 'WARN' else '❌')
-        name = result.get('name', 'unnamed')
-        message = result.get('message', '')
-        lines.append(f"- {icon} `{name}` — {result.get('status', 'UNKNOWN')}: {message}")
-
-    return '\n'.join(lines) + '\n\n---\n'
-
-
-def _extract_requirement_ids_from_briq(briq_path: Path) -> set[str]:
-    """Read persisted requirement IDs from briq frontmatter or instruction body."""
-    try:
-        content = briq_path.read_text(encoding='utf-8')
-    except Exception:
-        return set()
-
-    match = re.search(r'^Requirement-IDs:\s*(.+)$', content, re.IGNORECASE | re.MULTILINE)
-    if not match:
-        return set()
-
-    raw = match.group(1).strip()
-    if raw.upper() == 'NONE':
-        return set()
-
-    return {rid.strip().upper() for rid in raw.split(',') if rid.strip()}
-
-
-def _extract_scope_class_from_briq(briq_path: Path) -> str:
-    try:
-        content = briq_path.read_text(encoding='utf-8')
-    except Exception:
-        return MANDATORY_SCOPE_CLASS
-    return extract_scope_class(content, briq_path.stem)
-
-
-def _compute_requirement_coverage(worqspace_root: Path, cycle_num: str, briq_results: list[dict]) -> dict:
-    """Compute lightweight requirement coverage from qrystal ledger + briq requirement IDs."""
-    coverage = {
-        'must_have_total': 0,
-        'must_have_done': 0,
-        'should_have_total': 0,
-        'should_have_done': 0,
-        'blocked': 0,
-    }
-
-    req_path = worqspace_root / 'qrystal.d' / 'requirements.json'
-    if not req_path.exists():
-        return coverage
-
-    try:
-        req_data = json.loads(req_path.read_text(encoding='utf-8'))
-    except Exception:
-        return coverage
-
-    requirements = req_data.get('requirements', [])
-    must_ids = {r.get('id', '').upper() for r in requirements if r.get('priority') == 'must_have' and r.get('id')}
-    should_ids = {r.get('id', '').upper() for r in requirements if r.get('priority') == 'should_have' and r.get('id')}
-
-    coverage['must_have_total'] = len(must_ids)
-    coverage['should_have_total'] = len(should_ids)
-
-    briq_dir = worqspace_root / 'briq.d'
-    success_ids = set()
-    partial_ids = set()
-    failed_ids = set()
-
-    for result in briq_results:
-        briq_name = result.get('briq_name')
-        if not briq_name:
-            continue
-        briq_path = briq_dir / f"{briq_name}.md"
-        if is_optional_scope(result.get('scope_class')) or is_optional_scope(_extract_scope_class_from_briq(briq_path)):
-            continue
-        req_ids = _extract_requirement_ids_from_briq(briq_path)
-        assessment = result.get('assessment', '[UNKNOWN]').upper()
-        if assessment == '[SUCCESS]':
-            success_ids.update(req_ids)
-        elif assessment == '[PARTIAL]':
-            partial_ids.update(req_ids)
-        elif assessment == '[FAILURE]':
-            failed_ids.update(req_ids)
-
-    coverage['must_have_done'] = len(must_ids & success_ids)
-    coverage['should_have_done'] = len(should_ids & success_ids)
-    coverage['blocked'] = len((must_ids | should_ids) & (failed_ids | partial_ids) - success_ids)
-    return coverage
-
-
-def _write_verdict_json(
-    path: Path, cycle_num: str, overall_assessment: str,
-    guard_report, quality_results, briq_results: list[dict],
-    worqspace_root: Path, latest_path: Path = None,
-    mode_policy=None, open_blockers: list[str] | None = None,
-    optional_enhancement_backlog: list[dict] | None = None,
-):
-    """Write machine-readable cycle verdict."""
-
-    briq_stats = {"success": 0, "partial": 0, "failure": 0, "unknown": 0}
-    scope_summary = {
-        "mandatory": {"success": 0, "partial": 0, "failure": 0, "unknown": 0},
-        "optional_enhancement": {"success": 0, "partial": 0, "failure": 0, "unknown": 0},
-    }
-    for r in briq_results:
-        ass = r.get('assessment', '[UNKNOWN]').upper().replace('[', '').replace(']', '')
-        bucket = 'optional_enhancement' if is_optional_scope(r.get('scope_class')) else 'mandatory'
-        if ass == 'SUCCESS':
-            briq_stats['success'] += 1
-            scope_summary[bucket]['success'] += 1
-        elif ass == 'PARTIAL':
-            briq_stats['partial'] += 1
-            scope_summary[bucket]['partial'] += 1
-        elif ass == 'FAILURE':
-            briq_stats['failure'] += 1
-            scope_summary[bucket]['failure'] += 1
-        else:
-            briq_stats['unknown'] += 1
-            scope_summary[bucket]['unknown'] += 1
-
-    guard_passed = True
-    verification_errors = 0
-    if guard_report:
-        guard_passed = guard_report.passed
-        if hasattr(guard_report, 'violations'):
-            verification_errors = len(guard_report.violations)
-
-    quality_passed = True
-    if quality_results:
-        # USE STRICTOR quality check for verdict JSON
-        q_status = quality_results.get('overall_status')
-        q_summary = quality_results.get('summary', {})
-        req_failed = q_summary.get('required_failed', 0)
-        quality_passed = (q_status == 'PASS' and req_failed == 0)
-
-    blocker_list = open_blockers or []
-    optional_backlog = optional_enhancement_backlog or []
-
-    # RE-MATCH QRANE STOP LOGIC (v1.2.4)
-    clean_assessment = overall_assessment.replace('[', '').replace(']', '').upper()
-    
-    req_coverage = _compute_requirement_coverage(worqspace_root, cycle_num, briq_results)
-    must_total = req_coverage.get('must_have_total', 0)
-    must_done = req_coverage.get('must_have_done', 0)
-    
-    coverage_met = True
-    if must_total > 0:
-        coverage_met = (must_done >= must_total)
-
-    all_conditions_met = (
-        clean_assessment == "SUCCESS" and
-        guard_passed is True and
-        verification_errors == 0 and
-        quality_passed is True and
-        not blocker_list
-    )
-    
-    stop_recommended = all_conditions_met and coverage_met
-
-    verdict = {
-        "cycle": int(cycle_num),
-        "mode": (mode_policy.semantic_mode if mode_policy else load_mode_policy_from_env().semantic_mode),
-        "overall_assessment": clean_assessment,
-        "guard_passed": guard_passed,
-        "verification_errors": verification_errors,
-        "quality_passed": quality_passed,
-        "briqs": briq_stats,
-        "scope_summary": scope_summary,
-        "requirement_coverage": req_coverage,
-        "open_blockers": blocker_list,
-        "optional_enhancement_backlog": [
-            {
-                "briq": item.get('briq'),
-                "assessment": item.get('assessment'),
-                "scope_class": item.get('scope_class', 'OPTIONAL_ENHANCEMENT'),
-            }
-            for item in optional_backlog
-        ],
-        "integration_risk": "medium" if not quality_passed or scope_summary['mandatory']['partial'] > 0 else "low",
-        "stop_recommended": stop_recommended,
-        "recommended_next_action": "stop" if stop_recommended else "continue",
-        "recommended_remaining_cycles": 0 if stop_recommended else 1,
-        "confidence": 0.8,
-    }
-
-    try:
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(verdict, f, indent=2)
-
-        if latest_path:
-            with open(latest_path, 'w', encoding='utf-8') as f:
-                json.dump(verdict, f, indent=2)
-    except Exception as e:
-        print(f"[WARN] Could not write verdict JSON: {e}", flush=True)
-
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS (v1.0.4)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def _write_inspeqtor_context_log(
     struqture_dir: Path, cycle_num: str, qontract_path: Path,
@@ -1649,19 +1289,17 @@ def _write_inspeqtor_context_log(
 
 
 def _write_guard_only_reqap(
-    reqap_path: Path, cycle_num: str, guard_report, quality_results,
+    reqap_path: Path, cycle_num: str, guard_report, verification_results,
     overall_assessment: str, qontract_content: str
 ):
-    """Write a reqap when AI review was skipped due to gate failure."""
-    # NORMALIZED ASSESSMENT LINE
-    clean_assessment = overall_assessment.replace('[', '').replace(']', '').upper()
-
+    """Write a reqap when AI review was skipped due to guard failure."""
     content = f"""# CyQle {cycle_num} Final ReQap
-Assessment: {clean_assessment}
-Generated by InspeQtor v1.2.4 (Gate Failure Mode — AI review skipped)
+Generated by InspeQtor v1.0.4 (Guard-Only Mode — AI review skipped due to contract failure)
 
-**AI review skipped due to contract or quality failure.** Deterministic checks must
-pass before AI review can provide meaningful feedback.
+## Assessment: {overall_assessment}
+
+**AI review skipped due to contract failure.** The QontractGuard detected violations that must
+be fixed before AI review can provide meaningful feedback.
 
 """
     if guard_report and guard_report.violations:
@@ -1670,38 +1308,31 @@ pass before AI review can provide meaningful feedback.
             content += f"- {v}\n"
         content += "\n"
 
-    if quality_results and quality_results.get('overall_status') != 'PASS':
-        content += "## Quality Failures (Qualifier)\n\n"
-        for res in quality_results.get('results', []):
-            if not res.get('passed'):
-                content += f"### ❌ {res.get('name')}\n"
-                if res.get('stderr'):
-                    content += f"```\n{res['stderr']}\n```\n"
-        content += "\n"
+    if verification_results and hasattr(verification_results, 'errors') and verification_results.errors > 0:
+        content += _format_verification_section(verification_results)
 
     content += "\n## Next Steps\n\n"
-    content += "1. Fix all deterministic violations listed above\n"
-    content += "2. Re-run the cycle to get full AI review\n"
+    content += "1. Fix all QontractGuard violations listed above\n"
+    content += "2. Ensure code passes local syntax verification\n"
+    content += "3. Re-run the cycle to get full AI review\n"
 
     os.makedirs(reqap_path.parent, exist_ok=True)
     with open(reqap_path, 'w', encoding='utf-8') as f:
         f.write(content)
+    print(f"ReQap (guard-only): {reqap_path}", flush=True)
 
 
 def _write_fallback_reqap(
     reqap_path: Path, cycle_num: str, overall_assessment: str, error,
     success_count: int, partial_count: int, failure_count: int,
-    guard_report, quality_results,
+    guard_report, verification_results,
     cross_briq_warnings: list, failed_briq_suggestions: list
 ):
     """Write a fallback reqap when meta-review AI call fails."""
-    # NORMALIZED ASSESSMENT LINE
-    clean_assessment = overall_assessment.replace('[', '').replace(']', '').upper()
-
     fallback_content = f"""# CyQle {cycle_num} Final ReQap
-Generated by InspeQtor v1.2.4 (Fallback Mode - Meta-review failed)
+Generated by InspeQtor v1.0.4 (Fallback Mode - Meta-review failed)
 
-Assessment: {clean_assessment}
+Assessment: {overall_assessment}
 
 ## Summary
 Meta-review failed with error: {error}
@@ -1715,12 +1346,8 @@ Per-briq results: Success: {success_count} | Partial: {partial_count} | Failure:
             fallback_content += f"- {v}\n"
         fallback_content += "\n"
 
-    if quality_results:
-        fallback_content += "## Quality Results\n"
-        for res in quality_results.get('results', []):
-            status = "PASS" if res.get('passed') else "FAIL"
-            fallback_content += f"- {res.get('name')}: {status}\n"
-        fallback_content += "\n"
+    if verification_results and hasattr(verification_results, 'errors') and verification_results.errors > 0:
+        fallback_content += _format_verification_section(verification_results)
 
     if cross_briq_warnings:
         fallback_content += "## Cross-Briq Integration Points\n"
@@ -1737,10 +1364,41 @@ Per-briq results: Success: {success_count} | Partial: {partial_count} | Failure:
 
     fallback_content += f"## Next Steps\n- Review individual briq reqaps in `reqap.d/cyqle{cycle_num}/`\n"
 
+    os.makedirs(reqap_path.parent, exist_ok=True)
     with open(reqap_path, 'w', encoding='utf-8') as f:
         f.write(fallback_content)
 
 
+def _format_verification_section(verification_results) -> str:
+    """Format verification results for inclusion in reqap."""
+    section = f"""
+---
+
+## LoQal Verification Results
+
+**Status:** {verification_results.overall_status}
+**Checked:** {verification_results.files_checked} files
+**Results:** Passed: {verification_results.passed} | Warnings: {verification_results.warnings} | Errors: {verification_results.errors}
+
+"""
+    errors = [r for r in verification_results.results if not r.passed and r.severity == 'error']
+    if errors:
+        section += "### Errors (MUST FIX)\n\n"
+        for r in errors:
+            line_info = f" (line {r.line_number})" if r.line_number else ""
+            section += f"- **{r.file_path}**{line_info}: [{r.check_type}] {r.message}\n"
+        section += "\n"
+
+    warnings = [r for r in verification_results.results if not r.passed and r.severity == 'warning']
+    if warnings:
+        section += "### Warnings\n\n"
+        for r in warnings:
+            line_info = f" (line {r.line_number})" if r.line_number else ""
+            section += f"- **{r.file_path}**{line_info}: [{r.check_type}] {r.message}\n"
+        section += "\n"
+
+    return section
+
+
 if __name__ == '__main__':
     main()
-

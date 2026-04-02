@@ -3,7 +3,7 @@
  * Handles execution of qonqrete.sh commands
  * 
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -469,7 +469,7 @@ export class QonQreteRunner {
     }
 
     /**
-     * Get the workspace-root tasq.md path (new v1.2.4 canonical location)
+     * Get the workspace-root tasq.md path (new v1.2.0 canonical location)
      */
     public async getRootTasqPath(preferredFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
         const wsFolder = preferredFolder || vscode.workspace.workspaceFolders?.[0];
@@ -756,8 +756,6 @@ export class QonQreteRunner {
         const args: string[] = ['run'];
 
         args.push('--briq-sensitivity', config.sensitivity.toString());
-        
-        // Cycles: 0 = AUTO, >0 = FIXED
         args.push('--cyqles', config.cycles.toString());
 
         if (config.mode && config.mode !== 'program') {

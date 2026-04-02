@@ -83,13 +83,6 @@ This handles the edge case where a previous session was hard-killed mid-run.
 
 ## Features
 
-### Quality System
-
-- **ConstruQtor builds code only**
-- **Qualifier runs all execution validation** and writes `quality.d/`
-- **InspeQtor writes reqap markdown plus verdict JSON**
-- **Qrane stops or continues from structured verdict state**
-
 ### Command Palette
 
 - **QonQrete: Run Tasq** — Run `worqspace/tasq.md`
@@ -141,7 +134,7 @@ cd vscode-extension
 npm install
 npm run compile
 npx vsce package
-code --install-extension qonqrete-vscode-1.2.4.vsix
+code --install-extension qonqrete-vscode-1.1.9.vsix
 ```
 
 ## Settings
@@ -149,8 +142,8 @@ code --install-extension qonqrete-vscode-1.2.4.vsix
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `qonqrete.defaultSensitivity` | 6 | Briq sensitivity (0-16) |
-| `qonqrete.defaultCycles` | 1 | Cycles (0-50, where 0 = auto) |
-| `qonqrete.defaultMode` | "program" | Mode (`program` or `innovative` are the main semantic choices) |
+| `qonqrete.defaultCycles` | 3 | Cycles (1-50) |
+| `qonqrete.defaultMode` | "program" | Mode |
 | `qonqrete.defaultAutonomous` | false | Autonomous mode |
 | `qonqrete.containerEngine` | "auto" | Container engine |
 | `qonqrete.useSqrapyard` | false | Seed from sqrapyard |

@@ -6,7 +6,7 @@
  * Never in settings.json, never in terminal commands, never in logs
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -23,14 +23,29 @@ import {
     hasApiKey,
 } from '../secrets';
 
-const AI_AGENTS = ['qrystallizer', 'instruqtor', 'construqtor', 'inspeqtor'] as const;
+const AI_AGENTS = ['tasqleveler', 'instruqtor', 'construqtor', 'inspeqtor'] as const;
 type AgentName = typeof AI_AGENTS[number];
 
 interface AgentConfig { provider: string; model: string; }
 
+function parseYamlScalar(raw: string): string {
+    const withoutComment = raw.replace(/\s+#.*$/, '').trim();
+    if ((withoutComment.startsWith("'") && withoutComment.endsWith("'")) ||
+        (withoutComment.startsWith('\"') && withoutComment.endsWith('\"'))) {
+        return withoutComment.slice(1, -1);
+    }
+    return withoutComment;
+}
+
+function toYamlScalar(raw: string): string {
+    const value = raw.trim();
+    if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
+    return JSON.stringify(value);
+}
+
 function readAgentConfigs(configPath: string): Record<AgentName, AgentConfig> {
     const defaults: Record<AgentName, AgentConfig> = {
-        qrystallizer: { provider: 'openai', model: 'gpt-4.1-nano' },
+        tasqleveler: { provider: 'openai', model: 'gpt-4.1-nano' },
         instruqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
         construqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
         inspeqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
@@ -48,10 +63,10 @@ function readAgentConfigs(configPath: string): Record<AgentName, AgentConfig> {
                 continue;
             }
             if (currentAgent && AI_AGENTS.includes(currentAgent as AgentName)) {
-                const pm = line.match(/^\s{4}provider:\s*(\S+)/);
-                if (pm) { defaults[currentAgent as AgentName].provider = pm[1]; continue; }
-                const mm = line.match(/^\s{4}model:\s*(\S+)/);
-                if (mm) { defaults[currentAgent as AgentName].model = mm[1]; continue; }
+                const pm = line.match(/^\s{4}provider:\s*(.+)$/);
+                if (pm) { defaults[currentAgent as AgentName].provider = parseYamlScalar(pm[1]); continue; }
+                const mm = line.match(/^\s{4}model:\s*(.+)$/);
+                if (mm) { defaults[currentAgent as AgentName].model = parseYamlScalar(mm[1]); continue; }
                 if (line.match(/^\s{0,2}\S/)) currentAgent = null;
             }
         }
@@ -75,10 +90,10 @@ function writeAgentConfig(configPath: string, agent: AgentName, provider: string
                     inAgent = false;
                 }
                 if (inAgent && line.match(/^\s{4}provider:\s*\S+/) && !providerSet) {
-                    result.push(`    provider: ${provider}`); providerSet = true; continue;
+                    result.push(`    provider: ${toYamlScalar(provider)}`); providerSet = true; continue;
                 }
                 if (inAgent && line.match(/^\s{4}model:\s*\S+/) && !modelSet) {
-                    result.push(`    model: ${model}`); modelSet = true; continue;
+                    result.push(`    model: ${toYamlScalar(model)}`); modelSet = true; continue;
                 }
                 if (line.match(/^\s{0,2}\S/)) inAgent = false;
             }
@@ -97,14 +112,12 @@ export function getRequiredApiKeys(configPath: string): string[] {
     const provs = new Set<string>();
     for (const agent of AI_AGENTS) {
         const p = configs[agent].provider;
-        // Skip local and any other provider that doesn't have an envKey
-        if (p && p !== 'local' && PROVIDERS[p]?.envKey) {
-            provs.add(p);
-        }
+        const info = PROVIDERS[p];
+        if (p && p !== 'local' && info?.requiresApiKey) provs.add(p);
     }
     const keys: string[] = [];
     for (const p of provs) {
-        const envKey = PROVIDERS[p].envKey;
+        const envKey = PROVIDER_ENV_MAP[p];
         if (envKey && !keys.includes(envKey)) keys.push(envKey);
     }
     return keys;
@@ -194,14 +207,12 @@ export async function executeSetAIConfig(): Promise<void> {
 
         items.push({ label: '$(key) API Keys', kind: vscode.QuickPickItemKind.Separator });
 
-        for (const [, info] of Object.entries(PROVIDERS)) {
-            // Skip providers that don't need keys (like llamacpp)
-            if (!info.envKey) continue;
-            
-            const has = await hasApiKey(info.envKey);
+        for (const [, info] of Object.entries(PROVIDERS).filter(([, info]) => !!info.envKey)) {
+            const has = await hasApiKey(info.envKey!);
+            const requirementLabel = info.requiresApiKey ? 'required' : 'optional';
             items.push({
                 label: `$(key) ${info.label}`,
-                description: has ? '✓ Set' : '✗ Not set',
+                description: has ? `✓ Set (${requirementLabel})` : `✗ Not set (${requirementLabel})`,
                 detail: info.envKey,
             });
         }
@@ -232,9 +243,10 @@ export async function executeSetAIConfig(): Promise<void> {
             const provId = providerPick.description!;
             const provInfo = PROVIDERS[provId];
 
+            const customDescription = provId === 'llamacpp' ? 'Enter a custom GGUF path or server alias' : 'Enter a custom model name';
             const modelPick = await vscode.window.showQuickPick([
                 ...provInfo.models.map(m => ({ label: m, picked: currentConfigs[agentMatch].model === m })),
-                { label: '$(edit) Custom model...', description: 'Enter a custom model name' },
+                { label: '$(edit) Custom model...', description: customDescription },
             ], { title: `${agentMatch}: Select Model (${provInfo.label})` });
             if (!modelPick) continue;
 
@@ -242,7 +254,7 @@ export async function executeSetAIConfig(): Promise<void> {
             if (model.includes('Custom')) {
                 const custom = await vscode.window.showInputBox({
                     title: `${agentMatch}: Custom Model`,
-                    prompt: `Enter model name for ${provInfo.label}`,
+                    prompt: provId === 'llamacpp' ? `Enter GGUF path or server alias for ${provInfo.label}` : `Enter model name for ${provInfo.label}`,
                     value: currentConfigs[agentMatch].model,
                 });
                 if (!custom) continue;
@@ -257,18 +269,20 @@ export async function executeSetAIConfig(): Promise<void> {
         }
 
         // Handle API key
-        const keyMatch = Object.entries(PROVIDERS).find(([, info]) => selected.label.includes(info.label));
+        const keyMatch = Object.entries(PROVIDERS).filter(([, info]) => !!info.envKey).find(([, info]) => selected.label.includes(info.label));
         if (keyMatch) {
             const [, info] = keyMatch;
-            const existing = await getSecret(info.envKey);
+            const existing = await getSecret(info.envKey!);
             const key = await vscode.window.showInputBox({
                 title: `${info.label} API Key (stored securely)`,
-                prompt: `Enter your ${info.label} API key (${info.envKey})`,
+                prompt: info.requiresApiKey
+                    ? `Enter your ${info.label} API key (${info.envKey})`
+                    : `Enter your optional ${info.label} API key (${info.envKey})`,
                 password: true,
-                placeHolder: existing ? '(already set — leave empty to keep)' : 'sk-...',
+                placeHolder: existing ? '(already set — leave empty to keep)' : (info.requiresApiKey ? 'sk-...' : 'optional'),
             });
             if (key !== undefined && key) {
-                await storeSecret(info.envKey, key);
+                await storeSecret(info.envKey!, key);
                 vscode.window.showInformationMessage(`${info.label} API key saved securely.`);
             }
         }

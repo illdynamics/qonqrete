@@ -3,7 +3,7 @@
  * Configure providers, models, and API keys for QonQrete AI agents
  *
  * @author WoNQ
- * @version 1.2.4
+ * @version 1.2.0
  * @license AGPL-3.0
  */
 
@@ -34,29 +34,33 @@ import javax.swing.*
 class SetAIConfigAction : AnAction() {
 
     companion object {
-        private val AI_AGENTS = listOf("qrystallizer", "instruqtor", "construqtor", "inspeqtor")
+        private val AI_AGENTS = listOf("tasqleveler", "instruqtor", "construqtor", "inspeqtor")
 
         private data class ProviderInfo(
             val label: String,
-            val envKey: String,
-            val models: List<String>
+            val envKey: String?,
+            val models: List<String>,
+            val requiresApiKey: Boolean,
         )
 
         private val PROVIDERS = mapOf(
             "openai" to ProviderInfo("OpenAI", "OPENAI_API_KEY",
-                listOf("gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o3-mini", "o4-mini")),
+                listOf("gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o3-mini", "o4-mini"), true),
             "gemini" to ProviderInfo("Google Gemini", "GOOGLE_API_KEY",
-                listOf("gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite")),
+                listOf("gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"), true),
             "anthropic" to ProviderInfo("Anthropic", "ANTHROPIC_API_KEY",
-                listOf("claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-20250514")),
+                listOf("claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-20250514"), true),
             "deepseek" to ProviderInfo("DeepSeek", "DEEPSEEK_API_KEY",
-                listOf("deepseek-chat", "deepseek-reasoner")),
+                listOf("deepseek-chat", "deepseek-reasoner"), true),
             "qwen" to ProviderInfo("Qwen", "QWEN_API_KEY",
-                listOf("qwen-plus", "qwen-turbo", "qwen-max")),
+                listOf("qwen-plus", "qwen-turbo", "qwen-max"), true),
             "openrouter" to ProviderInfo("OpenRouter", "OPENROUTER_API_KEY",
-                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3")),
-            "llamacpp" to ProviderInfo("llama.cpp (external HTTP)", "",
-                listOf("qwen3-coder-14b", "qwen3-coder-7b", "deepseek-r1-distill-qwen-14b", "custom model..."))
+                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3"), true),
+            "llamacpp" to ProviderInfo("llama.cpp", "LLAMACPP_API_KEY",
+                listOf(
+                    "/Users/ricky/Qoding/ai/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q6_K.gguf",
+                    "/absolute/path/to/model.gguf"
+                ), false),
         )
 
         /**
@@ -86,7 +90,8 @@ class SetAIConfigAction : AnAction() {
                 "ANTHROPIC_API_KEY" to "ANTHROPIC_API_KEY",
                 "OPENROUTER_API_KEY" to "OPENROUTER_API_KEY",
                 "DEEPSEEK_API_KEY" to "DEEPSEEK_API_KEY",
-                "QWEN_API_KEY" to "QWEN_API_KEY"
+                "QWEN_API_KEY" to "QWEN_API_KEY",
+                "LLAMACPP_API_KEY" to "LLAMACPP_API_KEY"
             )
             for ((envKey, _) in keyMap) {
                 // Env var takes priority, only inject from stored if env not set
@@ -109,13 +114,13 @@ class SetAIConfigAction : AnAction() {
          */
         fun getMissingApiKeys(configPath: String): List<String> {
             val configs = readAgentConfigs(configPath)
-            val providers = configs.values.map { it.first }.filter { it != "local" }.toSet()
-            return providers.mapNotNull { prov -> 
-                val info = PROVIDERS[prov]
-                if (info != null && info.envKey.isNotEmpty()) info.envKey else null
+            val providers = configs.values.map { it.first }.toSet()
+            return providers.mapNotNull { providerId ->
+                PROVIDERS[providerId]?.takeIf { it.requiresApiKey }?.envKey
             }
                 .distinct()
-                .filter { envKey -> !hasApiKeyAvailable(envKey) }
+                .filter { envKey -> envKey != null && !hasApiKeyAvailable(envKey) }
+                .filterNotNull()
         }
 
         /**
@@ -137,9 +142,24 @@ class SetAIConfigAction : AnAction() {
 
         private data class AgentConfig(val provider: String, val model: String)
 
+        private fun parseYamlScalar(raw: String): String {
+            val withoutComment = raw.replace(Regex("\\s+#.*$"), "").trim()
+            if ((withoutComment.startsWith("\"") && withoutComment.endsWith("\"")) ||
+                (withoutComment.startsWith("'") && withoutComment.endsWith("'"))) {
+                return withoutComment.substring(1, withoutComment.length - 1)
+            }
+            return withoutComment
+        }
+
+        private fun toYamlScalar(raw: String): String {
+            val value = raw.trim()
+            return if (Regex("^[A-Za-z0-9_./:-]+$").matches(value)) value
+            else "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        }
+
         private fun readAgentConfigs(configPath: String): Map<String, Pair<String, String>> {
             val defaults = AI_AGENTS.associateWith {
-                if (it == "qrystallizer") Pair("openai", "gpt-4.1-nano") else Pair("openai", "gpt-4.1-mini")
+                if (it == "tasqleveler") Pair("openai", "gpt-4.1-nano") else Pair("openai", "gpt-4.1-mini")
             }.toMutableMap()
             val file = File(configPath)
             if (!file.exists()) return defaults
@@ -157,14 +177,14 @@ class SetAIConfigAction : AnAction() {
                         continue
                     }
                     if (currentAgent != null) {
-                        val provMatch = Regex("^\\s{4}provider:\\s*(\\S+)").find(line)
+                        val provMatch = Regex("^\\s{4}provider:\\s*(.+)$").find(line)
                         if (provMatch != null) {
-                            defaults[currentAgent!!] = defaults[currentAgent!!]!!.copy(first = provMatch.groupValues[1])
+                            defaults[currentAgent!!] = defaults[currentAgent!!]!!.copy(first = parseYamlScalar(provMatch.groupValues[1]))
                             continue
                         }
-                        val modelMatch = Regex("^\\s{4}model:\\s*(\\S+)").find(line)
+                        val modelMatch = Regex("^\\s{4}model:\\s*(.+)$").find(line)
                         if (modelMatch != null) {
-                            defaults[currentAgent!!] = defaults[currentAgent!!]!!.copy(second = modelMatch.groupValues[1])
+                            defaults[currentAgent!!] = defaults[currentAgent!!]!!.copy(second = parseYamlScalar(modelMatch.groupValues[1]))
                             continue
                         }
                         // Exit section on top-level or agents-level key
@@ -192,11 +212,11 @@ class SetAIConfigAction : AnAction() {
                         inAgent = false
                     }
                     if (inAgent) {
-                        if (!providerSet && Regex("^\\s{4}provider:\\s*\\S+").containsMatchIn(lines[i])) {
-                            lines[i] = "    provider: $provider"; providerSet = true; continue
+                        if (!providerSet && Regex("^\\s{4}provider:\\s*.+$").containsMatchIn(lines[i])) {
+                            lines[i] = "    provider: ${toYamlScalar(provider)}"; providerSet = true; continue
                         }
-                        if (!modelSet && Regex("^\\s{4}model:\\s*\\S+").containsMatchIn(lines[i])) {
-                            lines[i] = "    model: $model"; modelSet = true; continue
+                        if (!modelSet && Regex("^\\s{4}model:\\s*.+$").containsMatchIn(lines[i])) {
+                            lines[i] = "    model: ${toYamlScalar(model)}"; modelSet = true; continue
                         }
                         if (Regex("^\\s{0,2}\\S").containsMatchIn(lines[i])) inAgent = false
                     }
@@ -276,7 +296,7 @@ class SetAIConfigAction : AnAction() {
                 }
 
                 val modelField = JBTextField(currentModel, 25)
-                modelField.toolTipText = "Model name for $agent"
+                modelField.toolTipText = "Model name or GGUF path for $agent"
 
                 // Update model suggestions when provider changes
                 providerCombo.addActionListener {
@@ -298,18 +318,18 @@ class SetAIConfigAction : AnAction() {
             builder.addSeparator()
             builder.addComponent(JBLabel("<html><b>API Keys</b> (stored securely in IntelliJ credential store)</html>"))
 
-            for ((provId, info) in PROVIDERS) {
-                if (info.envKey.isEmpty()) continue
-                
-                val existing = getApiKey(info.envKey)
-                val envSet = !System.getenv(info.envKey).isNullOrEmpty()
+            for ((provId, info) in PROVIDERS.filterValues { it.envKey != null }) {
+                val envKey = info.envKey ?: continue
+                val existing = getApiKey(envKey)
+                val envSet = !System.getenv(envKey).isNullOrEmpty()
                 val field = JBPasswordField()
                 if (!existing.isNullOrEmpty()) {
                     field.text = existing
                 }
+                val requirementLabel = if (info.requiresApiKey) "required" else "optional"
                 val hint = if (envSet) " (env var set)" else ""
-                builder.addLabeledComponent("${info.label}$hint:", field)
-                apiKeyFields[info.envKey] = field
+                builder.addLabeledComponent("${info.label} [$requirementLabel]$hint:", field)
+                apiKeyFields[envKey] = field
             }
 
             val panel = JPanel(BorderLayout())
