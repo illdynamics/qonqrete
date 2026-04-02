@@ -328,7 +328,7 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
     verdict = None
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # v1.2.2: LOAD STRUCTURED VERDICT
+    # v1.2.4: LOAD STRUCTURED VERDICT
     # ═══════════════════════════════════════════════════════════════════════════
     verdict_path = reqap_path.parent / f"cyqle{cycle}_verdict.json"
     if verdict_path.exists():
@@ -369,7 +369,7 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
         must_total = req_cov.get("must_have_total", 0)
         must_done = req_cov.get("must_have_done", 0)
         
-        # HARDEN STOP GOVERNOR (v1.2.2)
+        # HARDEN STOP GOVERNOR (v1.2.4)
         # System MUST NOT stop if blockers exist or gates failed
         all_conditions_met = (
             g_pass is True and
@@ -547,6 +547,9 @@ def main():
         is_autonomous = False
     elif args.auto:
         is_autonomous = True
+    else:
+        # Default: use config cheqpoint setting to infer autonomy
+        is_autonomous = not cheqpoint_config
     prefix = "aQQ" if is_autonomous else "uQQ"
     if args.wonqrete: prefix = "aWQ" if is_autonomous else "uWQ"
 
@@ -588,6 +591,11 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     os.environ['QONQ_MODE'] = final_mode
     os.environ['QONQ_SENSITIVITY'] = str(final_sens)
 
+    # Build qrane_prefix EARLY so all subsequent code can use it
+    target_width = 11
+    qrane_padding = " " * (target_width - 5)
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
+
     # Max cycles: CLI overrides config
     # 0 = AUTO MODE (Autonomous with dynamic stop)
     config_auto_cap = max(1, min(50, int(config.get('options', {}).get('auto_cycle_limit', 4))))
@@ -603,6 +611,8 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
         prefix = "aQQ"
         if args.wonqrete: prefix = "aWQ"
         os.environ['QONQ_AUTONOMOUS'] = "true"
+        # Rebuild qrane_prefix with updated prefix
+        qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
         
         # Initial estimate from Qrystallizer if available
         qrystal_reqs_path = worqspace / "qrystal.d" / "requirements.json"

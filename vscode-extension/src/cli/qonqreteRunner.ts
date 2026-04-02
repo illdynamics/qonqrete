@@ -3,7 +3,7 @@
  * Handles execution of qonqrete.sh commands
  * 
  * @author WoNQ
- * @version 1.2.2
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 
@@ -469,7 +469,7 @@ export class QonQreteRunner {
     }
 
     /**
-     * Get the workspace-root tasq.md path (new v1.2.2 canonical location)
+     * Get the workspace-root tasq.md path (new v1.2.4 canonical location)
      */
     public async getRootTasqPath(preferredFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
         const wsFolder = preferredFolder || vscode.workspace.workspaceFolders?.[0];

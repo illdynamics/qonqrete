@@ -1,7 +1,7 @@
-# QonQrete Configuration v1.2.2-stable
+# QonQrete Configuration v1.2.4-stable
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# v1.2.2 alignment:
+# v1.2.4 alignment:
 # - single-image runtime remains
 # - Qrystallizer handles requirement anchoring in qrystal.d/
 # - Qualifier is the single source of truth for execution validation

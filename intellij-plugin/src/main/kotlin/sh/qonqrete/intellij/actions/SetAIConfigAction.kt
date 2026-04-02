@@ -3,7 +3,7 @@
  * Configure providers, models, and API keys for QonQrete AI agents
  *
  * @author WoNQ
- * @version 1.2.2
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 

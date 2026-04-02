@@ -410,7 +410,7 @@ def _run_llamacpp(model, prompt, timeout=DEFAULT_API_TIMEOUT, options=None):
     """
     options = options or {}
     
-    # 1. Base URL Resolution (EXACT FALLBACK ORDER per v1.2.2 spec)
+    # 1. Base URL Resolution (EXACT FALLBACK ORDER per v1.2.4 spec)
     # Priority: 
     # 1. env QONQ_LLAMACPP_BASE_URL
     # 2. config llamacpp.base_url
@@ -438,7 +438,7 @@ def _run_llamacpp(model, prompt, timeout=DEFAULT_API_TIMEOUT, options=None):
     # 2. api_style validation (STRICT: only 'openai' allowed)
     api_style = options.get("api_style", "openai").lower()
     if api_style != "openai":
-        raise RuntimeError(f"llamacpp: Invalid api_style '{api_style}'. ONLY 'openai' is supported for v1.2.2.")
+        raise RuntimeError(f"llamacpp: Invalid api_style '{api_style}'. ONLY 'openai' is supported for v1.2.4.")
 
     # Extract common LLM params from nested config
     temp = options.get("temperature", 0.3)

@@ -2,10 +2,10 @@
 # worqer/construqtor.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # ConstruQtor Agent - Code Generation with Contract-Aware Retries
-# v1.2.2-stable - QONTRACT + Cycle1 Tasq Context Wiring
+# v1.2.4-stable - QONTRACT + Cycle1 Tasq Context Wiring
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# CHANGELOG v1.2.2-stable:
+# CHANGELOG v1.2.4-stable:
 # - BULLETPROOF language detection: 400+ language identifiers (GitHub Linguist,
 #   OpenAI, Claude, Gemini, DeepSeek, Qwen outputs all covered)
 # - SMART filename validation: distinguishes real files from language keywords
@@ -625,7 +625,7 @@ def main():
     with open(changed_files_summary_file, 'w', encoding='utf-8') as f:
         f.write(changed_files_content)
 
-    print(f"\n--- ConstruQtor v1.2.2 Complete: {final_status} ---", flush=True)
+    print(f"\n--- ConstruQtor v1.2.4 Complete: {final_status} ---", flush=True)
     print(f"    Per-briq exeQ summaries written to: exeq.d/cyqle{cycle_num}/", flush=True)
 
 

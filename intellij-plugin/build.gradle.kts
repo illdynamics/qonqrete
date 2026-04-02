@@ -3,7 +3,7 @@
  * Build configuration - Production Ready
  *
  * @author QonQrete
- * @version v1.2.2
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 
@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "sh.qonqrete"
-version = "1.2.2"
+version = "1.2.4"
 
 repositories {
     mavenCentral()
@@ -54,7 +54,17 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
-            <h2>1.2.2 - Qualifier-Centralized Validation Alignment</h2>
+            <h2>1.2.4 - Production-Readiness & Forward Compatibility</h2>
+            <ul>
+                <li><b>FIX:</b> Critical auto-cycle (<code>--cyqles 0</code>) crash where <code>qrane_prefix</code> was used before assignment.</li>
+                <li><b>FIX:</b> Crash when neither <code>--auto</code> nor <code>--user</code> flag was passed (unbound <code>is_autonomous</code>).</li>
+                <li><b>FIX:</b> Replaced deprecated <code>setItemChoosenCallback</code> with <code>setItemChosenCallback</code>.</li>
+                <li><b>FIX:</b> Replaced deprecated <code>postStartupActivity</code> with <code>backgroundPostStartupActivity</code>.</li>
+                <li><b>Improved:</b> Forward compatibility verified for IntelliJ 2025.x and 2026.x IDE versions.</li>
+                <li><b>Improved:</b> Version consistency enforced across all 51 source files.</li>
+                <li><b>Improved:</b> Documentation fully aligned with actual v1.2.4 architecture.</li>
+            </ul>
+            <h2>1.2.4 - Qualifier-Centralized Validation Alignment</h2>
             <ul>
                 <li><b>NEW:</b> Qualifier is now documented as the single execution-validation authority.</li>
                 <li><b>NEW:</b> IDE run configuration documents <code>cycles = 0</code> as auto mode.</li>
@@ -102,7 +112,7 @@ tasks {
     }
     tasks {
         runPluginVerifier {
-            ideVersions.set(listOf("2023.3", "2024.1", "2024.2", "2024.3", "2025.1"))
+            ideVersions.set(listOf("2023.3", "2024.1", "2024.2", "2024.3", "2025.1", "2025.2", "2026.1"))
         }
     }
 }

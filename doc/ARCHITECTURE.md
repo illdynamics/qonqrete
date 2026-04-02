@@ -1,8 +1,8 @@
 # QonQrete Architecture
 
-**Version:** `v1.2.2`
+**Version:** `v1.2.4`
 
-This document describes the current repository architecture as shipped in the `v1.2.2` snapshot.
+This document describes the current repository architecture as shipped in the `v1.2.4` snapshot.
 
 ## High-level model
 
@@ -174,8 +174,8 @@ Important security properties:
 
 The IDE integrations deploy a hidden runtime into `.qonqrete/` and keep `tasq.md` user-facing at the workspace root.
 
-- **Deploy**: installs the `v1.2.2` runtime into the workspace
-- **Init**: builds `qonqrete-qage:1.2.2`
+- **Deploy**: installs the `v1.2.4` runtime into the workspace
+- **Init**: builds `qonqrete-qage:1.2.4`
 - **Run**: syncs the root task into the runtime and executes the loop
 
 ### Related docs

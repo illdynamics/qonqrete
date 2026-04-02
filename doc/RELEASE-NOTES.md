@@ -1,6 +1,30 @@
 # QonQrete Release Notes
 
-## v1.2.2
+## v1.2.4 — Production-Readiness & Forward Compatibility
+
+### 🐛 Critical Fixes
+- **RELEASE BLOCKER:** Fixed `qrane_prefix` used before assignment in auto-cycle path (`--cyqles 0`). Full autonomous mode now works reliably.
+- **CRASH FIX:** Fixed `is_autonomous` unbound when neither `--auto` nor `--user` flag is passed. Defaults to config-driven behavior.
+
+### 🧩 JetBrains Compatibility
+- Replaced deprecated `setItemChoosenCallback` → `setItemChosenCallback`
+- Replaced deprecated `postStartupActivity` → `backgroundPostStartupActivity`
+- Plugin verifier expanded to cover IntelliJ 2025.2 and 2026.1
+- Forward compatibility confirmed for `since-build="233"` through `until-build="261.*"`
+
+### 📚 Documentation & Version Consistency
+- Version bumped from 1.2.2 → 1.2.4 across all 51 source files
+- Zero stale version references remain
+- All docs, configs, plugin metadata, and extension manifests aligned
+
+### 🚀 Stability
+- Auto-cycle mode (`--cyqles 0`) stabilized for production use
+- Deterministic stop governor fully enforced via structured verdict.json
+- Production-ready control plane across CLI, VS Code, and IntelliJ
+
+---
+
+## v1.2.2 — Qualifier-Centralized Validation
 
 ### 🔄 Refactor
 - Migrated `loqal_verifier` into Qualifier

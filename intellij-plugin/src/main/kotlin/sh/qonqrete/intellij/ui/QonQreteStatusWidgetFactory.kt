@@ -5,7 +5,7 @@
  * v1.1.9: Now shows version in widget text
  *
  * @author WoNQ
- * @version 1.2.2
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 

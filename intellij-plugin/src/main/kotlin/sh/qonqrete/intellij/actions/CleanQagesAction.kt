@@ -3,7 +3,7 @@
  * Clean qage directories with confirmation
  *
  * @author WoNQ
- * @version 1.2.2
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 
@@ -123,7 +123,7 @@ class CleanQagesAction : AnAction() {
         JBPopupFactory.getInstance()
             .createListPopupBuilder(list)
             .setTitle("Select Qage to Clean")
-            .setItemChoosenCallback {
+            .setItemChosenCallback {
                 val selectedIndex = list.selectedIndex
                 if (selectedIndex >= 0) {
                     val selectedQage = qages[selectedIndex]

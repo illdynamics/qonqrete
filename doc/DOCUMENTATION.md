@@ -1,8 +1,8 @@
 # QonQrete Documentation
 
-**Version:** `v1.2.2`
+**Version:** `v1.2.4`
 
-This document is the technical reference for the `v1.2.2` repository snapshot.
+This document is the technical reference for the `v1.2.4` repository snapshot.
 
 ## Table of contents
 - [1. What QonQrete is](#1-what-qonqrete-is)
@@ -19,7 +19,7 @@ This document is the technical reference for the `v1.2.2` repository snapshot.
 
 QonQrete is a **structured AI construction loop** for autonomous software work inside a hardened container runtime. The architecture is intentionally split so that code generation, validation, evaluation, and stop/continue decisions are owned by different stages.
 
-Key `v1.2.2` alignment points:
+Key `v1.2.4` alignment points:
 - **Qualifier is the single source of truth for execution validation**
 - **Legacy standalone local verification has been removed**
 - **Structured verdict JSON governs completion**
@@ -180,8 +180,8 @@ QonQrete keeps one runtime image. Switching between cloud inference and `llamacp
 ## 8. IDE integrations
 
 The VS Code and IntelliJ integrations manage a workspace-local hidden runtime in `.qonqrete/`.
-- **Deploy**: installs the `v1.2.2` runtime
-- **Init**: builds the `qonqrete-qage:1.2.2` image
+- **Deploy**: installs the `v1.2.4` runtime
+- **Init**: builds the `qonqrete-qage:1.2.4` image
 - **Run**: syncs root `tasq.md` into the runtime
 - **Config UX**: documents `cycles = 0` as auto and exposes `innovative`
 

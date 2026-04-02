@@ -2,7 +2,7 @@
  * QonQrete Resume and Clean Commands
  * 
  * @author WoNQ
- * @version 1.2.2
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 

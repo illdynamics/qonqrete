@@ -2,11 +2,11 @@
  * Tasq Editor Notification Provider
  * Shows banner for tasq.md files with run action
  *
- * v1.2.2: Canonical tasq is now <project>/tasq.md (workspace root),
+ * v1.2.4: Canonical tasq is now <project>/tasq.md (workspace root),
  * NOT the internal .qonqrete/worqspace/tasq.md
  *
  * @author WoNQ
- * @version 1.2.2
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 

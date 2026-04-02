@@ -2,7 +2,7 @@
 # worqer/runtime_checks.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # Runtime Checks — Fail-Fast Contract Dependency Enforcement
-# v1.2.2-stable
+# v1.2.4-stable
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # Shared helper for ensuring mandatory pipeline prerequisites exist.

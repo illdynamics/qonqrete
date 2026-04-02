@@ -141,7 +141,7 @@ cd vscode-extension
 npm install
 npm run compile
 npx vsce package
-code --install-extension qonqrete-vscode-1.2.2.vsix
+code --install-extension qonqrete-vscode-1.2.4.vsix
 ```
 
 ## Settings

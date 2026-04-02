@@ -11,7 +11,7 @@ QonQrete is a **deterministic AI software construction system** that runs a stru
 
 ## Version
 
-**Current repository version:** `v1.2.2`  
+**Current repository version:** `v1.2.4`  
 Canonical source of truth: `VERSION`
 
 ## Install QonQrete in your IDE
@@ -27,7 +27,7 @@ Install QonQrete directly in your IDE and deploy the hidden runtime into your wo
 2. **VS Code extension**: `vscode-extension/`
 3. **IntelliJ / JetBrains plugin**: `intellij-plugin/`
 
-> **v1.2.2** — Qualifier-Centralized Validation & Architecture Alignment
+> **v1.2.4** — Production-Ready: Auto-Cycle Mode, Forward IDE Compatibility, Full Offline Support
 
 ## Quick Start (IDE)
 

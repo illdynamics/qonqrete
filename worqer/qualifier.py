@@ -2,7 +2,7 @@
 # worqer/qualifier.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # Qualifier Agent - Execution-Validation Gate
-# v1.2.2-stable
+# v1.2.4-stable
 # ═══════════════════════════════════════════════════════════════════════════════
 import ast
 import json
@@ -565,7 +565,7 @@ def _render_quality_markdown(report_json: dict) -> str:
 
 def main() -> None:
     # ═══════════════════════════════════════════════════════════════════════════
-    # FIX QUALIFIER RUNTIME CONTRACT (v1.2.2)
+    # FIX QUALIFIER RUNTIME CONTRACT (v1.2.4)
     # New signature: qualifier.py <input_path> <output_path>
     # ═══════════════════════════════════════════════════════════════════════════
     if len(sys.argv) < 3:
@@ -623,7 +623,7 @@ def main() -> None:
         print(f'Qualifier disabled for cycle {cycle_num}. Skipping.')
         sys.exit(0)
 
-    print(f'=== Qualifier Agent v1.2.2: Validation for CyQle {cycle_num} ===')
+    print(f'=== Qualifier Agent v1.2.4: Validation for CyQle {cycle_num} ===')
 
     results: list[dict] = []
     commands_log: list[dict] = []

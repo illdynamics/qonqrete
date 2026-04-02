@@ -2,7 +2,7 @@
 # worqer/qrystallizer.py
 # ═══════════════════════════════════════════════════════════════════════════════
 # Qrystallizer Agent - Cycle-1 Preflight & Artifact Generator
-# v1.2.2-stable
+# v1.2.4-stable
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import os

@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v1.2.2`
+**Version:** `v1.2.4`
 
 This document defines the main vocabulary used in the current repository.
 

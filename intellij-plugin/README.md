@@ -32,7 +32,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 ### From ZIP
 1. Build: `./gradlew buildPlugin`
 2. Install: Settings → Plugins → ⚙️ → Install Plugin from Disk
-3. Select `build/distributions/qonqrete-intellij-1.2.2.zip`
+3. Select `build/distributions/qonqrete-intellij-1.2.4.zip`
 
 ### From Source
 ```bash

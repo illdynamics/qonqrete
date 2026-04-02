@@ -1,6 +1,19 @@
 # QonQrete IntelliJ Plugin - Changelog
 
-## 1.2.2 - Deterministic Quality Gates & Auto-Cycle Mode
+## 1.2.4 - Production-Readiness & Forward Compatibility
+
+### Fixed
+- **Critical:** Auto-cycle mode (`--cyqles 0`) crash from `qrane_prefix` use-before-assignment.
+- **Critical:** Crash when neither `--auto` nor `--user` flag passed (unbound `is_autonomous`).
+- Replaced deprecated `setItemChoosenCallback` with `setItemChosenCallback`.
+- Replaced deprecated `postStartupActivity` with `backgroundPostStartupActivity`.
+
+### Improved
+- Forward compatibility verified for IntelliJ 2025.x and 2026.x.
+- Version consistency enforced across all source files (51 files updated).
+- Plugin verifier now tests against 2023.3 through 2026.1.
+
+## 1.2.4 - Deterministic Quality Gates & Auto-Cycle Mode
 
 ### Added
 - **Auto-Cycle Mode** (`cycles = 0`) support in run configuration.
@@ -10,7 +23,7 @@
 
 ### Improved
 - Robust stopping logic driven by structured `verdict.json`.
-- UI labels aligned with v1.2.2 deterministic pipeline.
+- UI labels aligned with v1.2.4 deterministic pipeline.
 - Improved error feedback for build/test failures in the container.
 
 ## 1.2.0 - Workspace Deployment & Hassle-Free Bootstrap

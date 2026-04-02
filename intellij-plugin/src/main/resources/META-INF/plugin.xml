@@ -72,7 +72,7 @@
             displayName="QonQrete"
             nonDefaultProject="true"/>
 
-        <postStartupActivity
+        <backgroundPostStartupActivity
             implementation="sh.qonqrete.intellij.services.QonQreteStartupActivity"/>
 
         <editorNotificationProvider

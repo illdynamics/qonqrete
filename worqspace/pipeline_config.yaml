@@ -1,5 +1,5 @@
 # QonQrete Pipeline Configuration
-# v1.2.2-stable — Qualifier-Centralized Validation
+# v1.2.4-stable — Qualifier-Centralized Validation
 #
 # CORE COMPLETION PATH:
 #   qrystallizer → instruqtor → construqtor → qualifier → inspeqtor → qrane
@@ -17,7 +17,7 @@ agents:
     input: "tasq.d/cyqle{N}_tasq.md"
     output: "tasq.d/cyqle{N}_tasq.md"
     description: |
-      Qrystallizer v1.2.2 - Cycle-1 Preflight Agent.
+      Qrystallizer v1.2.4 - Cycle-1 Preflight Agent.
       Analyzes tasq and generates requirements.json in qrystal.d/.
       Crucial for Auto-Cycle Mode cycle estimation.
     cycle_1_only: true

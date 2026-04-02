@@ -2,7 +2,7 @@
 # worqer/qompressor.py
 """
 The 'Skeletonizer' for QonQrete.
-v1.2.2-stable: Contract-preserving skeletonization with deterministic summaries.
+v1.2.4-stable: Contract-preserving skeletonization with deterministic summaries.
 
 PRESERVES:
 - Import statements
@@ -155,7 +155,7 @@ def _generate_body_summary(node, lines: list[str], indent_level: int = None) -> 
 
 def compress_python(content: str) -> str:
     """
-    v1.2.2: Contract-preserving Python skeletonizer.
+    v1.2.4: Contract-preserving Python skeletonizer.
     Uses AST to strip function bodies while preserving key evidence.
     Generates deterministic summary comments for stripped bodies.
     Output is valid, parseable Python.
@@ -415,7 +415,7 @@ def main():
         sys.exit(1)
 
     cycle_num = os.environ.get('CYCLE_NUM', '?')
-    print(f"--- Qompressor v1.2.2: Skeletonizing {source_dir} -> {dest_dir} (Cycle {cycle_num}) ---")
+    print(f"--- Qompressor v1.2.4: Skeletonizing {source_dir} -> {dest_dir} (Cycle {cycle_num}) ---")
     
     # G6.5: ALWAYS delete bloq.d/* before generating new skeletons
     # This ensures freshness — no stale files from previous cycles
@@ -445,7 +445,7 @@ def main():
     with open(marker_path, 'w') as f:
         f.write(f"cycle={cycle_num}\n")
             
-    print(f"--- Qompressor v1.2.2: Finished. {file_count} files processed (cycle {cycle_num}). ---")
+    print(f"--- Qompressor v1.2.4: Finished. {file_count} files processed (cycle {cycle_num}). ---")
 
 if __name__ == "__main__":
     main()

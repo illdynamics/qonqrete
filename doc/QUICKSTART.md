@@ -1,8 +1,8 @@
 # QonQrete Quickstart
 
-**Version:** `v1.2.2`
+**Version:** `v1.2.4`
 
-This guide gets you from zero to your first Qage using the workspace deployment model in `v1.2.2`.
+This guide gets you from zero to your first Qage using the workspace deployment model in `v1.2.4`.
 
 ## Option A: IDE-first
 
