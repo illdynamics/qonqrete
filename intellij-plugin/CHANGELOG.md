@@ -1,5 +1,18 @@
 # QonQrete IntelliJ Plugin - Changelog
 
+## 1.2.2 - Deterministic Quality Gates & Auto-Cycle Mode
+
+### Added
+- **Auto-Cycle Mode** (`cycles = 0`) support in run configuration.
+- **llamacpp** provider support in AI Configuration panel.
+- Support for **Program** and **Innovative** operational modes.
+- Real-time status reporting for **Qrystallizer** and **Qualifier** agents in tool window.
+
+### Improved
+- Robust stopping logic driven by structured `verdict.json`.
+- UI labels aligned with v1.2.2 deterministic pipeline.
+- Improved error feedback for build/test failures in the container.
+
 ## 1.2.0 - Workspace Deployment & Hassle-Free Bootstrap
 
 ### Added

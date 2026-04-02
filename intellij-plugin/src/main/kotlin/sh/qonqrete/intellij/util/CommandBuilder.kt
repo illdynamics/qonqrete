@@ -8,7 +8,7 @@
  * - Clear, auditable command assembly
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version 1.2.4
  * @license AGPL-3.0
  */
 

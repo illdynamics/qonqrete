@@ -540,7 +540,7 @@ def generate_context_local(file_path: Path, local_mode: str, project_path: Path)
 
 # --- AI Mode Logic ---
 
-def generate_qontext_ai(file_path: Path, provider: str, model: str, file_type: str) -> str:
+def generate_qontext_ai(file_path: Path, provider: str, model: str, file_type: str, config: dict) -> str:
     if not AI_MODE_AVAILABLE:
         return f"file_path: {str(file_path.as_posix())}\nerror: 'AI mode dependencies (lib_ai, qompressor) are not installed.'"
 
@@ -590,7 +590,16 @@ Analyze the following file and generate a YAML structure that summarizes its pur
 **Generate the YAML for the file provided above:**
 """
     try:
-        raw_result = lib_ai.run_ai_completion(provider, model, prompt)
+        ai_timeout = config.get('timeout')
+        ai_provider_options = config.get(provider) if provider == 'llamacpp' else None
+
+        raw_result = lib_ai.run_ai_completion(
+            provider, 
+            model, 
+            prompt,
+            timeout=ai_timeout,
+            provider_options=ai_provider_options
+        )
         yaml_match = re.search(r'```yaml\n(.*?)\n```', raw_result, re.DOTALL)
         return yaml_match.group(1) if yaml_match else raw_result
     except Exception as e:
@@ -631,7 +640,7 @@ def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, confi
         yaml_content = yaml.dump(context.to_dict(), sort_keys=False, default_flow_style=False, indent=2)
     else:
         file_type = get_file_type(file_path)
-        yaml_content = generate_qontext_ai(file_path, provider, model, file_type)
+        yaml_content = generate_qontext_ai(file_path, provider, model, file_type, config)
 
     with open(qontext_file, 'w', encoding='utf-8') as f:
         f.write(yaml_content)

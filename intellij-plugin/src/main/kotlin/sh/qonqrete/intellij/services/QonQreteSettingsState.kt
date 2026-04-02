@@ -3,7 +3,7 @@
  * Persistent application settings with all configuration options
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version 1.2.2
  * @license AGPL-3.0
  */
 
@@ -24,7 +24,7 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
 
     data class State(
         var defaultSensitivity: Int = 1,
-        var defaultCycles: Int = 1,
+        var defaultCycles: Int = 3,
         var defaultMode: String = "program",
         var defaultAutonomous: Boolean = true,
         var useSqrapyard: Boolean = false,
@@ -61,7 +61,7 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
 
     var defaultCycles: Int
         get() = myState.defaultCycles
-        set(value) { myState.defaultCycles = value.coerceIn(1, 50) }
+        set(value) { myState.defaultCycles = value.coerceIn(0, 50) }
 
     var defaultMode: String
         get() = myState.defaultMode
@@ -117,7 +117,7 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
  */
 data class QonQreteRunConfig(
     val sensitivity: Int = 1,
-    val cycles: Int = 1,
+    val cycles: Int = 3,
     val mode: String = "program",
     val autonomous: Boolean = true,
     val qonstructionName: String? = null,

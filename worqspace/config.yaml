@@ -1,234 +1,128 @@
-# QonQrete Configuration v1.0.4-stable
+# QonQrete Configuration v1.2.2-stable
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# v1.0.2 NEW: INVERTED BRIQ SENSITIVITY SCALE!
-# Higher number = MORE briqs (more intuitive!)
+# v1.2.2 alignment:
+# - single-image runtime remains
+# - Qrystallizer handles requirement anchoring in qrystal.d/
+# - Qualifier is the single source of truth for execution validation
+# - cycles=0 means auto (with auto_cycle_limit as the hard safety cap)
+# - provider: local and provider: llamacpp are NOT the same thing
 #
-# BRIQ SENSITIVITY SCALE (0-16):
-#   0  = Monolithic (1 briq)         - Single giant briq
-#   1  = Very Broad (2-3 briqs)      - Major chunks only
-#   2  = Broad (3-5 briqs)           - Large components
-#   3  = Feature-level (5-8 briqs)   - Per-feature
-#   4  = Component-level (8-12)      - Per-component
+# CORE COMPLETION PATH
+#   Qrystallizer → InstruQtor → ConstruQtor → Qualifier → InspeQtor → Qrane
+#
+# SUPPORT PASSES MAY ALSO RUN
+#   CalQulator / Qontextor / Qompressor / Qontrabender
+#
+# SENSITIVITY SCALE (0-16):
+#   0  = Monolithic (1 briq)
 #   5  = Balanced (10-15 briqs)      ← RECOMMENDED DEFAULT
-#   6  = Standard (15-20 briqs)      - Most files separate
-#   7  = High (20-30 briqs)          - Detailed split
-#   8  = Very High (30-40 briqs)     - Fine-grained
-#   9  = Atomic (40-60 briqs)        - Maximum detail
-#  10  = Ultra (50-75 briqs)         - Enterprise projects
-#  11  = Mega (60-90 briqs)          - Large enterprise
-#  12  = Hyper (75-110 briqs)        - Complex architectures
-#  13  = Extreme (90-130 briqs)      - Multi-layer systems
-#  14  = Maximum (110-160 briqs)     - Critical systems
-#  15  = Insane (130-200 briqs)      - Mega specifications
-#  16  = QONQRETE MAX (160-250)      - Enterprise mega-tasqs!
-#
-# v1.0.2 NEW: Non-interactive qonstruction save with -n flag
-# v1.0.2 NEW: Qontrabender only active when using Gemini for construqtor
+#   16 = QONQRETE MAX (160-250)
 #
 # ═══════════════════════════════════════════════════════════════════════════════
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# RETRY CONFIGURATION (v0.8.2+)
-# ═══════════════════════════════════════════════════════════════════════════════
-retry:
-  # Enable/disable retry mechanism
-  enabled: true
-  
-  # Maximum attempts per briq (1 = no retry, 3 = 2 retries)
-  max_attempts: 3
-  
-  # Stop entire cycle if a briq fails after all retries?
-  # true = stop immediately on briq failure (fail-fast)
-  # false = continue to next briq, collect all failures (fail-tolerant)
-  stop_on_briq_fail: false
-  
-  # Delay between retries (seconds)
-  retry_delay: 2
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# INTERLEAVED PIPELINE (NEW in v0.8.3)
-# ═══════════════════════════════════════════════════════════════════════════════
-# Build → Review → Build → Review (per briq)
-interleaved:
-  # Enable interleaved build + review per briq
-  enabled: true
-  
-  # Run local validation after each briq (syntax, imports) - NO AI
-  local_validation: true
-  
-  # Run lightweight AI review after each briq
-  # Set to false for faster builds, true for better quality assurance
-  ai_quick_review: false
-  
-  # Retry briq build if AI review fails
-  retry_on_review_fail: true
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# LOCAL VERIFICATION (v0.8.2+)
-# ═══════════════════════════════════════════════════════════════════════════════
-verification:
-  # Enable local verification after all briqs complete
-  enabled: true
-  
-  # What to check
-  checks:
-    syntax: true              # Python syntax validation (compile())
-    imports: true             # Check if imports resolve to files
-    skeleton_match: true      # Compare expected vs actual function signatures
 
 agents:
-  # ═══════════════════════════════════════════════════════════════════════════
-  # TASQLEVELER - Task Enhancement (OPTIONAL)
-  # ═══════════════════════════════════════════════════════════════════════════
-  tasqleveler:
+  # Qrystallizer: preflight analysis, requirement anchoring, anti-drift.
+  # Runs on Cycle 1 and writes qrystal.d/ artifacts.
+  qrystallizer:
     provider: openai
-    model: gpt-4.1-nano
-    # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
+    model: gpt-4o
     enabled: true
-    min_complexity_score: 200  # Below this score, don't enhance
-    min_lines: 200             # Below this line count, don't enhance
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # INSTRUQTOR - Briq Planning
-  # ═══════════════════════════════════════════════════════════════════════════
+  # InstruQtor: task decomposition into atomic briqs.
+  # program = only MANDATORY briqs from the canonical ledger.
+  # innovative = mandatory briqs first, optional enhancement briqs separated via Scope-Class.
   instruqtor:
     provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    model: gpt-4o
+    timeout: 300
 
-  calqulator:
-    provider: local
-    model: calqulator
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # CONSTRUQTOR - Code Generation (needs smarter model)
-  # ═══════════════════════════════════════════════════════════════════════════
+  # ConstruQtor: code generation only.
+  # Writes source into qodeyard/ and change summaries into exeq.d/.
+  # No build/test/runtime validation happens here.
   construqtor:
-    provider: openai
-    model: gpt-4.1-mini           # $1.25/$10.00 per 1M - best for code generation
+    provider: gemini
+    model: gemini-1.5-pro
+    timeout: 300
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
-  # ═══════════════════════════════════════════════════════════════════════════
+  # Qualifier: ALL deterministic validation and execution checks live here.
+  # Runs builtin checks first, then configured command checks.
+  # Writes cycle-scoped machine-readable evidence into quality.d/.
+  qualifier:
+    provider: local
+    model: qualifier
+    enabled: true
+    command_timeout: 300
+    commands:
+      - name: builtin_suite
+        type: builtin
+        enabled: true
+      - name: pytest
+        type: shell
+        cmd: pytest -v qodeyard/
+        enabled: false
+      - name: build
+        type: shell
+        cmd: echo "No build required"
+        enabled: false
+
+  # InspeQtor: evaluation and verdict synthesis.
+  # Reads code changes, quality.d/, and guard/requirement coverage.
+  # Writes reqap markdown plus structured verdict JSON in reqap.d/.
   inspeqtor:
     provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
-    
-    # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
-    batch_mode: true                 # Group briqs into batches
-    batch_token_roof: 60000          # Max input tokens per batch (~240KB)
-    batch_max_briqs: 12              # Max briqs per batch (safety cap)
-    
-    # Legacy per-briq limits (used when batch_mode=false)
-    max_prompt_chars_per_briq: 500000
-    max_context_files_per_briq: 40
-    max_chars_per_context_file: 80000
-    
-    # Context filtering
-    use_filtered_context: true
-    include_neighbor_depth: 1
+    model: gpt-4o
+    timeout: 300
+    batch_mode: true
+    batch_token_roof: 60000
+    batch_max_briqs: 12
 
+  # Support agents / utilities
   qontextor:
     provider: local
     model: qontextor
-    # local_mode: 'fast' = AST-only analysis
-    #             'complex' = AST + deep semantic analysis
-    local_mode: complex
-
   qompressor:
     provider: local
     model: qompressor
-
   qontrabender:
-    # NOTE: Qontrabender is ONLY active when construqtor uses Gemini!
-    # It's specifically designed for Gemini's context caching feature.
     provider: local
     model: qontrabender
-    
-    # ═══════════════════════════════════════════════════════════════════════════
-    # POLICY-DRIVEN CONFIGURATION (v0.8.0)
-    # ═══════════════════════════════════════════════════════════════════════════
-    
-    # Path to caching policy file (relative to worqspace)
-    policy_file: "./caching_policy.yaml"
-    
-    # Select operational mode from caching_policy.yaml
-    # Available modes:
-    #   - local_fast:       Ultra-fast, skeleton only, no remote cache
-    #   - local_smart:      Default - variable fidelity, local only (RECOMMENDED)
-    #   - cyber_bedrock:    Remote cache for stable bedrock
-    #   - cyber_aggressive: Aggressive remote caching, more churn
-    #   - paranoid_mincloud: Minimal cloud exposure, skeletons only
-    #   - debug_repro:      Maximum audit logging for debugging
-    mode: local_smart
 
 options:
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Agent Enable/Disable
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # Enable/disable Qompressor (skeleton generation)
-  use_qompressor: true
-  
-  # Enable/disable Qontextor (context indexing)
-  use_qontextor: true
+  # Operational mode
+  #   program:    freeze execution scope to the explicit tasq + canonical requirement ledger (default)
+  #   innovative: finish canonical ledger work first, then keep extras in an optional enhancement backlog
+  # Runtime briqs persist this split with Scope-Class: MANDATORY vs OPTIONAL_ENHANCEMENT.
+  mode: program
 
-  # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
-  # NOTE: Only works when construqtor.provider is 'gemini'!
+  # Cycle control
+  #   0  = auto (Qrane stops from structured verdict artifacts)
+  #   >0 = fixed manual cycle cap
+  # auto_cycle_limit is ONLY the hard safety cap for auto mode.
+  auto_cycle_limit: 4
+
+  # Granularity (0-16): higher = more briqs
+  briq_sensitivity: 5
+
+  # Enable/disable support agents
+  use_qompressor: true
+  use_qontextor: true
   use_qontrabender: true
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Cheqpoint Configuration
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # true = User-gated mode (cheqpoints enabled)
-  # false = Autonomous mode (cheqpoints disabled)
-  cheqpoint: false
+# Provider configuration
+# - local: internal Python worker agent inside the QonQrete runtime
+# - llamacpp: external OpenAI-compatible HTTP endpoint for LLM inference
+providers:
+  local:
+    enabled: true
 
-  # Max cycles in auto-mode (recommended: 3 for simple, 4-6 for complex)
-  auto_cycle_limit: 1
+  llamacpp:
+    enabled: false
+    endpoint: "http://host.docker.internal:8080/v1"
+    api_key: "not-needed-for-local"
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Cost Confirmation Gate (GateQeeper)
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # When true, after CalQulator estimates the run cost, QonQrete will prompt
-  # you to confirm before proceeding. You must answer yes/no.
-  # When false (default), runs proceed without cost confirmation.
-  cost_confirmation_gate: false
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Generation Settings (v1.0.2 - INVERTED ENFORCED Briq Ranges)
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # Briq Granularity Control (0-16) - INVERTED & ENFORCED!
-  # v1.0.2: Higher number = MORE briqs! (more intuitive)
-  #
-  # SENSITIVITY SCALE:
-  #   0  = Monolithic    (exactly 1 briq)
-  #   1  = Very Broad    (2-3 briqs)
-  #   2  = Broad         (3-5 briqs)
-  #   3  = Feature-level (5-8 briqs)
-  #   4  = Component     (8-12 briqs)
-  #   5  = Balanced      (10-15 briqs)  ← RECOMMENDED DEFAULT
-  #   6  = Standard      (15-20 briqs)
-  #   7  = High Gran.    (20-30 briqs)
-  #   8  = Very High     (30-40 briqs)
-  #   9  = Atomic        (40-60 briqs)
-  #  10  = Ultra         (50-75 briqs)
-  #  11  = Mega          (60-90 briqs)
-  #  12  = Hyper         (75-110 briqs)
-  #  13  = Extreme       (90-130 briqs)
-  #  14  = Maximum       (110-160 briqs)
-  #  15  = Insane        (130-200 briqs)
-  #  16  = QONQRETE MAX  (160-250 briqs)
-  #
-  # RECOMMENDATIONS:
-  #   Simple projects (web server, API): sens=1-2, cycles=1-3
-  #   Medium projects (full-stack app):  sens=4-6, cycles=2-4
-  #   Complexer projects (multi-service):  sens=6-10, cycles=3-6
-  #   QonQrete exQavator sized projects: sens=10+, cycles=6+
-  briq_sensitivity: 1
-
-  # Operational Mode
-  mode: program
+retry:
+  enabled: true
+  max_attempts: 3
+  stop_on_briq_fail: false
+  retry_delay: 2

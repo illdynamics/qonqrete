@@ -3,14 +3,14 @@
   Plugin configuration - Production Ready
 
   @author QonQrete
-  @version v1.1.9
+  @version v1.2.4
   @license AGPL-3.0
 -->
 <idea-plugin>
     <id>sh.qonqrete</id>
     <name>QonQrete</name>
-    <version>1.2.0</version>
-    <idea-version since-build="233"/>
+    <version>1.2.4</version>
+    <idea-version since-build="233" until-build="261.*"/>
     <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
 
     <description><![CDATA[

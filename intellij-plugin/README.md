@@ -4,6 +4,12 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 
 ## Features
 
+### Quality System
+- **ConstruQtor builds code only**
+- **Qualifier runs all execution validation** and writes `quality.d/`
+- **InspeQtor writes reqap markdown plus verdict JSON**
+- **Qrane decides stop/continue from structured verdict state**
+
 - **Run Tasq** - Execute QonQrete builds from your project root `tasq.md`
 - **Run Any Markdown** - Run any `.md` file as a temporary tasq
 - **Configuration** - Full config: sensitivity, cycles, mode, autonomous, sqrapyard, engine, TUI, wonqrete
@@ -26,7 +32,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 ### From ZIP
 1. Build: `./gradlew buildPlugin`
 2. Install: Settings → Plugins → ⚙️ → Install Plugin from Disk
-3. Select `build/distributions/qonqrete-intellij-1.1.9.zip`
+3. Select `build/distributions/qonqrete-intellij-1.2.2.zip`
 
 ### From Source
 ```bash
@@ -61,8 +67,8 @@ Settings → Tools → QonQrete:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Default Sensitivity | 6 | Briq sensitivity (0-16) |
-| Default Cycles | 3 | AI iteration cycles |
-| Default Mode | program | QonQrete mode |
+| Default Cycles | 3 | AI iteration cycles (0-50, where 0 = auto) |
+| Default Mode | program | `program` / `innovative` are the main semantic choices |
 | Default Autonomous | false | Auto mode |
 | Use Sqrapyard | false | Incremental builds |
 | Container Engine | auto | docker/podman/auto |

@@ -3,7 +3,7 @@
  * Configure providers, models, and API keys for QonQrete AI agents
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version 1.2.2
  * @license AGPL-3.0
  */
 
@@ -34,7 +34,7 @@ import javax.swing.*
 class SetAIConfigAction : AnAction() {
 
     companion object {
-        private val AI_AGENTS = listOf("tasqleveler", "instruqtor", "construqtor", "inspeqtor")
+        private val AI_AGENTS = listOf("qrystallizer", "instruqtor", "construqtor", "inspeqtor")
 
         private data class ProviderInfo(
             val label: String,
@@ -54,7 +54,9 @@ class SetAIConfigAction : AnAction() {
             "qwen" to ProviderInfo("Qwen", "QWEN_API_KEY",
                 listOf("qwen-plus", "qwen-turbo", "qwen-max")),
             "openrouter" to ProviderInfo("OpenRouter", "OPENROUTER_API_KEY",
-                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3"))
+                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3")),
+            "llamacpp" to ProviderInfo("llama.cpp (external HTTP)", "",
+                listOf("qwen3-coder-14b", "qwen3-coder-7b", "deepseek-r1-distill-qwen-14b", "custom model..."))
         )
 
         /**
@@ -108,7 +110,10 @@ class SetAIConfigAction : AnAction() {
         fun getMissingApiKeys(configPath: String): List<String> {
             val configs = readAgentConfigs(configPath)
             val providers = configs.values.map { it.first }.filter { it != "local" }.toSet()
-            return providers.mapNotNull { PROVIDERS[it]?.envKey }
+            return providers.mapNotNull { prov -> 
+                val info = PROVIDERS[prov]
+                if (info != null && info.envKey.isNotEmpty()) info.envKey else null
+            }
                 .distinct()
                 .filter { envKey -> !hasApiKeyAvailable(envKey) }
         }
@@ -134,7 +139,7 @@ class SetAIConfigAction : AnAction() {
 
         private fun readAgentConfigs(configPath: String): Map<String, Pair<String, String>> {
             val defaults = AI_AGENTS.associateWith {
-                if (it == "tasqleveler") Pair("openai", "gpt-4.1-nano") else Pair("openai", "gpt-4.1-mini")
+                if (it == "qrystallizer") Pair("openai", "gpt-4.1-nano") else Pair("openai", "gpt-4.1-mini")
             }.toMutableMap()
             val file = File(configPath)
             if (!file.exists()) return defaults
@@ -294,6 +299,8 @@ class SetAIConfigAction : AnAction() {
             builder.addComponent(JBLabel("<html><b>API Keys</b> (stored securely in IntelliJ credential store)</html>"))
 
             for ((provId, info) in PROVIDERS) {
+                if (info.envKey.isEmpty()) continue
+                
                 val existing = getApiKey(info.envKey)
                 val envSet = !System.getenv(info.envKey).isNullOrEmpty()
                 val field = JBPasswordField()

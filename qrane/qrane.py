@@ -8,6 +8,7 @@ import sys
 import time
 import traceback
 import select
+import json
 from pathlib import Path
 import yaml
 import re
@@ -66,7 +67,7 @@ def check_tui_keys(ui, proc=None):
 def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logger: logging.Logger, qonsole_log_path: Path, events_log_path: Path, env: dict, ui=None) -> bool:
     # Display name overrides
     DISPLAY_NAME_OVERRIDES = {
-        'loqal_verifier': 'inspeQtor',  # LoQal verifier is part of InspeQtor pipeline
+        'qualifier': 'qualiFier',
     }
     
     if agent_name in DISPLAY_NAME_OVERRIDES:
@@ -88,8 +89,9 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     # Keywords that SHOULD be displayed (high-level status only)
     # These are checked FIRST - if a line contains ANY of these, it displays
     VISIBLE_KEYWORDS = [
-        # TasqLeveler status (v0.9.0+) - only key status lines
+        # TasqLeveler/Qrystallizer status (v0.9.0+) - only key status lines
         "[TasqLeveler]",
+        "[Qrystallizer]",
         
         # ConstruQtor status - explicit patterns
         "--- ConstruQtor", "-- Processing Briq:", "- Wrote [Code]", "- Wrote [Plan]",
@@ -97,8 +99,10 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         "attempts:", "[SUCCESS]", "[FAILURE]", "[PARTIAL]",
         "[SKIP]", "[WARN]", "[ERROR]",
         
-        # LoQal Verifier (runs during build AND inspeQtor)
-        "[LoQal]",
+
+        
+        # Qualifier status
+        "--- Qualifier", "=== Qualifier", "Quality Check",
         
         # InstruQtor status
         "--- Architect", "Generating", "Ingesting", "Estimated cost:",
@@ -321,24 +325,82 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
 
     assessment = "Unknown"
     content = ""
+    verdict = None
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # v1.2.2: LOAD STRUCTURED VERDICT
+    # ═══════════════════════════════════════════════════════════════════════════
+    verdict_path = reqap_path.parent / f"cyqle{cycle}_verdict.json"
+    if verdict_path.exists():
+        try:
+            with open(verdict_path, 'r', encoding='utf-8') as f:
+                verdict = json.load(f)
+            assessment = verdict.get("overall_assessment", "Unknown")
+        except: pass
+
     try:
         if reqap_path.exists():
             with open(reqap_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            match = re.search(r"Assessment:.*?(SUCCESS|PARTIAL|FAILURE)", content, re.IGNORECASE | re.DOTALL)
-            if match:
-                assessment = match.group(1).strip()
+            if not verdict:
+                match = re.search(r"Assessment:.*?(SUCCESS|PARTIAL|FAILURE)", content, re.IGNORECASE | re.DOTALL)
+                if match:
+                    assessment = match.group(1).strip()
         else:
             content = f"[ERROR] reQap not found at {reqap_path}"
     except Exception as e:
         content = f"[ERROR] Could not read reQap: {e}"
 
+    # Deterministic Stop Logic
+    stop_recommended = False
+    if verdict:
+        # Existing variables
+        g_pass = verdict.get('guard_passed', False)
+        q_pass = verdict.get('quality_passed', False)
+        ass = verdict.get("overall_assessment", "UNKNOWN").upper()
+
+        # New variables from verdict
+        verif_errors = verdict.get('verification_errors', -1) # Default to -1 (error) for safety
+        open_blockers = verdict.get('open_blockers', []) 
+        if open_blockers is None: open_blockers = []
+
+        # Requirement coverage
+        req_cov = verdict.get("requirement_coverage", {})
+        must_total = req_cov.get("must_have_total", 0)
+        must_done = req_cov.get("must_have_done", 0)
+        
+        # HARDEN STOP GOVERNOR (v1.2.2)
+        # System MUST NOT stop if blockers exist or gates failed
+        all_conditions_met = (
+            g_pass is True and
+            verif_errors == 0 and
+            q_pass is True and
+            len(open_blockers) == 0 and
+            ass == "SUCCESS"
+        )
+
+        coverage_met = True
+        if must_total > 0: # Only check if must_have requirements exist
+            coverage_met = (must_done >= must_total)
+            
+        stop_recommended = all_conditions_met and coverage_met
+    else:
+        # Fallback to text matching for basic success if no verdict is found.
+        # This is a less reliable path and should ideally not be hit.
+        stop_recommended = (assessment.upper() == "SUCCESS") # assessment from text parsing
+
     if is_autonomous:
+        if stop_recommended:
+            msg = f"Autonomous Mode: SUCCESS DETECTED. Finalizing..."
+            if ui: ui.log_main(f"{gate_prefix}{msg}")
+            else: print(f"{gate_prefix}{msg}")
+            return 'STOP'
+        
         msg = "Autonomous Mode: Qontinuing..."
         if ui: ui.log_main(f"{gate_prefix}{msg}")
         else:
             print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
-            print(content)
+            # print(content) # Too noisy for auto
             print(f"{gate_prefix}{msg}")
         promote_reqap(cycle, prefix, path_manager, ui=ui)
         return 'QONTINUE'
@@ -347,14 +409,28 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
         if ui:
             ui.log_main(f"--- reQap Cycle {cycle} ---")
             ui.log_main(f"{gate_prefix}Result: {assessment}")
-            prompt = f"{gate_prefix}[Q]ontinue, [T]weaQ (Edit), [X]Quit"
+            if stop_recommended:
+                ui.log_main(f"{gate_prefix}{Colors.GREEN}Stop Recommended: Yes{Colors.R}")
+            
+            prompt = f"{gate_prefix}[Q]ontinue, [S]top (Finalize), [T]weaQ (Edit), [X]Quit"
             choice = ui.get_input_blocking(prompt).lower()
         else:
             print("\n" + f"{Colors.YELLOW}=== Cheqpoint {cycle:03d} ==={Colors.R}")
-            print(content)
+            if verdict:
+                q_pass = "YES" if verdict.get('quality_passed', True) else "NO"
+                g_pass = "YES" if verdict.get('guard_passed', True) else "NO"
+                briqs = verdict.get('briqs', {})
+                print(f"Overall Assessment: {assessment}")
+                print(f"Contract Guard:     {g_pass}")
+                print(f"Quality Gate:       {q_pass}")
+                print(f"Briq Stats:         ✅{briqs.get('success',0)} ⚠️{briqs.get('partial',0)} ❌{briqs.get('failure',0)}")
+                print(f"Stop Recommended:   {'YES' if stop_recommended else 'NO'}")
+            else:
+                print(content)
+            
             print(f"{Colors.YELLOW}==========================={Colors.R}")
             print(f"{gate_prefix}Result: {Colors.WHITE}{assessment}{Colors.R}")
-            print(f"{gate_prefix}[Q]ontinue, [T]weaQ (Edit), [X]Quit")
+            print(f"{gate_prefix}[Q]ontinue, [S]top (Finalize), [T]weaQ (Edit), [X]Quit")
             sys.stdout.write(f"{gate_prefix}Selection: {Colors.R}")
             sys.stdout.flush()
             choice = getch().lower()
@@ -367,6 +443,8 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
             else: print(f"{gate_prefix}{msg}")
             promote_reqap(cycle, prefix, path_manager, ui=ui)
             return 'QONTINUE'
+        elif choice == 's':
+            return 'STOP'
         elif choice == 'x': return 'QUIT'
         elif choice == 't':
             editor = os.environ.get('EDITOR', 'vim')
@@ -413,7 +491,9 @@ def check_api_keys(config, qrane_prefix):
     providers = set()
     for agent_config in config.get('agents', {}).values():
         if 'provider' in agent_config:
-            providers.add(agent_config['provider'].lower())
+            provider = agent_config['provider'].lower()
+            if provider not in ('local', 'llamacpp'):
+                providers.add(provider)
 
     if not providers:
         return
@@ -447,9 +527,9 @@ def main():
     parser.add_argument("-t", "--tui", action="store_true", help="Enable TUI")
     parser.add_argument("-w", "--wonqrete", action="store_true", help="Exp Mode")
     parser.add_argument("-V", "--version", action="version", version=get_version())
-    parser.add_argument("-m", "--mode", type=str, help="Operational Mode (program, enterprise, etc)")
+    parser.add_argument("-m", "--mode", type=str, help="Operational mode semantics (program or innovative; unknown values fall back to program semantics)")
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-9)")
-    parser.add_argument("-c", "--cyqles", type=int, help="Max auto-cycles (1-50)")
+    parser.add_argument("-c", "--cyqles", type=int, help="Cycle cap (0=auto, 1-50=fixed)")
     args = parser.parse_args()
 
     if args.auto and args.user:
@@ -467,9 +547,6 @@ def main():
         is_autonomous = False
     elif args.auto:
         is_autonomous = True
-    else:
-        is_autonomous = not cheqpoint_config
-
     prefix = "aQQ" if is_autonomous else "uQQ"
     if args.wonqrete: prefix = "aWQ" if is_autonomous else "uWQ"
 
@@ -512,9 +589,39 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     os.environ['QONQ_SENSITIVITY'] = str(final_sens)
 
     # Max cycles: CLI overrides config
-    max_cycles = config.get('options', {}).get('auto_cycle_limit', 4)
+    # 0 = AUTO MODE (Autonomous with dynamic stop)
+    config_auto_cap = max(1, min(50, int(config.get('options', {}).get('auto_cycle_limit', 4))))
+    max_cycles = config_auto_cap
     if args.cyqles is not None:
-        max_cycles = max(1, min(50, args.cyqles))  # Clamp to 1-50
+        max_cycles = max(0, min(50, args.cyqles))  # Clamp to 0-50
+    
+    is_auto_cycles = (max_cycles == 0)
+    hard_cap = config_auto_cap  # Default safety cap for auto mode
+    
+    if is_auto_cycles:
+        is_autonomous = True
+        prefix = "aQQ"
+        if args.wonqrete: prefix = "aWQ"
+        os.environ['QONQ_AUTONOMOUS'] = "true"
+        
+        # Initial estimate from Qrystallizer if available
+        qrystal_reqs_path = worqspace / "qrystal.d" / "requirements.json"
+        if qrystal_reqs_path.exists():
+            try:
+                with open(qrystal_reqs_path, 'r', encoding='utf-8') as f:
+                    qdata = json.load(f)
+                    initial_estimate = qdata.get('recommended_cycles_initial', 3)
+                    recommended_hard_cap = qdata.get('recommended_cycles_hard_cap', config_auto_cap)
+                    hard_cap = max(1, min(config_auto_cap, recommended_hard_cap))
+                    msg = f"Auto-Cycles enabled. Initial estimate: {initial_estimate}, Hard cap: {hard_cap}"
+                    if ui: ui.log_main(f"{qrane_prefix}{msg}")
+                    else: print(f"{qrane_prefix}{msg}\r")
+            except: pass
+        else:
+            msg = f"Auto-Cycles enabled (no estimate found). Safety cap: {hard_cap}"
+            if ui: ui.log_main(f"{qrane_prefix}{msg}")
+            else: print(f"{qrane_prefix}{msg}\r")
+
     target_width = 11
     qrane_padding = " " * (target_width - 5)
     qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
@@ -539,7 +646,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
-    AGENT_COLORS = {"tasqleveler": Colors.YELLOW, "instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B, "qontrabender": Colors.MAGENTA}
+    AGENT_COLORS = {"tasqleveler": Colors.YELLOW, "qrystallizer": Colors.YELLOW, "instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "qualifier": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B, "qontrabender": Colors.MAGENTA}
 
     # --- Initial Dual-Core Warmup (Sqrapyard Detection) ---
     # Checks if qodeyard was seeded. If so, generate Skeletons (Fast) and Context (Smart).
@@ -616,12 +723,20 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
     try:
         while True:
-            if is_autonomous and max_cycles > 0 and cycle > max_cycles:
-                limit_str = f"{Colors.C}{max_cycles}{Colors.R}"
-                msg = f"Max cyQle limit hit ({limit_str}) - Edit config.yaml to change this."
-                if ui: ui.log_main(f"{qrane_prefix}{msg}")
-                else: print(f"{qrane_prefix}{msg}\r")
-                break
+            # Cycle limit check
+            if is_auto_cycles:
+                if cycle > hard_cap:
+                    msg = f"Auto-mode hard cap hit ({hard_cap}). Safety termination."
+                    if ui: ui.log_main(f"{qrane_prefix}{msg}")
+                    else: print(f"{qrane_prefix}{msg}\r")
+                    break
+            else:
+                if cycle > max_cycles:
+                    limit_str = f"{Colors.C}{max_cycles}{Colors.R}"
+                    msg = f"Max cyQle limit hit ({limit_str}). Stop or resume to continue."
+                    if ui: ui.log_main(f"{qrane_prefix}{msg}")
+                    else: print(f"{qrane_prefix}{msg}\r")
+                    break
 
             env = os.environ.copy()
             env["CYCLE_NUM"] = str(cycle)
@@ -668,8 +783,8 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 if name == 'qontrabender' and construqtor_provider != 'gemini':
                     continue
                 
-                # Skip calqulator if using local construqtor (no API costs to calculate)
-                if name == 'calqulator' and construqtor_provider == 'local':
+                # Skip calqulator if using local/llamacpp construqtor (no API costs to calculate)
+                if name == 'calqulator' and construqtor_provider in ('local', 'llamacpp'):
                     continue
 
                 # --- DYNAMIC LOCAL AGENT LOADER ---
@@ -754,7 +869,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if session_failed: break
 
             res = handle_cheqpoint(cycle, is_autonomous, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)
-            if res == 'QUIT': break
+            if res == 'STOP' or res == 'QUIT': break
             cycle += 1
 
     except KeyboardInterrupt:

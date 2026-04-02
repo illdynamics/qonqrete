@@ -3,7 +3,7 @@
  * Build configuration - Production Ready
  *
  * @author QonQrete
- * @version v1.1.9
+ * @version v1.2.2
  * @license AGPL-3.0
  */
 
@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "sh.qonqrete"
-version = "1.2.0"
+version = "1.2.2"
 
 repositories {
     mavenCentral()
@@ -54,6 +54,24 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
+            <h2>1.2.2 - Qualifier-Centralized Validation Alignment</h2>
+            <ul>
+                <li><b>NEW:</b> Qualifier is now documented as the single execution-validation authority.</li>
+                <li><b>NEW:</b> IDE run configuration documents <code>cycles = 0</code> as auto mode.</li>
+                <li><b>NEW:</b> AI configuration now targets <code>qrystallizer</code> in line with the current architecture.</li>
+                <li><b>Improved:</b> Clearer separation between ConstruQtor (build), Qualifier (execute), InspeQtor (evaluate), and Qrane (decide).</li>
+                <li><b>Improved:</b> <code>llamacpp</code> is described as an external HTTP runtime, not as <code>local</code>.</li>
+            </ul>
+            <h2>1.2.1 - Deterministic Quality Gates &amp; Auto-Cycle Mode</h2>
+            <ul>
+                <li><b>NEW:</b> Auto-Cycle Mode (cycles: 0) — system stops automatically when quality gates pass.</li>
+                <li><b>NEW:</b> Qrystallizer Agent — Cycle-1 preflight requirement extraction.</li>
+                <li><b>NEW:</b> Qualifier Agent — Dedicated layer for build/test execution.</li>
+                <li><b>NEW:</b> Innovation vs Program modes for fine-grained scope control.</li>
+                <li><b>NEW:</b> llamacpp provider support for external local models.</li>
+                <li><b>Improved:</b> Robust stopping logic driven by structured verdict.json.</li>
+                <li><b>Improved:</b> Separation of code generation from runtime validation.</li>
+            </ul>
             <h2>1.2.0 - Workspace Deployment &amp; Hassle-Free Bootstrap</h2>
             <ul>
                 <li><b>NEW:</b> "Deploy to Workspace" — one-click runtime install into any project (.qonqrete/)</li>
@@ -84,7 +102,7 @@ tasks {
     }
     tasks {
         runPluginVerifier {
-            ideVersions.set(listOf("2023.3", "2024.1"))
+            ideVersions.set(listOf("2023.3", "2024.1", "2024.2", "2024.3", "2025.1"))
         }
     }
 }

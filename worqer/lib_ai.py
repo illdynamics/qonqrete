@@ -103,6 +103,11 @@ DEFAULT_MAX_CHARS_PER_FILE = 150_000     # Max chars per context file
 STRING_HARD_LIMIT = 9_500_000            # Just under 10MB HTTP limit
 
 
+def ai_query(prompt: str, provider: str = "openai", model: str = "gpt-4o", timeout: int = None, provider_options: dict = None) -> str:
+    """Compatibility wrapper for run_ai_completion."""
+    return run_ai_completion(provider=provider, model=model, prompt=prompt, timeout=timeout, provider_options=provider_options)
+
+
 def run_ai_completion(
     provider: str, 
     model: str, 
@@ -110,26 +115,26 @@ def run_ai_completion(
     context_files: list[str] = None,
     max_prompt_chars: int = None,
     max_context_files: int = None,
-    max_chars_per_file: int = None
+    max_chars_per_file: int = None,
+    timeout: int = None,
+    provider_options: dict = None
 ) -> str:
     """
     Execute AI completion with budget enforcement.
     
     Args:
-        provider: AI provider name (openai, gemini, anthropic, deepseek)
+        provider: AI provider name (openai, gemini, anthropic, deepseek, llamacpp)
         model: Model identifier
         prompt: Base prompt content
         context_files: Optional list of file paths to include as architectural context
         max_prompt_chars: Override default max prompt size
         max_context_files: Override default max number of context files
         max_chars_per_file: Override default max chars per individual file
+        timeout: Optional timeout in seconds
+        provider_options: Optional provider-specific configuration
         
     Returns:
         AI response content
-        
-    Raises:
-        ValueError: If provider is unknown
-        RuntimeError: If AI call fails
     """
     if context_files is None: 
         context_files = []
@@ -143,19 +148,25 @@ def run_ai_completion(
     
     full_prompt = _build_prompt(prompt, context_files, budget_config)
 
+    # Use provider-specific timeout or default
+    effective_timeout = timeout or DEFAULT_API_TIMEOUT
+
     try:
-        if provider.lower() == 'openai':
-            return _run_openai(model, full_prompt)
-        elif provider.lower() == 'gemini':
-            return _run_gemini(model, full_prompt)
-        elif provider.lower() == 'anthropic':
-            return _run_anthropic(model, full_prompt)
-        elif provider.lower() == 'deepseek':
-            return _run_deepseek(model, full_prompt)
-        elif provider.lower() == 'qwen':
-            return _run_qwen(model, full_prompt)
-        elif provider.lower() == 'openrouter':
-            return _run_openrouter(model, full_prompt)
+        p_low = provider.lower()
+        if p_low == 'openai':
+            return _run_openai(model, full_prompt, effective_timeout)
+        elif p_low == 'gemini':
+            return _run_gemini(model, full_prompt, effective_timeout)
+        elif p_low == 'anthropic':
+            return _run_anthropic(model, full_prompt, effective_timeout)
+        elif p_low == 'deepseek':
+            return _run_deepseek(model, full_prompt, effective_timeout)
+        elif p_low == 'qwen':
+            return _run_qwen(model, full_prompt, effective_timeout)
+        elif p_low == 'openrouter':
+            return _run_openrouter(model, full_prompt, effective_timeout)
+        elif p_low == 'llamacpp':
+            return _run_llamacpp(model, full_prompt, effective_timeout, provider_options)
         else:
             raise ValueError(f"Unknown AI Provider: {provider}")
     except Exception as e:
@@ -392,6 +403,93 @@ def _run_streaming_cli_process(cmd, input_text) -> str:
         raise RuntimeError(f"Subprocess execution failed: {e}")
 
 
+def _run_llamacpp(model, prompt, timeout=DEFAULT_API_TIMEOUT, options=None):
+    """
+    Local Llama.cpp (or compatible) provider using OpenAI chat completions.
+    Supports dynamic base_url resolution for Docker/Podman environments.
+    """
+    options = options or {}
+    
+    # 1. Base URL Resolution (EXACT FALLBACK ORDER per v1.2.2 spec)
+    # Priority: 
+    # 1. env QONQ_LLAMACPP_BASE_URL
+    # 2. config llamacpp.base_url
+    # 3. if podman: http://host.containers.internal:8080/v1
+    # 4. if docker: http://host.docker.internal:8080/v1
+    # 5. FINAL fallback: http://127.0.0.1:8080/v1
+    
+    base_url = os.environ.get("QONQ_LLAMACPP_BASE_URL")
+    
+    if not base_url:
+        base_url = options.get("base_url")
+        
+    if not base_url:
+        engine = os.environ.get("QONQ_CONTAINER_ENGINE", "").lower()
+        if engine == "podman":
+            base_url = "http://host.containers.internal:8080/v1"
+        elif engine == "docker":
+            base_url = "http://host.docker.internal:8080/v1"
+            
+    if not base_url:
+        base_url = "http://127.0.0.1:8080/v1"
+            
+    api_key = os.environ.get("QONQ_LLAMACPP_API_KEY", "llamacpp-local")
+    
+    # 2. api_style validation (STRICT: only 'openai' allowed)
+    api_style = options.get("api_style", "openai").lower()
+    if api_style != "openai":
+        raise RuntimeError(f"llamacpp: Invalid api_style '{api_style}'. ONLY 'openai' is supported for v1.2.2.")
+
+    # Extract common LLM params from nested config
+    temp = options.get("temperature", 0.3)
+    top_p = options.get("top_p", 0.9)
+    max_tokens = options.get("max_tokens", 4096)
+    extra_body = options.get("extra_body", {})
+    extra_headers = options.get("extra_headers", {})
+
+    try:
+        # Use OpenAI SDK as the generic HTTP client
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            default_headers=extra_headers
+        )
+        
+        response_stream = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+            temperature=temp,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            extra_body=extra_body,
+            timeout=timeout # Ensure timeout is passed to the specific call
+        )
+        
+        captured_chunks = []
+        for chunk in response_stream:
+            if hasattr(chunk, 'choices') and chunk.choices:
+                content = chunk.choices[0].delta.content
+                if content:
+                    captured_chunks.append(content)
+                    sys.stderr.write(content)
+                    sys.stderr.flush()
+        return "".join(captured_chunks).strip()
+
+    except openai.APITimeoutError as e:
+        raise TimeoutError(f"llamacpp: Connection timed out after {timeout}s at {base_url}. "
+                           "Ensure the model is loaded and the server is responsive.") from e
+    except openai.APIConnectionError as e:
+        raise RuntimeError(f"llamacpp: Connection refused or failed at {base_url}. "
+                           "Is the Llama.cpp server running with --api? (Connection Error)") from e
+    except openai.APIStatusError as e:
+        raise RuntimeError(f"llamacpp: Invalid endpoint or server error (HTTP {e.status_code}) at {base_url}. "
+                           f"Details: {e.response.text}") from e
+    except Exception as e:
+        raise RuntimeError(f"llamacpp: Malformed response or unexpected error from {base_url}: {e}") from e
+
+
 def _run_openai(model, prompt, timeout=DEFAULT_API_TIMEOUT):
     """OpenAI provider with streaming and timeout."""
     try:
@@ -419,7 +517,11 @@ def _run_openai(model, prompt, timeout=DEFAULT_API_TIMEOUT):
 def _run_gemini(model, prompt, timeout=DEFAULT_API_TIMEOUT):
     """Gemini provider with streaming and timeout."""
     try:
-        genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+        api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("Gemini API key not found (checked GOOGLE_API_KEY and GEMINI_API_KEY)")
+            
+        genai.configure(api_key=api_key)
         client = genai.GenerativeModel(model)
         # Note: google-generativeai doesn't support timeout directly in generate_content
         # Timeout is handled at the transport level

@@ -1,6 +1,6 @@
 #!/bin/bash
 # qonqrete.sh - The Entry Point
-# v1.2.0 - Container Runtime Auto-Detect + Versioned Images (Docker / Podman / MSB)
+# v1.2.4 - Production-Ready Control Plane
 
 set -euo pipefail
 
@@ -110,9 +110,9 @@ Run Options:
   -a, --auto                   Enable Autonomous Mode.
   -u, --user                   Force User-gated Mode.
   -t, --tui                    Enable TUI Mode. ${Y}[EXPERIMENTAL]${R}
-  -m, --mode <n>               Set Operational Mode (program, enterprise, security, etc).
+  -m, --mode <n>               Set Operational Mode (program, innovative, enterprise, security, etc).
   -b, --briq-sensitivity <N>   Set Granularity (0-16). Default: 6. Higher = more briqs!
-  -c, --cyqles <N>             Set max auto-cycles (1-50). Default: 3
+  -c, --cyqles <N>             Set cycle cap (0 for auto, 1-50 fixed). Default: config safety cap
   -n, --qonstruction-name <n>  Auto-save as qonstruction (non-interactive). v1.0.2
   -s, --sqrapyard              Seed from sqrapyard/ directory contents.
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
@@ -138,6 +138,7 @@ Examples:
   ./qonqrete.sh run -s                     # Start with sqrapyard contents
   ./qonqrete.sh run --auto --mode security # Autonomous security mode
   ./qonqrete.sh run -b 6 -c 3              # Sensitivity 6, 3 cycles (default)
+  ./qonqrete.sh run -c 0                   # Autonomous Mode with Auto-Cycles
   ./qonqrete.sh run -b 5 -c 6              # Complex project: sens 5, 6 cycles
   ./qonqrete.sh run -a -n myproject        # Auto-save as 'myproject' qonstruction
   ./qonqrete.sh run --podman               # Use Podman engine explicitly
@@ -681,6 +682,10 @@ normalize_mount_path() {
 
 build_api_env_vars() {
     local env_vars=""
+    # Runtime context
+    env_vars="$env_vars -e QONQ_CONTAINER_ENGINE=${CONTAINER_ENGINE}"
+    
+    # Cloud AI Keys
     if [ -n "${OPENAI_API_KEY-}" ]; then env_vars="$env_vars -e OPENAI_API_KEY=${OPENAI_API_KEY}"; fi
     if [ -n "${GOOGLE_API_KEY-}" ]; then env_vars="$env_vars -e GOOGLE_API_KEY=${GOOGLE_API_KEY} -e GEMINI_API_KEY=${GOOGLE_API_KEY}"; fi
     if [ -n "${GEMINI_API_KEY-}" ]; then env_vars="$env_vars -e GEMINI_API_KEY=${GEMINI_API_KEY}"; fi
@@ -688,6 +693,11 @@ build_api_env_vars() {
     if [ -n "${DEEPSEEK_API_KEY-}" ]; then env_vars="$env_vars -e DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}"; fi
     if [ -n "${QWEN_API_KEY-}" ]; then env_vars="$env_vars -e QWEN_API_KEY=${QWEN_API_KEY}"; fi
     if [ -n "${OPENROUTER_API_KEY-}" ]; then env_vars="$env_vars -e OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"; fi
+    
+    # Local Llama.cpp Config
+    if [ -n "${QONQ_LLAMACPP_BASE_URL-}" ]; then env_vars="$env_vars -e QONQ_LLAMACPP_BASE_URL=${QONQ_LLAMACPP_BASE_URL}"; fi
+    if [ -n "${QONQ_LLAMACPP_API_KEY-}" ]; then env_vars="$env_vars -e QONQ_LLAMACPP_API_KEY=${QONQ_LLAMACPP_API_KEY}"; fi
+    
     echo "$env_vars"
 }
 
@@ -934,9 +944,15 @@ case "$COMMAND" in
             fi
             next_cycle=$((max_cycle + 1))
             cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle${next_cycle}_tasq.md"
-        fi
-        
-        log_qrane "Handing off to Qrane in 3 seconds..."
+            fi
+
+            # Preflight Hint: Local Inference
+            if grep -q "provider: llamacpp" "${WORKSPACE_DIR}/config.yaml"; then
+            log_qrane "${Y}llamacpp provider detected.${R} Ensure your local model server is running at the configured endpoint."
+            fi
+
+            log_qrane "Handing off to Qrane in 3 seconds..."
+
         sleep 3
 
         run_container "$RUN_HOST_PATH"
@@ -999,6 +1015,12 @@ case "$COMMAND" in
         fi
         
         cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+
+        # Preflight Hint: Local Inference
+        if grep -q "provider: llamacpp" "${WORKSPACE_DIR}/config.yaml"; then
+            log_qrane "${Y}llamacpp provider detected.${R} Ensure your local model server is running at the configured endpoint."
+            log_qrane "Default resolution: ${G}host.docker.internal${R} (Docker) or ${G}host.containers.internal${R} (Podman)."
+        fi
 
         log_qrane "Handing off to Qrane in 3 seconds..."
         sleep 3

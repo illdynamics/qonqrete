@@ -3,7 +3,7 @@
  * Execute a non-canonical markdown file as a temporary tasq
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version 1.2.2
  * @license AGPL-3.0
  */
 

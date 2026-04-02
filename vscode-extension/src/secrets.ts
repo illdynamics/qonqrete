@@ -8,7 +8,7 @@
  * - Env vars take precedence over stored secrets
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version 1.2.2
  * @license AGPL-3.0
  */
 
@@ -66,6 +66,11 @@ export const PROVIDERS: Record<string, { label: string; envKey: string; models: 
         label: 'OpenRouter',
         envKey: 'OPENROUTER_API_KEY',
         models: ['anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'deepseek/deepseek-chat-v3'],
+    },
+    llamacpp: {
+        label: 'llama.cpp (external HTTP)',
+        envKey: '', // No key required
+        models: ['qwen3-coder-14b', 'qwen3-coder-7b', 'deepseek-r1-distill-qwen-14b', 'custom model...'],
     },
 };
 

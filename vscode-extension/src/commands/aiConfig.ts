@@ -6,7 +6,7 @@
  * Never in settings.json, never in terminal commands, never in logs
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version 1.2.2
  * @license AGPL-3.0
  */
 
@@ -23,14 +23,14 @@ import {
     hasApiKey,
 } from '../secrets';
 
-const AI_AGENTS = ['tasqleveler', 'instruqtor', 'construqtor', 'inspeqtor'] as const;
+const AI_AGENTS = ['qrystallizer', 'instruqtor', 'construqtor', 'inspeqtor'] as const;
 type AgentName = typeof AI_AGENTS[number];
 
 interface AgentConfig { provider: string; model: string; }
 
 function readAgentConfigs(configPath: string): Record<AgentName, AgentConfig> {
     const defaults: Record<AgentName, AgentConfig> = {
-        tasqleveler: { provider: 'openai', model: 'gpt-4.1-nano' },
+        qrystallizer: { provider: 'openai', model: 'gpt-4.1-nano' },
         instruqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
         construqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
         inspeqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
@@ -97,11 +97,14 @@ export function getRequiredApiKeys(configPath: string): string[] {
     const provs = new Set<string>();
     for (const agent of AI_AGENTS) {
         const p = configs[agent].provider;
-        if (p && p !== 'local') provs.add(p);
+        // Skip local and any other provider that doesn't have an envKey
+        if (p && p !== 'local' && PROVIDERS[p]?.envKey) {
+            provs.add(p);
+        }
     }
     const keys: string[] = [];
     for (const p of provs) {
-        const envKey = PROVIDER_ENV_MAP[p];
+        const envKey = PROVIDERS[p].envKey;
         if (envKey && !keys.includes(envKey)) keys.push(envKey);
     }
     return keys;
@@ -192,6 +195,9 @@ export async function executeSetAIConfig(): Promise<void> {
         items.push({ label: '$(key) API Keys', kind: vscode.QuickPickItemKind.Separator });
 
         for (const [, info] of Object.entries(PROVIDERS)) {
+            // Skip providers that don't need keys (like llamacpp)
+            if (!info.envKey) continue;
+            
             const has = await hasApiKey(info.envKey);
             items.push({
                 label: `$(key) ${info.label}`,

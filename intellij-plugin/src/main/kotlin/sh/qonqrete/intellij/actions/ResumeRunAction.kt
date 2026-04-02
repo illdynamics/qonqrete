@@ -5,7 +5,7 @@
  * v1.1.9: Shows timestamps and artifact counts in selection popup
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version 1.2.2
  * @license AGPL-3.0
  */
 
