@@ -1,6 +1,6 @@
 /**
  * Run Tasq Action
- * Execute QonQrete with tasq.md (synced from workspace root)
+ * Execute QonQrete with the default project task file
  *
  * @author WoNQ
  * @version 1.2.0
@@ -70,13 +70,13 @@ class RunTasqAction : AnAction() {
             return
         }
 
-        // Check if tasq.md exists - offer create if not
+        // Check if a default task file exists - offer create if not
         if (!service.hasTasqFile()) {
             val choice = Messages.showDialog(
                 project,
-                "No tasq.md found. Create one to define your build task.",
+                "No default task file found. Create a starter task file to define your build task.",
                 "QonQrete: No Tasq File",
-                arrayOf("Create tasq.md", "Cancel"),
+                arrayOf("Create Task File", "Cancel"),
                 0,
                 Messages.getQuestionIcon()
             )
@@ -89,9 +89,6 @@ class RunTasqAction : AnAction() {
 
         // Save all documents before running
         FileDocumentManager.getInstance().saveAllDocuments()
-
-        // Sync workspace-root tasq.md into internal runtime location
-        service.syncRootTasqToInternal()
 
         // Auto-init if image is missing
         val initStatus = service.isInitialized()
@@ -175,7 +172,7 @@ class RunTasqAction : AnAction() {
         presentation.text = when {
             isRunning -> "QonQrete: Running..."
             state == ShellState.VERIFYING -> "QonQrete: Verifying Shell..."
-            !hasTasq -> "QonQrete: No tasq.md"
+            !hasTasq -> "QonQrete: No Task File"
             else -> "QonQrete: Run Tasq"
         }
     }
@@ -189,9 +186,8 @@ class RunTasqAction : AnAction() {
             // Start with defaults from settings
             var config = QonQreteRunConfig.fromSettings()
 
-            // Always prompt for a qonstruction name if none has been provided. This ensures
-            // that the CLI receives a -n argument and the resulting qage directory is renamed
-            // appropriately. If the user cancels the dialog, abort the run.
+            // Always prompt for a qonstruction name if none has been provided.
+            // If the user cancels the dialog, abort the run.
             if (config.qonstructionName == null) {
                 val nameDialog = QonQreteQonstructionNameDialog(project, service)
                 if (!nameDialog.showAndGet()) {

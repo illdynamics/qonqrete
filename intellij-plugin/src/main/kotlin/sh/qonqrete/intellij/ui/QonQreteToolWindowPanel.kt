@@ -514,7 +514,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         if (tasqPath != null && File(tasqPath).exists()) {
             openFileInEditor(tasqPath)
         } else {
-            service.notify("QonQrete", "No tasq.md found", NotificationType.WARNING)
+            service.notify("QonQrete", "No default task file found", NotificationType.WARNING)
         }
     }
 
@@ -563,12 +563,9 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private fun executeRun() {
         val (canRun, reason, _) = service.canExecute()
         if (!canRun) { service.notify("QonQrete", reason ?: "Cannot run", NotificationType.WARNING); return }
-        if (!service.hasTasqFile()) { service.notify("QonQrete", "No tasq.md found. Use 'Create tasq.md' first.", NotificationType.WARNING); return }
+        if (!service.hasTasqFile()) { service.notify("QonQrete", "No default task file found. Use 'Create Task File' first.", NotificationType.WARNING); return }
 
         FileDocumentManager.getInstance().saveAllDocuments()
-
-        // Sync workspace-root tasq.md into internal runtime location
-        service.syncRootTasqToInternal()
 
         // Auto-init if image is missing
         val initStatus = service.isInitialized()

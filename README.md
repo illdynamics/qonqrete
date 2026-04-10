@@ -37,13 +37,13 @@ QonQrete is a deterministic AI coding agent that builds software inside hardened
 ### VS Code
 1. Install **QonQrete** from the VS Code Marketplace
 2. `Ctrl+Shift+P` → **QonQrete: Deploy to Workspace**
-3. `Ctrl+Shift+P` → **QonQrete: Create tasq.md** — describe what to build
-4. `Ctrl+Shift+P` → **QonQrete: Run Tasq** — auto-init on first run
+3. `Ctrl+Shift+P` → **QonQrete: Create Task File** — creates the starter `tasq.md`
+4. `Ctrl+Shift+P` → **QonQrete: Run Tasq** — runs the default task file directly, auto-init on first run
 
 ### IntelliJ / JetBrains
 1. Install **QonQrete** from the JetBrains Marketplace
 2. `Ctrl+Shift+A` → **QonQrete: Deploy to Workspace**
-3. `Ctrl+Shift+A` → **QonQrete: Create tasq.md**
+3. `Ctrl+Shift+A` → **QonQrete: Create Task File**
 4. `Ctrl+Alt+Q` → **Run Tasq**
 
 ### What happens
@@ -64,22 +64,26 @@ my-project/
 # Prerequisites: Docker or Podman + AI API key(s)
 export OPENAI_API_KEY='...'
 
-# Build the runtime
+# Build the runtime once
 chmod +x qonqrete.sh
 ./qonqrete.sh init
 
-# Edit your task
-vim worqspace/tasq.md
+# Point QonQrete at any task file
+vim docs/demo-task.md
 
 # Run
-./qonqrete.sh run
+./qonqrete.sh docs/demo-task.md
+./qonqrete.sh run -f docs/demo-task.md
 ./qonqrete.sh run --auto --mode security -b 6 -c 3
+./qonqrete.sh status
 ```
+
+Task files are now the canonical front door for the CLI. `tasq.md` remains the default starter for compatibility, but the primary demo path is `qonqrete.sh <task-file>`.
 
 ## How It Works
 
 ```
-User defines tasq.md
+User defines a task file
   → TasqLeveler enhances the task (cycle 1)
   → InstruQtor decomposes into briqs + generates QONTRACT
   → CalQulator estimates cost
@@ -130,13 +134,15 @@ qonqrete/
 
 ```bash
 ./qonqrete.sh init                           # Build container image
-./qonqrete.sh run                            # Fresh run
+./qonqrete.sh docs/demo-task.md              # Task-first run
+./qonqrete.sh run -f docs/demo-task.md       # Explicit task-file run
 ./qonqrete.sh run --auto                     # Autonomous mode
 ./qonqrete.sh run -b 6 -c 3                  # Sensitivity 6, 3 cycles
 ./qonqrete.sh run --mode security            # Security-focused mode
 ./qonqrete.sh run -a -n myproject            # Auto + save as qonstruction
-./qonqrete.sh run -s                         # Seed from sqrapyard
 ./qonqrete.sh resume                         # Resume from previous qage
+./qonqrete.sh status                         # Latest run state + manifest paths
+./qonqrete.sh audit                          # Latest audit timeline + artifact paths
 ./qonqrete.sh clean                          # Interactive qage cleanup
 ./qonqrete.sh clean -A                       # Delete all qages
 ```
@@ -148,10 +154,10 @@ Both VS Code and IntelliJ support identical commands:
 | Command | Description |
 |---------|-------------|
 | **Deploy to Workspace** | Install runtime into `.qonqrete/` |
-| **Create tasq.md** | Create starter template at project root |
+| **Create Task File** | Create starter `tasq.md` at project root |
 | **Configure Run** | Set sensitivity, cycles, mode, engine |
-| **Run Tasq** | Sync tasq → auto-init → execute |
-| **Run as QonQrete Tasq** | Run any markdown as temp tasq |
+| **Run Tasq** | Run the default task file directly with auto-init when needed |
+| **Run as QonQrete Tasq** | Run any markdown file directly as task input |
 | **Resume Run** | Continue from previous qage |
 | **Clean Qages** | Delete old qage directories |
 | **Init Workspace** | Manually build container image |
@@ -176,6 +182,10 @@ Both VS Code and IntelliJ support identical commands:
 - [Documentation](doc/DOCUMENTATION.md)
 - [Terminology](doc/TERMINOLOGY.md)
 - [Release Notes](doc/RELEASE-NOTES.md)
+
+## Validation Reality
+
+Deterministic validation in the current bridge is strongest for Python. Other ecosystems still benefit from workflow orchestration, artifact capture, and AI review, but they do not yet have equivalent deterministic compile/test coverage.
 
 ## Project
 
@@ -370,23 +380,25 @@ Optional engine forcing:
 Edit:
 
 ```text
-worqspace/tasq.md
+docs/demo-task.md
 ```
 
 ### 3. Run
 
 ```bash
-./qonqrete.sh run
+./qonqrete.sh docs/demo-task.md
 ```
 
 Useful variants:
 
 ```bash
+./qonqrete.sh run -f docs/demo-task.md
 ./qonqrete.sh run --auto
 ./qonqrete.sh run --user
-./qonqrete.sh run -s
 ./qonqrete.sh run -a -n myproject
 ./qonqrete.sh run --mode security --briq-sensitivity 6 --cyqles 3
+./qonqrete.sh status
+./qonqrete.sh audit
 ```
 
 ### 4. Resume

@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 import re
 import shutil
+import json
 
 # Add script's directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +22,27 @@ try:
     from paths import PathManager
 except ImportError:
     Spinner = None; Colors = None; PathManager = None
+
+try:
+    from manifest_bridge import (
+        STAGE_ALIAS_MAP,
+        complete_stage,
+        create_manifest,
+        finalize_manifest,
+        record_agent_completion,
+        record_cycle_promotion,
+        record_support_service,
+        start_stage,
+    )
+except ImportError:
+    STAGE_ALIAS_MAP = {}
+    complete_stage = None
+    create_manifest = None
+    finalize_manifest = None
+    record_agent_completion = None
+    record_cycle_promotion = None
+    record_support_service = None
+    start_stage = None
 
 try:
     import tui
@@ -90,6 +112,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
     VISIBLE_KEYWORDS = [
         # TasqLeveler status (v0.9.0+) - only key status lines
         "[TasqLeveler]",
+        "[Qrystallizer]",
+        "[Guard]",
         
         # ConstruQtor status - explicit patterns
         "--- ConstruQtor", "-- Processing Briq:", "- Wrote [Code]", "- Wrote [Plan]",
@@ -313,7 +337,34 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
             traceback.print_exc()
             return False
 
-def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: str, path_manager: PathManager, ui=None) -> str:
+def load_task_spec_status(workspace_root: Path) -> tuple[bool | None, str | None]:
+    task_spec_path = workspace_root / "task" / "task-spec.v1.json"
+    if not task_spec_path.exists():
+        return None, None
+    try:
+        payload = json.loads(task_spec_path.read_text(encoding="utf-8"))
+        return payload.get("ready"), payload.get("status")
+    except Exception:
+        return None, None
+
+
+def legacy_cycle_continuation_enabled(config: dict | None = None) -> bool:
+    env_value = os.environ.get("QONQ_ENABLE_LEGACY_CONTINUATION", "").strip().lower()
+    if env_value in {"1", "true", "yes", "on"}:
+        return True
+    return bool((config or {}).get("options", {}).get("legacy_cycle_continuation", False))
+
+
+def handle_cheqpoint(
+    cycle: int,
+    is_autonomous: bool,
+    reqap_path: Path,
+    prefix: str,
+    path_manager: PathManager,
+    ui=None,
+    no_midrun_questions: bool = False,
+    legacy_continuation: bool = False,
+) -> str:
     target_width = 11
     gatekeeper_name = "gateQeeper"
     p_padding = " " * (target_width - len(gatekeeper_name))
@@ -333,6 +384,17 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
     except Exception as e:
         content = f"[ERROR] Could not read reQap: {e}"
 
+    if no_midrun_questions and not legacy_continuation:
+        msg = (
+            "Bounded clarified run complete. Legacy reqap -> next tasq continuation is disabled "
+            "unless explicitly re-enabled via compatibility mode."
+        )
+        if ui:
+            ui.log_main(f"{gate_prefix}{msg}")
+        else:
+            print(f"{gate_prefix}{msg}")
+        return 'STOP'
+
     if is_autonomous:
         msg = "Autonomous Mode: Qontinuing..."
         if ui: ui.log_main(f"{gate_prefix}{msg}")
@@ -342,6 +404,17 @@ def handle_cheqpoint(cycle: int, is_autonomous: bool, reqap_path: Path, prefix: 
             print(f"{gate_prefix}{msg}")
         promote_reqap(cycle, prefix, path_manager, ui=ui)
         return 'QONTINUE'
+
+    if no_midrun_questions:
+        msg = (
+            "No-mid-run-question enforcement active after readiness acceptance. "
+            "Ending without prompting or implicit continuation."
+        )
+        if ui:
+            ui.log_main(f"{gate_prefix}{msg}")
+        else:
+            print(f"{gate_prefix}{msg}")
+        return 'STOP'
 
     while True:
         if ui:
@@ -400,6 +473,8 @@ def promote_reqap(cycle: int, prefix: str, path_manager: PathManager, ui=None):
         msg = f"Successfully created {dst.name}."
         if ui: ui.log_main(f"{qrane_prefix}{msg}")
         else: print(f"{qrane_prefix}{msg}")
+        if record_cycle_promotion:
+            record_cycle_promotion(path_manager.root, cycle, str(dst.relative_to(path_manager.root)))
 
 def getch():
     try:
@@ -504,6 +579,10 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     path_manager = PathManager(worqspace)
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("qrane")
+    if create_manifest:
+        create_manifest(worqspace)
+        start_stage(worqspace, "INTAKE", os.environ.get("QONQ_RUN_KIND", "run"), 0, "Run intake metadata initialized.")
+        complete_stage(worqspace, "INTAKE", os.environ.get("QONQ_RUN_KIND", "run"), 0, artifacts=["task/task-intake-bridge.v1.json"], notes=["Legacy qage intake linked into canonical run manifest bridge."], success=True)
 
     final_mode = args.mode if args.mode else config.get('options', {}).get('mode', 'program')
     final_sens = args.briq_sensitivity if args.briq_sensitivity is not None else config.get('options', {}).get('briq_sensitivity', 7)
@@ -562,6 +641,10 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if not run_agent("qompressor", qompressor_cmd, prefix, AGENT_COLORS.get("qompressor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
                  if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}")
                  else: print(f"{qrane_prefix}{Colors.RED}Qompressor warmup failed.{Colors.R}\r")
+                 if record_support_service:
+                     record_support_service(worqspace, "qompressor_warmup", 0, artifacts=["bloq.d"] if path_manager.bloq_dir.exists() else [], notes=["Warmup skeleton generation failed."], success=False)
+            elif record_support_service:
+                record_support_service(worqspace, "qompressor_warmup", 0, artifacts=["bloq.d"] if path_manager.bloq_dir.exists() else [], notes=["Warmup skeleton generation completed."], success=True)
         else:
             msg = "Qompressor DISABLED - skipping skeleton generation."
             if ui: ui.log_main(f"{qrane_prefix}{msg}")
@@ -580,10 +663,16 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if not run_agent("qontextor", qontextor_cmd, prefix, AGENT_COLORS.get("qontextor"), logger, qonsole_log_path, events_log_path, initial_env, ui):
                 if ui: ui.log_main(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}")
                 else: print(f"{qrane_prefix}{Colors.RED}Initial Qontextor scan failed. Aborting.{Colors.R}\r")
+                if record_support_service:
+                    record_support_service(worqspace, "qontextor_initial", 0, artifacts=["qontext.d"] if path_manager.qontext_dir.exists() else [], notes=["Initial context warmup failed."], success=False)
+                if finalize_manifest:
+                    finalize_manifest(worqspace, "failed", "Initial qontextor warmup failed.")
                 return
             else:
                 if ui: ui.log_main(f"{qrane_prefix}Dual-Core Memory Primed.")
                 else: print(f"{qrane_prefix}Dual-Core Memory Primed.\r")
+                if record_support_service:
+                    record_support_service(worqspace, "qontextor_initial", 0, artifacts=["qontext.d"] if path_manager.qontext_dir.exists() else [], notes=["Initial context warmup completed."], success=True)
         else:
             msg = "Qontextor DISABLED - skipping context generation."
             if ui: ui.log_main(f"{qrane_prefix}{msg}")
@@ -602,9 +691,13 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if not run_agent("qontrabender", qontrabender_cmd, prefix, AGENT_COLORS.get("qontrabender"), logger, qonsole_log_path, events_log_path, initial_env, ui):
                 if ui: ui.log_main(f"{qrane_prefix}{Colors.YELLOW}Qontrabender warmup had issues (non-critical).{Colors.R}")
                 else: print(f"{qrane_prefix}{Colors.YELLOW}Qontrabender warmup had issues (non-critical).{Colors.R}\r")
+                if record_support_service:
+                    record_support_service(worqspace, "qontrabender_warmup", 0, artifacts=["qache.d/manifest.json"] if (worqspace / "qache.d" / "manifest.json").exists() else [], notes=["Warmup cache check had issues."], success=False)
             else:
                 if ui: ui.log_main(f"{qrane_prefix}Qache Ready.")
                 else: print(f"{qrane_prefix}Qache Ready.\r")
+                if record_support_service:
+                    record_support_service(worqspace, "qontrabender_warmup", 0, artifacts=["qache.d/manifest.json"] if (worqspace / "qache.d" / "manifest.json").exists() else [], notes=["Warmup cache check completed."], success=True)
         else:
             msg = "Qontrabender DISABLED - skipping cache management."
             if ui: ui.log_main(f"{qrane_prefix}{msg}")
@@ -613,6 +706,10 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     cycle = 1
     session_failed = False
     user_aborted = False
+    user_quit = False
+    bounded_stop = False
+    no_midrun_questions = False
+    legacy_continuation = legacy_cycle_continuation_enabled(config)
 
     try:
         while True:
@@ -723,13 +820,47 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             for name, cmd in agents_to_run:
                 env["QONQ_PREVIOUS_LOG"] = str(previous_log_path) if previous_log_path else ""
 
+                canonical_stage = STAGE_ALIAS_MAP.get(name)
+                if canonical_stage and start_stage:
+                    start_stage(worqspace, canonical_stage, name, cycle, f"Stage {canonical_stage} starting via legacy alias '{name}'.")
+                    stage_msg = f"Stage {canonical_stage} [legacy: {name}]"
+                    if ui:
+                        ui.log_main(f"{qrane_prefix}{stage_msg}")
+                    else:
+                        print(f"{qrane_prefix}{stage_msg}\r")
+
                 qonsole_log_path = path_manager.get_qonsole_log_path(name)
                 events_log_path = path_manager.get_events_log_path(name)
 
                 if not run_agent(name, cmd, prefix, AGENT_COLORS.get(name, Colors.WHITE), logger, qonsole_log_path, events_log_path, env, ui):
+                    if canonical_stage and record_agent_completion:
+                        record_agent_completion(worqspace, name, cycle, success=False)
+                    elif record_support_service:
+                        record_support_service(worqspace, name, cycle, artifacts=[], notes=[f"Support service '{name}' failed."], success=False)
                     session_failed = True; break
 
                 previous_log_path = qonsole_log_path
+                if record_agent_completion:
+                    record_agent_completion(worqspace, name, cycle, success=True)
+                if name == 'tasqleveler':
+                    ready, status = load_task_spec_status(worqspace)
+                    if ready:
+                        no_midrun_questions = True
+                        env["QONQ_NO_MIDRUN_QUESTIONS"] = "1"
+                        if legacy_continuation:
+                            msg = (
+                                f"Clarification accepted with Task Spec status {status}. "
+                                "Mid-run questioning disabled. Legacy continuation remains enabled by explicit compatibility opt-in."
+                            )
+                        else:
+                            msg = (
+                                f"Clarification accepted with Task Spec status {status}. "
+                                "Mid-run questioning disabled and legacy reqap continuation downgraded to compatibility-only."
+                            )
+                        if ui:
+                            ui.log_main(f"{qrane_prefix}{msg}")
+                        else:
+                            print(f"{qrane_prefix}{msg}\r")
 
                 # ═══════════════════════════════════════════════════════════════
                 # GateQeeper — Cost Confirmation Gate
@@ -737,6 +868,12 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 # ═══════════════════════════════════════════════════════════════
                 if name == 'calqulator' and config.get('options', {}).get('cost_confirmation_gate', False):
                     gate_prefix = f"{Colors.B}〘{prefix}〙『{Colors.YELLOW}GateQeeper{Colors.B}』      ⸎{Colors.R}"
+                    if no_midrun_questions:
+                        if ui:
+                            ui.log_main("GateQeeper bypassed: no-mid-run-question enforcement active.")
+                        else:
+                            print(f"{gate_prefix} Gate bypassed: no-mid-run-question enforcement active.")
+                        continue
                     if ui:
                         ui.log_main("GateQeeper: Cost estimate above. Confirm to proceed?")
                     else:
@@ -753,8 +890,22 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
             if session_failed: break
 
-            res = handle_cheqpoint(cycle, is_autonomous, path_manager.get_reqap_path(cycle), prefix, path_manager, ui)
-            if res == 'QUIT': break
+            res = handle_cheqpoint(
+                cycle,
+                is_autonomous,
+                path_manager.get_reqap_path(cycle),
+                prefix,
+                path_manager,
+                ui,
+                no_midrun_questions=no_midrun_questions,
+                legacy_continuation=legacy_continuation,
+            )
+            if res == 'QUIT':
+                user_quit = True
+                break
+            if res == 'STOP':
+                bounded_stop = True
+                break
             cycle += 1
 
     except KeyboardInterrupt:
@@ -771,6 +922,17 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
              print(f"{qrane_prefix}{Colors.WHITE}QonQrete session ended with {Colors.RED}errors{Colors.R}{Colors.WHITE}.{Colors.R}\r")
         else:
              print(f"{qrane_prefix}QonQrete session finished. Enjoy :)\r")
+    if finalize_manifest:
+        if user_aborted:
+            finalize_manifest(worqspace, "aborted", "Run aborted by user.")
+        elif session_failed:
+            finalize_manifest(worqspace, "failed", "Run ended with errors.")
+        elif user_quit:
+            finalize_manifest(worqspace, "partial", "Run ended at legacy user-gated cheqpoint.")
+        elif bounded_stop:
+            finalize_manifest(worqspace, "completed", "Run ended after bounded clarified bridge pass without implicit legacy continuation.")
+        else:
+            finalize_manifest(worqspace, "completed", "Run finished without runtime errors.")
 
 if __name__ == "__main__":
     main()

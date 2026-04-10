@@ -120,7 +120,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         try {
             const hasTasq = await runner.hasTasqFile();
             if (!hasTasq) {
-                vscode.window.showWarningMessage('No tasq.md found. Use "Create tasq.md" first.');
+                vscode.window.showWarningMessage('No default task file found. Use "Create Task File" first.');
                 return;
             }
 
@@ -484,7 +484,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             <div class="section-title">Actions</div>
             <button class="btn-primary" id="runBtn" onclick="runTasq()">▶ Run Tasq</button>
             <button class="btn-secondary" onclick="deployWorkspace()">⬡ Deploy</button>
-            <button class="btn-secondary" onclick="createTasq()">+ Create tasq.md</button>
+            <button class="btn-secondary" onclick="createTasq()">+ Create Task File</button>
             <button class="btn-secondary" onclick="setAIConfig()">🤖 AI Config</button>
             <button class="btn-secondary" onclick="resumeRun()">⟳ Resume</button>
             <button class="btn-secondary" onclick="initWorkspace()">⚙ Init</button>

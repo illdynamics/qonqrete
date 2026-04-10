@@ -690,26 +690,24 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
     fun run(config: QonQreteRunConfig) {
         val scriptPath = getQonQretePath() ?: throw IllegalStateException("QonQrete script not found")
-        executeWithVerifiedBash(File(scriptPath).parent, CommandBuilder.qonqrete().run(config).build(), "Running QonQrete")
+        val taskFilePath = getTasqPath() ?: throw IllegalStateException("No default task file found")
+        executeWithVerifiedBash(
+            File(scriptPath).parent,
+            CommandBuilder.qonqrete().run(config, taskFilePath).build(),
+            "Running QonQrete"
+        )
     }
 
     fun runWithFile(filePath: String, config: QonQreteRunConfig) {
         if (shellInfo.state != ShellState.READY) throw IllegalStateException("Shell not verified")
         val scriptPath = getQonQretePath() ?: throw IllegalStateException("QonQrete script not found")
         val workingDir = File(scriptPath).parent
-        val worqspaceTasq = File(workingDir, "worqspace/tasq.md")
-        val backupPath = File(workingDir, "worqspace/.tasq.md.qonqrete-backup")
-
-        var hadOriginal = false
-        if (worqspaceTasq.exists()) { worqspaceTasq.copyTo(backupPath, overwrite = true); hadOriginal = true }
-        File(filePath).copyTo(worqspaceTasq, overwrite = true)
 
         val markerPath = createMarkerPath(workingDir)
         currentMarkerPath = markerPath
         
-        val runCommand = CommandBuilder.qonqrete().run(config).build()
-        val restoreCommand = CommandBuilder.buildRestoreCommand(backupPath.absolutePath, worqspaceTasq.absolutePath, hadOriginal, shellInfo.isWindows)
-        val bashScript = CommandBuilder.buildBashScript(workingDir, runCommand, markerPath.toString(), restoreCommand, shellInfo.isWindows)
+        val runCommand = CommandBuilder.qonqrete().run(config, filePath).build()
+        val bashScript = CommandBuilder.buildBashScript(workingDir, runCommand, markerPath.toString(), null, shellInfo.isWindows)
 
         updateRunStatus(RunStatus(state = RunState.RUNNING, startTime = System.currentTimeMillis(), command = runCommand))
         startMarkerWatch(markerPath)

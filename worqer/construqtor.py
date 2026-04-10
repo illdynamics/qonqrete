@@ -27,6 +27,8 @@ import yaml
 import re
 import time
 import ast
+import json
+import subprocess
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -173,6 +175,7 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
         {
             'passed': bool,
             'syntax_errors': list[str],
+            'constraint_errors': list[str],
             'import_warnings': list[str],
             'files_checked': int
         }
@@ -180,6 +183,7 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
     result = {
         'passed': True,
         'syntax_errors': [],
+        'constraint_errors': [],
         'import_warnings': [],
         'files_checked': 0
     }
@@ -199,8 +203,128 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
             # Import check
             import_warns = validate_imports(file_path, qodeyard_path)
             result['import_warnings'].extend([f"{file_name}: {w}" for w in import_warns])
-    
+        elif file_path.suffix == '.sh' and file_path.exists():
+            result['files_checked'] += 1
+
+            shell_check = subprocess.run(
+                ['sh', '-n', str(file_path)],
+                capture_output=True,
+                text=True,
+            )
+            if shell_check.returncode != 0:
+                result['syntax_errors'].append(
+                    f"{file_name}: {shell_check.stderr.strip() or 'shell syntax check failed'}"
+                )
+                result['passed'] = False
+
+            if file_name == 'run.sh':
+                try:
+                    shell_content = file_path.read_text(encoding='utf-8')
+                except Exception as exc:
+                    result['constraint_errors'].append(f"{file_name}: could not read run.sh ({exc})")
+                    result['passed'] = False
+                    continue
+
+                if "python -m uvicorn main:app --reload --port" not in shell_content:
+                    result['constraint_errors'].append(
+                        f"{file_name}: must launch exactly `python -m uvicorn main:app --reload --port $PORT`"
+                    )
+                if not re.search(r'--port\s+["\']?\$PORT["\']?|--port\s+["\']?\$\{PORT\}["\']?', shell_content):
+                    result['constraint_errors'].append(
+                        f"{file_name}: uvicorn command must pass the PORT variable instead of a literal value"
+                    )
+                if re.search(r'--port\s+\d+', shell_content):
+                    result['constraint_errors'].append(
+                        f"{file_name}: hardcoded numeric port literal found in uvicorn command"
+                    )
+                if re.search(r'PORT\s*[:=+-]*\s*[\'"]?\d+[\'"]?', shell_content):
+                    result['constraint_errors'].append(
+                        f"{file_name}: hardcoded numeric PORT assignment found; derive PORT without duplicating the literal from main.py"
+                    )
+
+                if result['constraint_errors']:
+                    result['passed'] = False
+
     return result
+
+
+def build_validation_correction_directive(validation: dict) -> str:
+    errors = validation.get('constraint_errors', []) + validation.get('syntax_errors', [])
+    if not errors:
+        return ""
+    bullets = "\n".join(f"- {item}" for item in errors[:10])
+    return f"""
+
+CRITICAL RETRY CORRECTION:
+The previous output failed deterministic local validation. Regenerate the affected files and fix all of these issues exactly:
+{bullets}
+
+For `run.sh`, do not duplicate the numeric port literal from `main.py`. Derive the shell `PORT` value from `main.py` or the environment, then pass `$PORT` to uvicorn.
+Return only corrected file blocks.
+"""
+
+
+def load_optional_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def parse_briq_metadata(briq_content: str) -> dict:
+    metadata = {}
+    for line in briq_content.splitlines():
+        if not line.strip():
+            break
+        if ':' not in line:
+            continue
+        key, value = line.split(':', 1)
+        metadata[key.strip().lower()] = value.strip()
+    return metadata
+
+
+def build_group_context(metadata: dict, planning_payload: dict, component_contracts_payload: dict) -> str:
+    build_groups = {
+        item.get('build_group_id'): item
+        for item in planning_payload.get('items', [])
+        if item.get('build_group_id')
+    }
+    component_contracts = {
+        item.get('component_id'): item
+        for item in component_contracts_payload.get('items', [])
+        if item.get('component_id')
+    }
+    build_group_id = metadata.get('build-group')
+    component_id = metadata.get('component-id')
+    group = build_groups.get(build_group_id, {})
+    component = component_contracts.get(component_id, {})
+
+    if not build_group_id and not component_id:
+        return ""
+
+    lines = [
+        "",
+        "**GROUPED BUILD CONTRACT (MUST RESPECT):**",
+        f"- Build Group: {build_group_id or 'n/a'}",
+        f"- Scope ID: {metadata.get('scope-id', 'n/a')}",
+        f"- Component ID: {component_id or 'n/a'}",
+    ]
+    if group.get('objective'):
+        lines.append(f"- Group Objective: {group['objective']}")
+    if group.get('validation_focus'):
+        lines.append(f"- Group Validation Focus: {', '.join(group['validation_focus'])}")
+    if component.get('summary'):
+        lines.append(f"- Component Summary: {component['summary']}")
+    if component.get('dependencies'):
+        lines.append(f"- Component Dependencies: {', '.join(component['dependencies'])}")
+    if component.get('constraints'):
+        lines.append("- Component Constraints:")
+        for item in component['constraints'][:6]:
+            lines.append(f"  - {item}")
+    return "\n".join(lines) + "\n"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -796,7 +920,9 @@ def process_briq_interleaved(
     review_model: str = None,
     constitutional_context: str = "",  # v1.0.4: QONTRACT + cycle1 tasq
     qontract_json_path: Path = None,   # v1.0.4: Path to qontract.json for per-briq guard
-    contract_data: dict = None          # v1.0.4: Loaded contract dict
+    contract_data: dict = None,         # v1.0.4: Loaded contract dict
+    planning_payload: dict = None,
+    component_contracts_payload: dict = None
 ) -> dict:
     """
     Process a single briq with interleaved build + review.
@@ -838,7 +964,8 @@ def process_briq_interleaved(
         'guard_report': None,
         'attempts': 0,
         'error': None,
-        'exeq_path': None
+        'exeq_path': None,
+        'metadata': {}
     }
     
     # Read briq content
@@ -848,11 +975,19 @@ def process_briq_interleaved(
     except Exception as e:
         result['error'] = f"Could not read briq: {e}"
         return result
-    
+
+    briq_metadata = parse_briq_metadata(briq_content)
+    result['metadata'] = briq_metadata
+
     # v1.0.4: Parse Contract-Relevant header from briq
     is_contract_relevant = False
     if re.search(r'^Contract-Relevant:\s*yes', briq_content, re.MULTILINE | re.IGNORECASE):
         is_contract_relevant = True
+    grouped_context = build_group_context(
+        briq_metadata,
+        planning_payload or {},
+        component_contracts_payload or {}
+    )
     
     # Build prompt
     prompt = f"""You are the 'construQtor'.
@@ -861,6 +996,7 @@ def process_briq_interleaved(
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
 {constitutional_context}
+{grouped_context}
 **MANDATORY NAMING CONVENTIONS (STRICT):**
 All function and method names MUST follow these verb prefixes for deterministic mapping:
 - `get_`, `fetch_`, `load_`, `read_`, `retrieve_`, `find_`, `lookup_`, `query_`, `select_` → Data retrieval
@@ -888,8 +1024,12 @@ print("Hello, World!")
 {briq_content}
 """
     
-    # v1.0.4: Track correction directive for guard retries
-    guard_correction = ""
+    # Legacy direct writes persist across retries, so track cumulative files touched by
+    # this briq rather than only the last attempt's payload.
+    cumulative_written_files: set[str] = set()
+
+    # Track correction directives for deterministic validation / guard retries.
+    retry_correction = ""
     
     # Retry loop with interleaved review
     for attempt in range(1, max_attempts + 1):
@@ -901,11 +1041,11 @@ print("Hello, World!")
         
         try:
             # STEP 1: Build (AI code generation)
-            # v1.0.4: Include guard correction directive if retrying due to contract violation
             current_prompt = prompt
-            if guard_correction:
-                current_prompt = prompt + guard_correction
-                print(f"     [GUARD] Including correction directive in prompt", flush=True)
+            if retry_correction:
+                current_prompt = prompt + retry_correction
+                print(f"     [RETRY] Including correction directive in prompt", flush=True)
+            retry_correction = ""
             
             print(f"     - Sending to AI (attempt {attempt})...", flush=True)
             
@@ -922,8 +1062,9 @@ print("Hello, World!")
             
             # Write files
             written_files = _write_ai_output_to_qodeyard(ai_result, qodeyard_path)
-            result['written_files'] = written_files
-            
+            cumulative_written_files.update(written_files)
+            result['written_files'] = sorted(cumulative_written_files)
+
             if not written_files:
                 result['error'] = "No files were written"
                 continue
@@ -933,7 +1074,7 @@ print("Hello, World!")
             
             if do_local_validation:
                 print(f"     [LoQal] Running validation...", flush=True)
-                validation = run_local_validation(written_files, qodeyard_path)
+                validation = run_local_validation(result['written_files'], qodeyard_path)
                 result['validation'] = validation
                 
                 if validation['syntax_errors']:
@@ -942,17 +1083,26 @@ print("Hello, World!")
                         print(f"            {err}", flush=True)
                     result['error'] = f"{len(validation['syntax_errors'])} syntax errors"
                     build_passed = False
+                    if attempt < max_attempts:
+                        retry_correction = build_validation_correction_directive(validation)
+                elif validation['constraint_errors']:
+                    print(f"     [LoQal] ❌ Constraint errors found:", flush=True)
+                    for err in validation['constraint_errors'][:3]:
+                        print(f"            {err}", flush=True)
+                    result['error'] = f"{len(validation['constraint_errors'])} constraint errors"
+                    build_passed = False
+                    if attempt < max_attempts:
+                        retry_correction = build_validation_correction_directive(validation)
                 elif validation['import_warnings']:
                     print(f"     [LoQal] ⚠️ Import warnings: {len(validation['import_warnings'])}", flush=True)
                 else:
                     print(f"     [LoQal] ✅ Passed", flush=True)
             
             # STEP 2.5 (v1.0.4): Per-Briq QontractGuard Gate
-            guard_correction = ""  # Reset for next iteration
             if is_contract_relevant and qontract_guard and contract_data and build_passed:
                 print(f"     [GUARD] Running QontractGuard (contract-relevant briq)...", flush=True)
                 briq_guard = qontract_guard.run_guard_for_files(
-                    contract_data, qodeyard_path, written_files
+                    contract_data, qodeyard_path, result['written_files']
                 )
                 result['guard_report'] = briq_guard.to_json()
                 
@@ -965,7 +1115,7 @@ print("Hello, World!")
                     
                     if attempt < max_attempts:
                         # Build correction directive for retry
-                        guard_correction = briq_guard.get_correction_directive(contract_data)
+                        retry_correction = briq_guard.get_correction_directive(contract_data)
                         result['error'] = f"QontractGuard: {error_count} contract violations"
                         build_passed = False
                     else:
@@ -981,7 +1131,7 @@ print("Hello, World!")
                 review = run_ai_quick_review(
                     briq_name,
                     briq_content,
-                    written_files,
+                    result['written_files'],
                     qodeyard_path,
                     review_provider or ai_provider,
                     review_model or ai_model
@@ -1069,6 +1219,12 @@ Generated by ConstruQtor v1.0.4 (Interleaved Pipeline)
         if validation.get('syntax_errors'):
             exeq += "### Syntax Errors\n\n"
             for err in validation['syntax_errors']:
+                exeq += f"- {err}\n"
+            exeq += "\n"
+
+        if validation.get('constraint_errors'):
+            exeq += "### Constraint Errors\n\n"
+            for err in validation['constraint_errors']:
                 exeq += f"- {err}\n"
             exeq += "\n"
         
@@ -1278,6 +1434,10 @@ def main():
     # Setup exeQ directory for per-briq execution summaries
     exeq_briq_dir = worqspace_root / "exeq.d" / f"cyqle{cycle_num}"
     exeq_briq_dir.mkdir(parents=True, exist_ok=True)
+    build_groups_dir = worqspace_root / "build" / "groups"
+    build_groups_dir.mkdir(parents=True, exist_ok=True)
+    planning_payload = load_optional_json(worqspace_root / "planning" / "build-groups.v1.json")
+    component_contracts_payload = load_optional_json(worqspace_root / "planning" / "component-contracts.v1.json")
 
     # Processing stats
     all_results = []
@@ -1315,7 +1475,12 @@ def main():
             print(f"    QontractGuard: ⚠️ Could not load contract: {e}", flush=True)
 
     for briq_file in briq_files:
+        briq_metadata = parse_briq_metadata(briq_file.read_text(encoding='utf-8'))
+        build_group_id = briq_metadata.get('build-group', 'ungrouped')
+        component_id = briq_metadata.get('component-id', 'unassigned')
+        scope_id = briq_metadata.get('scope-id', 'scope_unknown')
         print(f"\n-- Processing Briq: {briq_file.name} --", flush=True)
+        print(f"   Group: {build_group_id} | Component: {component_id} | Scope: {scope_id}", flush=True)
         
         result = process_briq_interleaved(
             briq_file,
@@ -1333,7 +1498,9 @@ def main():
             review_model,
             constitutional_context=constitutional_context,
             qontract_json_path=qontract_json_path,
-            contract_data=contract_data
+            contract_data=contract_data,
+            planning_payload=planning_payload,
+            component_contracts_payload=component_contracts_payload
         )
         
         all_results.append(result)
@@ -1368,6 +1535,24 @@ def main():
     if stopped_early:
         final_status = "Halted"
 
+    grouped_results = {}
+    for result in all_results:
+        metadata = result.get('metadata', {})
+        group_id = metadata.get('build-group', 'ungrouped')
+        component_id = metadata.get('component-id', 'unassigned')
+        scope_id = metadata.get('scope-id', f"scope_build_group_{group_id.replace('-', '_')}")
+        group_entry = grouped_results.setdefault(group_id, {
+            'scope_id': scope_id,
+            'component_ids': set(),
+            'briq_files': [],
+            'written_files': set(),
+            'statuses': [],
+        })
+        group_entry['component_ids'].add(component_id)
+        group_entry['briq_files'].append(result['briq_file'])
+        group_entry['written_files'].update(result['written_files'])
+        group_entry['statuses'].append(result['status'])
+
     # --- Write Main Summary File ---
     summary_content = f"# Execution Summary (ConstruQtor v1.0.4 - Interleaved Pipeline)\n\n"
     summary_content += f"**Overall Status:** {final_status}\n"
@@ -1377,10 +1562,25 @@ def main():
     if stopped_early:
         summary_content += f"⚠️ **Cycle halted early due to `stop_on_briq_fail=true`**\n\n"
     
+    summary_content += "## Build Group Overview\n\n"
+    for group_id, group_entry in sorted(grouped_results.items()):
+        summary_content += f"### {group_id}\n"
+        summary_content += f"- Scope ID: {group_entry['scope_id']}\n"
+        summary_content += f"- Components: {', '.join(sorted(group_entry['component_ids']))}\n"
+        summary_content += f"- Briqs: {len(group_entry['briq_files'])}\n"
+        summary_content += f"- Files Changed: {len(group_entry['written_files'])}\n\n"
+
     summary_content += "## Briq Details\n\n"
     for result in all_results:
         status_emoji = "✅" if result['status'] == 'success' else ("⚠️" if result['status'] == 'partial' else "❌")
         summary_content += f"### {result['briq_file']}: {status_emoji} {result['status']}\n"
+        metadata = result.get('metadata', {})
+        if metadata.get('build-group'):
+            summary_content += f"- Build Group: `{metadata['build-group']}`\n"
+        if metadata.get('component-id'):
+            summary_content += f"- Component: `{metadata['component-id']}`\n"
+        if metadata.get('scope-id'):
+            summary_content += f"- Scope ID: `{metadata['scope-id']}`\n"
         summary_content += f"- Attempts: {result['attempts']}\n"
         summary_content += f"- Files: {len(result['written_files'])}\n"
         if result['exeq_path']:
@@ -1392,6 +1592,8 @@ def main():
         validation = result.get('validation', {})
         if validation.get('syntax_errors'):
             summary_content += f"- Syntax Errors: {len(validation['syntax_errors'])}\n"
+        if validation.get('constraint_errors'):
+            summary_content += f"- Constraint Errors: {len(validation['constraint_errors'])}\n"
         if validation.get('import_warnings'):
             summary_content += f"- Import Warnings: {len(validation['import_warnings'])}\n"
         
@@ -1414,6 +1616,10 @@ def main():
                 summary_content += f"- Syntax errors:\n"
                 for err in fb['validation']['syntax_errors']:
                     summary_content += f"  - {err}\n"
+            if fb.get('validation', {}).get('constraint_errors'):
+                summary_content += f"- Constraint errors:\n"
+                for err in fb['validation']['constraint_errors']:
+                    summary_content += f"  - {err}\n"
             summary_content += "\n"
 
     os.makedirs(summary_file.parent, exist_ok=True)
@@ -1422,15 +1628,77 @@ def main():
 
     # --- Write Changed Files Summary ---
     changed_files_content = "# Changed Files\n\n"
-    for f_name in sorted(list(set(all_written_files))):
-        changed_files_content += f"- `{f_name}`\n"
+    for group_id, group_entry in sorted(grouped_results.items()):
+        changed_files_content += f"## {group_id}\n\n"
+        changed_files_content += f"- Scope ID: `{group_entry['scope_id']}`\n"
+        changed_files_content += f"- Components: {', '.join(sorted(group_entry['component_ids']))}\n"
+        for f_name in sorted(group_entry['written_files']):
+            changed_files_content += f"- `{f_name}`\n"
+        changed_files_content += "\n"
         
     os.makedirs(changed_files_summary_file.parent, exist_ok=True)
     with open(changed_files_summary_file, 'w', encoding='utf-8') as f:
         f.write(changed_files_content)
 
+    for group_id, group_entry in sorted(grouped_results.items()):
+        group_dir = build_groups_dir / group_id
+        group_dir.mkdir(parents=True, exist_ok=True)
+        if any(status == 'failure' for status in group_entry['statuses']):
+            group_status = "FAILURE"
+        elif any(status == 'partial' for status in group_entry['statuses']):
+            group_status = "PARTIAL"
+        else:
+            group_status = "SUCCESS"
+        build_report = {
+            "schema_version": "build-report.v1",
+            "build_report_id": f"{cycle_num}-{group_id}",
+            "run_id": worqspace_root.name,
+            "build_group_id": group_id,
+            "status": group_status,
+            "files": sorted(group_entry['written_files']),
+            "changed_files": [{"path": path, "change_type": "modified_or_created"} for path in sorted(group_entry['written_files'])],
+            "assumptions_used": [],
+            "scope_id": group_entry['scope_id'],
+            "write_strategy": "direct_with_recovery_risk",
+            "capability_mode": "MIXED_REASONING_EXECUTION",
+            "component_ids": sorted(group_entry['component_ids']),
+            "briq_files": group_entry['briq_files'],
+        }
+        changed_scope_manifest = {
+            "schema_version": "changed-scope-manifest.v1",
+            "run_id": worqspace_root.name,
+            "build_group_id": group_id,
+            "scope_id": group_entry['scope_id'],
+            "component_refs": [
+                {
+                    "component_id": component_id,
+                    "declared_touch": True,
+                    "touched_files": sorted(group_entry['written_files']),
+                }
+                for component_id in sorted(group_entry['component_ids'])
+            ],
+            "changed_files": [
+                {
+                    "path": path,
+                    "change_type": "modified_or_created",
+                    "in_intended_scope": True,
+                    "commit_state": "applied_with_legacy_direct_write",
+                    "evidence_class": "direct_execution_evidence",
+                    "source_build_ref": f"build/groups/{group_id}/build-report.v1.json",
+                }
+                for path in sorted(group_entry['written_files'])
+            ],
+        }
+        with open(group_dir / "build-report.v1.json", "w", encoding="utf-8") as f:
+            json.dump(build_report, f, indent=2)
+            f.write("\n")
+        with open(group_dir / "changed-files.v1.json", "w", encoding="utf-8") as f:
+            json.dump(changed_scope_manifest, f, indent=2)
+            f.write("\n")
+
     print(f"\n--- ConstruQtor v1.0.4 Complete: {final_status} ---", flush=True)
     print(f"    Per-briq exeQ summaries written to: exeq.d/cyqle{cycle_num}/", flush=True)
+    print(f"    Build-group reports written to: build/groups/", flush=True)
 
 
 if __name__ == "__main__":

@@ -82,8 +82,8 @@ agents:
   # TASQLEVELER - Task Enhancement (OPTIONAL)
   # ═══════════════════════════════════════════════════════════════════════════
   tasqleveler:
-    provider: openai
-    model: gpt-4.1-nano
+    provider: deepseek
+    model: deepseek-chat
     # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
     enabled: true
     min_complexity_score: 200  # Below this score, don't enhance
@@ -93,8 +93,8 @@ agents:
   # INSTRUQTOR - Briq Planning
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
-    provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    provider: deepseek
+    model: deepseek-chat
 
   calqulator:
     provider: local
@@ -104,15 +104,15 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: openai
-    model: gpt-4.1-mini           # $1.25/$10.00 per 1M - best for code generation
+    provider: deepseek
+    model: deepseek-chat
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
-    provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    provider: deepseek
+    model: deepseek-chat
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
     batch_mode: true                 # Group briqs into batches

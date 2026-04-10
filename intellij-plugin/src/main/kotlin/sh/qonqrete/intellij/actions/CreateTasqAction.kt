@@ -71,7 +71,7 @@ Requirements:
 
         if (wasCreated) {
             QonQreteProjectService.getInstance(project)
-                .notify("QonQrete", "tasq.md created! Edit it and run QonQrete when ready.", com.intellij.notification.NotificationType.INFORMATION)
+                .notify("QonQrete", "Starter task file created as tasq.md. Edit it and run QonQrete when ready.", com.intellij.notification.NotificationType.INFORMATION)
         }
     }
 

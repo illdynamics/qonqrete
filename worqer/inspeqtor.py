@@ -18,6 +18,8 @@ import sys
 import yaml
 import re
 import glob
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -63,6 +65,707 @@ DEFAULT_INSPEQTOR_CONFIG = {
 }
 
 
+def now_utc() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def load_optional_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2)
+        f.write("\n")
+
+
+def detect_validation_execution_mode(guard_report, verification_results) -> str:
+    if guard_report or verification_results:
+        return "STATIC_ONLY"
+    return "NONE"
+
+
+def detect_repo_languages(qodeyard_path: Path) -> dict:
+    python_files = []
+    non_python_files = []
+    for file_path in qodeyard_path.rglob("*"):
+        if not file_path.is_file():
+            continue
+        if file_path.suffix == ".py":
+            python_files.append(str(file_path.relative_to(qodeyard_path)))
+        elif file_path.suffix:
+            non_python_files.append(str(file_path.relative_to(qodeyard_path)))
+    return {
+        "python_files": sorted(python_files),
+        "non_python_files": sorted(non_python_files),
+    }
+
+
+def evaluate_grouped_coherence(
+    worqspace_root: Path,
+    cycle_num: str,
+    changed_manifest_files: list[str],
+) -> dict:
+    build_groups_doc = load_optional_json(worqspace_root / "planning" / "build-groups.v1.json")
+    component_contracts_doc = load_optional_json(worqspace_root / "planning" / "component-contracts.v1.json")
+    build_group_items = build_groups_doc.get("items", [])
+    component_contracts = {
+        item.get("component_id"): item
+        for item in component_contracts_doc.get("items", [])
+        if item.get("component_id")
+    }
+    briq_inventory = build_groups_doc.get("briq_inventory", [])
+
+    checks = []
+    issues = []
+    touched_group_files = set()
+    touched_scope_ids = set()
+    group_summaries = []
+    assigned_briq_refs = set()
+
+    for item in build_group_items:
+        group_id = item.get("build_group_id")
+        scope_id = item.get("scope_id")
+        planned_components = sorted(item.get("component_refs", []))
+        planned_briqs = item.get("briq_refs", [])
+        assigned_briq_refs.update(planned_briqs)
+
+        group_dir = worqspace_root / "build" / "groups" / group_id
+        build_report = load_optional_json(group_dir / "build-report.v1.json")
+        changed_scope = load_optional_json(group_dir / "changed-files.v1.json")
+        report_files = sorted(build_report.get("files", []))
+        changed_files = sorted(
+            entry.get("path")
+            for entry in changed_scope.get("changed_files", [])
+            if entry.get("path")
+        )
+        touched_group_files.update(changed_files)
+        if scope_id:
+            touched_scope_ids.add(scope_id)
+
+        group_status = "PASS"
+        if not build_report:
+            group_status = "FAIL"
+            issues.append({
+                "severity": "error",
+                "scope": group_id,
+                "message": f"Missing build report for group `{group_id}`.",
+            })
+        if not changed_scope:
+            group_status = "FAIL"
+            issues.append({
+                "severity": "error",
+                "scope": group_id,
+                "message": f"Missing changed-scope manifest for group `{group_id}`.",
+            })
+
+        reported_components = sorted(build_report.get("component_ids", []))
+        if build_report and reported_components != planned_components:
+            group_status = "PARTIAL" if group_status == "PASS" else group_status
+            issues.append({
+                "severity": "warning",
+                "scope": group_id,
+                "message": f"Planned components {planned_components} do not match build report components {reported_components}.",
+            })
+
+        if build_report and changed_scope and report_files != changed_files:
+            group_status = "PARTIAL" if group_status == "PASS" else group_status
+            issues.append({
+                "severity": "warning",
+                "scope": group_id,
+                "message": f"Build report files and changed-scope files differ for `{group_id}`.",
+            })
+
+        missing_component_contracts = [
+            component_id for component_id in planned_components if component_id not in component_contracts
+        ]
+        if missing_component_contracts:
+            group_status = "PARTIAL" if group_status == "PASS" else group_status
+            issues.append({
+                "severity": "warning",
+                "scope": group_id,
+                "message": f"Missing component contracts for {', '.join(missing_component_contracts)}.",
+            })
+
+        checks.append({
+            "check_id": f"group-coherence-{group_id}",
+            "level": "build_group_checks",
+            "status": group_status,
+            "build_group_id": group_id,
+            "scope_id": scope_id,
+            "planned_components": planned_components,
+            "planned_briq_count": len(planned_briqs),
+            "reported_file_count": len(report_files),
+            "changed_file_count": len(changed_files),
+        })
+        group_summaries.append({
+            "build_group_id": group_id,
+            "scope_id": scope_id,
+            "planned_components": planned_components,
+            "planned_briq_refs": planned_briqs,
+            "reported_files": report_files,
+            "changed_files": changed_files,
+            "status": group_status,
+        })
+
+    unassigned_briqs = [
+        item.get("briq_ref")
+        for item in briq_inventory
+        if item.get("briq_ref") and item.get("briq_ref") not in assigned_briq_refs
+    ]
+    if unassigned_briqs:
+        issues.append({
+            "severity": "error",
+            "scope": f"cycle-{cycle_num}",
+            "message": f"Unassigned briqs detected: {', '.join(unassigned_briqs)}.",
+        })
+
+    undeclared_changed_files = sorted(set(changed_manifest_files) - touched_group_files)
+    if undeclared_changed_files:
+        issues.append({
+            "severity": "warning",
+            "scope": f"cycle-{cycle_num}",
+            "message": "Changed files exist outside grouped scope manifests.",
+            "files": undeclared_changed_files,
+        })
+
+    overall_status = "PASS"
+    if any(issue["severity"] == "error" for issue in issues):
+        overall_status = "FAIL"
+    elif issues:
+        overall_status = "PARTIAL"
+
+    return {
+        "status": overall_status,
+        "checks": checks,
+        "issues": issues,
+        "group_summaries": group_summaries,
+        "touched_scope_ids": sorted(touched_scope_ids),
+        "touched_group_files": sorted(touched_group_files),
+        "undeclared_changed_files": undeclared_changed_files,
+        "unassigned_briqs": unassigned_briqs,
+    }
+
+
+def build_validation_bundle(
+    worqspace_root: Path,
+    cycle_num: str,
+    guard_report,
+    verification_results,
+    grouped_coherence: dict,
+    changed_manifest_files: list[str],
+) -> dict:
+    reqap_dir = worqspace_root / "reqap.d"
+    guard_md = reqap_dir / f"cyqle{cycle_num}_qontract_guard.md"
+    guard_json = reqap_dir / f"cyqle{cycle_num}_qontract_guard.json"
+    verification_md = reqap_dir / f"cyqle{cycle_num}" / f"cyqle{cycle_num}_verification.md"
+    language_inventory = detect_repo_languages(worqspace_root / "qodeyard")
+
+    checks = []
+    issues = []
+    if guard_report:
+        guard_status = "PASS" if guard_report.passed else "FAIL"
+        checks.append({
+            "check_id": "qontract_guard",
+            "level": "project_specific_checks",
+            "status": guard_status,
+            "executed": True,
+            "files_checked": guard_report.files_checked,
+            "rules_checked": guard_report.rules_checked,
+            "issue_count": len(guard_report.violations),
+        })
+        for violation in guard_report.violations:
+            issues.append({
+                "source": "qontract_guard",
+                "severity": getattr(violation, "severity", "error"),
+                "file": getattr(violation, "file_path", None),
+                "line": getattr(violation, "line_number", None),
+                "message": getattr(violation, "message", str(violation)),
+            })
+
+    if verification_results:
+        verification_status = verification_results.overall_status
+        checks.append({
+            "check_id": "loqal_verification",
+            "level": "language_specific_checks",
+            "status": verification_status,
+            "executed": True,
+            "files_checked": verification_results.files_checked,
+            "passed": verification_results.passed,
+            "warnings": verification_results.warnings,
+            "errors": verification_results.errors,
+        })
+        for result in verification_results.results:
+            if result.passed:
+                continue
+            issues.append({
+                "source": "loqal_verification",
+                "severity": result.severity,
+                "file": result.file_path,
+                "line": result.line_number,
+                "message": result.message,
+                "check_type": result.check_type,
+            })
+
+    checks.append({
+        "check_id": "grouped_component_coherence",
+        "level": "universal_checks",
+        "status": grouped_coherence["status"],
+        "executed": True,
+        "groups_checked": len(grouped_coherence["group_summaries"]),
+        "undeclared_changed_file_count": len(grouped_coherence["undeclared_changed_files"]),
+        "unassigned_briq_count": len(grouped_coherence["unassigned_briqs"]),
+        "changed_manifest_file_count": len(changed_manifest_files),
+    })
+    issues.extend([
+        {
+            "source": "grouped_component_coherence",
+            **issue,
+        }
+        for issue in grouped_coherence["issues"]
+    ])
+
+    validation_status = "PASS"
+    if any(check["status"] == "FAIL" for check in checks):
+        validation_status = "FAIL"
+    elif any(check["status"] == "PARTIAL" for check in checks):
+        validation_status = "PARTIAL"
+
+    unknowns = []
+    capability_notes = [
+        "Deterministic validation is strongest for Python files in the current engine.",
+        "Non-Python files currently receive scope, manifest, and artifact coherence checks but not equivalent compile/test rigor.",
+        "Executed project-wide test runners are not yet wired into the canonical validation stage.",
+    ]
+    if language_inventory["non_python_files"]:
+        unknowns.append("Non-Python files changed without equivalent deterministic compile/test validation coverage.")
+    if not language_inventory["python_files"]:
+        unknowns.append("No Python files were available for the strongest deterministic validation path.")
+
+    return {
+        "schema_version": "validation-bundle.v1",
+        "validation_bundle_id": f"{worqspace_root.name}-validation-cyqle{cycle_num}",
+        "run_id": worqspace_root.name,
+        "cycle": int(cycle_num),
+        "stage": "VALIDATION",
+        "status": validation_status,
+        "capability_mode": "MIXED_REASONING_EXECUTION",
+        "validation_execution_mode": detect_validation_execution_mode(guard_report, verification_results),
+        "coverage": {
+            "python_files": language_inventory["python_files"],
+            "non_python_files": language_inventory["non_python_files"],
+            "strongest_ecosystem": "python" if language_inventory["python_files"] else None,
+        },
+        "capability_disclosure": {
+            "deterministic_validation_strength": "PYTHON_CENTRIC_STATIC_VALIDATION",
+            "notes": capability_notes,
+        },
+        "checks": checks,
+        "issues": issues,
+        "grouped_component_validation": grouped_coherence["group_summaries"],
+        "unknowns": unknowns,
+        "evidence_refs": [
+            str(path)
+            for path in [
+                guard_md.relative_to(worqspace_root) if guard_md.exists() else None,
+                guard_json.relative_to(worqspace_root) if guard_json.exists() else None,
+                verification_md.relative_to(worqspace_root) if verification_md.exists() else None,
+            ]
+            if path
+        ] + [
+            f"build/groups/{group['build_group_id']}/build-report.v1.json"
+            for group in grouped_coherence["group_summaries"]
+        ] + [
+            f"build/groups/{group['build_group_id']}/changed-files.v1.json"
+            for group in grouped_coherence["group_summaries"]
+        ],
+        "created_at": now_utc(),
+    }
+
+
+def build_realization_bundle(
+    worqspace_root: Path,
+    cycle_num: str,
+    validation_bundle: dict,
+    grouped_coherence: dict,
+    changed_manifest_files: list[str],
+    cross_briq_warnings: list[str],
+) -> dict:
+    build_groups_doc = load_optional_json(worqspace_root / "planning" / "build-groups.v1.json")
+    summary_path = worqspace_root / "exeq.d" / f"cyqle{cycle_num}_summary.md"
+    changed_path = worqspace_root / "exeq.d" / f"cyqle{cycle_num}_changed.md"
+
+    changed_file_records = []
+    for group in grouped_coherence["group_summaries"]:
+        for path in group["changed_files"]:
+            changed_file_records.append({
+                "path": path,
+                "change_type": "modified_or_created",
+                "build_group_id": group["build_group_id"],
+                "scope_id": group["scope_id"],
+                "in_intended_scope": True,
+                "evidence_class": "direct_execution_evidence",
+                "commit_state": "applied_with_legacy_direct_write",
+                "source_build_ref": f"build/groups/{group['build_group_id']}/build-report.v1.json",
+            })
+
+    for path in grouped_coherence["undeclared_changed_files"]:
+        changed_file_records.append({
+            "path": path,
+            "change_type": "modified_or_created",
+            "build_group_id": None,
+            "scope_id": None,
+            "in_intended_scope": False,
+            "evidence_class": "direct_execution_evidence",
+            "commit_state": "applied_with_legacy_direct_write",
+            "source_build_ref": f"exeq.d/cyqle{cycle_num}_changed.md",
+        })
+
+    observed_behaviors = []
+    failed_behaviors = []
+    unverified_behaviors = []
+    for check in validation_bundle.get("checks", []):
+        behavior = {
+            "behavior_id": check["check_id"],
+            "result": check["status"].lower(),
+            "evidence_class": "direct_deterministic_evidence",
+        }
+        if check["status"] == "FAIL":
+            failed_behaviors.append(behavior)
+        elif check["status"] == "PASS":
+            observed_behaviors.append(behavior)
+        else:
+            observed_behaviors.append(behavior)
+
+    unverified_behaviors.append({
+        "behavior_id": "project_test_runner",
+        "reason": "No canonical executed test runner is wired into the legacy runtime.",
+    })
+    if validation_bundle.get("coverage", {}).get("non_python_files"):
+        unverified_behaviors.append({
+            "behavior_id": "non_python_deterministic_validation_depth",
+            "reason": "Non-Python ecosystems currently rely on weaker deterministic coverage than Python.",
+        })
+
+    evidence_status = "EVIDENCE_COMPLETE"
+    if validation_bundle.get("status") == "FAIL" or grouped_coherence["undeclared_changed_files"]:
+        evidence_status = "EVIDENCE_PARTIAL"
+    elif not changed_file_records:
+        evidence_status = "EVIDENCE_MISSING"
+
+    confidence = "CONFIDENCE_HIGH"
+    if validation_bundle.get("validation_execution_mode") == "NONE":
+        confidence = "CONFIDENCE_LOW"
+    elif (
+        validation_bundle.get("status") != "PASS"
+        or validation_bundle.get("coverage", {}).get("non_python_files")
+        or grouped_coherence["undeclared_changed_files"]
+    ):
+        confidence = "CONFIDENCE_MEDIUM"
+
+    intended_scopes = [
+        item.get("scope_id")
+        for item in build_groups_doc.get("items", [])
+        if item.get("scope_id")
+    ]
+    unknowns = [
+        "Legacy ConstruQtor still writes directly into qodeyard without transactional staging.",
+        "System impact telemetry is not collected in the current engine.",
+    ]
+    if cross_briq_warnings:
+        unknowns.append("Cross-briq integration points exist and require inspection judgment.")
+
+    return {
+        "schema_version": "realization-bundle.v1",
+        "realization_bundle_id": f"{worqspace_root.name}-realization-cyqle{cycle_num}",
+        "run_id": worqspace_root.name,
+        "cycle": int(cycle_num),
+        "stage": "REALIZATION",
+        "status": evidence_status,
+        "capability_mode": "MIXED_REASONING_EXECUTION",
+        "validation_execution_mode": validation_bundle.get("validation_execution_mode", "NONE"),
+        "evidence_status": evidence_status,
+        "confidence": confidence,
+        "scope_summary": {
+            "intended_scopes": sorted(set(intended_scopes)),
+            "touched_scopes": grouped_coherence["touched_scope_ids"],
+            "undeclared_touched_scopes": [
+                f"file:{path}" for path in grouped_coherence["undeclared_changed_files"]
+            ],
+        },
+        "structural_reality": {
+            "changed_files": changed_file_records,
+            "touched_components": sorted({
+                component_id
+                for group in grouped_coherence["group_summaries"]
+                for component_id in group["planned_components"]
+            }),
+            "artifact_changes": [
+                {"artifact_type": "execution_summary", "path": f"exeq.d/cyqle{cycle_num}_summary.md"} if summary_path.exists() else None,
+                {"artifact_type": "changed_manifest", "path": f"exeq.d/cyqle{cycle_num}_changed.md"} if changed_path.exists() else None,
+                {"artifact_type": "validation_bundle", "path": "validation/validation-bundle.v1.json"},
+            ],
+        },
+        "behavioral_reality": {
+            "observed_behaviors": observed_behaviors,
+            "failed_behaviors": failed_behaviors,
+            "unverified_behaviors": unverified_behaviors,
+            "interface_behavior_deltas": [],
+        },
+        "system_impact_reality": {
+            "performance": {"status": "unknown", "reason": "No benchmark evidence collected."},
+            "stability": {"status": "unknown", "reason": "No long-running runtime telemetry collected."},
+            "resource_usage": {"status": "unknown", "reason": "No resource telemetry collected."},
+            "error_signals": [],
+        },
+        "unknowns": unknowns,
+        "evidence_refs": [
+            f"exeq.d/cyqle{cycle_num}_summary.md" if summary_path.exists() else None,
+            f"exeq.d/cyqle{cycle_num}_changed.md" if changed_path.exists() else None,
+            "validation/validation-bundle.v1.json",
+        ] + [
+            f"build/groups/{group['build_group_id']}/build-report.v1.json"
+            for group in grouped_coherence["group_summaries"]
+        ] + [
+            f"build/groups/{group['build_group_id']}/changed-files.v1.json"
+            for group in grouped_coherence["group_summaries"]
+        ],
+        "source_build_refs": [
+            f"build/groups/{group['build_group_id']}/build-report.v1.json"
+            for group in grouped_coherence["group_summaries"]
+        ],
+        "source_validation_refs": ["validation/validation-bundle.v1.json"],
+        "manifest_ref": "run-manifest.v1.json",
+        "created_at": now_utc(),
+    }
+
+
+def build_inspection_input_contract(
+    worqspace_root: Path,
+    cycle_num: str,
+    validation_bundle: dict,
+    realization_bundle: dict,
+) -> dict:
+    completion_criteria = load_optional_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    execution_blueprint = load_optional_json(worqspace_root / "planning" / "execution-blueprint.v1.json")
+    status = "READY"
+    missing = []
+    if not validation_bundle:
+        missing.append("validation/validation-bundle.v1.json")
+    if not realization_bundle:
+        missing.append("realization/realization-bundle.v1.json")
+    if not completion_criteria:
+        missing.append("planning/completion-criteria.v1.json")
+    if missing:
+        status = "BLOCKED"
+
+    return {
+        "schema_version": "inspection-input.v1",
+        "inspection_input_id": f"{worqspace_root.name}-inspection-input-cyqle{cycle_num}",
+        "run_id": worqspace_root.name,
+        "cycle": int(cycle_num),
+        "stage": "INSPECTION",
+        "status": status,
+        "required_inputs": {
+            "validation_bundle_ref": "validation/validation-bundle.v1.json",
+            "realization_bundle_ref": "realization/realization-bundle.v1.json",
+            "completion_criteria_ref": "planning/completion-criteria.v1.json",
+            "execution_blueprint_ref": "planning/execution-blueprint.v1.json" if execution_blueprint else None,
+        },
+        "missing_inputs": missing,
+        "capability_mode": realization_bundle.get("capability_mode", "MIXED_REASONING_EXECUTION") if realization_bundle else "MIXED_REASONING_EXECUTION",
+        "validation_execution_mode": validation_bundle.get("validation_execution_mode", "NONE") if validation_bundle else "NONE",
+        "created_at": now_utc(),
+    }
+
+
+def build_inspection_verdict(
+    worqspace_root: Path,
+    cycle_num: str,
+    overall_assessment: str,
+    validation_bundle: dict,
+    realization_bundle: dict,
+    inspection_input: dict,
+    cross_briq_warnings: list[str],
+    failed_briq_suggestions: list[dict],
+) -> dict:
+    completion_criteria = load_optional_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    build_groups_doc = load_optional_json(worqspace_root / "planning" / "build-groups.v1.json")
+
+    criteria_results = []
+    planning_paths = [
+        worqspace_root / "planning" / "execution-blueprint.v1.json",
+        worqspace_root / "planning" / "validation-plan.v1.json",
+        worqspace_root / "planning" / "completion-criteria.v1.json",
+        worqspace_root / "planning" / "build-groups.v1.json",
+    ]
+    planning_ok = all(path.exists() for path in planning_paths)
+    criteria_results.append({
+        "criterion": "Required planning artifacts exist and are manifest-linkable.",
+        "status": "PASS" if planning_ok else "FAIL",
+        "basis": [str(path.relative_to(worqspace_root)) for path in planning_paths],
+    })
+
+    expected_briqs = [
+        item.get("briq_ref")
+        for item in build_groups_doc.get("briq_inventory", [])
+        if item.get("briq_ref")
+    ]
+    assigned_briqs = sorted({
+        briq_ref
+        for item in build_groups_doc.get("items", [])
+        for briq_ref in item.get("briq_refs", [])
+    })
+    assignment_ok = sorted(expected_briqs) == assigned_briqs
+    criteria_results.append({
+        "criterion": "Every briq is assigned to a build group and component scope.",
+        "status": "PASS" if assignment_ok else "FAIL",
+        "basis": {
+            "expected_briqs": expected_briqs,
+            "assigned_briqs": assigned_briqs,
+        },
+    })
+
+    grouped_outputs = realization_bundle.get("scope_summary", {}).get("touched_scopes", [])
+    build_scope_ok = bool(grouped_outputs) and not realization_bundle.get("scope_summary", {}).get("undeclared_touched_scopes", [])
+    criteria_results.append({
+        "criterion": "ConstruQtor consumes grouped scope metadata during build.",
+        "status": "PASS" if build_scope_ok else "PARTIAL",
+        "basis": {
+            "touched_scopes": grouped_outputs,
+            "undeclared_touched_scopes": realization_bundle.get("scope_summary", {}).get("undeclared_touched_scopes", []),
+        },
+    })
+
+    criteria_results.append({
+        "criterion": "Inspection consumed validation and realization bundles before verdict.",
+        "status": "PASS" if inspection_input.get("status") == "READY" else "FAIL",
+        "basis": inspection_input.get("required_inputs", {}),
+    })
+
+    deterministic_failures = [
+        issue for issue in validation_bundle.get("issues", [])
+        if issue.get("severity") == "error"
+    ]
+
+    if deterministic_failures or validation_bundle.get("status") == "FAIL":
+        verdict = "FAILURE"
+    elif any(item["status"] == "FAIL" for item in criteria_results):
+        verdict = "PARTIAL"
+    else:
+        verdict = overall_assessment.strip("[]")
+
+    confidence = realization_bundle.get("confidence", "CONFIDENCE_LOW")
+    unresolved_issues = []
+    unresolved_issues.extend([issue.get("message") for issue in deterministic_failures])
+    unresolved_issues.extend(realization_bundle.get("unknowns", []))
+    unresolved_issues.extend(cross_briq_warnings)
+    unresolved_issues.extend(
+        f"{item['briq']} {item['assessment']}: {item['suggestions'][:240]}"
+        for item in failed_briq_suggestions
+    )
+
+    return {
+        "schema_version": "inspection-verdict.v1",
+        "inspection_verdict_id": f"{worqspace_root.name}-inspection-verdict-cyqle{cycle_num}",
+        "run_id": worqspace_root.name,
+        "cycle": int(cycle_num),
+        "stage": "INSPECTION",
+        "status": verdict,
+        "deterministic_gate": "FAIL" if deterministic_failures else "PASS",
+        "completion_criteria_results": criteria_results,
+        "completion_criteria_summary": completion_criteria.get("summary"),
+        "confidence": confidence,
+        "evidence_status": realization_bundle.get("evidence_status", "EVIDENCE_PARTIAL"),
+        "validation_execution_mode": validation_bundle.get("validation_execution_mode", "NONE"),
+        "capability_mode": realization_bundle.get("capability_mode", "MIXED_REASONING_EXECUTION"),
+        "repair_required": verdict != "SUCCESS",
+        "unresolved_issues": unresolved_issues,
+        "evidence_refs": [
+            "validation/validation-bundle.v1.json",
+            "realization/realization-bundle.v1.json",
+            "verdict/inspection-input.v1.json",
+            "planning/completion-criteria.v1.json",
+        ],
+        "created_at": now_utc(),
+    }
+
+
+def render_validation_summary(validation_bundle: dict) -> str:
+    lines = [
+        "# Validation Summary",
+        "",
+        f"- Status: {validation_bundle['status']}",
+        f"- Mode: {validation_bundle['validation_execution_mode']}",
+        f"- Capability: {validation_bundle['capability_disclosure']['deterministic_validation_strength']}",
+        "",
+        "## Checks",
+    ]
+    for check in validation_bundle.get("checks", []):
+        lines.append(f"- {check['check_id']}: {check['status']}")
+    lines.extend(["", "## Capability Notes"])
+    for note in validation_bundle.get("capability_disclosure", {}).get("notes", []):
+        lines.append(f"- {note}")
+    if validation_bundle.get("unknowns"):
+        lines.extend(["", "## Unknowns"])
+        for item in validation_bundle["unknowns"]:
+            lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_realization_summary(realization_bundle: dict) -> str:
+    lines = [
+        "# Realization Summary",
+        "",
+        f"- Evidence Status: {realization_bundle['evidence_status']}",
+        f"- Confidence: {realization_bundle['confidence']}",
+        "",
+        "## Scope Summary",
+        f"- Intended Scopes: {', '.join(realization_bundle['scope_summary']['intended_scopes']) or 'None'}",
+        f"- Touched Scopes: {', '.join(realization_bundle['scope_summary']['touched_scopes']) or 'None'}",
+        f"- Undeclared Scope Touches: {', '.join(realization_bundle['scope_summary']['undeclared_touched_scopes']) or 'None'}",
+        "",
+        "## Changed Files",
+    ]
+    for item in realization_bundle.get("structural_reality", {}).get("changed_files", []):
+        lines.append(f"- `{item['path']}` ({'in-scope' if item['in_intended_scope'] else 'undeclared'})")
+    if realization_bundle.get("unknowns"):
+        lines.extend(["", "## Unknowns"])
+        for item in realization_bundle["unknowns"]:
+            lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_inspection_verdict_summary(verdict: dict) -> str:
+    lines = [
+        "# Inspection Verdict",
+        "",
+        f"- Status: {verdict['status']}",
+        f"- Deterministic Gate: {verdict['deterministic_gate']}",
+        f"- Confidence: {verdict['confidence']}",
+        f"- Evidence Status: {verdict['evidence_status']}",
+        "",
+        "## Completion Criteria",
+    ]
+    for item in verdict.get("completion_criteria_results", []):
+        lines.append(f"- {item['status']}: {item['criterion']}")
+    if verdict.get("unresolved_issues"):
+        lines.extend(["", "## Unresolved Issues"])
+        for item in verdict["unresolved_issues"][:20]:
+            lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def load_inspeqtor_config(config_path: Path) -> dict:
     """Load inspeqtor-specific configuration from config.yaml."""
     config = {}
@@ -95,10 +798,18 @@ def extract_changed_files(changed_files_content: str, qodeyard_path: Path) -> li
     Returns:
         List of (filename, content) tuples
     """
-    changed_files = re.findall(r'`([^`]+)`', changed_files_content)
+    changed_files = []
+    for line in changed_files_content.splitlines():
+        match = re.match(r'^\s*-\s+`([^`]+)`\s*$', line)
+        if match:
+            changed_files.append(match.group(1))
     result = []
-    
-    for file_str in set(changed_files):
+    seen_files = set()
+
+    for file_str in changed_files:
+        if file_str in seen_files:
+            continue
+        seen_files.add(file_str)
         file_path = qodeyard_path / file_str
         if file_path.is_file():
             try:
@@ -109,8 +820,169 @@ def extract_changed_files(changed_files_content: str, qodeyard_path: Path) -> li
                 result.append((file_str, f"[Could not read: {e}]"))
         else:
             result.append((file_str, "[File not found in qodeyard]"))
-    
+
     return result
+
+
+def load_changed_code_artifacts(exeq_dir: Path, cycle_num: str, qodeyard_path: Path) -> list[tuple[str, str]]:
+    """Load changed code artifacts for a cycle from exeq and grouped build manifests."""
+    changed_files_in_order: list[str] = []
+    seen_files: set[str] = set()
+
+    def record_file(rel_path: str) -> None:
+        if not rel_path or rel_path in seen_files:
+            return
+        seen_files.add(rel_path)
+        changed_files_in_order.append(rel_path)
+
+    changed_manifest_path = exeq_dir / f"cyqle{cycle_num}_changed.md"
+    try:
+        with open(changed_manifest_path, 'r', encoding='utf-8') as f:
+            changed_manifest = f.read()
+        for rel_path, _ in extract_changed_files(changed_manifest, qodeyard_path):
+            record_file(rel_path)
+    except Exception:
+        pass
+
+    build_groups_dir = exeq_dir.parent / "build" / "groups"
+    if build_groups_dir.is_dir():
+        for manifest_path in sorted(build_groups_dir.glob("*/changed-files.v1.json")):
+            try:
+                manifest = load_optional_json(manifest_path)
+                for item in manifest.get("changed_files", []):
+                    record_file(item.get("path", ""))
+            except Exception:
+                continue
+
+    result = []
+    for file_str in changed_files_in_order:
+        file_path = qodeyard_path / file_str
+        if file_path.is_file():
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                result.append((file_str, content))
+            except Exception as e:
+                result.append((file_str, f"[Could not read: {e}]"))
+        else:
+            result.append((file_str, "[File not found in qodeyard]"))
+    return result
+
+
+def normalize_review_result(
+    assessment: str,
+    summary: str,
+    issues: str,
+    changed_files: list[tuple[str, str]],
+) -> tuple[str, str, str]:
+    """
+    Remove file-missing claims that contradict deterministic qodeyard evidence.
+
+    AI review remains advisory, but it should not downgrade a briq for claiming an
+    embedded changed file is missing when the deterministic artifact loader already
+    confirmed that file exists in qodeyard.
+    """
+    content_by_file = {
+        filename.lower(): content
+        for filename, content in changed_files
+        if content != "[File not found in qodeyard]"
+    }
+    evidence_files = set(content_by_file)
+    if not evidence_files:
+        return assessment, summary, issues
+
+    run_sh_content = content_by_file.get("run.sh", "")
+    run_sh_lower = run_sh_content.lower()
+    run_sh_uses_port_var = bool(re.search(r'(\$port|\$\{port[:}]|"\$port"|\'\$PORT\')', run_sh_lower))
+    run_sh_exports_port = "export port" in run_sh_lower or ": \"${port:=" in run_sh_lower
+    run_sh_has_hardcoded_port = bool(
+        re.search(r'--port\s+[0-9]+', run_sh_lower)
+        or re.search(r'port\s*=\s*[0-9]+', run_sh_lower)
+    )
+
+    raw_issue_lines = [line.strip() for line in issues.splitlines() if line.strip()]
+    kept_issue_lines: list[str] = []
+    contradicted_files: set[str] = set()
+
+    for line in raw_issue_lines:
+        lower_line = line.lower()
+        contradicted_port_claim = False
+
+        if "run.sh" in evidence_files and "run.sh" in lower_line:
+            if (
+                ("port variable" in lower_line or "uses the port variable" in lower_line)
+                and ("no assurance" in lower_line or "no evidence" in lower_line or "not" in lower_line)
+                and run_sh_uses_port_var
+            ):
+                contradicted_port_claim = True
+            if ("source" in lower_line or "export" in lower_line) and run_sh_exports_port:
+                contradicted_port_claim = True
+            if "hardcod" in lower_line and run_sh_uses_port_var and not run_sh_has_hardcoded_port:
+                contradicted_port_claim = True
+
+        if (
+            "run.sh" in evidence_files
+            and "hardcod" in lower_line
+            and "main.py" in lower_line
+            and run_sh_uses_port_var
+            and not run_sh_has_hardcoded_port
+        ):
+            contradicted_port_claim = True
+
+        if contradicted_port_claim:
+            contradicted_files.add("run.sh")
+            continue
+
+        contradicted = [
+            filename for filename in evidence_files
+            if filename in lower_line and ("missing" in lower_line or "not found" in lower_line)
+        ]
+        if contradicted:
+            contradicted_files.update(contradicted)
+            continue
+        kept_issue_lines.append(line)
+
+    if contradicted_files:
+        filtered_issue_lines = []
+        for line in kept_issue_lines:
+            lower_line = line.lower()
+            if any(filename in lower_line for filename in contradicted_files) and (
+                "cannot verify" in lower_line or "could not verify" in lower_line
+            ):
+                continue
+            filtered_issue_lines.append(line)
+        kept_issue_lines = filtered_issue_lines
+
+        lower_summary = summary.lower()
+        if any(filename in lower_summary for filename in contradicted_files) and (
+            "missing" in lower_summary or "not found" in lower_summary
+        ):
+            contradicted_list = ", ".join(sorted(contradicted_files))
+            if kept_issue_lines:
+                summary = (
+                    f"Deterministic qodeyard evidence confirmed the generated files exist, including {contradicted_list}. "
+                    "Remaining review notes are preserved below."
+                )
+            else:
+                summary = (
+                    f"Deterministic qodeyard evidence confirmed the generated files exist, including {contradicted_list}. "
+                    "No remaining review issues were substantiated."
+                )
+
+    substantive_issues = [line for line in kept_issue_lines if line.lower() != "none"]
+    if contradicted_files and not substantive_issues:
+        contradicted_list = ", ".join(sorted(contradicted_files))
+        summary = (
+            f"Deterministic qodeyard evidence confirmed the generated files exist, including {contradicted_list}. "
+            "No remaining review issues were substantiated."
+        )
+
+    if assessment in {"[PARTIAL]", "[FAILURE]"} and contradicted_files and not substantive_issues:
+        assessment = "[SUCCESS]"
+        kept_issue_lines = ["None"]
+
+    normalized_issues = "\n".join(kept_issue_lines) if kept_issue_lines else "None"
+    return assessment, summary, normalized_issues
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -428,7 +1300,8 @@ def run_per_briq_reviews(
     qodeyard_path: Path,
     qontext_path: Path,
     reqap_dir: Path,
-    config: dict
+    config: dict,
+    all_changed: list[tuple[str, str]],
 ) -> list[dict]:
     """
     Run per-briq reviews for all briqs in the current cycle.
@@ -457,15 +1330,6 @@ def run_per_briq_reviews(
             for file in files:
                 if file.endswith('.q.yaml'):
                     all_context_files.append(str(Path(root) / file))
-    
-    # Read the changed files manifest for the cycle
-    changed_manifest_path = exeq_dir / f"cyqle{cycle_num}_changed.md"
-    try:
-        with open(changed_manifest_path, 'r', encoding='utf-8') as f:
-            changed_manifest = f.read()
-        all_changed = extract_changed_files(changed_manifest, qodeyard_path)
-    except:
-        all_changed = []
     
     # Create cycle reqap directory
     cycle_reqap_dir = reqap_dir / f"cyqle{cycle_num}"
@@ -545,24 +1409,31 @@ def run_per_briq_reviews(
                 parsed_results = parse_batched_response(response, batch_briq_names)
                 
                 # Write individual reqaps and collect results
-                for briq_name in batch_briq_names:
+                for briq_data in briqs_data:
+                    briq_name = briq_data['name']
                     parsed = parsed_results.get(briq_name, {
                         'assessment': '[UNKNOWN]',
                         'summary': 'Not found in batch',
                         'issues': 'Review manually',
                         'raw': ''
                     })
+                    normalized_assessment, normalized_summary, normalized_issues = normalize_review_result(
+                        parsed['assessment'],
+                        parsed['summary'],
+                        parsed['issues'],
+                        briq_data.get('changed', []),
+                    )
                     
                     reqap_path = cycle_reqap_dir / f"{briq_name}_reqap.md"
                     with open(reqap_path, 'w', encoding='utf-8') as f:
                         f.write(f"# Briq Review: {briq_name}\n\n")
-                        f.write(f"Assessment: {parsed['assessment']}\n\n")
-                        f.write(f"## Summary\n{parsed['summary']}\n\n")
-                        f.write(f"## Issues\n{parsed['issues']}\n")
+                        f.write(f"Assessment: {normalized_assessment}\n\n")
+                        f.write(f"## Summary\n{normalized_summary}\n\n")
+                        f.write(f"## Issues\n{normalized_issues}\n")
                     
                     results.append({
                         'briq_name': briq_name,
-                        'assessment': parsed['assessment'],
+                        'assessment': normalized_assessment,
                         'reqap_path': str(reqap_path),
                         'error': None
                     })
@@ -660,11 +1531,25 @@ def run_per_briq_reviews(
                     assessment = "[PARTIAL]"
                 elif "[FAILURE]" in response:
                     assessment = "[FAILURE]"
-                
+
+                summary_match = re.search(r'## Summary\s*\n(.*?)(?=\n##|\Z)', response, re.DOTALL)
+                issues_match = re.search(r'## Issues(?: Found)?\s*\n(.*?)(?=\n##|\Z)', response, re.DOTALL)
+                summary = summary_match.group(1).strip() if summary_match else "Review completed."
+                issues = issues_match.group(1).strip() if issues_match else "None"
+                assessment, summary, issues = normalize_review_result(
+                    assessment,
+                    summary,
+                    issues,
+                    briq_changed,
+                )
+
                 # Write reqap
                 reqap_path = cycle_reqap_dir / f"{briq_name}_reqap.md"
                 with open(reqap_path, 'w', encoding='utf-8') as f:
-                    f.write(f"# Briq Review: {briq_name}\n\n{response}")
+                    f.write(f"# Briq Review: {briq_name}\n\n")
+                    f.write(f"Assessment: {assessment}\n\n")
+                    f.write(f"## Summary\n{summary}\n\n")
+                    f.write(f"## Issues\n{issues}\n")
                 
                 print(f"   Assessment: {assessment}", flush=True)
                 
@@ -727,6 +1612,7 @@ def main() -> None:
     reqap_dir = worqspace_root / "reqap.d"
     tasq_dir = worqspace_root / "tasq.d"
     struqture_dir = worqspace_root / "struqture"
+    changed_code_artifacts = load_changed_code_artifacts(exeq_dir, cycle_num, qodeyard_path)
     
     print(f"=== InspeQtor v1.0.4: Multi-Stage Review for cyQle {cycle_num} ===", flush=True)
 
@@ -981,7 +1867,8 @@ def main() -> None:
             qodeyard_path,
             qontext_path,
             reqap_dir,
-            config
+            config,
+            changed_code_artifacts,
         )
     else:
         print(f"\n--- STAGE 2: Per-Briq Reviews SKIPPED (AI review skipped due to contract failure) ---", flush=True)
@@ -1086,13 +1973,83 @@ def main() -> None:
             overall_assessment = "[PARTIAL]"
             print(f"[VERIFY] Verification errors found — downgrading to PARTIAL", flush=True)
 
+    changed_manifest_files = sorted({filename for filename, _ in changed_code_artifacts})
+    grouped_coherence = evaluate_grouped_coherence(
+        worqspace_root,
+        cycle_num,
+        changed_manifest_files,
+    )
+
+    validation_bundle = build_validation_bundle(
+        worqspace_root,
+        cycle_num,
+        guard_report,
+        verification_results,
+        grouped_coherence,
+        changed_manifest_files,
+    )
+    validation_bundle_path = worqspace_root / "validation" / "validation-bundle.v1.json"
+    validation_summary_path = worqspace_root / "validation" / "validation-summary.md"
+    write_json(validation_bundle_path, validation_bundle)
+    validation_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(validation_summary_path, 'w', encoding='utf-8') as f:
+        f.write(render_validation_summary(validation_bundle))
+
+    realization_bundle = build_realization_bundle(
+        worqspace_root,
+        cycle_num,
+        validation_bundle,
+        grouped_coherence,
+        changed_manifest_files,
+        cross_briq_warnings,
+    )
+    realization_bundle_path = worqspace_root / "realization" / "realization-bundle.v1.json"
+    realization_summary_path = worqspace_root / "realization" / "realization-summary.md"
+    write_json(realization_bundle_path, realization_bundle)
+    realization_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(realization_summary_path, 'w', encoding='utf-8') as f:
+        f.write(render_realization_summary(realization_bundle))
+
+    inspection_input = build_inspection_input_contract(
+        worqspace_root,
+        cycle_num,
+        validation_bundle,
+        realization_bundle,
+    )
+    inspection_input_path = worqspace_root / "verdict" / "inspection-input.v1.json"
+    write_json(inspection_input_path, inspection_input)
+
+    inspection_verdict = build_inspection_verdict(
+        worqspace_root,
+        cycle_num,
+        overall_assessment,
+        validation_bundle,
+        realization_bundle,
+        inspection_input,
+        cross_briq_warnings,
+        failed_briq_suggestions,
+    )
+    inspection_verdict_path = worqspace_root / "verdict" / "inspection-verdict.v1.json"
+    inspection_verdict_summary_path = worqspace_root / "verdict" / "inspection-verdict.md"
+    write_json(inspection_verdict_path, inspection_verdict)
+    inspection_verdict_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(inspection_verdict_summary_path, 'w', encoding='utf-8') as f:
+        f.write(render_inspection_verdict_summary(inspection_verdict))
+
+    overall_assessment = f"[{inspection_verdict['status']}]"
+    print(f"\n[BOUNDARY] Validation bundle: {validation_bundle_path}", flush=True)
+    print(f"[BOUNDARY] Realization bundle: {realization_bundle_path}", flush=True)
+    print(f"[BOUNDARY] Inspection input: {inspection_input_path}", flush=True)
+    print(f"[BOUNDARY] Inspection verdict: {inspection_verdict_path}", flush=True)
+
     # ═══════════════════════════════════════════════════════════════════════════
     # WRITE FINAL REQAP
     # ═══════════════════════════════════════════════════════════════════════════
     if ai_review_mode == "skipped" or not briq_results:
         _write_guard_only_reqap(
             reqap_path, cycle_num, guard_report, verification_results,
-            overall_assessment, qontract_content
+            overall_assessment, qontract_content,
+            validation_bundle, realization_bundle, inspection_verdict
         )
     else:
         # Build meta-review prompt
@@ -1177,6 +2134,27 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
             final_content = f"""# CyQle {cycle_num} Final ReQap
 Generated by InspeQtor v1.0.4 (Multi-Stage Review: Guard > Verify > AI)
 
+## Structured Verdict
+
+- Assessment: {overall_assessment}
+- Deterministic Gate: {inspection_verdict['deterministic_gate']}
+- Evidence Status: {inspection_verdict['evidence_status']}
+- Confidence: {inspection_verdict['confidence']}
+- Validation Bundle: `validation/validation-bundle.v1.json`
+- Realization Bundle: `realization/realization-bundle.v1.json`
+- Inspection Input Contract: `verdict/inspection-input.v1.json`
+- Inspection Verdict: `verdict/inspection-verdict.v1.json`
+
+## Completion Criteria Judgment
+"""
+
+            for item in inspection_verdict.get('completion_criteria_results', []):
+                final_content += f"\n- {item['status']}: {item['criterion']}"
+
+            final_content += f"""
+
+## AI Inspection Synthesis
+
 {meta_response}
 
 ---
@@ -1223,7 +2201,8 @@ Generated by InspeQtor v1.0.4 (Multi-Stage Review: Guard > Verify > AI)
                 reqap_path, cycle_num, overall_assessment, e,
                 success_count, partial_count, failure_count,
                 guard_report, verification_results,
-                cross_briq_warnings, failed_briq_suggestions
+                cross_briq_warnings, failed_briq_suggestions,
+                validation_bundle, realization_bundle, inspection_verdict
             )
 
     print(f"\n=== InspeQtor v1.0.4 Complete: {overall_assessment} ===", flush=True)
@@ -1281,13 +2260,23 @@ def _write_inspeqtor_context_log(
 
 def _write_guard_only_reqap(
     reqap_path: Path, cycle_num: str, guard_report, verification_results,
-    overall_assessment: str, qontract_content: str
+    overall_assessment: str, qontract_content: str,
+    validation_bundle: dict, realization_bundle: dict, inspection_verdict: dict
 ):
     """Write a reqap when AI review was skipped due to guard failure."""
     content = f"""# CyQle {cycle_num} Final ReQap
 Generated by InspeQtor v1.0.4 (Guard-Only Mode — AI review skipped due to contract failure)
 
 ## Assessment: {overall_assessment}
+
+## Structured Verdict
+
+- Deterministic Gate: {inspection_verdict['deterministic_gate']}
+- Evidence Status: {inspection_verdict['evidence_status']}
+- Confidence: {inspection_verdict['confidence']}
+- Validation Bundle: `validation/validation-bundle.v1.json`
+- Realization Bundle: `realization/realization-bundle.v1.json`
+- Inspection Verdict: `verdict/inspection-verdict.v1.json`
 
 **AI review skipped due to contract failure.** The QontractGuard detected violations that must
 be fixed before AI review can provide meaningful feedback.
@@ -1301,6 +2290,15 @@ be fixed before AI review can provide meaningful feedback.
 
     if verification_results and hasattr(verification_results, 'errors') and verification_results.errors > 0:
         content += _format_verification_section(verification_results)
+
+    content += "\n## Completion Criteria Judgment\n\n"
+    for item in inspection_verdict.get('completion_criteria_results', []):
+        content += f"- {item['status']}: {item['criterion']}\n"
+
+    if realization_bundle.get('unknowns'):
+        content += "\n## Unknowns / Blind Spots\n\n"
+        for item in realization_bundle['unknowns']:
+            content += f"- {item}\n"
 
     content += "\n## Next Steps\n\n"
     content += "1. Fix all QontractGuard violations listed above\n"
@@ -1317,13 +2315,23 @@ def _write_fallback_reqap(
     reqap_path: Path, cycle_num: str, overall_assessment: str, error,
     success_count: int, partial_count: int, failure_count: int,
     guard_report, verification_results,
-    cross_briq_warnings: list, failed_briq_suggestions: list
+    cross_briq_warnings: list, failed_briq_suggestions: list,
+    validation_bundle: dict, realization_bundle: dict, inspection_verdict: dict
 ):
     """Write a fallback reqap when meta-review AI call fails."""
     fallback_content = f"""# CyQle {cycle_num} Final ReQap
 Generated by InspeQtor v1.0.4 (Fallback Mode - Meta-review failed)
 
 Assessment: {overall_assessment}
+
+## Structured Verdict
+
+- Deterministic Gate: {inspection_verdict['deterministic_gate']}
+- Evidence Status: {inspection_verdict['evidence_status']}
+- Confidence: {inspection_verdict['confidence']}
+- Validation Bundle: `validation/validation-bundle.v1.json`
+- Realization Bundle: `realization/realization-bundle.v1.json`
+- Inspection Verdict: `verdict/inspection-verdict.v1.json`
 
 ## Summary
 Meta-review failed with error: {error}
@@ -1344,6 +2352,17 @@ Per-briq results: Success: {success_count} | Partial: {partial_count} | Failure:
         fallback_content += "## Cross-Briq Integration Points\n"
         for warning in cross_briq_warnings:
             fallback_content += f"- {warning}\n"
+        fallback_content += "\n"
+
+    fallback_content += "## Completion Criteria Judgment\n"
+    for item in inspection_verdict.get('completion_criteria_results', []):
+        fallback_content += f"- {item['status']}: {item['criterion']}\n"
+    fallback_content += "\n"
+
+    if realization_bundle.get('unknowns'):
+        fallback_content += "## Unknowns / Blind Spots\n"
+        for item in realization_bundle['unknowns']:
+            fallback_content += f"- {item}\n"
         fallback_content += "\n"
 
     if failed_briq_suggestions:

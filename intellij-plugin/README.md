@@ -4,9 +4,9 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 
 ## Features
 
-- **Run Tasq** - Execute QonQrete builds from your project root `tasq.md`
-- **Run Any Markdown** - Run any `.md` file as a temporary tasq
-- **Configuration** - Full config: sensitivity, cycles, mode, autonomous, sqrapyard, engine, TUI, wonqrete
+- **Run Tasq** - Execute QonQrete from the default project task file
+- **Run Any Markdown** - Run any `.md` file directly as the task input
+- **Configuration** - Full config: sensitivity, cycles, mode, autonomous, legacy sqrapyard overlay, engine, TUI, wonqrete
 - **Tool Window** - Control panel with status, config, qage browser
 - **Status Widget** - Real-time status with version in status bar
 - **Shell Verification** - Auto-detects and verifies bash shell
@@ -39,7 +39,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 
 ### Quick Start
 1. Open a QonQrete project in IntelliJ
-2. Create or edit `tasq.md` at the project root
+2. Create or edit your project task file at the root (`tasq.md` remains the default starter)
 3. Press `Ctrl+Alt+Q` or use Tools → QonQrete → Run Tasq
 
 ### Tool Window
@@ -52,7 +52,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 - `Ctrl+Alt+Q` - Run Tasq
 
 ### Context Menu
-Right-click any `.md` file to "Run as QonQrete Tasq"
+Right-click any `.md` file to run it directly as the QonQrete task file
 
 ## Configuration
 
@@ -76,8 +76,11 @@ Settings → Tools → QonQrete:
 
 ## Known Limitations
 
-- Hard-killing the terminal during temp tasq flow may interrupt restore (next startup will recover)
 - Windows requires Git Bash, WSL, or MSYS2 for bash shell
+
+## Validation Reality
+
+Deterministic validation in the current bridge is strongest for Python. Other ecosystems still run through the workflow, but deterministic compile/test coverage is weaker and should be treated accordingly.
 
 ## License
 
