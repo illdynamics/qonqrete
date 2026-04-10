@@ -132,7 +132,7 @@ Run Options:
   -b, --briq-sensitivity <N>   Set Granularity (0-16). Default: 6. Higher = more briqs!
   -c, --cyqles <N>             Set max auto-cycles (1-50). Default: 3
   -n, --qonstruction-name <n>  Auto-save as qonstruction (non-interactive). v1.0.2
-  -s, --sqrapyard              Legacy compatibility overlay from sqrapyard/.
+  -s, --sqrapyard              Legacy compatibility seed overlay from sqrapyard/ (not canonical).
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
   -d, --docker                 Force Docker engine.
   -p, --podman                 Force Podman engine.
@@ -157,7 +157,7 @@ Examples:
   ./qonqrete.sh run --auto --mode security # Autonomous security mode
   ./qonqrete.sh run --auto --legacy-cycle-continuation
   ./qonqrete.sh run -a -n myproject        # Auto-save as 'myproject' qonstruction
-  ./qonqrete.sh resume                     # Continue latest/selected run
+  ./qonqrete.sh resume                     # Continue latest/selected run from manifest-linked state
   ./qonqrete.sh status                     # Latest manifest + stage summary
   ./qonqrete.sh audit -q qage_20260410_123456
   ./qonqrete.sh clean -A                   # Delete ALL Qages
@@ -862,6 +862,7 @@ show_run_status() {
     echo "$VERSION"
     echo "Run: ${run_name}"
     echo "Run Root: ${target_qage}"
+    echo "Canonical State Root: ${STATE_ROOT}"
     echo "Manifest: ${manifest_path}"
     if [ -f "$manifest_path" ]; then
         echo "Current Stage: $(read_manifest_value "$manifest_path" "current_stage")"
@@ -876,9 +877,14 @@ show_run_status() {
     echo "Audit Timeline: ${target_qage}/audit/timeline.md"
     echo "Audit Events: ${target_qage}/audit/events.ndjson"
     echo "Task Spec: ${target_qage}/task/task-spec.v1.json"
+    echo "Guard Result: ${target_qage}/guard/guard-result.v1.json"
+    echo "Execution Blueprint: ${target_qage}/planning/execution-blueprint.v1.json"
     echo "Validation Bundle: ${target_qage}/validation/validation-bundle.v1.json"
     echo "Realization Bundle: ${target_qage}/realization/realization-bundle.v1.json"
     echo "Inspection Verdict: ${target_qage}/verdict/inspection-verdict.v1.json"
+    echo "Repair Plan: ${target_qage}/verdict/repair-plan.v1.json"
+    echo "Continuation Metadata: ${target_qage}/continuation/continuation-metadata.v1.json"
+    echo "Build Attempts: ${target_qage}/build/attempts"
 }
 
 show_run_audit() {
@@ -950,7 +956,17 @@ seed_qodeyard_from_repo() {
     mkdir -p "$run_host_path/qodeyard"
     (
         cd "$PROJECT_ROOT"
-        tar -cf - --exclude='.git' --exclude='.qonqrete' .
+        tar -cf - \
+            --exclude='.git' \
+            --exclude='.qonqrete' \
+            --exclude='.venv' \
+            --exclude='node_modules' \
+            --exclude='__pycache__' \
+            --exclude='.pytest_cache' \
+            --exclude='.mypy_cache' \
+            --exclude='.ruff_cache' \
+            --exclude='.cache' \
+            .
     ) | (
         cd "$run_host_path/qodeyard"
         tar -xf -
@@ -964,7 +980,7 @@ seed_qodeyard_from_sqrapyard() {
         return 0
     fi
 
-    log_qrane "Legacy sqrapyard compatibility overlay enabled."
+    log_qrane "Legacy sqrapyard compatibility seed overlay enabled."
     if [ -d "$sqrapyard_path" ] && [ -n "$(ls -A "$sqrapyard_path" 2>/dev/null)" ]; then
         cp -r "$sqrapyard_path"/* "$run_host_path/qodeyard/"
         log_qrane "Sqrapyard overlay copied into qodeyard."
@@ -1290,6 +1306,7 @@ case "$COMMAND" in
         log_qrane "Creating new Qage: ${RUN_DIR_NAME}"
         
         cp -r "$SOURCE_QAGE" "$RUN_HOST_PATH"
+        mkdir -p "$RUN_HOST_PATH"/{task,guard,planning,estimation,build,validation,realization,verdict,continuation,audit}
         export QONQ_RUN_KIND="resume"
         export QONQ_LEGACY_QAGE_ID="$RUN_DIR_NAME"
         export QONQ_RESUMED_FROM_QAGE="$QAGE_NAME"
@@ -1362,8 +1379,9 @@ case "$COMMAND" in
         if [ -n "$QONQ_ENABLE_LEGACY_CONTINUATION" ]; then
             log_qrane "Legacy reqap continuation compatibility mode enabled for this run."
         fi
+        log_qrane "Canonical intake path: task file -> Qrystallizer -> Guard -> Planning -> Build -> Validation -> Realization -> Inspection"
 
-        mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,qontext.d,bloq.d,briq.d,qontract.d}
+        mkdir -p "$RUN_HOST_PATH"/{tasq.d,task,guard,briq.d,qontract.d,planning,estimation,qodeyard,exeq.d,build,validation,realization,verdict,continuation,reqap.d,struqture,qontext.d,bloq.d,qache.d,audit}
 
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi

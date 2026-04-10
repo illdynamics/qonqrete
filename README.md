@@ -277,8 +277,8 @@ This is useful for preventing accidental expensive runs with high sensitivity or
 ## Core principles
 
 - **Isolation by design** — AI execution happens in a Qage container, not directly on the host.
-- **File-based communication** — tasqs, briqs, reviews, skeletons, contracts, and logs are visible on disk.
-- **Structured iteration** — QonQrete works in cyQles with planning, build, review, and checkpoint phases.
+- **File-based communication** — task specs, plans, build evidence, validation, realization, verdicts, and logs are visible on disk.
+- **Evidence-gated execution** — QonQrete runs clarification, planning, build, validation, realization, and inspection with bounded repair instead of implicit endless looping.
 - **Human control when wanted** — autonomous mode exists, but user-gated cheQpoints remain first-class.
 - **Local-first supporting stack** — several helper agents run fully locally with zero AI-token cost.
 
@@ -287,19 +287,20 @@ This is useful for preventing accidental expensive runs with high sensitivity or
 - **`qonqrete.sh`** — host entrypoint and runtime bootstrap
 - **`qrane/`** — orchestrator, TUI, path handling, cost helpers
 - **`worqer/`** — agent scripts and security/provider utilities
-- **`worqspace/`** — config, task input, sqrapyard, qages, qonstructions
+- **`worqspace/`** — config, compatibility task copy, qages, qonstructions
 - **`vscode-extension/`** — VS Code integration
 - **`intellij-plugin/`** — JetBrains integration
 
 ## Main workflow
 
-1. **Enhance** — `tasqleveler` (optional, cycle 1 only)
-2. **Plan** — `instruqtor` creates briqs and contract files
-3. **Estimate** — `calqulator` estimates token/cost usage
-4. **Build** — `construqtor` generates and updates code in `qodeyard/`
-5. **Review** — `inspeqtor` validates and reviews results
-6. **Index / compress** — `qontextor` and `qompressor` refresh context artifacts
-7. **Checkpoint** — continue, tweaQ, or quit
+1. **Clarify** — `tasqleveler` is now a compatibility wrapper for canonical `Qrystallizer`
+2. **Guard** — `guard` evaluates readiness and effective constraints before planning
+3. **Plan** — `instruqtor` emits execution blueprint, build groups, validation plan, and contract files
+4. **Estimate** — `calqulator` emits estimation artifacts
+5. **Build** — `construqtor` performs scoped staged writes with attempt/recovery evidence
+6. **Validate + Realize** — deterministic validation and realization bundles are produced before judgment
+7. **Inspect** — `inspeqtor` emits structured verdicts and repair plans
+8. **Continue only if justified** — bounded repair or explicit linked continuation, with legacy cycle promotion compatibility opt-in only
 
 ## Directory overview
 
@@ -313,7 +314,6 @@ qonqrete/
 │   ├── pipeline_config.yaml
 │   ├── caching_policy.yaml
 │   ├── tasq.md
-│   ├── sqrapyard/
 │   ├── qonstructions/
 │   └── qage_YYYYMMDD_HHMMSS/
 ├── doc/
@@ -480,7 +480,7 @@ Run options:
   -b, --briq-sensitivity <0-16>
   -c, --cyqles <1-50>
   -n, --qonstruction-name <name>
-  -s, --sqrapyard
+  -s, --sqrapyard                # legacy compatibility overlay only
   -M, --msb
   -d, --docker
   -p, --podman

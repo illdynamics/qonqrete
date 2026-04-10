@@ -29,11 +29,11 @@ qonqrete/
 
 ### `qonqrete.sh`
 Responsibilities:
-- command parsing (`init`, `run`, `resume`, `clean`)
+- command parsing (`init`, `run`, `resume`, `status`, `audit`, `clean`)
 - OS detection
 - container engine detection
 - build backend detection
-- qage creation and workspace seeding
+- qage creation and manifest-linked workspace seeding
 - Qonstruction save / resume / clean flow
 
 The current CLI supports:
@@ -46,7 +46,7 @@ It also provides flags for:
 - operational mode
 - briq sensitivity
 - cycle limit
-- sqrapyard seeding
+- legacy sqrapyard compatibility seeding
 - explicit runtime forcing
 - qonstruction save naming
 
@@ -65,9 +65,10 @@ Qrane:
 - reads `worqspace/config.yaml`
 - resolves final mode / sensitivity / cycle count
 - validates required API keys for configured providers
-- runs the configured pipeline in order
-- performs checkpoint handling
-- promotes reQap output into the next task flow when continuing
+- runs the configured pipeline in canonical stage order through alias bridging
+- maintains the run manifest and audit trail
+- performs bounded repair and continuation routing
+- keeps legacy reqap promotion compatibility gated behind explicit opt-in
 
 ## Layer 3 — Agent layer
 
@@ -75,7 +76,9 @@ Qrane:
 The repo currently contains these notable agents/utilities:
 
 #### AI / pipeline agents
-- `tasqleveler.py`
+- `tasqleveler.py` (compatibility wrapper for `qrystallizer.py`)
+- `qrystallizer.py`
+- `guard.py`
 - `instruqtor.py`
 - `construqtor.py`
 - `inspeqtor.py`
@@ -93,17 +96,17 @@ The repo currently contains these notable agents/utilities:
 
 ## Pipeline order
 
-The current committed `worqspace/pipeline_config.yaml` documents the intended order as:
+The current committed `worqspace/pipeline_config.yaml` bridges the canonical order as:
 
 ```text
-instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
+tasqleveler(Qrystallizer) → guard → instruqtor → calqulator → construqtor → qontextor/qompressor/qontrabender (support services) → inspeqtor
 ```
 
 Additional notes:
-- `tasqleveler` is optional and cycle-1-only
+- `tasqleveler` is no longer the canonical intake implementation; it aliases Qrystallizer
 - `qontrabender` is trigger-driven rather than a simple always-on stage
-- the docs and code still treat `qodeyard/` as the primary source of truth for current code
-- `bloq.d/` and `qontext.d/` are support context layers, not the canonical code output
+- `qodeyard/` remains the mutable build surface inside a run, while the manifest is the authoritative linkage layer
+- `bloq.d/`, `qontext.d/`, and `qache.d/` are support artifact domains, not canonical lifecycle stages
 
 ## Artifact model
 
@@ -117,26 +120,47 @@ Typical contents:
 
 ```text
 tasq.d/
+task/
+guard/
 briq.d/
 qontract.d/
+planning/
+estimation/
 qodeyard/
 exeq.d/
+build/
+validation/
+realization/
+verdict/
+continuation/
 reqap.d/
 qontext.d/
 bloq.d/
 struqture/
+audit/
+run-manifest.v1.json
 ```
 
 ### Meaning of the main directories
-- `tasq.d/` — cycle-specific task material
+- `tasq.d/` — compatibility cycle task material
+- `task/` — canonical task spec, clarification log, and intake summary
+- `guard/` — guard result artifacts
 - `briq.d/` — generated work units
 - `qontract.d/` — human + machine-readable contract
-- `qodeyard/` — generated / modified code, current truth source
-- `exeq.d/` — execution summaries
-- `reqap.d/` — review / recap output
+- `planning/` — execution blueprint, validation plan, build groups, completion criteria
+- `estimation/` — estimation artifacts
+- `qodeyard/` — generated / modified code build surface
+- `exeq.d/` — legacy execution summaries
+- `build/` — build-group reports and per-attempt staged/recovery evidence
+- `validation/` — validation bundles
+- `realization/` — observed-outcome bundles
+- `verdict/` — inspection verdicts and repair plans
+- `continuation/` — continuation metadata
+- `reqap.d/` — legacy recap output retained for compatibility
 - `qontext.d/` — semantic / structural context output
 - `bloq.d/` — compressed structural skeletons
-- `struqture/` — logs
+- `struqture/` — legacy per-agent logs
+- `audit/` — manifest-linked audit timeline and event stream
 
 ## QONTRACT enforcement model
 

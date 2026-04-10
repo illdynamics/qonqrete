@@ -69,17 +69,18 @@ Supported runtime paths in the repo:
 ### 3.2 Fresh run
 
 ```bash
-./qonqrete.sh run
+./qonqrete.sh docs/demo-task.md
+./qonqrete.sh run -f docs/demo-task.md
 ```
 
 Current run flow:
 1. validate runtime prerequisites
 2. validate required config/task files
 3. create a new `qage_YYYYMMDD_HHMMSS`
-4. optionally seed from `worqspace/sqrapyard/` when `-s` is used
+4. optionally apply the legacy `worqspace/sqrapyard/` compatibility overlay when `-s` is used
 5. copy config/task material into the new Qage workspace
 6. launch the container
-7. let Qrane execute the pipeline
+7. let Qrane execute clarification, guard, planning, build, validation/realization, and inspection
 8. optionally save as a qonstruction
 
 ### 3.3 Resume
@@ -111,10 +112,10 @@ Clean flow supports:
 ## 4. Agent reference
 
 ## 4.1 `tasqleveler.py`
-Optional task enhancer.
+Compatibility wrapper for canonical `qrystallizer.py`.
 - cycle-1-only behavior
-- enriches a tasq with success criteria / structure / testing guidance
-- controlled by config and pipeline presence
+- writes `task/task-spec.v1.json`, `task/clarification-log.v1.json`, and `task/clarification-summary.md`
+- does not remain the canonical intake authority
 
 ## 4.2 `instruqtor.py`
 Planning agent.

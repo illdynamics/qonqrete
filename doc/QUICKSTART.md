@@ -106,9 +106,13 @@ After a successful run, verify these exist:
 
 ```text
 .qonqrete/worqspace/qage_YYYYMMDD_HHMMSS/
+.qonqrete/worqspace/qage_.../run-manifest.v1.json
+.qonqrete/worqspace/qage_.../task/task-spec.v1.json
+.qonqrete/worqspace/qage_.../validation/validation-bundle.v1.json
+.qonqrete/worqspace/qage_.../realization/realization-bundle.v1.json
+.qonqrete/worqspace/qage_.../verdict/inspection-verdict.v1.json
 .qonqrete/worqspace/qage_.../qodeyard/
-.qonqrete/worqspace/qage_.../exeq.d/
-.qonqrete/worqspace/qage_.../reqap.d/
+.qonqrete/worqspace/qage_.../build/attempts/
 ```
 
 ## Cost Confirmation Gate

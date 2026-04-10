@@ -984,6 +984,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     user_quit = False
     bounded_stop = False
     partial_stop = False
+    repair_blocked_by_cycle_limit = False
     no_midrun_questions = False
     legacy_continuation = legacy_cycle_continuation_enabled(config)
     repair_attempts_started = 0
@@ -996,6 +997,9 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 msg = f"Max cyQle limit hit ({limit_str}) - Edit config.yaml to change this."
                 if ui: ui.log_main(f"{qrane_prefix}{msg}")
                 else: print(f"{qrane_prefix}{msg}\r")
+                if cycle in repair_cycles:
+                    repair_blocked_by_cycle_limit = True
+                    partial_stop = True
                 break
 
             env = os.environ.copy()
@@ -1227,7 +1231,10 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
         elif user_quit:
             finalize_manifest(worqspace, "partial", "Run ended at legacy user-gated cheqpoint.")
         elif partial_stop:
-            finalize_manifest(worqspace, "partial", "Run ended with explicit continuable repair state.")
+            detail = "Run ended with explicit continuable repair state."
+            if repair_blocked_by_cycle_limit:
+                detail = "Run stopped before executing scheduled repair because the configured cycle limit was reached."
+            finalize_manifest(worqspace, "partial", detail)
         elif bounded_stop:
             finalize_manifest(worqspace, "completed", "Run ended after bounded clarified bridge pass without implicit legacy continuation.")
         else:

@@ -43,3 +43,9 @@ worqspace/qonstructions/*
 # asdf
 **.tool-versions**
 **/**.tool-versions**
+
+# qq stuff
+state/**
+state
+runs/**
+runs

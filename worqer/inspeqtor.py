@@ -2204,6 +2204,15 @@ def main() -> None:
     partial_count = 0
     failure_count = 0
     failed_briq_suggestions = []
+    briq_name_to_ref = {}
+    for briq_file in sorted(briq_dir.glob(f"cyqle{cycle_num}_*.md")):
+        try:
+            briq_text = briq_file.read_text(encoding='utf-8')
+        except Exception:
+            continue
+        match = re.search(r"^Briq-Ref:\s*(.+)$", briq_text, re.MULTILINE)
+        if match:
+            briq_name_to_ref[briq_file.stem] = match.group(1).strip()
     
     for result in briq_results:
         if result['assessment'] == '[SUCCESS]':
@@ -2220,16 +2229,17 @@ def main() -> None:
             briq_reqap = f"Assessment: {result['assessment']}\n\nError: {result.get('error', 'Unknown')}"
         
         if result['assessment'] in ['[FAILURE]', '[PARTIAL]']:
+            failed_briq_ref = briq_name_to_ref.get(result['briq_name'], result['briq_name'])
             suggestions_match = re.search(r'## Suggestions\s*\n(.*?)(?=\n##|\Z)', briq_reqap, re.DOTALL)
             if suggestions_match:
                 failed_briq_suggestions.append({
-                    'briq': result['briq_name'],
+                    'briq': failed_briq_ref,
                     'assessment': result['assessment'],
                     'suggestions': suggestions_match.group(1).strip()
                 })
             else:
                 failed_briq_suggestions.append({
-                    'briq': result['briq_name'],
+                    'briq': failed_briq_ref,
                     'assessment': result['assessment'],
                     'suggestions': briq_reqap
                 })
