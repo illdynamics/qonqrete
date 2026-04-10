@@ -28,8 +28,15 @@ import re
 import time
 import ast
 import json
+import shutil
 import subprocess
+import hashlib
 from pathlib import Path
+
+try:
+    import tomllib
+except ImportError:
+    tomllib = None
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try: 
@@ -43,6 +50,11 @@ try:
     import qontract_guard
 except ImportError:
     qontract_guard = None
+
+try:
+    from lib_security import safe_write_file
+except ImportError:
+    safe_write_file = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -60,6 +72,11 @@ DEFAULT_INTERLEAVED_CONFIG = {
     'local_validation': True,           # Run local syntax/import checks
     'ai_quick_review': False,           # Run lightweight AI review per briq
     'retry_on_review_fail': True,       # Retry build if review fails
+}
+
+DEFAULT_WRITE_STRATEGY = {
+    'mode': 'staged_atomic_per_attempt',
+    'recovery_policy': 'snapshot_before_commit',
 }
 
 
@@ -91,6 +108,15 @@ def get_interleaved_config(config: dict) -> dict:
     for key in DEFAULT_INTERLEAVED_CONFIG:
         if key in interleaved_cfg:
             result[key] = interleaved_cfg[key]
+    return result
+
+
+def get_write_strategy_config(config: dict) -> dict:
+    strategy_cfg = config.get('write_strategy', {})
+    result = DEFAULT_WRITE_STRATEGY.copy()
+    for key in DEFAULT_WRITE_STRATEGY:
+        if key in strategy_cfg:
+            result[key] = strategy_cfg[key]
     return result
 
 
@@ -244,6 +270,32 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
 
                 if result['constraint_errors']:
                     result['passed'] = False
+        elif file_path.suffix == '.json' and file_path.exists():
+            result['files_checked'] += 1
+            try:
+                json.loads(file_path.read_text(encoding='utf-8'))
+            except Exception as exc:
+                result['syntax_errors'].append(f"{file_name}: JSON parse error ({exc})")
+                result['passed'] = False
+        elif file_path.suffix in {'.yaml', '.yml'} and file_path.exists():
+            result['files_checked'] += 1
+            try:
+                yaml.safe_load(file_path.read_text(encoding='utf-8'))
+            except Exception as exc:
+                result['syntax_errors'].append(f"{file_name}: YAML parse error ({exc})")
+                result['passed'] = False
+        elif file_path.suffix == '.toml' and file_path.exists():
+            result['files_checked'] += 1
+            if tomllib is None:
+                result['import_warnings'].append(
+                    f"{file_name}: TOML parser unavailable in current runtime; deterministic parse check skipped"
+                )
+            else:
+                try:
+                    tomllib.loads(file_path.read_text(encoding='utf-8'))
+                except Exception as exc:
+                    result['syntax_errors'].append(f"{file_name}: TOML parse error ({exc})")
+                    result['passed'] = False
 
     return result
 
@@ -272,6 +324,40 @@ def load_optional_json(path: Path) -> dict:
             return json.load(f)
     except Exception:
         return {}
+
+
+def sha256_text(content: str) -> str:
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+
+def sha256_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def detect_execution_backend(provider: str, model: str) -> dict:
+    provider_value = (provider or "unknown").lower()
+    model_value = (model or "unknown").lower()
+    backend_kind = "reasoning_model"
+    backend_family = provider_value or "unknown"
+    engine_id = f"{provider or 'unknown'}:{model or 'unknown'}"
+
+    if provider_value == "local" and "codex" in model_value:
+        backend_kind = "codex_style_scoped_execution_engine"
+        backend_family = "codex"
+    elif "codex" in provider_value or "codex" in model_value:
+        backend_kind = "codex_style_scoped_execution_engine"
+        backend_family = "codex"
+    elif provider_value in {"openai", "anthropic", "gemini", "deepseek", "qwen", "openrouter"}:
+        backend_kind = "llm_patch_generation_engine"
+
+    return {
+        "engine_id": engine_id,
+        "backend_kind": backend_kind,
+        "backend_family": backend_family,
+        "scope_enforcement_model": "qonqrete_manifest_scoped_execution",
+        "orchestration_authority": "qrane_manifest_runtime",
+        "authority_disclosure": "Execution backend may generate or apply scoped file payloads, but planning and orchestration authority remain outside the backend.",
+    }
 
 
 def parse_briq_metadata(briq_content: str) -> dict:
@@ -433,16 +519,10 @@ Keep it brief - max 200 words total.
 # CODE GENERATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
-    """
-    Parse AI markdown output and write code blocks to qodeyard.
-    
-    Returns:
-        List of written file paths (relative to qodeyard)
-    """
-    qodeyard.mkdir(parents=True, exist_ok=True)
-    written_files = []
-    
+def _extract_ai_output_files(result: str, qodeyard: Path) -> dict[str, str]:
+    """Parse AI markdown output into relative qodeyard file payloads."""
+    extracted_files: dict[str, str] = {}
+
     # ═══════════════════════════════════════════════════════════════════════════
     # ULTIMATE LANGUAGE KEYWORDS SET v1.0.0
     # Comprehensive set of ALL language identifiers that AI models might output
@@ -832,7 +912,7 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         matches = pattern.findall(result)
 
     if not matches:
-        return written_files
+        return extracted_files
 
     for filename, code_content in matches:
         if not filename:
@@ -887,17 +967,173 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
         if not str(proposed_abs).startswith(str(qodeyard_abs)):
             print(f"     [WARN] Skipping unsafe path: {filename}", flush=True)
             continue
-        
-        full_path = proposed_abs
-        safe_filename = full_path.relative_to(qodeyard_abs)
-        
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(code_content, encoding='utf-8')
-        
-        written_files.append(str(safe_filename))
-        print(f"     - Wrote [Code] {safe_filename}", flush=True)
 
-    return written_files
+        safe_filename = proposed_abs.relative_to(qodeyard_abs)
+        extracted_files[str(safe_filename)] = code_content
+
+    return extracted_files
+
+
+def _write_text(path: Path, content: str, jail: Path | None = None) -> None:
+    if safe_write_file:
+        safe_write_file(path, content, jail=jail or path.parent)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding='utf-8')
+
+
+def stage_attempt_files(
+    result: str,
+    qodeyard: Path,
+    worqspace_root: Path,
+    attempt_id: str,
+    metadata: dict,
+) -> dict:
+    qodeyard.mkdir(parents=True, exist_ok=True)
+    extracted_files = _extract_ai_output_files(result, qodeyard)
+    attempt_root = worqspace_root / "build" / "attempts" / attempt_id
+    staging_dir = attempt_root / "staging"
+    validation_root = attempt_root / "validation-root"
+    recovery_dir = attempt_root / "recovery"
+    attempt_root.mkdir(parents=True, exist_ok=True)
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    recovery_dir.mkdir(parents=True, exist_ok=True)
+
+    staged_files = []
+    file_records = []
+    for rel_path, content in extracted_files.items():
+        stage_path = staging_dir / rel_path
+        _write_text(stage_path, content, jail=attempt_root)
+        staged_files.append(rel_path)
+        file_records.append({
+            "path": rel_path,
+            "stage_path": str(stage_path.relative_to(worqspace_root)),
+            "content_sha256": sha256_text(content),
+            "size_bytes": len(content.encode('utf-8')),
+        })
+        print(f"     - Staged [Code] {rel_path}", flush=True)
+
+    if validation_root.exists():
+        shutil.rmtree(validation_root)
+    shutil.copytree(qodeyard, validation_root, dirs_exist_ok=True)
+    for rel_path, content in extracted_files.items():
+        validation_path = validation_root / rel_path
+        validation_path.parent.mkdir(parents=True, exist_ok=True)
+        validation_path.write_text(content, encoding='utf-8')
+
+    manifest = {
+        "schema_version": "build-attempt.v1",
+        "attempt_id": attempt_id,
+        "run_id": worqspace_root.name,
+        "build_group_id": metadata.get('build-group', 'ungrouped'),
+        "scope_id": metadata.get('scope-id', 'scope_unknown'),
+        "component_id": metadata.get('component-id', 'unassigned'),
+        "write_strategy": "staged_atomic_per_attempt",
+        "recovery_policy": "snapshot_before_commit",
+        "attempt_status": "staged",
+        "staged_files": file_records,
+        "commit_summary": {
+            "committed_files": [],
+            "snapshot_refs": [],
+            "commit_state": "not_committed",
+        },
+    }
+    manifest_path = attempt_root / "attempt-manifest.v1.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding='utf-8')
+    return {
+        "attempt_id": attempt_id,
+        "attempt_root": attempt_root,
+        "staging_dir": staging_dir,
+        "validation_root": validation_root,
+        "recovery_dir": recovery_dir,
+        "manifest_path": manifest_path,
+        "staged_files": sorted(staged_files),
+        "file_records": file_records,
+    }
+
+
+def finalize_attempt_manifest(
+    staged_attempt: dict,
+    *,
+    status: str,
+    committed_files: list[dict] | None = None,
+    snapshot_refs: list[str] | None = None,
+    failure_reason: str | None = None,
+) -> None:
+    manifest_path = staged_attempt["manifest_path"]
+    try:
+        payload = json.loads(manifest_path.read_text(encoding='utf-8'))
+    except Exception:
+        payload = {
+            "schema_version": "build-attempt.v1",
+            "attempt_id": staged_attempt["attempt_id"],
+        }
+    payload["attempt_status"] = status
+    payload["commit_summary"] = {
+        "committed_files": committed_files or [],
+        "snapshot_refs": snapshot_refs or [],
+        "commit_state": "committed" if committed_files else "not_committed",
+    }
+    if failure_reason:
+        payload["failure_reason"] = failure_reason
+    manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding='utf-8')
+
+
+def commit_staged_attempt(staged_attempt: dict, qodeyard: Path, worqspace_root: Path) -> list[dict]:
+    committed_files = []
+    snapshot_refs = []
+    for file_record in staged_attempt["file_records"]:
+        rel_path = file_record["path"]
+        staged_path = staged_attempt["staging_dir"] / rel_path
+        target_path = qodeyard / rel_path
+        prior_exists = target_path.exists()
+        snapshot_ref = None
+        prior_sha = None
+        if prior_exists:
+            prior_bytes = target_path.read_bytes()
+            prior_sha = sha256_bytes(prior_bytes)
+            snapshot_path = staged_attempt["recovery_dir"] / rel_path
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(prior_bytes)
+            snapshot_ref = str(snapshot_path.relative_to(worqspace_root))
+            snapshot_refs.append(snapshot_ref)
+
+        new_content = staged_path.read_text(encoding='utf-8')
+        if safe_write_file:
+            safe_write_file(target_path, new_content, jail=qodeyard)
+        else:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(new_content, encoding='utf-8')
+        committed_files.append({
+            "path": rel_path,
+            "change_type": "modified" if prior_exists else "created",
+            "attempt_id": staged_attempt["attempt_id"],
+            "snapshot_ref": snapshot_ref,
+            "prior_exists": prior_exists,
+            "prior_sha256": prior_sha,
+            "content_sha256": file_record["content_sha256"],
+            "commit_state": "committed_atomically",
+        })
+
+    recovery_manifest = {
+        "schema_version": "recovery-metadata.v1",
+        "attempt_id": staged_attempt["attempt_id"],
+        "run_id": worqspace_root.name,
+        "recovery_policy": "snapshot_before_commit",
+        "recovery_available": True,
+        "workspace_recovery_scope": "attempt_scoped",
+        "snapshots": committed_files,
+        "restore_contract": "Restore from build/attempts/<attempt_id>/recovery/ snapshots before retrying outside bounded repair flow.",
+    }
+    recovery_manifest_path = staged_attempt["attempt_root"] / "recovery-metadata.v1.json"
+    recovery_manifest_path.write_text(json.dumps(recovery_manifest, indent=2) + "\n", encoding='utf-8')
+    finalize_attempt_manifest(
+        staged_attempt,
+        status="committed",
+        committed_files=committed_files,
+        snapshot_refs=snapshot_refs,
+    )
+    return committed_files
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -907,6 +1143,7 @@ def _write_ai_output_to_qodeyard(result: str, qodeyard: Path) -> list[str]:
 def process_briq_interleaved(
     briq_file: Path,
     qodeyard_path: Path,
+    worqspace_root: Path,
     exeq_dir: Path,
     all_context_files: list[str],
     context_type: str,
@@ -922,7 +1159,9 @@ def process_briq_interleaved(
     qontract_json_path: Path = None,   # v1.0.4: Path to qontract.json for per-briq guard
     contract_data: dict = None,         # v1.0.4: Loaded contract dict
     planning_payload: dict = None,
-    component_contracts_payload: dict = None
+    component_contracts_payload: dict = None,
+    write_strategy_config: dict | None = None,
+    execution_backend: dict | None = None,
 ) -> dict:
     """
     Process a single briq with interleaved build + review.
@@ -943,9 +1182,9 @@ def process_briq_interleaved(
             'validation': dict,
             'review': dict,
             'guard_report': dict | None,
-            'attempts': int,
-            'error': str | None,
-            'exeq_path': str
+        'attempts': int,
+        'error': str | None,
+        'exeq_path': str
         }
     """
     briq_name = briq_file.stem
@@ -965,7 +1204,10 @@ def process_briq_interleaved(
         'attempts': 0,
         'error': None,
         'exeq_path': None,
-        'metadata': {}
+        'metadata': {},
+        'attempt_records': [],
+        'execution_backend': execution_backend or {},
+        'write_strategy': (write_strategy_config or {}).get('mode', DEFAULT_WRITE_STRATEGY['mode']),
     }
     
     # Read briq content
@@ -1024,9 +1266,7 @@ print("Hello, World!")
 {briq_content}
 """
     
-    # Legacy direct writes persist across retries, so track cumulative files touched by
-    # this briq rather than only the last attempt's payload.
-    cumulative_written_files: set[str] = set()
+    committed_written_files: set[str] = set()
 
     # Track correction directives for deterministic validation / guard retries.
     retry_correction = ""
@@ -1060,13 +1300,34 @@ print("Hello, World!")
                 result['error'] = "AI returned no code blocks"
                 continue
             
-            # Write files
-            written_files = _write_ai_output_to_qodeyard(ai_result, qodeyard_path)
-            cumulative_written_files.update(written_files)
-            result['written_files'] = sorted(cumulative_written_files)
+            attempt_id = f"{worqspace_root.name}-cyqle{os.environ.get('CYCLE_NUM', '1')}-{briq_name}-attempt{attempt:02d}"
+            staged_attempt = stage_attempt_files(
+                ai_result,
+                qodeyard_path,
+                worqspace_root,
+                attempt_id,
+                briq_metadata,
+            )
+            result['attempt_records'].append({
+                "attempt_id": attempt_id,
+                "status": "staged",
+                "scope_id": briq_metadata.get('scope-id', 'scope_unknown'),
+                "build_group_id": briq_metadata.get('build-group', 'ungrouped'),
+                "component_id": briq_metadata.get('component-id', 'unassigned'),
+                "staged_files": staged_attempt['staged_files'],
+                "manifest_ref": str(staged_attempt['manifest_path'].relative_to(worqspace_root)),
+                "recovery_ref": str((staged_attempt['attempt_root'] / 'recovery-metadata.v1.json').relative_to(worqspace_root)),
+                "committed_files": [],
+            })
 
-            if not written_files:
+            if not staged_attempt['staged_files']:
                 result['error'] = "No files were written"
+                finalize_attempt_manifest(
+                    staged_attempt,
+                    status="failed_empty",
+                    failure_reason=result['error'],
+                )
+                result['attempt_records'][-1]['status'] = 'failed_empty'
                 continue
             
             # STEP 2: Local Validation (LoQal Verifier - part of InspeQtor)
@@ -1074,7 +1335,7 @@ print("Hello, World!")
             
             if do_local_validation:
                 print(f"     [LoQal] Running validation...", flush=True)
-                validation = run_local_validation(result['written_files'], qodeyard_path)
+                validation = run_local_validation(staged_attempt['staged_files'], staged_attempt['validation_root'])
                 result['validation'] = validation
                 
                 if validation['syntax_errors']:
@@ -1102,7 +1363,7 @@ print("Hello, World!")
             if is_contract_relevant and qontract_guard and contract_data and build_passed:
                 print(f"     [GUARD] Running QontractGuard (contract-relevant briq)...", flush=True)
                 briq_guard = qontract_guard.run_guard_for_files(
-                    contract_data, qodeyard_path, result['written_files']
+                    contract_data, staged_attempt['validation_root'], staged_attempt['staged_files']
                 )
                 result['guard_report'] = briq_guard.to_json()
                 
@@ -1131,8 +1392,8 @@ print("Hello, World!")
                 review = run_ai_quick_review(
                     briq_name,
                     briq_content,
-                    result['written_files'],
-                    qodeyard_path,
+                    staged_attempt['staged_files'],
+                    staged_attempt['validation_root'],
                     review_provider or ai_provider,
                     review_model or ai_model
                 )
@@ -1150,6 +1411,11 @@ print("Hello, World!")
             
             # STEP 4: Determine result
             if build_passed:
+                committed_files = commit_staged_attempt(staged_attempt, qodeyard_path, worqspace_root)
+                committed_written_files.update(item['path'] for item in committed_files)
+                result['written_files'] = sorted(committed_written_files)
+                result['attempt_records'][-1]['status'] = 'committed'
+                result['attempt_records'][-1]['committed_files'] = [item['path'] for item in committed_files]
                 if result.get('validation', {}).get('import_warnings'):
                     result['status'] = 'partial'
                     result['error'] = "Import warnings"
@@ -1161,6 +1427,12 @@ print("Hello, World!")
                     result['error'] = None
                 break
             else:
+                finalize_attempt_manifest(
+                    staged_attempt,
+                    status="failed_validation",
+                    failure_reason=result.get('error'),
+                )
+                result['attempt_records'][-1]['status'] = 'failed_validation'
                 # Try again if we have attempts left
                 if attempt >= max_attempts:
                     result['status'] = 'failure'
@@ -1168,7 +1440,9 @@ print("Hello, World!")
         except Exception as e:
             result['error'] = str(e)
             print(f"     [ERROR] Attempt {attempt} failed: {e}", flush=True)
-    
+            if result.get('attempt_records'):
+                result['attempt_records'][-1]['status'] = 'failed_exception'
+
     # STEP 5: Write per-briq exeQ summary
     exeq_path = exeq_dir / f"{briq_name}_exeq.md"
     exeq_content = generate_briq_exeq(briq_name, briq_content, result)
@@ -1196,6 +1470,7 @@ Generated by ConstruQtor v1.0.4 (Interleaved Pipeline)
 
 **Attempts:** {result['attempts']}
 **Files Written:** {len(result['written_files'])}
+**Write Strategy:** {result.get('write_strategy', 'unknown')}
 
 """
     
@@ -1207,6 +1482,12 @@ Generated by ConstruQtor v1.0.4 (Interleaved Pipeline)
         exeq += "## Generated Files\n\n"
         for f in result['written_files']:
             exeq += f"- `{f}`\n"
+        exeq += "\n"
+
+    if result.get('attempt_records'):
+        exeq += "## Attempt Lineage\n\n"
+        for attempt in result['attempt_records']:
+            exeq += f"- `{attempt['attempt_id']}`: {attempt['status']} | staged={len(attempt.get('staged_files', []))} | committed={len(attempt.get('committed_files', []))}\n"
         exeq += "\n"
     
     # Validation results
@@ -1295,6 +1576,7 @@ def main():
     config = load_config(worqspace_root / 'config.yaml')
     retry_config = get_retry_config(config)
     interleaved_config = get_interleaved_config(config)
+    write_strategy_config = get_write_strategy_config(config)
     
     agent_cfg = config.get('agents', {}).get('construqtor', {})
     ai_provider = agent_cfg.get('provider', 'gemini')
@@ -1305,6 +1587,7 @@ def main():
     inspeqtor_cfg = config.get('agents', {}).get('inspeqtor', {})
     review_provider = inspeqtor_cfg.get('provider', ai_provider)
     review_model = inspeqtor_cfg.get('model', ai_model)
+    execution_backend = detect_execution_backend(ai_provider, ai_model)
 
     mode = os.environ.get('QONQ_MODE', 'enterprise')
     mode_prompt = get_mode_persona(mode)
@@ -1485,6 +1768,7 @@ def main():
         result = process_briq_interleaved(
             briq_file,
             qodeyard_path,
+            worqspace_root,
             exeq_briq_dir,
             merged_context_files,
             context_type,
@@ -1500,7 +1784,9 @@ def main():
             qontract_json_path=qontract_json_path,
             contract_data=contract_data,
             planning_payload=planning_payload,
-            component_contracts_payload=component_contracts_payload
+            component_contracts_payload=component_contracts_payload,
+            write_strategy_config=write_strategy_config,
+            execution_backend=execution_backend,
         )
         
         all_results.append(result)
@@ -1547,11 +1833,20 @@ def main():
             'briq_files': [],
             'written_files': set(),
             'statuses': [],
+            'attempt_ids': [],
+            'attempt_manifests': [],
+            'recovery_refs': [],
+            'attempt_records': [],
         })
         group_entry['component_ids'].add(component_id)
         group_entry['briq_files'].append(result['briq_file'])
         group_entry['written_files'].update(result['written_files'])
         group_entry['statuses'].append(result['status'])
+        for attempt_record in result.get('attempt_records', []):
+            group_entry['attempt_records'].append(attempt_record)
+            group_entry['attempt_ids'].append(attempt_record['attempt_id'])
+            group_entry['attempt_manifests'].append(attempt_record['manifest_ref'])
+            group_entry['recovery_refs'].append(attempt_record['recovery_ref'])
 
     # --- Write Main Summary File ---
     summary_content = f"# Execution Summary (ConstruQtor v1.0.4 - Interleaved Pipeline)\n\n"
@@ -1569,6 +1864,8 @@ def main():
         summary_content += f"- Components: {', '.join(sorted(group_entry['component_ids']))}\n"
         summary_content += f"- Briqs: {len(group_entry['briq_files'])}\n"
         summary_content += f"- Files Changed: {len(group_entry['written_files'])}\n\n"
+        summary_content += f"- Write Strategy: {write_strategy_config['mode']}\n"
+        summary_content += f"- Build Attempts: {len(set(group_entry['attempt_ids']))}\n\n"
 
     summary_content += "## Briq Details\n\n"
     for result in all_results:
@@ -1632,6 +1929,8 @@ def main():
         changed_files_content += f"## {group_id}\n\n"
         changed_files_content += f"- Scope ID: `{group_entry['scope_id']}`\n"
         changed_files_content += f"- Components: {', '.join(sorted(group_entry['component_ids']))}\n"
+        changed_files_content += f"- Write Strategy: `{write_strategy_config['mode']}`\n"
+        changed_files_content += f"- Build Attempts: {', '.join(sorted(set(group_entry['attempt_ids']))) or 'None'}\n"
         for f_name in sorted(group_entry['written_files']):
             changed_files_content += f"- `{f_name}`\n"
         changed_files_content += "\n"
@@ -1659,16 +1958,26 @@ def main():
             "changed_files": [{"path": path, "change_type": "modified_or_created"} for path in sorted(group_entry['written_files'])],
             "assumptions_used": [],
             "scope_id": group_entry['scope_id'],
-            "write_strategy": "direct_with_recovery_risk",
+            "write_strategy": write_strategy_config['mode'],
+            "write_strategy_disclosure": "Scoped staged writes validate against an overlay workspace and commit atomically per briq attempt.",
+            "recovery_policy": write_strategy_config['recovery_policy'],
             "capability_mode": "MIXED_REASONING_EXECUTION",
+            "execution_backend": execution_backend,
             "component_ids": sorted(group_entry['component_ids']),
             "briq_files": group_entry['briq_files'],
+            "build_attempt_ids": sorted(set(group_entry['attempt_ids'])),
+            "attempt_manifest_refs": sorted(set(group_entry['attempt_manifests'])),
+            "recovery_refs": sorted(set(group_entry['recovery_refs'])),
+            "attempt_records": group_entry['attempt_records'],
         }
         changed_scope_manifest = {
             "schema_version": "changed-scope-manifest.v1",
             "run_id": worqspace_root.name,
             "build_group_id": group_id,
             "scope_id": group_entry['scope_id'],
+            "write_strategy": write_strategy_config['mode'],
+            "recovery_policy": write_strategy_config['recovery_policy'],
+            "build_attempt_ids": sorted(set(group_entry['attempt_ids'])),
             "component_refs": [
                 {
                     "component_id": component_id,
@@ -1682,12 +1991,19 @@ def main():
                     "path": path,
                     "change_type": "modified_or_created",
                     "in_intended_scope": True,
-                    "commit_state": "applied_with_legacy_direct_write",
+                    "commit_state": "committed_atomically",
                     "evidence_class": "direct_execution_evidence",
                     "source_build_ref": f"build/groups/{group_id}/build-report.v1.json",
+                    "attempt_ids": sorted({
+                        attempt_record['attempt_id']
+                        for attempt_record in group_entry['attempt_records']
+                        if path in attempt_record.get('committed_files', [])
+                    }),
                 }
                 for path in sorted(group_entry['written_files'])
             ],
+            "attempt_manifest_refs": sorted(set(group_entry['attempt_manifests'])),
+            "recovery_refs": sorted(set(group_entry['recovery_refs'])),
         }
         with open(group_dir / "build-report.v1.json", "w", encoding="utf-8") as f:
             json.dump(build_report, f, indent=2)

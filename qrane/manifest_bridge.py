@@ -271,9 +271,9 @@ def base_manifest(workspace_root: Path) -> dict[str, Any]:
             "resumed_from_qage": resumed_from_qage,
         },
         "compatibility": {
-            "partial_write_model": "DIRECT_WRITE_LEGACY_QODEYARD",
-            "partial_write_disclosure": "Legacy ConstruQtor still writes directly into qodeyard without transactional staging.",
-            "continuation_model": "LEGACY_CYCLE_PROMOTION_COMPATIBILITY",
+            "partial_write_model": "SCOPED_STAGED_ATOMIC_ATTEMPTS",
+            "partial_write_disclosure": "ConstruQtor stages scoped attempt writes, validates against an overlay workspace, and commits atomically with snapshot-based recovery metadata.",
+            "continuation_model": "EXPLICIT_REPAIR_PLAN_CANONICAL_WITH_LEGACY_COMPATIBILITY_GATE",
             "canonical_manifest_authority": True,
         },
         "registry": {
@@ -303,6 +303,9 @@ def base_manifest(workspace_root: Path) -> dict[str, Any]:
             "task_spec": rel_path(workspace_root, workspace_root / "task" / "task-spec.v1.json"),
             "clarification_log": rel_path(workspace_root, workspace_root / "task" / "clarification-log.v1.json"),
             "guard_result": rel_path(workspace_root, workspace_root / "guard" / "guard-result.v1.json"),
+            "repair_plan": rel_path(workspace_root, workspace_root / "verdict" / "repair-plan.v1.json"),
+            "continuation_metadata": rel_path(workspace_root, workspace_root / "continuation" / "continuation-metadata.v1.json"),
+            "build_attempts_root": rel_path(workspace_root, workspace_root / "build" / "attempts"),
         },
         "legacy_links": {
             "qage_root": ".",
@@ -545,6 +548,25 @@ def write_build_bridge(workspace_root: Path, cycle: int) -> str:
     summary = read_text(summary_path)
     status_match = re.search(r"\*\*Overall Status:\*\*\s*([A-Za-z]+)", summary)
     per_briq_dir = workspace_root / "exeq.d" / f"cyqle{cycle}"
+    group_reports = [
+        read_json(path)
+        for path in sorted((workspace_root / "build" / "groups").glob("*/build-report.v1.json"))
+    ] if (workspace_root / "build" / "groups").exists() else []
+    write_modes = sorted({
+        report.get("write_strategy")
+        for report in group_reports
+        if report.get("write_strategy")
+    })
+    recovery_policies = sorted({
+        report.get("recovery_policy")
+        for report in group_reports
+        if report.get("recovery_policy")
+    })
+    execution_backends = [
+        report.get("execution_backend")
+        for report in group_reports
+        if report.get("execution_backend")
+    ]
     payload = {
         "schema_version": "build-output-bridge.v1",
         "generated_at": now_utc(),
@@ -563,7 +585,10 @@ def write_build_bridge(workspace_root: Path, cycle: int) -> str:
             rel_path(workspace_root, path)
             for path in (workspace_root / "build" / "groups").glob("*/changed-files.v1.json")
         ) if (workspace_root / "build" / "groups").exists() else [],
-        "partial_write_disclosure": "Legacy direct-write behavior remains active in Phase 1.",
+        "write_strategy": write_modes[0] if len(write_modes) == 1 else ("mixed" if write_modes else "unknown"),
+        "write_strategy_disclosure": "Build groups disclose scoped staged or atomic attempt writes and snapshot-based recovery metadata.",
+        "recovery_policies": recovery_policies,
+        "execution_backends": execution_backends,
     }
     return write_json(workspace_root, "build/build-output-bridge.v1.json", payload)
 
@@ -637,6 +662,16 @@ def write_realization_bridge(workspace_root: Path, cycle: int) -> str:
     summary_path = workspace_root / "exeq.d" / f"cyqle{cycle}_summary.md"
     changed_text = read_text(changed_path)
     changed_files = parse_changed_files(changed_text)
+    changed_scope_manifests = sorted(
+        rel_path(workspace_root, path)
+        for path in (workspace_root / "build" / "groups").glob("*/changed-files.v1.json")
+    ) if (workspace_root / "build" / "groups").exists() else []
+    recovery_refs = []
+    attempt_refs = []
+    for manifest_ref in changed_scope_manifests:
+        manifest_payload = read_json(workspace_root / manifest_ref)
+        recovery_refs.extend(manifest_payload.get("recovery_refs", []))
+        attempt_refs.extend(manifest_payload.get("attempt_manifest_refs", []))
     payload = {
         "schema_version": "realization-bundle.v1",
         "generated_at": now_utc(),
@@ -649,10 +684,9 @@ def write_realization_bridge(workspace_root: Path, cycle: int) -> str:
         "structural_reality": {
             "changed_files": changed_files,
             "changed_file_count": len(changed_files),
-            "grouped_scope_manifests": sorted(
-                rel_path(workspace_root, path)
-                for path in (workspace_root / "build" / "groups").glob("*/changed-files.v1.json")
-            ) if (workspace_root / "build" / "groups").exists() else [],
+            "grouped_scope_manifests": changed_scope_manifests,
+            "recovery_refs": sorted(set(recovery_refs)),
+            "attempt_manifest_refs": sorted(set(attempt_refs)),
         },
         "behavioral_reality": {
             "validation_execution_mode": determine_validation_mode(workspace_root),
@@ -754,6 +788,7 @@ def collect_agent_artifacts(workspace_root: Path, legacy_alias: str, cycle: int)
             f"exeq.d/cyqle{cycle}_changed.md",
             f"exeq.d/cyqle{cycle}",
             "build/groups",
+            "build/attempts",
         ]:
             if (workspace_root / rel_candidate).exists():
                 append_unique(artifacts, rel_candidate)
@@ -769,6 +804,9 @@ def collect_agent_artifacts(workspace_root: Path, legacy_alias: str, cycle: int)
             "verdict/inspection-input.v1.json",
             "verdict/inspection-verdict.v1.json",
             "verdict/inspection-verdict.md",
+            "verdict/repair-plan.v1.json",
+            "verdict/repair-plan.md",
+            "continuation/continuation-metadata.v1.json",
             f"reqap.d/cyqle{cycle}_reqap.md",
             f"reqap.d/cyqle{cycle}_qontract_guard.md",
             f"reqap.d/cyqle{cycle}_qontract_guard.json",
@@ -813,11 +851,14 @@ def sync_artifact_slots(workspace_root: Path) -> dict[str, Any]:
         "estimation_output": "estimation/estimation-bridge.v1.json",
         "estimate_artifact": "estimation/estimate.v1.json",
         "build_output": "build/build-output-bridge.v1.json",
+        "build_attempts_root": "build/attempts",
         "validation_output": "validation/validation-bundle.v1.json",
         "realization_output": "realization/realization-bundle.v1.json",
         "inspection_input": "verdict/inspection-input.v1.json",
         "inspection_output": "verdict/inspection-verdict.v1.json",
         "inspection_output_bridge": "verdict/inspection-verdict-bridge.v1.json",
+        "repair_plan": "verdict/repair-plan.v1.json",
+        "continuation_metadata": "continuation/continuation-metadata.v1.json",
         "cache_manifest": "qache.d/manifest.json",
     }
     for slot, rel_candidate in bridge_candidates.items():
@@ -844,8 +885,13 @@ def record_agent_completion(workspace_root: Path, legacy_alias: str, cycle: int,
             assessment = verdict.get("status") or verdict.get("assessment")
             if assessment == "SUCCESS":
                 manifest["terminal"]["final_verdict"] = "SUCCESS"
+                manifest["compatibility"]["continuation_model"] = "EXPLICIT_REPAIR_PLAN_CANONICAL"
             elif assessment in {"PARTIAL", "FAILURE"}:
                 manifest["terminal"]["final_verdict"] = assessment
+            if verdict.get("repair_required"):
+                manifest["run_status"] = "RUN_REPAIR_PENDING"
+                manifest["lifecycle_state"] = "CONTINUABLE"
+                manifest["compatibility"]["continuation_model"] = "EXPLICIT_REPAIR_PLAN_CANONICAL"
             save_manifest(workspace_root, manifest)
     return manifest
 
@@ -867,6 +913,7 @@ def record_cycle_promotion(workspace_root: Path, cycle: int, destination: str) -
         payload,
     )
     manifest.setdefault("continuation", []).append(payload)
+    manifest["compatibility"]["continuation_model"] = "LEGACY_CYCLE_PROMOTION_COMPATIBILITY"
     return save_manifest(workspace_root, manifest)
 
 

@@ -183,6 +183,30 @@ def evaluate_grouped_coherence(
                 "message": f"Build report files and changed-scope files differ for `{group_id}`.",
             })
 
+        attempt_ids = sorted(build_report.get("build_attempt_ids", [])) if build_report else []
+        changed_attempt_ids = sorted(changed_scope.get("build_attempt_ids", [])) if changed_scope else []
+        if build_report and not build_report.get("write_strategy"):
+            group_status = "FAIL" if group_status == "PASS" else group_status
+            issues.append({
+                "severity": "error",
+                "scope": group_id,
+                "message": f"Missing explicit write strategy disclosure for `{group_id}`.",
+            })
+        if changed_scope and not changed_scope.get("recovery_refs"):
+            group_status = "PARTIAL" if group_status == "PASS" else group_status
+            issues.append({
+                "severity": "warning",
+                "scope": group_id,
+                "message": f"Missing recovery metadata references for `{group_id}`.",
+            })
+        if build_report and (not attempt_ids or attempt_ids != changed_attempt_ids):
+            group_status = "FAIL" if group_status == "PASS" else group_status
+            issues.append({
+                "severity": "error",
+                "scope": group_id,
+                "message": f"Attempt lineage mismatch between build report and changed-scope manifest for `{group_id}`.",
+            })
+
         missing_component_contracts = [
             component_id for component_id in planned_components if component_id not in component_contracts
         ]
@@ -204,6 +228,9 @@ def evaluate_grouped_coherence(
             "planned_briq_count": len(planned_briqs),
             "reported_file_count": len(report_files),
             "changed_file_count": len(changed_files),
+            "write_strategy": build_report.get("write_strategy") if build_report else None,
+            "build_attempt_count": len(attempt_ids),
+            "recovery_ref_count": len(changed_scope.get("recovery_refs", [])) if changed_scope else 0,
         })
         group_summaries.append({
             "build_group_id": group_id,
@@ -213,6 +240,13 @@ def evaluate_grouped_coherence(
             "reported_files": report_files,
             "changed_files": changed_files,
             "status": group_status,
+            "write_strategy": build_report.get("write_strategy") if build_report else None,
+            "write_strategy_disclosure": build_report.get("write_strategy_disclosure") if build_report else None,
+            "recovery_policy": build_report.get("recovery_policy") if build_report else None,
+            "build_attempt_ids": attempt_ids,
+            "attempt_manifest_refs": build_report.get("attempt_manifest_refs", []) if build_report else [],
+            "recovery_refs": changed_scope.get("recovery_refs", []) if changed_scope else [],
+            "execution_backend": build_report.get("execution_backend") if build_report else None,
         })
 
     unassigned_briqs = [
@@ -341,7 +375,7 @@ def build_validation_bundle(
     unknowns = []
     capability_notes = [
         "Deterministic validation is strongest for Python files in the current engine.",
-        "Non-Python files currently receive scope, manifest, and artifact coherence checks but not equivalent compile/test rigor.",
+        "Non-Python files currently receive scope, manifest, and artifact coherence checks, with deterministic parsing added for shell, JSON, YAML, and TOML where runtime support exists.",
         "Executed project-wide test runners are not yet wired into the canonical validation stage.",
     ]
     if language_inventory["non_python_files"]:
@@ -404,17 +438,38 @@ def build_realization_bundle(
 
     changed_file_records = []
     for group in grouped_coherence["group_summaries"]:
-        for path in group["changed_files"]:
-            changed_file_records.append({
-                "path": path,
-                "change_type": "modified_or_created",
-                "build_group_id": group["build_group_id"],
-                "scope_id": group["scope_id"],
-                "in_intended_scope": True,
-                "evidence_class": "direct_execution_evidence",
-                "commit_state": "applied_with_legacy_direct_write",
-                "source_build_ref": f"build/groups/{group['build_group_id']}/build-report.v1.json",
-            })
+        changed_manifest = load_optional_json(
+            worqspace_root / "build" / "groups" / group["build_group_id"] / "changed-files.v1.json"
+        )
+        manifest_changed_files = changed_manifest.get("changed_files", [])
+        if manifest_changed_files:
+            for entry in manifest_changed_files:
+                if not entry.get("path"):
+                    continue
+                changed_file_records.append({
+                    "path": entry.get("path"),
+                    "change_type": entry.get("change_type", "modified_or_created"),
+                    "build_group_id": group["build_group_id"],
+                    "scope_id": group["scope_id"],
+                    "in_intended_scope": entry.get("in_intended_scope", True),
+                    "evidence_class": entry.get("evidence_class", "direct_execution_evidence"),
+                    "commit_state": entry.get("commit_state", "committed_atomically"),
+                    "source_build_ref": entry.get("source_build_ref", f"build/groups/{group['build_group_id']}/build-report.v1.json"),
+                    "attempt_ids": entry.get("attempt_ids", []),
+                })
+        else:
+            for path in group["changed_files"]:
+                changed_file_records.append({
+                    "path": path,
+                    "change_type": "modified_or_created",
+                    "build_group_id": group["build_group_id"],
+                    "scope_id": group["scope_id"],
+                    "in_intended_scope": True,
+                    "evidence_class": "direct_execution_evidence",
+                    "commit_state": "unknown_commit_state",
+                    "source_build_ref": f"build/groups/{group['build_group_id']}/build-report.v1.json",
+                    "attempt_ids": [],
+                })
 
     for path in grouped_coherence["undeclared_changed_files"]:
         changed_file_records.append({
@@ -424,7 +479,7 @@ def build_realization_bundle(
             "scope_id": None,
             "in_intended_scope": False,
             "evidence_class": "direct_execution_evidence",
-            "commit_state": "applied_with_legacy_direct_write",
+            "commit_state": "committed_atomically_but_out_of_declared_scope",
             "source_build_ref": f"exeq.d/cyqle{cycle_num}_changed.md",
         })
 
@@ -476,9 +531,11 @@ def build_realization_bundle(
         if item.get("scope_id")
     ]
     unknowns = [
-        "Legacy ConstruQtor still writes directly into qodeyard without transactional staging.",
         "System impact telemetry is not collected in the current engine.",
     ]
+    group_write_modes = sorted({group.get("write_strategy") for group in grouped_coherence["group_summaries"] if group.get("write_strategy")})
+    if not group_write_modes:
+        unknowns.append("No explicit scoped write strategy was recorded for the observed build groups.")
     if cross_briq_warnings:
         unknowns.append("Cross-briq integration points exist and require inspection judgment.")
 
@@ -526,6 +583,29 @@ def build_realization_bundle(
             "error_signals": [],
         },
         "unknowns": unknowns,
+        "write_strategy": {
+            "mode": group_write_modes[0] if len(group_write_modes) == 1 else ("mixed" if group_write_modes else "unknown"),
+            "group_modes": group_write_modes,
+            "recovery_policies": sorted({group.get("recovery_policy") for group in grouped_coherence["group_summaries"] if group.get("recovery_policy")}),
+            "recovery_refs": sorted({
+                ref
+                for group in grouped_coherence["group_summaries"]
+                for ref in group.get("recovery_refs", [])
+            }),
+            "attempt_manifest_refs": sorted({
+                ref
+                for group in grouped_coherence["group_summaries"]
+                for ref in group.get("attempt_manifest_refs", [])
+            }),
+        },
+        "execution_backend": {
+            "engines": [
+                group.get("execution_backend")
+                for group in grouped_coherence["group_summaries"]
+                if group.get("execution_backend")
+            ],
+            "authority_disclosure": "Execution backends operate as scoped build engines; orchestration and manifest authority remain with QonQrete runtime contracts.",
+        },
         "evidence_refs": [
             f"exeq.d/cyqle{cycle_num}_summary.md" if summary_path.exists() else None,
             f"exeq.d/cyqle{cycle_num}_changed.md" if changed_path.exists() else None,
@@ -536,6 +616,14 @@ def build_realization_bundle(
         ] + [
             f"build/groups/{group['build_group_id']}/changed-files.v1.json"
             for group in grouped_coherence["group_summaries"]
+        ] + [
+            ref
+            for group in grouped_coherence["group_summaries"]
+            for ref in group.get("recovery_refs", [])
+        ] + [
+            ref
+            for group in grouped_coherence["group_summaries"]
+            for ref in group.get("attempt_manifest_refs", [])
         ],
         "source_build_refs": [
             f"build/groups/{group['build_group_id']}/build-report.v1.json"
@@ -672,6 +760,42 @@ def build_inspection_verdict(
         for item in failed_briq_suggestions
     )
 
+    structured_issues = []
+    for index, issue in enumerate(deterministic_failures, start=1):
+        structured_issues.append({
+            "issue_id": f"deterministic-{index:03d}",
+            "summary": issue.get("message", "Deterministic validation failure."),
+            "severity": issue.get("severity", "error"),
+            "source": issue.get("source"),
+            "file": issue.get("file"),
+            "line": issue.get("line"),
+        })
+    for index, warning in enumerate(cross_briq_warnings, start=1):
+        structured_issues.append({
+            "issue_id": f"cross-briq-{index:03d}",
+            "summary": warning,
+            "severity": "warning",
+            "source": "cross_briq_consistency",
+        })
+    for index, item in enumerate(failed_briq_suggestions, start=1):
+        structured_issues.append({
+            "issue_id": f"briq-review-{index:03d}",
+            "summary": f"{item['briq']} {item['assessment']}: {item['suggestions'][:240]}",
+            "severity": "warning" if item["assessment"] == "[PARTIAL]" else "error",
+            "source": "briq_review",
+            "briq_ref": item["briq"],
+        })
+
+    if verdict == "SUCCESS":
+        completion_assessment = "Observed build, validation, and realization evidence satisfy the current completion criteria."
+        next_transition = "COMPLETED"
+    elif deterministic_failures:
+        completion_assessment = "Deterministic validation or contract evidence blocks completion and requires bounded repair."
+        next_transition = "REPAIRING"
+    else:
+        completion_assessment = "Planned scope is partially realized, but unresolved gaps require bounded evidence-linked repair before completion."
+        next_transition = "REPAIRING"
+
     return {
         "schema_version": "inspection-verdict.v1",
         "inspection_verdict_id": f"{worqspace_root.name}-inspection-verdict-cyqle{cycle_num}",
@@ -686,7 +810,11 @@ def build_inspection_verdict(
         "evidence_status": realization_bundle.get("evidence_status", "EVIDENCE_PARTIAL"),
         "validation_execution_mode": validation_bundle.get("validation_execution_mode", "NONE"),
         "capability_mode": realization_bundle.get("capability_mode", "MIXED_REASONING_EXECUTION"),
+        "issues": structured_issues,
         "repair_required": verdict != "SUCCESS",
+        "completion_assessment": completion_assessment,
+        "next_lifecycle_transition": next_transition,
+        "repair_plan_ref": None,
         "unresolved_issues": unresolved_issues,
         "evidence_refs": [
             "validation/validation-bundle.v1.json",
@@ -696,6 +824,186 @@ def build_inspection_verdict(
         ],
         "created_at": now_utc(),
     }
+
+
+def build_repair_plan(
+    worqspace_root: Path,
+    cycle_num: str,
+    inspection_verdict: dict,
+    validation_bundle: dict,
+    realization_bundle: dict,
+    grouped_coherence: dict,
+    failed_briq_suggestions: list[dict],
+) -> dict:
+    build_groups_doc = load_optional_json(worqspace_root / "planning" / "build-groups.v1.json")
+    build_group_items = build_groups_doc.get("items", [])
+    briq_inventory = build_groups_doc.get("briq_inventory", [])
+    briq_ref_to_file = {}
+    for briq_path in sorted((worqspace_root / "briq.d").glob(f"cyqle{cycle_num}_*.md")):
+        try:
+            briq_text = briq_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        match = re.search(r"^Briq-Ref:\s*(.+)$", briq_text, re.MULTILINE)
+        if match:
+            briq_ref_to_file[match.group(1).strip()] = briq_path.name
+
+    briq_to_group = {}
+    group_to_briqs = {}
+    group_to_scope = {}
+    group_to_components = {}
+    file_to_groups = {}
+
+    for item in build_group_items:
+        group_id = item.get("build_group_id")
+        if not group_id:
+            continue
+        group_to_briqs[group_id] = sorted(item.get("briq_refs", []))
+        group_to_scope[group_id] = item.get("scope_id")
+        group_to_components[group_id] = sorted(item.get("component_refs", []))
+        for briq_ref in item.get("briq_refs", []):
+            briq_to_group[briq_ref] = group_id
+
+    for group in grouped_coherence.get("group_summaries", []):
+        group_id = group.get("build_group_id")
+        for path in group.get("changed_files", []):
+            file_to_groups.setdefault(path, set()).add(group_id)
+        for path in group.get("reported_files", []):
+            file_to_groups.setdefault(path, set()).add(group_id)
+
+    target_groups = {
+        group.get("build_group_id")
+        for group in grouped_coherence.get("group_summaries", [])
+        if group.get("status") in {"FAIL", "PARTIAL"}
+    }
+
+    for issue in validation_bundle.get("issues", []):
+        file_path = issue.get("file")
+        if file_path and file_path in file_to_groups:
+            target_groups.update(file_to_groups[file_path])
+        scope = issue.get("scope")
+        if scope and scope in group_to_briqs:
+            target_groups.add(scope)
+
+    inventory_refs = {
+        item.get("briq_ref")
+        for item in briq_inventory
+        if item.get("briq_ref")
+    }
+    for item in failed_briq_suggestions:
+        briq_ref = item.get("briq")
+        if briq_ref in briq_to_group:
+            target_groups.add(briq_to_group[briq_ref])
+        elif briq_ref in inventory_refs:
+            target_groups.add(briq_to_group.get(briq_ref))
+
+    target_groups = sorted(group_id for group_id in target_groups if group_id)
+    target_briqs = sorted({
+        briq_ref
+        for group_id in target_groups
+        for briq_ref in group_to_briqs.get(group_id, [])
+    })
+    target_briq_files = sorted({
+        briq_ref_to_file[briq_ref]
+        for briq_ref in target_briqs
+        if briq_ref in briq_ref_to_file
+    })
+    target_scopes = sorted({
+        group_to_scope.get(group_id)
+        for group_id in target_groups
+        if group_to_scope.get(group_id)
+    })
+    target_components = sorted({
+        component_id
+        for group_id in target_groups
+        for component_id in group_to_components.get(group_id, [])
+    })
+
+    same_run_eligible = bool(target_groups and target_briq_files)
+    continuation_strategy = "same_run" if same_run_eligible else "linked_continuation"
+    next_transition = "REPAIRING" if same_run_eligible else "CONTINUABLE"
+
+    required_actions = []
+    if any(check.get("status") == "FAIL" for check in validation_bundle.get("checks", [])):
+        required_actions.append("correct deterministic validation failures in the targeted repair scope")
+    if grouped_coherence.get("undeclared_changed_files"):
+        required_actions.append("bring changed files back inside declared grouped scope or update targeted scope evidence")
+    if failed_briq_suggestions:
+        required_actions.append("address failed or partial briq findings for the targeted build groups")
+    required_actions.append("re-run validation, realization, and inspection after the targeted repair pass")
+
+    validation_requirements = []
+    for check in validation_bundle.get("checks", []):
+        if check.get("status") in {"FAIL", "PARTIAL"}:
+            validation_requirements.append(check.get("check_id"))
+    if not validation_requirements:
+        validation_requirements.append("validation-bundle.v1 scoped re-run")
+
+    existing_pass_index = int(os.environ.get("QONQ_REPAIR_PASS_INDEX", "0") or "0")
+    repair_reason_summary = inspection_verdict.get("completion_assessment") or (
+        "Inspection found unresolved gaps that require explicit bounded repair."
+    )
+
+    return {
+        "schema_version": "repair-plan.v1",
+        "repair_plan_id": f"{worqspace_root.name}-repair-plan-cyqle{cycle_num}",
+        "source_run_id": worqspace_root.name,
+        "source_cycle": int(cycle_num),
+        "source_verdict_ref": "verdict/inspection-verdict.v1.json",
+        "repair_reason_summary": repair_reason_summary,
+        "target_components": target_components,
+        "target_scopes": target_scopes,
+        "target_build_groups": target_groups,
+        "target_briq_refs": target_briqs,
+        "target_briq_files": target_briq_files,
+        "required_actions": required_actions,
+        "planning_reuse_mode": "reuse_locked_plan",
+        "repair_pass_index": existing_pass_index + 1,
+        "repair_constraints": [
+            "no architecture mutation",
+            "no scope expansion",
+            "repair must stay within manifest-linked target groups and briqs",
+        ],
+        "validation_requirements_for_repair": validation_requirements,
+        "same_run_repair_eligible": same_run_eligible,
+        "continuation_strategy": continuation_strategy,
+        "next_lifecycle_transition": next_transition,
+        "repair_status": "REPAIR_PROPOSED",
+        "manifest_refs": ["run-manifest.v1.json"],
+        "evidence_refs": [
+            "validation/validation-bundle.v1.json",
+            "realization/realization-bundle.v1.json",
+            "verdict/inspection-verdict.v1.json",
+        ],
+        "repair_required_semantics": "explicit_bounded_manifest_linked",
+        "created_at": now_utc(),
+    }
+
+
+def render_repair_plan_summary(repair_plan: dict) -> str:
+    lines = [
+        "# Repair Plan",
+        "",
+        f"- Repair Pass Index: {repair_plan['repair_pass_index']}",
+        f"- Continuation Strategy: {repair_plan['continuation_strategy']}",
+        f"- Same-Run Eligible: {repair_plan['same_run_repair_eligible']}",
+        f"- Next Lifecycle Transition: {repair_plan['next_lifecycle_transition']}",
+        "",
+        "## Target Scope",
+        f"- Build Groups: {', '.join(repair_plan.get('target_build_groups', [])) or 'None'}",
+        f"- Components: {', '.join(repair_plan.get('target_components', [])) or 'None'}",
+        f"- Scopes: {', '.join(repair_plan.get('target_scopes', [])) or 'None'}",
+        f"- Briqs: {', '.join(repair_plan.get('target_briq_files', [])) or 'None'}",
+        "",
+        "## Required Actions",
+    ]
+    for item in repair_plan.get("required_actions", []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Evidence References"])
+    for item in repair_plan.get("evidence_refs", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def render_validation_summary(validation_bundle: dict) -> str:
@@ -727,6 +1035,7 @@ def render_realization_summary(realization_bundle: dict) -> str:
         "",
         f"- Evidence Status: {realization_bundle['evidence_status']}",
         f"- Confidence: {realization_bundle['confidence']}",
+        f"- Write Strategy: {realization_bundle.get('write_strategy', {}).get('mode', 'unknown')}",
         "",
         "## Scope Summary",
         f"- Intended Scopes: {', '.join(realization_bundle['scope_summary']['intended_scopes']) or 'None'}",
@@ -2029,6 +2338,31 @@ def main() -> None:
         cross_briq_warnings,
         failed_briq_suggestions,
     )
+    repair_plan_path = worqspace_root / "verdict" / "repair-plan.v1.json"
+    repair_plan_summary_path = worqspace_root / "verdict" / "repair-plan.md"
+    if inspection_verdict["repair_required"]:
+        repair_plan = build_repair_plan(
+            worqspace_root,
+            cycle_num,
+            inspection_verdict,
+            validation_bundle,
+            realization_bundle,
+            grouped_coherence,
+            failed_briq_suggestions,
+        )
+        inspection_verdict["repair_plan_ref"] = "verdict/repair-plan.v1.json"
+        inspection_verdict["next_lifecycle_transition"] = repair_plan["next_lifecycle_transition"]
+        write_json(repair_plan_path, repair_plan)
+        repair_plan_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(repair_plan_summary_path, 'w', encoding='utf-8') as f:
+            f.write(render_repair_plan_summary(repair_plan))
+    else:
+        repair_plan = None
+        if repair_plan_path.exists():
+            repair_plan_path.unlink()
+        if repair_plan_summary_path.exists():
+            repair_plan_summary_path.unlink()
+
     inspection_verdict_path = worqspace_root / "verdict" / "inspection-verdict.v1.json"
     inspection_verdict_summary_path = worqspace_root / "verdict" / "inspection-verdict.md"
     write_json(inspection_verdict_path, inspection_verdict)
@@ -2041,6 +2375,8 @@ def main() -> None:
     print(f"[BOUNDARY] Realization bundle: {realization_bundle_path}", flush=True)
     print(f"[BOUNDARY] Inspection input: {inspection_input_path}", flush=True)
     print(f"[BOUNDARY] Inspection verdict: {inspection_verdict_path}", flush=True)
+    if repair_plan:
+        print(f"[BOUNDARY] Repair plan: {repair_plan_path}", flush=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # WRITE FINAL REQAP

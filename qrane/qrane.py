@@ -26,23 +26,31 @@ except ImportError:
 try:
     from manifest_bridge import (
         STAGE_ALIAS_MAP,
+        append_audit_event,
         complete_stage,
         create_manifest,
         finalize_manifest,
+        load_manifest,
         record_agent_completion,
         record_cycle_promotion,
         record_support_service,
+        save_manifest,
         start_stage,
+        sync_artifact_slots,
     )
 except ImportError:
     STAGE_ALIAS_MAP = {}
+    append_audit_event = None
     complete_stage = None
     create_manifest = None
     finalize_manifest = None
+    load_manifest = None
     record_agent_completion = None
     record_cycle_promotion = None
     record_support_service = None
+    save_manifest = None
     start_stage = None
+    sync_artifact_slots = None
 
 try:
     import tui
@@ -348,6 +356,186 @@ def load_task_spec_status(workspace_root: Path) -> tuple[bool | None, str | None
         return None, None
 
 
+def load_optional_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def repair_plan_path(workspace_root: Path) -> Path:
+    return workspace_root / "verdict" / "repair-plan.v1.json"
+
+
+def inspection_verdict_path(workspace_root: Path) -> Path:
+    return workspace_root / "verdict" / "inspection-verdict.v1.json"
+
+
+def continuation_metadata_path(workspace_root: Path) -> Path:
+    return workspace_root / "continuation" / "continuation-metadata.v1.json"
+
+
+def load_inspection_artifacts(workspace_root: Path) -> tuple[dict, dict]:
+    return (
+        load_optional_json(inspection_verdict_path(workspace_root)),
+        load_optional_json(repair_plan_path(workspace_root)),
+    )
+
+
+def get_repair_config(config: dict | None = None) -> dict:
+    repair_cfg = (config or {}).get("repair", {})
+    return {
+        "max_attempts": max(0, int(repair_cfg.get("max_attempts", 1))),
+    }
+
+
+def _rename_briq_for_cycle(source_name: str, target_cycle: int) -> str:
+    return re.sub(r"^cyqle\d+_", f"cyqle{target_cycle}_", source_name)
+
+
+def prepare_same_run_repair_cycle(
+    current_cycle: int,
+    target_cycle: int,
+    prefix: str,
+    path_manager: PathManager,
+    repair_plan: dict,
+    ui=None,
+) -> bool:
+    target_briqs = repair_plan.get("target_briq_files", [])
+    if not target_briqs:
+        return False
+
+    target_tasq_path = path_manager.get_tasq_path(target_cycle)
+    target_tasq_path.parent.mkdir(parents=True, exist_ok=True)
+    target_tasq_path.write_text(
+        "\n".join([
+            f"# Cycle {target_cycle} Repair Directive",
+            "",
+            f"Source cycle: {current_cycle}",
+            f"Repair pass index: {repair_plan.get('repair_pass_index')}",
+            f"Reason: {repair_plan.get('repair_reason_summary', 'Bounded targeted repair required.')}",
+            "",
+            "Target build groups:",
+            *[f"- {item}" for item in repair_plan.get("target_build_groups", [])],
+            "",
+            "Target briqs:",
+            *[f"- {item}" for item in target_briqs],
+            "",
+            "Required actions:",
+            *[f"- {item}" for item in repair_plan.get("required_actions", [])],
+            "",
+            "This cycle is an explicit repair wrapper. It is not canonical reqap promotion.",
+            "",
+        ]),
+        encoding="utf-8",
+    )
+
+    briq_dir = path_manager.get_briq_dir()
+    created_files = []
+    for briq_ref in target_briqs:
+        source_path = briq_dir / briq_ref
+        if not source_path.exists():
+            continue
+        target_name = _rename_briq_for_cycle(source_path.name, target_cycle)
+        target_path = briq_dir / target_name
+        shutil.copyfile(source_path, target_path)
+        created_files.append(str(target_path.relative_to(path_manager.root)))
+
+    if not created_files:
+        return False
+
+    if append_audit_event:
+        append_audit_event(
+            path_manager.root,
+            "repair_cycle_prepared",
+            "REPAIR",
+            "same_run_targeted_repair",
+            "Prepared explicit same-run targeted repair cycle from repair plan.",
+            {
+                "source_cycle": current_cycle,
+                "target_cycle": target_cycle,
+                "repair_plan_ref": "verdict/repair-plan.v1.json",
+                "target_briqs": target_briqs,
+                "created_briq_files": created_files,
+            },
+        )
+
+    if sync_artifact_slots:
+        sync_artifact_slots(path_manager.root)
+
+    target_width = 11
+    qrane_padding = " " * (target_width - 5)
+    qrane_prefix = f"{Colors.B}〘{prefix}〙『{Colors.WHITE}Qrane{Colors.B}』{qrane_padding}⸎ {Colors.R}"
+    msg = (
+        f"Prepared same-run targeted repair cycle {target_cycle} with "
+        f"{len(created_files)} scoped briq copies from repair plan."
+    )
+    if ui:
+        ui.log_main(f"{qrane_prefix}{msg}")
+    else:
+        print(f"{qrane_prefix}{msg}")
+    return True
+
+
+def write_continuation_metadata(
+    workspace_root: Path,
+    repair_plan: dict,
+    reason: str,
+    next_run_id: str | None = None,
+) -> str:
+    continuation_path = continuation_metadata_path(workspace_root)
+    continuation_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": "continuation-metadata.v1",
+        "continuation_id": f"{workspace_root.name}-continuation",
+        "source_run_id": workspace_root.name,
+        "resume_point": repair_plan.get("next_lifecycle_transition", "CONTINUABLE"),
+        "planning_reuse_mode": repair_plan.get("planning_reuse_mode", "reuse_locked_plan"),
+        "continuation_reason": reason,
+        "next_run_id": next_run_id,
+        "repair_plan_ref": "verdict/repair-plan.v1.json",
+        "evidence_refs": repair_plan.get("evidence_refs", []),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    continuation_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return str(continuation_path.relative_to(workspace_root))
+
+
+def update_manifest_for_repair_state(
+    workspace_root: Path,
+    lifecycle_state: str,
+    run_status: str,
+    detail: str,
+    continuation_artifact: str | None = None,
+) -> None:
+    if not load_manifest or not save_manifest:
+        return
+    if sync_artifact_slots:
+        sync_artifact_slots(workspace_root)
+    manifest = load_manifest(workspace_root)
+    manifest["lifecycle_state"] = lifecycle_state
+    manifest["run_status"] = run_status
+    manifest["compatibility"]["continuation_model"] = "EXPLICIT_REPAIR_PLAN_CANONICAL"
+    if continuation_artifact:
+        manifest.setdefault("artifacts", {})["continuation_metadata"] = continuation_artifact
+    save_manifest(workspace_root, manifest)
+    if append_audit_event:
+        append_audit_event(
+            workspace_root,
+            "repair_state_updated",
+            "REPAIR",
+            "explicit_repair_flow",
+            detail,
+            {
+                "lifecycle_state": lifecycle_state,
+                "run_status": run_status,
+                "continuation_metadata": continuation_artifact,
+            },
+        )
+
+
 def legacy_cycle_continuation_enabled(config: dict | None = None) -> bool:
     env_value = os.environ.get("QONQ_ENABLE_LEGACY_CONTINUATION", "").strip().lower()
     if env_value in {"1", "true", "yes", "on"}:
@@ -364,6 +552,8 @@ def handle_cheqpoint(
     ui=None,
     no_midrun_questions: bool = False,
     legacy_continuation: bool = False,
+    config: dict | None = None,
+    repair_attempts_started: int = 0,
 ) -> str:
     target_width = 11
     gatekeeper_name = "gateQeeper"
@@ -372,6 +562,9 @@ def handle_cheqpoint(
 
     assessment = "Unknown"
     content = ""
+    inspection_verdict, repair_plan = load_inspection_artifacts(path_manager.root)
+    repair_required = bool(inspection_verdict.get("repair_required"))
+    repair_config = get_repair_config(config)
     try:
         if reqap_path.exists():
             with open(reqap_path, 'r', encoding='utf-8') as f:
@@ -384,10 +577,92 @@ def handle_cheqpoint(
     except Exception as e:
         content = f"[ERROR] Could not read reQap: {e}"
 
+    if inspection_verdict.get("status"):
+        assessment = inspection_verdict["status"]
+
+    if repair_required and repair_plan:
+        same_run_eligible = bool(repair_plan.get("same_run_repair_eligible"))
+        repair_cap_remaining = repair_attempts_started < repair_config["max_attempts"]
+        if same_run_eligible and repair_cap_remaining:
+            should_repair_now = is_autonomous or no_midrun_questions
+            if not should_repair_now:
+                if ui:
+                    ui.log_main(f"{gate_prefix}Repair plan available. [R]epair now, [L]ink later, [X]Quit")
+                    choice = ui.get_input_blocking(f"{gate_prefix}Selection").lower()
+                else:
+                    print("\n" + f"{Colors.YELLOW}=== Repair Gate {cycle:03d} ==={Colors.R}")
+                    print(content)
+                    print(f"{gate_prefix}Repair plan available. [R]epair now, [L]ink later, [X]Quit")
+                    sys.stdout.write(f"{gate_prefix}Selection: {Colors.R}")
+                    sys.stdout.flush()
+                    choice = getch().lower()
+                    if choice in ['\r', '\n']:
+                        choice = 'x'
+                    print(choice)
+                if choice == 'r':
+                    should_repair_now = True
+                elif choice == 'l':
+                    continuation_artifact = write_continuation_metadata(
+                        path_manager.root,
+                        repair_plan,
+                        repair_plan.get("repair_reason_summary", "Deferred bounded repair continuation."),
+                    )
+                    update_manifest_for_repair_state(
+                        path_manager.root,
+                        "CONTINUABLE",
+                        "RUN_REPAIR_PENDING",
+                        "Deferred repair as explicit linked continuation.",
+                        continuation_artifact,
+                    )
+                    return 'STOP_PARTIAL'
+                else:
+                    return 'QUIT'
+
+            if should_repair_now:
+                if prepare_same_run_repair_cycle(cycle, cycle + 1, prefix, path_manager, repair_plan, ui=ui):
+                    update_manifest_for_repair_state(
+                        path_manager.root,
+                        "REPAIRING",
+                        "RUN_ACTIVE",
+                        "Approved same-run targeted repair from manifest-linked repair plan.",
+                    )
+                    return 'REPAIR'
+
+        continuation_artifact = write_continuation_metadata(
+            path_manager.root,
+            repair_plan,
+            repair_plan.get("repair_reason_summary", "Repair requires later linked continuation."),
+        )
+        update_manifest_for_repair_state(
+            path_manager.root,
+            "CONTINUABLE",
+            "RUN_REPAIR_PENDING",
+            "Repair remains explicit and deferred to a later linked run.",
+            continuation_artifact,
+        )
+        if legacy_continuation and not no_midrun_questions:
+            msg = "Repair is canonical. Legacy reqap promotion remains opt-in compatibility only."
+            if ui:
+                ui.log_main(f"{gate_prefix}{msg}")
+            else:
+                print(f"{gate_prefix}{msg}")
+        return 'STOP_PARTIAL'
+
     if no_midrun_questions and not legacy_continuation:
         msg = (
             "Bounded clarified run complete. Legacy reqap -> next tasq continuation is disabled "
             "unless explicitly re-enabled via compatibility mode."
+        )
+        if ui:
+            ui.log_main(f"{gate_prefix}{msg}")
+        else:
+            print(f"{gate_prefix}{msg}")
+        return 'STOP'
+
+    if not legacy_continuation:
+        msg = (
+            "Canonical inspection completed without repair. Legacy reqap -> next tasq continuation "
+            "is disabled unless explicitly re-enabled via compatibility mode."
         )
         if ui:
             ui.log_main(f"{gate_prefix}{msg}")
@@ -708,8 +983,11 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     user_aborted = False
     user_quit = False
     bounded_stop = False
+    partial_stop = False
     no_midrun_questions = False
     legacy_continuation = legacy_cycle_continuation_enabled(config)
+    repair_attempts_started = 0
+    repair_cycles: set[int] = set()
 
     try:
         while True:
@@ -722,6 +1000,14 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
             env = os.environ.copy()
             env["CYCLE_NUM"] = str(cycle)
+            if cycle in repair_cycles:
+                env["QONQ_REPAIR_MODE"] = "1"
+                env["QONQ_REPAIR_PLAN_PATH"] = str(repair_plan_path(worqspace))
+                env["QONQ_REPAIR_PASS_INDEX"] = str(repair_attempts_started)
+            else:
+                env.pop("QONQ_REPAIR_MODE", None)
+                env.pop("QONQ_REPAIR_PLAN_PATH", None)
+                env.pop("QONQ_REPAIR_PASS_INDEX", None)
 
             try:
                 with open(path_manager.root / 'pipeline_config.yaml', 'r') as f:
@@ -736,6 +1022,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
             agents_to_run = []
             agent_configs = config.get('agents', {})
+            is_repair_cycle = cycle in repair_cycles
 
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
@@ -752,6 +1039,8 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 if name == 'qontextor' and not use_qontextor:
                     continue
                 if name == 'qontrabender' and not use_qontrabender:
+                    continue
+                if is_repair_cycle and name in {'instruqtor', 'calqulator'}:
                     continue
                 
                 # ═══════════════════════════════════════════════════════════════
@@ -899,6 +1188,8 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 ui,
                 no_midrun_questions=no_midrun_questions,
                 legacy_continuation=legacy_continuation,
+                config=config,
+                repair_attempts_started=repair_attempts_started,
             )
             if res == 'QUIT':
                 user_quit = True
@@ -906,6 +1197,12 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             if res == 'STOP':
                 bounded_stop = True
                 break
+            if res == 'STOP_PARTIAL':
+                partial_stop = True
+                break
+            if res == 'REPAIR':
+                repair_attempts_started += 1
+                repair_cycles.add(cycle + 1)
             cycle += 1
 
     except KeyboardInterrupt:
@@ -929,6 +1226,8 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             finalize_manifest(worqspace, "failed", "Run ended with errors.")
         elif user_quit:
             finalize_manifest(worqspace, "partial", "Run ended at legacy user-gated cheqpoint.")
+        elif partial_stop:
+            finalize_manifest(worqspace, "partial", "Run ended with explicit continuable repair state.")
         elif bounded_stop:
             finalize_manifest(worqspace, "completed", "Run ended after bounded clarified bridge pass without implicit legacy continuation.")
         else:
