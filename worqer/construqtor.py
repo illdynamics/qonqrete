@@ -1312,6 +1312,7 @@ print("Hello, World!")
         result['attempts'] = attempt
         
         if attempt > 1:
+            print(f"Construqtor: repair build for {briq_metadata.get('build-group', 'ungrouped')}", flush=True)
             print(f"     [RETRY] Attempt {attempt}/{max_attempts}", flush=True)
             time.sleep(retry_delay)
         
@@ -1323,6 +1324,7 @@ print("Hello, World!")
                 print(f"     [RETRY] Including correction directive in prompt", flush=True)
             retry_correction = ""
             
+            print("Construqtor: writing code", flush=True)
             print(f"     - Sending to AI (attempt {attempt})...", flush=True)
             
             ai_result = lib_ai.run_ai_completion(
@@ -1365,6 +1367,9 @@ print("Hello, World!")
                 )
                 result['attempt_records'][-1]['status'] = 'failed_empty'
                 continue
+
+            print(f"Construqtor: building group {briq_metadata.get('build-group', 'ungrouped')}", flush=True)
+            print(f"Construqtor: updating {staged_attempt['staged_files'][0]}", flush=True)
             
             # STEP 2: Local Validation (LoQal Verifier - part of InspeQtor)
             build_passed = True
@@ -1798,6 +1803,7 @@ def main():
         build_group_id = briq_metadata.get('build-group', 'ungrouped')
         component_id = briq_metadata.get('component-id', 'unassigned')
         scope_id = briq_metadata.get('scope-id', 'scope_unknown')
+        print(f"Construqtor: building group {build_group_id}", flush=True)
         print(f"\n-- Processing Briq: {briq_file.name} --", flush=True)
         print(f"   Group: {build_group_id} | Component: {component_id} | Scope: {scope_id}", flush=True)
         

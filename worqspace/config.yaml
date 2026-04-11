@@ -87,23 +87,26 @@ agents:
   # Legacy `tasqleveler` remains a compatibility alias only.
   # ═══════════════════════════════════════════════════════════════════════════
   qrystallizer:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: deepseek
+    model: deepseek-chat
+    timeout: 600
     # Transitional compatibility knobs retained for the wrapper path.
     enabled: true
     min_complexity_score: 200  # Below this score, don't enhance
     min_lines: 200             # Below this line count, don't enhance
 
   guard:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: deepseek
+    model: deepseek-chat
+    timeout: 600
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSTRUQTOR - Briq Planning
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: deepseek
+    model: deepseek-chat
+    timeout: 600
 
   calqulator:
     provider: local
@@ -113,15 +116,17 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: deepseek
+    model: deepseek-chat
+    timeout: 600
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
-    provider: openai
-    model: gpt-4.1-mini
+    provider: deepseek
+    model: deepseek-chat
+    timeout: 600
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
     batch_mode: true                 # Group briqs into batches

@@ -19,7 +19,19 @@ from worqer.lib_security import (
 # ═══════════════════════════════════════════════════════════════════════════════
 # TIMEOUT CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
-DEFAULT_API_TIMEOUT = 300  # 5 minutes default timeout for AI API calls
+def _default_api_timeout() -> int:
+    raw = os.environ.get("QONQ_AI_TIMEOUT", "").strip()
+    if raw:
+        try:
+            parsed = int(raw)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+    return 300
+
+
+DEFAULT_API_TIMEOUT = _default_api_timeout()  # 5 minutes default timeout for AI API calls
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEEPSEEK PROVIDER (built-in, uses OpenAI-compatible API)
@@ -110,7 +122,8 @@ def run_ai_completion(
     context_files: list[str] = None,
     max_prompt_chars: int = None,
     max_context_files: int = None,
-    max_chars_per_file: int = None
+    max_chars_per_file: int = None,
+    timeout: int = None
 ) -> str:
     """
     Execute AI completion with budget enforcement.
@@ -143,19 +156,21 @@ def run_ai_completion(
     
     full_prompt = _build_prompt(prompt, context_files, budget_config)
 
+    resolved_timeout = timeout or _default_api_timeout()
+
     try:
         if provider.lower() == 'openai':
-            return _run_openai(model, full_prompt)
+            return _run_openai(model, full_prompt, timeout=resolved_timeout)
         elif provider.lower() == 'gemini':
-            return _run_gemini(model, full_prompt)
+            return _run_gemini(model, full_prompt, timeout=resolved_timeout)
         elif provider.lower() == 'anthropic':
-            return _run_anthropic(model, full_prompt)
+            return _run_anthropic(model, full_prompt, timeout=resolved_timeout)
         elif provider.lower() == 'deepseek':
-            return _run_deepseek(model, full_prompt)
+            return _run_deepseek(model, full_prompt, timeout=resolved_timeout)
         elif provider.lower() == 'qwen':
-            return _run_qwen(model, full_prompt)
+            return _run_qwen(model, full_prompt, timeout=resolved_timeout)
         elif provider.lower() == 'openrouter':
-            return _run_openrouter(model, full_prompt)
+            return _run_openrouter(model, full_prompt, timeout=resolved_timeout)
         else:
             raise ValueError(f"Unknown AI Provider: {provider}")
     except Exception as e:

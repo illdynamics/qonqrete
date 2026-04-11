@@ -1539,6 +1539,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 **BEGIN ATOMIC BREAKDOWN (Count your briqs to ensure compliance!):**
 """
 
+    print("Instruqtor: splitting briqs", flush=True)
     # v1.0.3: Generate briqs using appropriate strategy
     if use_batched:
         # Try batched generation first
@@ -1608,6 +1609,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
     # PHASE 3 BRIDGE: STRUCTURED PLANNING + GROUPED BUILD MODEL
     # ═══════════════════════════════════════════════════════════════════════════
     briq_summaries = summarize_briqs_for_planning(briqs)
+    print("Instruqtor: planning build groups", flush=True)
     try:
         plan_payload = generate_structured_plan(
             ai_provider=ai_provider,
@@ -1641,6 +1643,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
         plan_payload=plan_payload,
         briq_summaries=briq_summaries,
     )
+    print("Instruqtor: wrote execution blueprint", flush=True)
     briq_assignments = assign_briqs_to_groups(briq_summaries, plan_payload)
     print(f"  [PLAN] Build groups: {len(plan_payload.get('execution_blueprint', {}).get('build_groups', []))}", flush=True)
     print(f"  [PLAN] Component contracts: {len(plan_payload.get('component_contracts', []))}", flush=True)
@@ -1739,6 +1742,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(f"{frontmatter}# {item['title']} [Est: {briq_tokens:,} toks | {format_cost(briq_cost)}]\n\n**ARCHITECT'S INSTRUCTION:**\n{briq_content}")
+        print(f"Instruqtor: wrote briq {filename}", flush=True)
         print(f"    ↳ Grouped Scope: {build_group_id} | Component: {component_id} | Scope: {scope_id}", flush=True)
 
 

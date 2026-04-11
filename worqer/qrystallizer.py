@@ -321,7 +321,9 @@ def main() -> None:
     workspace_root = Path(os.environ.get("QONQ_WORKSPACE", input_path.resolve().parents[1] if input_path.parent.name == "tasq.d" else input_path.parent))
     run_id = os.environ.get("QONQ_LEGACY_QAGE_ID") or workspace_root.name
 
+    print("[Qrystallizer] Qrystallizer: clarifying task", flush=True)
     raw_task = load_text(input_path)
+    print("[Qrystallizer] Qrystallizer: checking gaps", flush=True)
     task_spec, clarification_log = build_task_spec(run_id, input_path, raw_task)
 
     task_dir = workspace_root / "task"
@@ -342,6 +344,7 @@ def main() -> None:
     print(f"[Qrystallizer] Readiness: {task_spec['status']}", flush=True)
     print(f"[Qrystallizer] Assumptions logged: {len(task_spec['assumptions'])}", flush=True)
     print(f"[Qrystallizer] Blocking gaps: {len(task_spec['blocking_gaps'])}", flush=True)
+    print("[Qrystallizer] Qrystallizer: wrote task spec", flush=True)
     print(f"[Qrystallizer] Wrote Task Spec: {task_spec_path}", flush=True)
     print(f"[Qrystallizer] Wrote Clarification Log: {clarification_log_path}", flush=True)
 

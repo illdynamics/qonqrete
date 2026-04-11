@@ -131,22 +131,27 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         # TasqLeveler status (v0.9.0+) - only key status lines
         "[TasqLeveler]",
         "[Qrystallizer]",
+        "Qrystallizer:",
         "[Guard]",
+        "Repair:",
         
         # ConstruQtor status - explicit patterns
         "--- ConstruQtor", "-- Processing Briq:", "- Wrote [Code]", "- Wrote [Plan]",
         "-- Briq Complete:", "Wrote exeQ:", "Per-briq exeQ",
         "attempts:", "[SUCCESS]", "[FAILURE]", "[PARTIAL]",
         "[SKIP]", "[WARN]", "[ERROR]",
+        "Construqtor:",
         
         # LoQal Verifier (runs during build AND inspeQtor)
         "[LoQal]",
         
         # InstruQtor status
         "--- Architect", "Generating", "Ingesting", "Estimated cost:",
-        
+        "Instruqtor:",
+
         # InspeQtor status - ONLY final assessment (v0.9.8+)
         "=== InspeQtor", "=== Final Assessment:",
+        "Inspeqtor:",
         
         # CalQulator status
         "CalQulator", "Est. Cost", "TOTAL CYCLE", "-----------------------------------",
@@ -244,6 +249,110 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         # Default: don't display unrecognized lines
         return False
 
+    workspace_root = get_worqspace()
+
+    def count_files(path: Path, pattern: str) -> int:
+        if not path.exists():
+            return 0
+        try:
+            return sum(1 for _ in path.glob(pattern))
+        except OSError:
+            return 0
+
+    def latest_mtime(path: Path) -> float:
+        if not path.exists():
+            return 0.0
+        try:
+            if path.is_file():
+                return path.stat().st_mtime
+            newest = 0.0
+            for item in path.rglob("*"):
+                try:
+                    newest = max(newest, item.stat().st_mtime)
+                except OSError:
+                    continue
+            return newest
+        except OSError:
+            return 0.0
+
+    def snapshot_progress() -> dict:
+        cycle_num = env.get("CYCLE_NUM", "1")
+        build_attempts_dir = workspace_root / "build" / "attempts"
+        exeq_cycle_dir = workspace_root / "exeq.d" / f"cyqle{cycle_num}"
+        build_groups_dir = workspace_root / "build" / "groups"
+        validation_bundle = workspace_root / "validation" / "validation-bundle.v1.json"
+        realization_bundle = workspace_root / "realization" / "realization-bundle.v1.json"
+        inspection_verdict = workspace_root / "verdict" / "inspection-verdict.v1.json"
+        repair_plan = workspace_root / "verdict" / "repair-plan.v1.json"
+        task_spec = workspace_root / "task" / "task-spec.v1.json"
+        planning_dir = workspace_root / "planning"
+        return {
+            "task_spec": task_spec.exists(),
+            "planning_files": count_files(planning_dir, "*.json") + count_files(planning_dir, "*.md"),
+            "briq_files": count_files(workspace_root / "briq.d", f"cyqle{cycle_num}_*.md"),
+            "attempt_manifests": count_files(build_attempts_dir, "**/attempt-manifest.v1.json"),
+            "qodeyard_files": count_files(workspace_root / "qodeyard", "**/*"),
+            "exeq_files": count_files(exeq_cycle_dir, "*.md"),
+            "build_group_reports": count_files(build_groups_dir, "**/build-report.v1.json"),
+            "validation_bundle": validation_bundle.exists(),
+            "realization_bundle": realization_bundle.exists(),
+            "inspection_verdict": inspection_verdict.exists(),
+            "repair_plan": repair_plan.exists(),
+            "mtime": max(
+                latest_mtime(task_spec),
+                latest_mtime(planning_dir),
+                latest_mtime(build_attempts_dir),
+                latest_mtime(workspace_root / "qodeyard"),
+                latest_mtime(exeq_cycle_dir),
+                latest_mtime(validation_bundle),
+                latest_mtime(realization_bundle),
+                latest_mtime(inspection_verdict),
+                latest_mtime(repair_plan),
+            ),
+        }
+
+    def heartbeat_message(silence_seconds: float, previous: dict, current: dict) -> str | None:
+        changed = current != previous
+        if agent_name in {"qrystallizer", "tasqleveler"}:
+            if current["task_spec"]:
+                return "Qrystallizer: wrote task spec"
+            if changed:
+                return "Qrystallizer: checking gaps"
+            return f"Qrystallizer: clarifying task (waiting {int(silence_seconds)}s)"
+        if agent_name == "instruqtor":
+            if changed and current["briq_files"] > previous.get("briq_files", 0):
+                return f"Instruqtor: wrote briqs ({current['briq_files']})"
+            if changed and current["planning_files"] > previous.get("planning_files", 0):
+                return "Instruqtor: wrote execution blueprint"
+            return f"Instruqtor: splitting briqs (waiting {int(silence_seconds)}s)"
+        if agent_name == "construqtor":
+            if changed:
+                if current["attempt_manifests"] > previous.get("attempt_manifests", 0):
+                    return (
+                        "Construqtor: slow but progressing build "
+                        f"(attempts={current['attempt_manifests']}, exeq={current['exeq_files']})"
+                    )
+                if current["qodeyard_files"] > previous.get("qodeyard_files", 0):
+                    return (
+                        "Construqtor: slow but progressing build "
+                        f"(qodeyard_files={current['qodeyard_files']}, exeq={current['exeq_files']})"
+                    )
+            if silence_seconds >= 180:
+                return (
+                    "Construqtor: no new build artifacts for "
+                    f"{int(silence_seconds)}s; possible stall, still waiting within bounded limits"
+                )
+            return f"Construqtor: waiting on model/build response ({int(silence_seconds)}s without new artifacts)"
+        if agent_name == "inspeqtor":
+            if changed and current["repair_plan"] and not previous.get("repair_plan"):
+                return "Inspeqtor: writing repair plan"
+            if changed and current["inspection_verdict"] and not previous.get("inspection_verdict"):
+                return "Inspeqtor: wrote inspection verdict"
+            if changed and current["validation_bundle"] and not previous.get("validation_bundle"):
+                return "Inspeqtor: checking build output"
+            return f"Inspeqtor: checking build output (waiting {int(silence_seconds)}s)"
+        return None
+
     def iter_ready_lines(proc, reads, buffers):
         readable, _, _ = select.select(reads, [], [], 0.05)
         yielded = False
@@ -317,15 +426,20 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         spinner.start()
         try:
             stderr_capture = []
+            heartbeat_interval = 30.0
             with subprocess.Popen(command, cwd=str(get_worqspace()), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1, universal_newlines=True) as proc, \
                  open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
 
                 reads = [proc.stdout, proc.stderr]
                 stream_buffers = {proc.stdout: "", proc.stderr: ""}
+                last_output_at = time.monotonic()
+                last_heartbeat_at = last_output_at
+                previous_snapshot = snapshot_progress()
                 while True:
                     any_output = False
                     for r, line in iter_ready_lines(proc, reads, stream_buffers):
                         any_output = True
+                        last_output_at = time.monotonic()
                         qonsole_log.write(line)
 
                         if r == proc.stderr:
@@ -338,6 +452,20 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
+                    now = time.monotonic()
+                    if (
+                        proc.poll() is None
+                        and now - last_output_at >= heartbeat_interval
+                        and now - last_heartbeat_at >= heartbeat_interval
+                    ):
+                        current_snapshot = snapshot_progress()
+                        message = heartbeat_message(now - last_output_at, previous_snapshot, current_snapshot)
+                        if message:
+                            spinner.stop()
+                            print(f"{agent_prefix}{message}")
+                            spinner.start()
+                        previous_snapshot = current_snapshot
+                        last_heartbeat_at = now
                     if not any_output and proc.poll() is not None and not reads:
                         break
 
@@ -1165,6 +1293,8 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
             previous_log_path = None
             for name, cmd in agents_to_run:
                 env["QONQ_PREVIOUS_LOG"] = str(previous_log_path) if previous_log_path else ""
+                agent_timeout = get_agent_config(agent_configs, name).get("timeout", 300)
+                env["QONQ_AI_TIMEOUT"] = str(agent_timeout)
 
                 canonical_stage = STAGE_ALIAS_MAP.get(name)
                 if canonical_stage and start_stage:
@@ -1258,6 +1388,22 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 partial_stop = True
                 break
             if res == 'REPAIR':
+                repair_cfg = get_repair_config(config)
+                repair_plan = load_optional_json(repair_plan_path(worqspace))
+                target_groups = ", ".join((repair_plan or {}).get("target_build_groups", [])[:2])
+                if ui:
+                    ui.log_main(f"{qrane_prefix}Repair: preparing targeted repair")
+                    ui.log_main(
+                        f"{qrane_prefix}Repair: attempt {repair_attempts_started + 1} of {repair_cfg['max_attempts']}"
+                        + (f" | continuing with group {target_groups}" if target_groups else "")
+                    )
+                else:
+                    print(f"{qrane_prefix}Repair: preparing targeted repair\r")
+                    print(
+                        f"{qrane_prefix}Repair: attempt {repair_attempts_started + 1} of {repair_cfg['max_attempts']}"
+                        + (f" | continuing with group {target_groups}" if target_groups else "")
+                        + "\r"
+                    )
                 repair_attempts_started += 1
                 repair_cycles.add(cycle + 1)
             cycle += 1

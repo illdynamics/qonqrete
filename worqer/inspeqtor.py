@@ -2369,6 +2369,7 @@ def main() -> None:
             print(f"[VERIFY] Verification errors found — downgrading to PARTIAL", flush=True)
 
     changed_manifest_files = sorted({filename for filename, _ in changed_code_artifacts})
+    print("Inspeqtor: checking build output", flush=True)
     grouped_coherence = evaluate_grouped_coherence(
         worqspace_root,
         cycle_num,
@@ -2384,6 +2385,7 @@ def main() -> None:
         changed_manifest_files,
     )
     validation_bundle_path = worqspace_root / "validation" / "validation-bundle.v1.json"
+    print("Inspeqtor: checking group coherence", flush=True)
     validation_summary_path = worqspace_root / "validation" / "validation-summary.md"
     write_json(validation_bundle_path, validation_bundle)
     validation_summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2427,6 +2429,7 @@ def main() -> None:
     repair_plan_path = worqspace_root / "verdict" / "repair-plan.v1.json"
     repair_plan_summary_path = worqspace_root / "verdict" / "repair-plan.md"
     if inspection_verdict["repair_required"]:
+        print("Inspeqtor: writing repair plan", flush=True)
         repair_plan = build_repair_plan(
             worqspace_root,
             cycle_num,
@@ -2450,6 +2453,7 @@ def main() -> None:
             repair_plan_summary_path.unlink()
 
     inspection_verdict_path = worqspace_root / "verdict" / "inspection-verdict.v1.json"
+    print("Inspeqtor: checking component contracts", flush=True)
     inspection_verdict_summary_path = worqspace_root / "verdict" / "inspection-verdict.md"
     write_json(inspection_verdict_path, inspection_verdict)
     inspection_verdict_summary_path.parent.mkdir(parents=True, exist_ok=True)
