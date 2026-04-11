@@ -23,6 +23,8 @@ export const PROVIDER_ENV_MAP: Record<string, string> = {
     gemini: 'GOOGLE_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY',
     qwen: 'QWEN_API_KEY',
+    llamacpp: 'LLAMACPP_API_KEY',
+    ollama: 'OLLAMA_API_KEY',
 };
 
 /** All supported env key names */
@@ -33,10 +35,12 @@ export const ALL_API_KEYS = [
     'GOOGLE_API_KEY',
     'DEEPSEEK_API_KEY',
     'QWEN_API_KEY',
+    'LLAMACPP_API_KEY',
+    'OLLAMA_API_KEY',
 ] as const;
 
 /** Provider metadata */
-export const PROVIDERS: Record<string, { label: string; envKey: string; models: string[] }> = {
+export const PROVIDERS: Record<string, { label: string; envKey: string; models: string[]; requiredAuth?: boolean }> = {
     openai: {
         label: 'OpenAI',
         envKey: 'OPENAI_API_KEY',
@@ -66,6 +70,18 @@ export const PROVIDERS: Record<string, { label: string; envKey: string; models: 
         label: 'OpenRouter',
         envKey: 'OPENROUTER_API_KEY',
         models: ['anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'deepseek/deepseek-chat-v3'],
+    },
+    llamacpp: {
+        label: 'llama.cpp',
+        envKey: 'LLAMACPP_API_KEY',
+        models: ['model.gguf', '/absolute/path/to/model.gguf', 'server-alias'],
+        requiredAuth: false,
+    },
+    ollama: {
+        label: 'Ollama',
+        envKey: 'OLLAMA_API_KEY',
+        models: ['qwen3:14b', 'llama3.2', 'gemma3', 'deepseek-r1:14b'],
+        requiredAuth: false,
     },
 };
 

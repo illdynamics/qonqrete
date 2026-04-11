@@ -101,6 +101,7 @@ export function getRequiredApiKeys(configPath: string): string[] {
     }
     const keys: string[] = [];
     for (const p of provs) {
+        if (PROVIDERS[p] && PROVIDERS[p].requiredAuth === false) continue;
         const envKey = PROVIDER_ENV_MAP[p];
         if (envKey && !keys.includes(envKey)) keys.push(envKey);
     }

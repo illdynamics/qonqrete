@@ -91,10 +91,67 @@ ai_budgeting:
         safe_input_tokens: 80000
         safe_output_tokens: 8192
         total_context_window: 100000
+        planning_context_limit_tokens: 100000
         chars_per_token: 3.5
         supports_multi_message_history: true
         supports_chunk_preload: true
         supports_system_messages: true
+    llamacpp:
+      defaults:
+        safe_input_tokens: 24000
+        safe_output_tokens: 4096
+        total_context_window: 32768
+        planning_context_limit_tokens: 32768
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+    ollama:
+      defaults:
+        safe_input_tokens: 24000
+        safe_output_tokens: 4096
+        total_context_window: 32768
+        planning_context_limit_tokens: 32768
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+providers:
+  llamacpp:
+    endpoint: http://localhost:8080/v1
+    timeout: 900
+    max_tokens: 8192
+    temperature: 0.2
+    top_p: 0.9
+    top_k: 40
+    min_p: 0.05
+    seed: -1
+    repeat_penalty: 1.05
+    presence_penalty: 0.0
+    frequency_penalty: 0.0
+    stop: []
+    planning_context_limit_tokens: 32768
+
+  ollama:
+    endpoint: http://localhost:11434/v1
+    native_endpoint: http://localhost:11434/api
+    timeout: 900
+    max_tokens: 8192
+    temperature: 0.2
+    top_p: 0.9
+    seed:
+    presence_penalty: 0.0
+    frequency_penalty: 0.0
+    stop: []
+    use_native_discovery: true
+    use_native_metadata: true
+    use_native_transport: false
+    enable_responses_api: false
+    keep_alive: 10m
+    think: false
+    reasoning_effort:
+    planning_context_limit_tokens: 32768
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # INTERLEAVED PIPELINE (NEW in v0.8.3)
@@ -153,6 +210,7 @@ agents:
     provider: deepseek
     model: deepseek-chat
     timeout: 600
+    planning_context_limit_tokens:
 
   calqulator:
     provider: local
@@ -165,6 +223,7 @@ agents:
     provider: deepseek
     model: deepseek-chat
     timeout: 600
+    planning_context_limit_tokens:
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
@@ -173,6 +232,7 @@ agents:
     provider: deepseek
     model: deepseek-chat
     timeout: 600
+    planning_context_limit_tokens:
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
     batch_mode: true                 # Group briqs into batches

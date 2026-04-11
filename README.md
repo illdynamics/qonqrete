@@ -123,6 +123,8 @@ qonqrete/
 | DeepSeek | `DEEPSEEK_API_KEY` |
 | Qwen | `QWEN_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
+| llama.cpp | optional `LLAMACPP_API_KEY` |
+| Ollama | optional `OLLAMA_API_KEY` |
 
 ## Container Engines
 
@@ -210,6 +212,11 @@ Keys are stored in IntelliJ's **PasswordSafe** (encrypted credential store). The
 
 ### Gemini / Google equivalence
 `GOOGLE_API_KEY` and `GEMINI_API_KEY` are treated as equivalent. If either is set, the Gemini provider is considered configured.
+
+### Local HTTP provider note
+`provider: local` still means QonQrete's internal helper agents. `provider: llamacpp` and `provider: ollama` are separate first-class HTTP inference providers for already-running local servers.
+
+`planning_context_limit_tokens` can be set at provider level or agent level and is used by QonQrete's budgeting and chunking planner. For Ollama's OpenAI-compatible `/v1` mode, that planning limit does not change the server-side `num_ctx`.
 
 ## AI Configuration Panel
 
@@ -330,6 +337,9 @@ The current repo supports these providers through `worqer/lib_ai.py` and config:
 - Anthropic
 - DeepSeek
 - Qwen
+- OpenRouter
+- llama.cpp
+- Ollama
 - `local` for non-remote helper agents
 
 Required environment variables depend on your selected providers:
@@ -341,6 +351,9 @@ export ANTHROPIC_API_KEY='...'
 export DEEPSEEK_API_KEY='...'
 export QWEN_API_KEY='...'
 export OPENROUTER_API_KEY='...'
+export LLAMACPP_ENDPOINT='http://localhost:8080/v1'
+export OLLAMA_ENDPOINT='http://localhost:11434/v1'
+export OLLAMA_NATIVE_ENDPOINT='http://localhost:11434/api'
 ```
 
 ## System requirements

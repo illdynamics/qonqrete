@@ -273,15 +273,24 @@ def safe_read_file(path: Path, max_size: int = MAX_GENERATED_FILE_SIZE,
 CONFIG_SCHEMA = {
     "type": "object",
     "properties": {
+        "providers": {
+            "type": "object",
+            "properties": {
+                "llamacpp": {"type": "object"},
+                "ollama": {"type": "object"}
+            },
+            "additionalProperties": True
+        },
         "agents": {
             "type": "object",
             "additionalProperties": {
                 "type": "object",
                 "properties": {
-                    "provider": {"type": "string", "enum": ["openai", "anthropic", "gemini", "deepseek", "qwen"]},
+                    "provider": {"type": "string", "enum": ["openai", "anthropic", "gemini", "deepseek", "qwen", "openrouter", "local", "llamacpp", "ollama"]},
                     "model": {"type": "string"},
                     "max_retries": {"type": "integer", "minimum": 0, "maximum": MAX_RETRIES_HARD_LIMIT},
-                    "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT_SECONDS}
+                    "timeout": {"type": "integer", "minimum": 1, "maximum": 900},
+                    "planning_context_limit_tokens": {"type": "integer", "minimum": 512}
                 }
             }
         },
@@ -324,6 +333,21 @@ def validate_config(config: Dict[str, Any]) -> List[str]:
                         errors.append(f"agents.{agent_name}.timeout must be 1-{MAX_TIMEOUT_SECONDS}")
     except Exception as e:
         errors.append(f"Schema validation error: {e}")
+
+    for agent_name, agent_config in (config.get("agents", {}) or {}).items():
+        provider = str(agent_config.get("provider", "")).lower()
+        timeout = agent_config.get("timeout")
+        if timeout is not None:
+            cap = 900 if provider in {"llamacpp", "ollama"} else MAX_TIMEOUT_SECONDS
+            if not isinstance(timeout, int) or timeout < 1 or timeout > cap:
+                errors.append(f"agents.{agent_name}.timeout must be 1-{cap} for provider {provider or 'unknown'}")
+
+    for provider_name in ("llamacpp", "ollama"):
+        provider_cfg = (config.get("providers", {}) or {}).get(provider_name, {})
+        timeout = provider_cfg.get("timeout")
+        if timeout is not None:
+            if not isinstance(timeout, int) or timeout < 1 or timeout > 900:
+                errors.append(f"providers.{provider_name}.timeout must be 1-900")
     
     return errors
 

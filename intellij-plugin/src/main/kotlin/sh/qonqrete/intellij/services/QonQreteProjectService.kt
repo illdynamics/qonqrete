@@ -594,7 +594,7 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
         val allKeys = listOf(
             "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY",
-            "GOOGLE_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY"
+            "GOOGLE_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY", "LLAMACPP_API_KEY", "OLLAMA_API_KEY"
         )
         for (envKey in allKeys) {
             if (!System.getenv(envKey).isNullOrEmpty()) continue

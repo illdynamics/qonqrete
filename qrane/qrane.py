@@ -962,6 +962,8 @@ def check_api_keys(config, qrane_prefix):
         if provider in ('gemini', 'google'):
             if not (os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')):
                 missing_keys.append('GOOGLE_API_KEY/GEMINI_API_KEY')
+        elif provider in ('local', 'llamacpp', 'ollama'):
+            continue
         elif provider in key_mapping:
             key_name = key_mapping[provider]
             if not os.environ.get(key_name):
@@ -1240,7 +1242,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                     continue
                 
                 # Skip calqulator if using local construqtor (no API costs to calculate)
-                if name == 'calqulator' and construqtor_provider == 'local':
+                if name == 'calqulator' and construqtor_provider in {'local', 'llamacpp', 'ollama'}:
                     continue
 
                 # --- DYNAMIC LOCAL AGENT LOADER ---

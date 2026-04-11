@@ -110,7 +110,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
 
         task_instruction_tokens = lib.estimate_tokens(content, model)
         total_briq_tokens = base_context_tokens + tokens_for_files + task_instruction_tokens
-        cost = lib.calculate_cost(total_briq_tokens, model, is_input=True)
+        cost = lib.calculate_cost(total_briq_tokens, model, is_input=True, provider=provider)
         grand_total_tokens += total_briq_tokens
 
         metadata = {}
@@ -145,7 +145,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
         })
 
     # --- Print Footer ---
-    total_cost_formatted = lib.format_cost(lib.calculate_cost(grand_total_tokens, model, is_input=True))
+    total_cost_formatted = lib.format_cost(lib.calculate_cost(grand_total_tokens, model, is_input=True, provider=provider))
     print(separator, flush=True)
     print(f"{'TOTAL CYCLE ESTIMATE':<{col_width}} | {grand_total_tokens:<12,} | {total_cost_formatted:<15}", flush=True)
     print(separator + "\n", flush=True)
@@ -161,7 +161,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
         'base_context_tokens': base_context_tokens,
         'estimated_briqs': estimate_entries,
         'total_estimated_tokens': grand_total_tokens,
-        'total_estimated_cost': round(lib.calculate_cost(grand_total_tokens, model, is_input=True), 8),
+        'total_estimated_cost': round(lib.calculate_cost(grand_total_tokens, model, is_input=True, provider=provider), 8),
     }
     with open(estimation_dir / "estimate.v1.json", 'w', encoding='utf-8') as f:
         json.dump(estimate_payload, f, indent=2)

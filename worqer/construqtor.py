@@ -381,7 +381,7 @@ def detect_execution_backend(provider: str, model: str) -> dict:
     elif "codex" in provider_value or "codex" in model_value:
         backend_kind = "codex_style_scoped_execution_engine"
         backend_family = "codex"
-    elif provider_value in {"openai", "anthropic", "gemini", "deepseek", "qwen", "openrouter"}:
+    elif provider_value in {"openai", "anthropic", "gemini", "deepseek", "qwen", "openrouter", "llamacpp", "ollama"}:
         backend_kind = "llm_patch_generation_engine"
 
     return {

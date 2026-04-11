@@ -49,6 +49,23 @@ class AIBudgetingDryRunTest(unittest.TestCase):
                 ],
                 agent_name="test-agent",
                 task_type="code_generation",
+                config={
+                    "ai_budgeting": {
+                        "dry_run_provider": "deepseek",
+                        "providers": {
+                            "deepseek": {
+                                "defaults": {
+                                    "safe_input_tokens": 32000,
+                                    "safe_output_tokens": 6000,
+                                    "total_context_window": 320000,
+                                    "planning_context_limit_tokens": 320000,
+                                    "supports_multi_message_history": True,
+                                    "supports_chunk_preload": True,
+                                }
+                            }
+                        }
+                    }
+                },
             )
 
             self.assertIn("[DRY RUN]", response)
@@ -64,6 +81,52 @@ class AIBudgetingDryRunTest(unittest.TestCase):
             sections = {item["label"]: item for item in payload["sections"]}
             self.assertTrue(sections["required_large_task"]["chunked"])
             self.assertFalse(sections["required_large_task"]["omitted"])
+            self.assertIn("transport_sidecars", payload)
+            sidecar_dir = workspace / payload["transport_sidecars"]["directory"]
+            self.assertTrue(sidecar_dir.exists())
+            self.assertTrue(any(path.name.startswith("chunk-") for path in sidecar_dir.iterdir()))
+
+    def test_aggregate_history_limit_failure_is_loud(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "worqspace"
+            workspace.mkdir(parents=True, exist_ok=True)
+            os.environ["QONQ_WORKSPACE"] = str(workspace)
+
+            with self.assertRaises(RuntimeError) as raised:
+                lib_ai.run_ai_completion(
+                    provider="dry-run",
+                    model="deepseek-chat",
+                    prompt="core prompt",
+                    prompt_sections=[
+                        {
+                            "label": "required_large_task",
+                            "content": "TASK\n" + ("A" * 120000),
+                            "required": True,
+                            "loss_policy": "chunkable",
+                        }
+                    ],
+                    agent_name="test-agent",
+                    task_type="code_generation",
+                    config={
+                        "ai_budgeting": {
+                            "dry_run_provider": "deepseek",
+                            "providers": {
+                                "deepseek": {
+                                    "defaults": {
+                                        "safe_input_tokens": 16000,
+                                        "safe_output_tokens": 2000,
+                                        "total_context_window": 22000,
+                                        "planning_context_limit_tokens": 22000,
+                                        "supports_multi_message_history": True,
+                                        "supports_chunk_preload": True,
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+
+            self.assertIn("effective planning context limit", str(raised.exception))
 
 
 if __name__ == "__main__":

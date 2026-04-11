@@ -1232,7 +1232,7 @@ Your task: Generate a JSON list of EXACTLY {target_briqs} briq specifications.
         
         # Estimate tokens for blueprint phase
         blueprint_tokens = estimate_tokens(blueprint_prompt + blueprint_response, ai_model)
-        blueprint_cost = calculate_cost(blueprint_tokens, ai_model, is_input=True)
+        blueprint_cost = calculate_cost(blueprint_tokens, ai_model, is_input=True, provider=ai_provider)
         print(f"  💰 [BLUEPRINT] Cost: {format_cost(blueprint_cost)} ({blueprint_tokens:,} tokens)", flush=True)
         
     except Exception as e:
@@ -1310,7 +1310,7 @@ Do not include any other text outside of the `<briq>` tags.
             
             # Estimate cost for this batch
             batch_tokens = estimate_tokens(fabrication_prompt + fabrication_response, ai_model)
-            batch_cost = calculate_cost(batch_tokens, ai_model, is_input=True)
+            batch_cost = calculate_cost(batch_tokens, ai_model, is_input=True, provider=ai_provider)
             total_fabrication_cost += batch_cost
             
             print(f"  ✅ [Batch {batch_idx + 1}] Generated {len(batch_briqs)} briqs | Cost: {format_cost(batch_cost)} ({batch_tokens:,} toks)", flush=True)
@@ -1367,8 +1367,8 @@ THIS IS A HARD REQUIREMENT. NON-COMPLIANCE WILL CAUSE SYSTEM FAILURE.
         # Estimate and log cost
         input_tokens = estimate_tokens(full_prompt, ai_model)
         estimated_output_tokens = 2000
-        input_cost = calculate_cost(input_tokens, ai_model, is_input=True)
-        output_cost = calculate_cost(estimated_output_tokens, ai_model, is_input=False)
+        input_cost = calculate_cost(input_tokens, ai_model, is_input=True, provider=ai_provider)
+        output_cost = calculate_cost(estimated_output_tokens, ai_model, is_input=False, provider=ai_provider)
         total_cost = input_cost + output_cost
         
         if attempt == 0:
@@ -1736,7 +1736,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
         # Estimate tokens for this briq
         full_briq = f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{briq_content}"
         briq_tokens = estimate_tokens(full_briq, ai_model)
-        briq_cost = calculate_cost(briq_tokens, ai_model, is_input=True)
+        briq_cost = calculate_cost(briq_tokens, ai_model, is_input=True, provider=ai_provider)
 
         grouped_scope_section = "\n\n---\n**Grouped Scope Contract:**\n"
         grouped_scope_section += f"- Build Group: {build_group_id} ({group_title})\n"

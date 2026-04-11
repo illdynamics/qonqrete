@@ -1774,8 +1774,8 @@ def run_per_briq_reviews(
                 # Estimate cost
                 input_tokens = estimate_tokens(prompt, config['model'])
                 estimated_output_tokens = len(batch) * 150  # ~150 tokens per briq assessment
-                input_cost = calculate_cost(input_tokens, config['model'], is_input=True)
-                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False)
+                input_cost = calculate_cost(input_tokens, config['model'], is_input=True, provider=config['provider'])
+                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False, provider=config['provider'])
                 batch_cost = input_cost + output_cost
                 total_review_cost += batch_cost
                 
@@ -1904,8 +1904,8 @@ def run_per_briq_reviews(
                 )
                 input_tokens = estimate_tokens(prompt, config['model']) + context_size_tokens
                 estimated_output_tokens = 500
-                input_cost = calculate_cost(input_tokens, config['model'], is_input=True)
-                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False)
+                input_cost = calculate_cost(input_tokens, config['model'], is_input=True, provider=config['provider'])
+                output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False, provider=config['provider'])
                 review_cost = input_cost + output_cost
                 total_review_cost += review_cost
                 
@@ -2565,8 +2565,8 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
 
         meta_input_tokens = estimate_tokens(meta_prompt, config['model'])
         meta_output_tokens = 2000
-        meta_input_cost = calculate_cost(meta_input_tokens, config['model'], is_input=True)
-        meta_output_cost = calculate_cost(meta_output_tokens, config['model'], is_input=False)
+        meta_input_cost = calculate_cost(meta_input_tokens, config['model'], is_input=True, provider=config['provider'])
+        meta_output_cost = calculate_cost(meta_output_tokens, config['model'], is_input=False, provider=config['provider'])
         meta_cost = meta_input_cost + meta_output_cost
         print(f"Estimated cost: {format_cost(meta_cost)} (meta-review @ {config['model']})", flush=True)
 

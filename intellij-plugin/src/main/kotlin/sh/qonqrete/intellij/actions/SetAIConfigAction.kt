@@ -39,7 +39,8 @@ class SetAIConfigAction : AnAction() {
         private data class ProviderInfo(
             val label: String,
             val envKey: String,
-            val models: List<String>
+            val models: List<String>,
+            val requiredAuth: Boolean = true
         )
 
         private val PROVIDERS = mapOf(
@@ -54,7 +55,11 @@ class SetAIConfigAction : AnAction() {
             "qwen" to ProviderInfo("Qwen", "QWEN_API_KEY",
                 listOf("qwen-plus", "qwen-turbo", "qwen-max")),
             "openrouter" to ProviderInfo("OpenRouter", "OPENROUTER_API_KEY",
-                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3"))
+                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3")),
+            "llamacpp" to ProviderInfo("llama.cpp", "LLAMACPP_API_KEY",
+                listOf("model.gguf", "/absolute/path/to/model.gguf", "server-alias"), requiredAuth = false),
+            "ollama" to ProviderInfo("Ollama", "OLLAMA_API_KEY",
+                listOf("qwen3:14b", "llama3.2", "gemma3", "deepseek-r1:14b"), requiredAuth = false)
         )
 
         /**
@@ -84,7 +89,9 @@ class SetAIConfigAction : AnAction() {
                 "ANTHROPIC_API_KEY" to "ANTHROPIC_API_KEY",
                 "OPENROUTER_API_KEY" to "OPENROUTER_API_KEY",
                 "DEEPSEEK_API_KEY" to "DEEPSEEK_API_KEY",
-                "QWEN_API_KEY" to "QWEN_API_KEY"
+                "QWEN_API_KEY" to "QWEN_API_KEY",
+                "LLAMACPP_API_KEY" to "LLAMACPP_API_KEY",
+                "OLLAMA_API_KEY" to "OLLAMA_API_KEY"
             )
             for ((envKey, _) in keyMap) {
                 // Env var takes priority, only inject from stored if env not set
@@ -108,7 +115,11 @@ class SetAIConfigAction : AnAction() {
         fun getMissingApiKeys(configPath: String): List<String> {
             val configs = readAgentConfigs(configPath)
             val providers = configs.values.map { it.first }.filter { it != "local" }.toSet()
-            return providers.mapNotNull { PROVIDERS[it]?.envKey }
+            return providers.mapNotNull { providerId ->
+                val info = PROVIDERS[providerId] ?: return@mapNotNull null
+                if (!info.requiredAuth) return@mapNotNull null
+                info.envKey
+            }
                 .distinct()
                 .filter { envKey -> !hasApiKeyAvailable(envKey) }
         }
