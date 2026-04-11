@@ -24,6 +24,15 @@ from pathlib import Path
 from typing import Optional, Any, Dict, List, Callable
 from datetime import datetime
 
+try:
+    from worqer.lib_provider_config import validate_provider_config
+except ImportError:
+    try:
+        from lib_provider_config import validate_provider_config
+    except ImportError:
+        def validate_provider_config(_config):
+            return []
+
 # =============================================================================
 # CONSTANTS
 # =============================================================================
@@ -348,6 +357,8 @@ def validate_config(config: Dict[str, Any]) -> List[str]:
         if timeout is not None:
             if not isinstance(timeout, int) or timeout < 1 or timeout > 900:
                 errors.append(f"providers.{provider_name}.timeout must be 1-900")
+
+    errors.extend(validate_provider_config(config))
     
     return errors
 

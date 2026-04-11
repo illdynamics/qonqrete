@@ -76,6 +76,61 @@ class LocalProviderIntegrationTest(unittest.TestCase):
         self.assertEqual(options["native_endpoint"], "http://localhost:11434/api")
 
     @mock.patch("lib_ai._http_json_request")
+    def test_ollama_native_discovery_flags_change_runtime_behavior(self, mock_request):
+        calls = []
+
+        def fake_request(url, *args, **kwargs):
+            calls.append(url)
+            if url.endswith("/v1/models"):
+                return {"data": [{"id": "qwen3:14b"}]}
+            if url.endswith("/api/version"):
+                return {"version": "0.13.3"}
+            if url.endswith("/api/tags"):
+                return {"models": [{"name": "qwen3:14b"}]}
+            if url.endswith("/api/show"):
+                return {"details": {"family": "qwen3"}}
+            if url.endswith("/api/ps"):
+                return {"models": [{"model": "qwen3:14b", "context_length": 16384}]}
+            raise AssertionError(url)
+
+        mock_request.side_effect = fake_request
+
+        resolved, meta = lib_ai._select_ollama_model_id(
+            "qwen3:14b",
+            "http://localhost:11434/v1",
+            "http://localhost:11434/api",
+            30,
+            use_native_discovery=False,
+            use_native_metadata=True,
+        )
+        self.assertEqual(resolved, "qwen3:14b")
+        self.assertEqual(meta["native_discovery"], {})
+        self.assertEqual(calls, ["http://localhost:11434/v1/models"])
+
+        calls.clear()
+        resolved, meta = lib_ai._select_ollama_model_id(
+            "qwen3:14b",
+            "http://localhost:11434/v1",
+            "http://localhost:11434/api",
+            30,
+            use_native_discovery=True,
+            use_native_metadata=False,
+        )
+        self.assertEqual(resolved, "qwen3:14b")
+        self.assertIn("version", meta["native_discovery"])
+        self.assertIn("tags", meta["native_discovery"])
+        self.assertNotIn("show", meta["native_discovery"])
+        self.assertNotIn("ps", meta["native_discovery"])
+        self.assertEqual(
+            calls,
+            [
+                "http://localhost:11434/v1/models",
+                "http://localhost:11434/api/version",
+                "http://localhost:11434/api/tags",
+            ],
+        )
+
+    @mock.patch("lib_ai._http_json_request")
     def test_ollama_model_resolution_and_missing_model_diagnostic(self, mock_request):
         def fake_request(url, *args, **kwargs):
             if url.endswith("/v1/models"):
@@ -106,6 +161,19 @@ class LocalProviderIntegrationTest(unittest.TestCase):
         }
         caps = resolve_model_capabilities("llamacpp", "model.gguf", config=config, agent_name="builder")
         self.assertEqual(caps.planning_context_limit_tokens, 12000)
+
+    def test_runtime_config_loader_prefers_active_qage_config(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            (workspace / "config.yaml").write_text(
+                "providers:\n  llamacpp:\n    planning_context_limit_tokens: 16384\n    max_tokens: 2048\n"
+                "agents:\n  builder:\n    provider: llamacpp\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict("os.environ", {"QONQ_WORKSPACE": str(workspace)}, clear=False):
+                caps = resolve_model_capabilities("llamacpp", "model.gguf", agent_name="builder")
+        self.assertEqual(caps.planning_context_limit_tokens, 16384)
+        self.assertEqual(caps.safe_output_tokens, 2048)
 
     def test_check_api_keys_skips_local_http_providers(self):
         config = {"agents": {"builder": {"provider": "llamacpp"}, "reviewer": {"provider": "ollama"}}}
@@ -148,6 +216,85 @@ class LocalProviderIntegrationTest(unittest.TestCase):
         self.assertEqual(len(retry_log[0]["attempts"]), 2)
         self.assertTrue(retry_log[0]["success"])
         self.assertTrue(calls[0]["request_options"]["ack_mode"])
+
+    def test_ollama_fallback_pairs_native_endpoint_with_current_host(self):
+        seen_pairs = []
+
+        def fake_select(model, endpoint, native_endpoint, timeout, **kwargs):
+            seen_pairs.append((endpoint, native_endpoint))
+            raise RuntimeError(f"boom at {endpoint}")
+
+        provider_options = {
+            "endpoint_candidates": [
+                "http://bad-host:11434/v1",
+                "http://good-host:11434/v1",
+            ],
+            "native_endpoint_candidates": [
+                "http://good-host:11434/api",
+                "http://bad-host:11434/api",
+            ],
+            "api_key": "ollama",
+            "use_native_discovery": True,
+            "use_native_metadata": True,
+        }
+
+        with mock.patch("lib_ai._select_ollama_model_id", side_effect=fake_select):
+            with self.assertRaises(RuntimeError) as raised:
+                lib_ai._dispatch_local_openai_compatible(
+                    provider="ollama",
+                    model="qwen3:14b",
+                    messages=[{"role": "user", "content": "hello"}],
+                    output_tokens=64,
+                    timeout=30,
+                    provider_options=provider_options,
+                )
+
+        self.assertEqual(
+            seen_pairs,
+            [
+                ("http://bad-host:11434/v1", "http://bad-host:11434/api"),
+                ("http://good-host:11434/v1", "http://good-host:11434/api"),
+            ],
+        )
+        self.assertIn("openai=http://bad-host:11434/v1, native=http://bad-host:11434/api", str(raised.exception))
+        self.assertIn("openai=http://good-host:11434/v1, native=http://good-host:11434/api", str(raised.exception))
+
+    def test_validate_config_rejects_invalid_local_provider_config(self):
+        errors = validate_config(
+            {
+                "providers": {
+                    "llamacpp": {
+                        "endpoint": 123,
+                        "timeout": "slow",
+                        "planning_context_limit_tokens": 128,
+                    },
+                    "ollama": {
+                        "endpoint": "notaurl:://bad",
+                        "native_endpoint": "http://other-host:11434/api",
+                        "use_native_discovery": "yes",
+                        "use_native_metadata": True,
+                        "use_native_transport": True,
+                    },
+                },
+                "agents": {
+                    "builder": {
+                        "provider": "ollama",
+                        "endpoint": "http://localhost:11434/v1",
+                        "native_endpoint": "http://127.0.0.1:11434/api",
+                        "enable_responses_api": True,
+                    }
+                },
+            }
+        )
+        joined = "\n".join(errors)
+        self.assertIn("providers.llamacpp.endpoint must be a string HTTP endpoint", joined)
+        self.assertIn("providers.llamacpp.timeout must be an integer between 1 and 900", joined)
+        self.assertIn("providers.llamacpp.planning_context_limit_tokens must be an integer >= 512", joined)
+        self.assertIn("providers.ollama.endpoint must use http:// or https://", joined)
+        self.assertIn("providers.ollama.native_endpoint must point at the same host as providers.ollama.endpoint", joined)
+        self.assertIn("providers.ollama.use_native_discovery must be a boolean", joined)
+        self.assertIn("providers.ollama.use_native_transport is not supported yet; remove it from config", joined)
+        self.assertIn("agents.builder.enable_responses_api is not supported yet; remove it from config", joined)
 
 
 if __name__ == "__main__":

@@ -29,9 +29,19 @@ except ImportError:
     from ai_capabilities import load_runtime_config, resolve_model_capabilities
 
 try:
-    from worqer.lib_provider_config import is_local_endpoint, resolve_agent_provider_options, resolve_local_provider
+    from worqer.lib_provider_config import (
+        is_local_endpoint,
+        paired_ollama_native_endpoint,
+        resolve_agent_provider_options,
+        resolve_local_provider,
+    )
 except ImportError:
-    from lib_provider_config import is_local_endpoint, resolve_agent_provider_options, resolve_local_provider
+    from lib_provider_config import (
+        is_local_endpoint,
+        paired_ollama_native_endpoint,
+        resolve_agent_provider_options,
+        resolve_local_provider,
+    )
 
 try:
     from worqer.lib_security import MAX_TIMEOUT_SECONDS
@@ -99,6 +109,25 @@ class DispatchResult:
     response_truncated: bool
     provider_metadata: dict[str, Any]
     preload_acks: list[str] = field(default_factory=list)
+
+
+class ChunkTransportError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str,
+        preload_acks: list[str] | None = None,
+        retry_log: list[dict[str, Any]] | None = None,
+        transmitted_chunks: list[dict[str, Any]] | None = None,
+        final_failure: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.preload_acks = list(preload_acks or [])
+        self.retry_log = list(retry_log or [])
+        self.transmitted_chunks = list(transmitted_chunks or [])
+        self.final_failure = dict(final_failure or {})
 
 
 def _default_api_timeout() -> int:
@@ -685,7 +714,13 @@ def _select_llamacpp_model_id(configured_model: str, endpoint: str, timeout: int
     }
 
 
-def _discover_ollama_native(native_endpoint: str, timeout: int, model: str) -> dict[str, Any]:
+def _discover_ollama_native(
+    native_endpoint: str,
+    timeout: int,
+    model: str,
+    *,
+    include_metadata: bool = True,
+) -> dict[str, Any]:
     diagnostics: dict[str, Any] = {}
     try:
         diagnostics["version"] = _http_json_request(f"{native_endpoint.rstrip('/')}/version", timeout=timeout)
@@ -696,11 +731,13 @@ def _discover_ollama_native(native_endpoint: str, timeout: int, model: str) -> d
     except Exception as exc:
         diagnostics["tags_error"] = str(exc)
     try:
-        diagnostics["show"] = _http_json_request(f"{native_endpoint.rstrip('/')}/show", method="POST", timeout=timeout, payload={"name": model})
+        if include_metadata:
+            diagnostics["show"] = _http_json_request(f"{native_endpoint.rstrip('/')}/show", method="POST", timeout=timeout, payload={"name": model})
     except Exception as exc:
         diagnostics["show_error"] = str(exc)
     try:
-        diagnostics["ps"] = _http_json_request(f"{native_endpoint.rstrip('/')}/ps", timeout=timeout)
+        if include_metadata:
+            diagnostics["ps"] = _http_json_request(f"{native_endpoint.rstrip('/')}/ps", timeout=timeout)
     except Exception as exc:
         diagnostics["ps_error"] = str(exc)
     return diagnostics
@@ -732,7 +769,15 @@ def _normalize_ollama_model_candidates(model: str) -> list[str]:
     return list(dict.fromkeys(candidates))
 
 
-def _select_ollama_model_id(model: str, endpoint: str, native_endpoint: str | None, timeout: int) -> tuple[str, dict[str, Any]]:
+def _select_ollama_model_id(
+    model: str,
+    endpoint: str,
+    native_endpoint: str | None,
+    timeout: int,
+    *,
+    use_native_discovery: bool = True,
+    use_native_metadata: bool = True,
+) -> tuple[str, dict[str, Any]]:
     v1_payload = None
     discovery: dict[str, Any] = {}
     try:
@@ -740,7 +785,11 @@ def _select_ollama_model_id(model: str, endpoint: str, native_endpoint: str | No
     except Exception as exc:
         discovery["v1_models_error"] = str(exc)
 
-    native_discovery = _discover_ollama_native(native_endpoint, timeout, model) if native_endpoint else {}
+    native_discovery = (
+        _discover_ollama_native(native_endpoint, timeout, model, include_metadata=use_native_metadata)
+        if native_endpoint and use_native_discovery
+        else {}
+    )
     installed = _installed_ollama_models(v1_payload, native_discovery.get("tags"))
     candidates = _normalize_ollama_model_candidates(model)
     lowered_installed = {item.lower(): item for item in installed}
@@ -870,8 +919,10 @@ def _dispatch_local_openai_compatible(
     endpoint_candidates = provider_options.get("endpoint_candidates") or resolution.endpoint_candidates
     native_endpoint_candidates = provider_options.get("native_endpoint_candidates") or resolution.native_endpoint_candidates
     last_error = None
+    attempted_pairs: list[dict[str, Any]] = []
 
     for endpoint in endpoint_candidates:
+        native_endpoint = None
         try:
             if provider == "llamacpp":
                 api_key = os.environ.get("LLAMACPP_API_KEY") or "sk-no-key-required"
@@ -881,8 +932,17 @@ def _dispatch_local_openai_compatible(
                 api_key = configured_key or ("ollama" if is_local_endpoint(endpoint) else None)
                 if api_key is None:
                     raise ValueError("OLLAMA_API_KEY is required for non-local Ollama endpoints.")
-                native_endpoint = (native_endpoint_candidates[0] if native_endpoint_candidates else None)
-                resolved_model, discovery = _select_ollama_model_id(model, endpoint, native_endpoint, timeout)
+                use_native_discovery = bool(provider_options.get("use_native_discovery", True))
+                use_native_metadata = bool(provider_options.get("use_native_metadata", True))
+                native_endpoint = paired_ollama_native_endpoint(endpoint, native_endpoint_candidates) if use_native_discovery else None
+                resolved_model, discovery = _select_ollama_model_id(
+                    model,
+                    endpoint,
+                    native_endpoint,
+                    timeout,
+                    use_native_discovery=use_native_discovery,
+                    use_native_metadata=use_native_metadata,
+                )
 
             client = openai.OpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
             request_kwargs = _build_local_openai_request_kwargs(provider, resolved_model, messages, output_tokens, provider_options, request_options)
@@ -911,9 +971,17 @@ def _dispatch_local_openai_compatible(
             )
         except Exception as exc:
             last_error = exc
+            attempted_pairs.append({
+                "endpoint": endpoint,
+                "native_endpoint": native_endpoint,
+                "error": str(exc),
+            })
             sys.stderr.write(f"\n[WARN] {provider} endpoint failed {endpoint}: {exc}\n")
 
-    attempted = ", ".join(endpoint_candidates)
+    attempted = "; ".join(
+        f"openai={item['endpoint']}" + (f", native={item['native_endpoint']}" if item.get("native_endpoint") else "") + f", error={item['error']}"
+        for item in attempted_pairs
+    ) or ", ".join(endpoint_candidates)
     raise RuntimeError(f"{provider} request failed for every endpoint candidate: {attempted}. Last error: {last_error}")
 
 
@@ -1034,6 +1102,7 @@ def _dispatch_with_chunking(
     messages = [{"role": "system", "content": _system_message()}]
     acks: list[str] = []
     retry_log: list[dict[str, Any]] = []
+    transmitted_chunks: list[dict[str, Any]] = []
     max_retries = max(0, int(config.get("ai_budgeting", {}).get("preload_ack_max_retries", 2)))
     ack_budget = min(64, config.get("ai_budgeting", {}).get("ack_output_budget_tokens", 32))
     for chunk in chunks:
@@ -1069,21 +1138,54 @@ def _dispatch_with_chunking(
             "success": bool(ack_result and ack_result.text.strip() == chunk.expected_ack),
         })
         if not ack_result or ack_result.text.strip() != chunk.expected_ack:
-            raise RuntimeError(f"Chunk preload ACK mismatch after bounded retries. Expected `{chunk.expected_ack}`")
+            raise ChunkTransportError(
+                f"Chunk preload ACK mismatch after bounded retries. Expected `{chunk.expected_ack}`",
+                stage="preload_ack",
+                preload_acks=acks,
+                retry_log=retry_log,
+                transmitted_chunks=transmitted_chunks,
+                final_failure={
+                    "chunk_index": chunk.chunk_index,
+                    "expected_ack": chunk.expected_ack,
+                    "last_attempt": attempts[-1] if attempts else None,
+                },
+            )
         acks.append(ack_result.text.strip())
         messages.append(preload)
         messages.append({"role": "assistant", "content": ack_result.text.strip()})
+        transmitted_chunks.append({
+            "chunk_index": chunk.chunk_index,
+            "section_label": chunk.section_label,
+            "section_hash": chunk.section_hash,
+            "chunk_hash": chunk.chunk_hash,
+            "preload_message_hash": _sha256_text(chunk.preload_message),
+            "ack": ack_result.text.strip(),
+            "ack_hash": _sha256_text(ack_result.text.strip()),
+        })
 
     final_user = {"role": "user", "content": _build_final_user_message(inline_prompt, chunks)}
-    final_result = run_ai_messages(
-        provider=provider,
-        model=model,
-        messages=messages + [final_user],
-        output_tokens=output_tokens,
-        timeout=timeout,
-        config=config,
-        agent_name=agent_name,
-    )
+    try:
+        final_result = run_ai_messages(
+            provider=provider,
+            model=model,
+            messages=messages + [final_user],
+            output_tokens=output_tokens,
+            timeout=timeout,
+            config=config,
+            agent_name=agent_name,
+        )
+    except Exception as exc:
+        raise ChunkTransportError(
+            str(exc),
+            stage="final_generation",
+            preload_acks=acks,
+            retry_log=retry_log,
+            transmitted_chunks=transmitted_chunks,
+            final_failure={
+                "final_user_message_hash": _sha256_text(final_user["content"]),
+                "error": str(exc),
+            },
+        ) from exc
     final_result.preload_acks = acks
     return final_result, retry_log
 
@@ -1110,21 +1212,62 @@ def _write_audit_sidecars(
 
     files = []
 
-    def write_file(name: str, content: str) -> str:
+    def write_file(name: str, content: str, logical_name: str) -> str:
         path = sidecar_root / name
         path.write_text(content, encoding="utf-8")
-        files.append({"path": _relative_to_worqspace(path, config), "sha256": _sha256_text(content), "char_count": len(content)})
+        files.append({
+            "logical_name": logical_name,
+            "path": _relative_to_worqspace(path, config),
+            "sha256": _sha256_text(content),
+            "char_count": len(content),
+        })
         return str(path)
 
-    write_file("system_message.txt", _system_message())
-    write_file("inline_prompt.txt", inline_prompt)
-    write_file("final_user_message.txt", final_user_message)
+    write_file("system_message.txt", _system_message(), "system_message")
+    write_file("inline_prompt.txt", inline_prompt, "inline_prompt")
+    write_file("final_user_message.txt", final_user_message, "final_user_message")
     for chunk in chunks:
-        write_file(f"chunk-{chunk.chunk_index:03d}.txt", chunk.text)
-        write_file(f"preload-{chunk.chunk_index:03d}.txt", chunk.preload_message)
+        write_file(f"chunk-{chunk.chunk_index:03d}.txt", chunk.text, f"chunk:{chunk.chunk_index}")
+        write_file(f"preload-{chunk.chunk_index:03d}.txt", chunk.preload_message, f"preload:{chunk.chunk_index}")
     for idx, ack in enumerate(preload_acks or [], start=1):
-        write_file(f"ack-{idx:03d}.txt", ack)
+        write_file(f"ack-{idx:03d}.txt", ack, f"ack:{idx}")
     return {"directory": _relative_to_worqspace(sidecar_root, config), "files": files}
+
+
+def _build_chunk_transport_audit(
+    chunks: list[ChunkRecord],
+    sidecars: dict[str, Any],
+    preload_acks: list[str],
+    retry_log: list[dict[str, Any]],
+    failure_boundary: dict[str, Any] | None = None,
+    transmitted_chunks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    by_logical_name = {item.get("logical_name"): item for item in sidecars.get("files", [])}
+    transmitted_lookup = {item.get("chunk_index"): item for item in (transmitted_chunks or [])}
+    return {
+        "preload_history_preserved": [
+            {
+                "chunk_index": chunk.chunk_index,
+                "expected_ack": chunk.expected_ack,
+                "ack_succeeded": chunk.chunk_index <= len(preload_acks),
+                "chunk_sidecar": by_logical_name.get(f"chunk:{chunk.chunk_index}"),
+                "preload_sidecar": by_logical_name.get(f"preload:{chunk.chunk_index}"),
+                "ack_sidecar": by_logical_name.get(f"ack:{chunk.chunk_index}"),
+            }
+            for chunk in chunks
+        ],
+        "transmitted_chunks": [
+            {
+                **item,
+                "chunk_sidecar": by_logical_name.get(f"chunk:{item['chunk_index']}"),
+                "preload_sidecar": by_logical_name.get(f"preload:{item['chunk_index']}"),
+                "ack_sidecar": by_logical_name.get(f"ack:{item['chunk_index']}"),
+            }
+            for item in transmitted_lookup.values()
+        ],
+        "ack_retry_log": retry_log,
+        "failure_boundary": failure_boundary,
+    }
 
 
 def _write_audit_record(config: dict[str, Any], agent_name: str | None, payload: dict[str, Any]) -> Path:
@@ -1229,6 +1372,9 @@ def run_ai_completion(
     dispatch_result: DispatchResult | None = None
     error_text: str | None = None
     ack_retry_log: list[dict[str, Any]] = []
+    preload_acks: list[str] = []
+    chunk_transport_failure: dict[str, Any] | None = None
+    transmitted_chunks: list[dict[str, Any]] = []
     resolved_timeout = _clamp_timeout(provider, timeout or plan["provider_options"].get("timeout"))
 
     audit_payload = {
@@ -1285,16 +1431,26 @@ def run_ai_completion(
                     provider_metadata={"mode": "dry-run"},
                 )
             elif plan["chunks"]:
-                dispatch_result, ack_retry_log = _dispatch_with_chunking(
-                    provider=provider,
-                    model=model,
-                    inline_prompt=plan["inline_prompt"],
-                    chunks=plan["chunks"],
-                    output_tokens=plan["budgets"]["safe_output_tokens"],
-                    timeout=resolved_timeout,
-                    config=runtime_config,
-                    agent_name=agent_name,
-                )
+                try:
+                    dispatch_result, ack_retry_log = _dispatch_with_chunking(
+                        provider=provider,
+                        model=model,
+                        inline_prompt=plan["inline_prompt"],
+                        chunks=plan["chunks"],
+                        output_tokens=plan["budgets"]["safe_output_tokens"],
+                        timeout=resolved_timeout,
+                        config=runtime_config,
+                        agent_name=agent_name,
+                    )
+                except ChunkTransportError as exc:
+                    preload_acks = exc.preload_acks
+                    ack_retry_log = exc.retry_log
+                    transmitted_chunks = exc.transmitted_chunks
+                    chunk_transport_failure = {
+                        "stage": exc.stage,
+                        **exc.final_failure,
+                    }
+                    raise
             else:
                 messages = [
                     {"role": "system", "content": _system_message()},
@@ -1313,8 +1469,9 @@ def run_ai_completion(
             error_text = str(exc)
             sys.stderr.write(f"\n[AI ERROR - {provider.upper()}]: {exc}\n")
 
-    preload_acks = dispatch_result.preload_acks if dispatch_result else []
-    audit_payload["transport_sidecars"] = _write_audit_sidecars(
+    if dispatch_result is not None:
+        preload_acks = dispatch_result.preload_acks
+    sidecars = _write_audit_sidecars(
         runtime_config,
         plan["request_hash"],
         plan["inline_prompt"],
@@ -1322,12 +1479,21 @@ def run_ai_completion(
         plan["final_user_message"],
         preload_acks=preload_acks,
     )
+    audit_payload["transport_sidecars"] = sidecars
     audit_payload["preload_ack_retries"] = ack_retry_log
+    audit_payload["preload_acks"] = preload_acks
+    audit_payload["chunk_transport"] = _build_chunk_transport_audit(
+        plan["chunks"],
+        sidecars,
+        preload_acks,
+        ack_retry_log,
+        failure_boundary=chunk_transport_failure,
+        transmitted_chunks=transmitted_chunks,
+    )
 
     if dispatch_result is not None:
         audit_payload["response_truncation_detected"] = dispatch_result.response_truncated
         audit_payload["provider_response_metadata"] = dispatch_result.provider_metadata
-        audit_payload["preload_acks"] = dispatch_result.preload_acks
     if error_text is not None:
         audit_payload["error"] = error_text
 

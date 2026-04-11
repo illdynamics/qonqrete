@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,11 @@ import lib_ai  # noqa: E402
 
 
 class AIBudgetingDryRunTest(unittest.TestCase):
+    def _ack_from_preload_message(self, preload_message: str) -> str:
+        marker = "Reply with exactly:\n"
+        tail = preload_message.split(marker, 1)[1]
+        return tail.split("\n", 1)[0].strip()
+
     def test_oversized_request_uses_chunking_and_audit(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir) / "worqspace"
@@ -127,6 +133,121 @@ class AIBudgetingDryRunTest(unittest.TestCase):
                 )
 
             self.assertIn("effective planning context limit", str(raised.exception))
+
+    def test_preload_failure_still_persists_partial_transport_audit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "worqspace"
+            workspace.mkdir(parents=True, exist_ok=True)
+            os.environ["QONQ_WORKSPACE"] = str(workspace)
+            call_count = {"value": 0}
+
+            def fake_run_ai_messages(provider, model, messages, output_tokens, timeout=None, config=None, agent_name=None, request_options=None):
+                call_count["value"] += 1
+                preload_message = messages[-1]["content"]
+                expected_ack = self._ack_from_preload_message(preload_message)
+                if call_count["value"] == 1:
+                    return lib_ai.DispatchResult(expected_ack, False, {"mode": "ack"})
+                return lib_ai.DispatchResult("WRONG", False, {"mode": "ack"})
+
+            with mock.patch("lib_ai.run_ai_messages", side_effect=fake_run_ai_messages):
+                with self.assertRaises(RuntimeError) as raised:
+                    lib_ai.run_ai_completion(
+                        provider="llamacpp",
+                        model="model.gguf",
+                        prompt="core prompt",
+                        prompt_sections=[
+                            {
+                                "label": "required_large_task",
+                                "content": "TASK\n" + ("A" * 200000),
+                                "required": True,
+                                "loss_policy": "chunkable",
+                            }
+                        ],
+                        agent_name="builder",
+                        config={
+                            "ai_budgeting": {
+                                "chunk_target_input_tokens": 12000,
+                                "providers": {
+                                    "llamacpp": {
+                                        "defaults": {
+                                            "safe_input_tokens": 24000,
+                                            "safe_output_tokens": 4096,
+                                            "total_context_window": 320000,
+                                            "planning_context_limit_tokens": 320000,
+                                            "supports_multi_message_history": True,
+                                            "supports_chunk_preload": True,
+                                        }
+                                    }
+                                },
+                            }
+                        },
+                    )
+
+            self.assertIn("audit=", str(raised.exception))
+            audit_path = Path(str(raised.exception).split("audit=", 1)[1].strip())
+            payload = json.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["chunk_transport"]["failure_boundary"]["stage"], "preload_ack")
+            self.assertEqual(len(payload["preload_acks"]), 1)
+            self.assertEqual(len(payload["chunk_transport"]["transmitted_chunks"]), 1)
+            self.assertTrue(payload["chunk_transport"]["preload_history_preserved"][0]["ack_succeeded"])
+            self.assertFalse(payload["chunk_transport"]["preload_history_preserved"][1]["ack_succeeded"])
+            self.assertTrue(payload["chunk_transport"]["transmitted_chunks"][0]["chunk_sidecar"]["path"].endswith("chunk-001.txt"))
+            self.assertTrue(payload["chunk_transport"]["transmitted_chunks"][0]["ack_sidecar"]["path"].endswith("ack-001.txt"))
+
+    def test_final_generation_failure_preserves_completed_preload_audit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "worqspace"
+            workspace.mkdir(parents=True, exist_ok=True)
+            os.environ["QONQ_WORKSPACE"] = str(workspace)
+            preload_calls = {"count": 0}
+
+            def fake_run_ai_messages(provider, model, messages, output_tokens, timeout=None, config=None, agent_name=None, request_options=None):
+                if request_options and request_options.get("ack_mode"):
+                    preload_calls["count"] += 1
+                    return lib_ai.DispatchResult(self._ack_from_preload_message(messages[-1]["content"]), False, {"mode": "ack"})
+                raise RuntimeError("final generation boom")
+
+            with mock.patch("lib_ai.run_ai_messages", side_effect=fake_run_ai_messages):
+                with self.assertRaises(RuntimeError) as raised:
+                    lib_ai.run_ai_completion(
+                        provider="llamacpp",
+                        model="model.gguf",
+                        prompt="core prompt",
+                        prompt_sections=[
+                            {
+                                "label": "required_large_task",
+                                "content": "TASK\n" + ("A" * 200000),
+                                "required": True,
+                                "loss_policy": "chunkable",
+                            }
+                        ],
+                        agent_name="builder",
+                        config={
+                            "ai_budgeting": {
+                                "chunk_target_input_tokens": 12000,
+                                "providers": {
+                                    "llamacpp": {
+                                        "defaults": {
+                                            "safe_input_tokens": 24000,
+                                            "safe_output_tokens": 4096,
+                                            "total_context_window": 320000,
+                                            "planning_context_limit_tokens": 320000,
+                                            "supports_multi_message_history": True,
+                                            "supports_chunk_preload": True,
+                                        }
+                                    }
+                                },
+                            }
+                        },
+                    )
+
+            audit_path = Path(str(raised.exception).split("audit=", 1)[1].strip())
+            payload = json.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["chunk_transport"]["failure_boundary"]["stage"], "final_generation")
+            self.assertEqual(len(payload["preload_acks"]), preload_calls["count"])
+            self.assertEqual(len(payload["chunk_transport"]["transmitted_chunks"]), preload_calls["count"])
+            self.assertTrue(all(item["ack_succeeded"] for item in payload["chunk_transport"]["preload_history_preserved"]))
+            self.assertIn("final generation boom", payload["error"])
 
 
 if __name__ == "__main__":

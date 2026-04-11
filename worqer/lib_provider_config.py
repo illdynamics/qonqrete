@@ -53,8 +53,6 @@ OLLAMA_OPTION_KEYS = {
     "stop",
     "use_native_discovery",
     "use_native_metadata",
-    "use_native_transport",
-    "enable_responses_api",
     "keep_alive",
     "think",
     "reasoning_effort",
@@ -93,8 +91,6 @@ DEFAULT_PROVIDER_OPTIONS: dict[str, dict[str, Any]] = {
         "stop": [],
         "use_native_discovery": True,
         "use_native_metadata": True,
-        "use_native_transport": False,
-        "enable_responses_api": False,
         "keep_alive": "10m",
         "think": False,
         "reasoning_effort": None,
@@ -110,6 +106,30 @@ class LocalProviderResolution:
     options: dict[str, Any]
     endpoint_candidates: list[str]
     native_endpoint_candidates: list[str]
+
+
+UNSUPPORTED_OLLAMA_OPTION_KEYS = {"use_native_transport", "enable_responses_api"}
+BOOLEAN_OPTION_KEYS = {
+    "use_native_discovery",
+    "use_native_metadata",
+    "think",
+}
+NUMERIC_OPTION_KEYS = {
+    "timeout",
+    "max_tokens",
+    "temperature",
+    "top_p",
+    "top_k",
+    "min_p",
+    "seed",
+    "repeat_penalty",
+    "presence_penalty",
+    "frequency_penalty",
+    "mirostat",
+    "mirostat_tau",
+    "mirostat_eta",
+    "planning_context_limit_tokens",
+}
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -185,6 +205,148 @@ def _dedupe_keep_order(values: list[str | None]) -> list[str]:
 
 def _normalize_candidates(values: list[str | None], normalizer) -> list[str]:
     return _dedupe_keep_order([normalizer(value) for value in values if value is not None])
+
+
+def _same_endpoint_host(lhs: str | None, rhs: str | None) -> bool:
+    if not lhs or not rhs:
+        return False
+    left = urlparse(lhs if "://" in lhs else f"http://{lhs}")
+    right = urlparse(rhs if "://" in rhs else f"http://{rhs}")
+    return (
+        (left.scheme or "http").lower() == (right.scheme or "http").lower()
+        and (left.hostname or "").lower() == (right.hostname or "").lower()
+        and (left.port or (443 if left.scheme == "https" else 80)) == (right.port or (443 if right.scheme == "https" else 80))
+    )
+
+
+def paired_ollama_native_endpoint(endpoint: str | None, native_endpoint_candidates: list[str] | None = None) -> str | None:
+    derived = normalize_ollama_native_endpoint(endpoint)
+    for candidate in native_endpoint_candidates or []:
+        if _same_endpoint_host(candidate, endpoint):
+            return candidate
+    return derived
+
+
+def _is_valid_http_endpoint(value: str) -> tuple[bool, str | None]:
+    normalized = value.strip()
+    if not normalized:
+        return False, "must not be empty"
+    if "://" not in normalized:
+        normalized = f"http://{normalized}"
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        return False, "must use http:// or https://"
+    if not parsed.netloc:
+        return False, "must include a hostname"
+    if parsed.username or parsed.password:
+        return False, "must not embed credentials in the URL"
+    return True, None
+
+
+def _validate_endpoint_option(errors: list[str], path: str, value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, str):
+        errors.append(f"{path} must be a string HTTP endpoint")
+        return
+    ok, detail = _is_valid_http_endpoint(value)
+    if not ok:
+        errors.append(f"{path} {detail}")
+
+
+def _validate_timeout_option(errors: list[str], path: str, value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1 or value > 900:
+        errors.append(f"{path} must be an integer between 1 and 900")
+
+
+def _validate_planning_limit(errors: list[str], path: str, value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, int) or isinstance(value, bool) or value < 512:
+        errors.append(f"{path} must be an integer >= 512")
+
+
+def _validate_stop_option(errors: list[str], path: str, value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        errors.append(f"{path} must be a list of strings")
+
+
+def _validate_provider_option_types(errors: list[str], provider: str, base_path: str, options: dict[str, Any]) -> None:
+    allowed_keys = PROVIDER_OPTION_KEYS.get(provider, set())
+    for key, value in options.items():
+        path = f"{base_path}.{key}"
+        if provider == "ollama" and key in UNSUPPORTED_OLLAMA_OPTION_KEYS:
+            errors.append(f"{path} is not supported yet; remove it from config")
+            continue
+        if key in {"endpoint", "native_endpoint"}:
+            _validate_endpoint_option(errors, path, value)
+            continue
+        if key == "timeout":
+            _validate_timeout_option(errors, path, value)
+            continue
+        if key == "planning_context_limit_tokens":
+            _validate_planning_limit(errors, path, value)
+            continue
+        if key == "stop":
+            _validate_stop_option(errors, path, value)
+            continue
+        if key in BOOLEAN_OPTION_KEYS:
+            if value is not None and not isinstance(value, bool):
+                errors.append(f"{path} must be a boolean")
+            continue
+        if key in NUMERIC_OPTION_KEYS:
+            if value is not None and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+                errors.append(f"{path} must be numeric")
+            continue
+        if key in allowed_keys:
+            if value is not None and key in {"keep_alive", "reasoning_effort", "api_key"} and not isinstance(value, str):
+                errors.append(f"{path} must be a string")
+
+
+def validate_provider_config(config: dict[str, Any] | None) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(config, dict):
+        return errors
+
+    providers_cfg = config.get("providers", {}) or {}
+    for provider in ("llamacpp", "ollama"):
+        provider_cfg = providers_cfg.get(provider, {}) or {}
+        if not isinstance(provider_cfg, dict):
+            errors.append(f"providers.{provider} must be an object")
+            continue
+        _validate_provider_option_types(errors, provider, f"providers.{provider}", provider_cfg)
+        if provider == "ollama":
+            if provider_cfg.get("native_endpoint") and provider_cfg.get("endpoint"):
+                if not _same_endpoint_host(
+                    normalize_ollama_native_endpoint(provider_cfg.get("native_endpoint")),
+                    normalize_ollama_endpoint(provider_cfg.get("endpoint")),
+                ):
+                    errors.append("providers.ollama.native_endpoint must point at the same host as providers.ollama.endpoint")
+            if provider_cfg.get("use_native_metadata") and provider_cfg.get("use_native_discovery") is False:
+                errors.append("providers.ollama.use_native_metadata requires providers.ollama.use_native_discovery=true")
+
+    for agent_name, agent_cfg in (config.get("agents", {}) or {}).items():
+        if not isinstance(agent_cfg, dict):
+            continue
+        provider = str(agent_cfg.get("provider", "")).lower()
+        if provider not in PROVIDER_OPTION_KEYS:
+            continue
+        _validate_provider_option_types(errors, provider, f"agents.{agent_name}", agent_cfg)
+        if provider == "ollama":
+            if agent_cfg.get("native_endpoint") and agent_cfg.get("endpoint"):
+                if not _same_endpoint_host(
+                    normalize_ollama_native_endpoint(agent_cfg.get("native_endpoint")),
+                    normalize_ollama_endpoint(agent_cfg.get("endpoint")),
+                ):
+                    errors.append(f"agents.{agent_name}.native_endpoint must point at the same host as agents.{agent_name}.endpoint")
+            if agent_cfg.get("use_native_metadata") and agent_cfg.get("use_native_discovery") is False:
+                errors.append(f"agents.{agent_name}.use_native_metadata requires agents.{agent_name}.use_native_discovery=true")
+
+    return errors
 
 
 def get_provider_config_block(config: dict[str, Any] | None, provider: str) -> dict[str, Any]:

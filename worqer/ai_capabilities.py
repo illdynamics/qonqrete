@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import fnmatch
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -79,10 +80,20 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 def _config_path_candidates() -> list[Path]:
     here = Path(__file__).resolve()
     project_root = here.parent.parent
-    return [
-        project_root / "worqspace" / "config.yaml",
+    env_root = os.environ.get("QONQ_WORKSPACE")
+    candidates = []
+    if env_root:
+        candidates.extend([
+            Path(env_root) / "config.yaml",
+            Path(env_root) / "worqspace" / "config.yaml",
+        ])
+    candidates.extend([
+        Path.cwd() / "config.yaml",
         Path.cwd() / "worqspace" / "config.yaml",
-    ]
+        project_root / "config.yaml",
+        project_root / "worqspace" / "config.yaml",
+    ])
+    return list(dict.fromkeys(candidates))
 
 
 def load_runtime_config(config: dict[str, Any] | None = None) -> dict[str, Any]:

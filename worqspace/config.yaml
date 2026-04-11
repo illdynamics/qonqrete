@@ -98,10 +98,10 @@ ai_budgeting:
         supports_system_messages: true
     llamacpp:
       defaults:
-        safe_input_tokens: 24000
+        safe_input_tokens: 12000
         safe_output_tokens: 4096
-        total_context_window: 32768
-        planning_context_limit_tokens: 32768
+        total_context_window: 16384
+        planning_context_limit_tokens: 16384
         chars_per_token: 4.0
         supports_multi_message_history: true
         supports_chunk_preload: true
@@ -121,7 +121,7 @@ providers:
   llamacpp:
     endpoint: http://localhost:8080/v1
     timeout: 900
-    max_tokens: 8192
+    max_tokens: 16384
     temperature: 0.2
     top_p: 0.9
     top_k: 40
@@ -131,7 +131,9 @@ providers:
     presence_penalty: 0.0
     frequency_penalty: 0.0
     stop: []
-    planning_context_limit_tokens: 32768
+    # QonQrete-side planning/chunking ceiling only.
+    # This does not change llama-server's real context window; configure that on the server itself.
+    planning_context_limit_tokens: 16384
 
   ollama:
     endpoint: http://localhost:11434/v1
@@ -146,11 +148,11 @@ providers:
     stop: []
     use_native_discovery: true
     use_native_metadata: true
-    use_native_transport: false
-    enable_responses_api: false
     keep_alive: 10m
     think: false
     reasoning_effort:
+    # QonQrete-side planning/chunking ceiling only.
+    # This does not change Ollama /v1 server-side num_ctx; configure that outside QonQrete.
     planning_context_limit_tokens: 32768
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -190,8 +192,8 @@ agents:
   # Legacy `tasqleveler` remains a compatibility alias only.
   # ═══════════════════════════════════════════════════════════════════════════
   qrystallizer:
-    provider: deepseek
-    model: deepseek-chat
+    provider: llamacpp
+    model: /Users/wicked/Qoding/ai/OmniCoder-Claude-uncensored-V2-Q4_K_M.gguf
     timeout: 600
     # Transitional compatibility knobs retained for the wrapper path.
     enabled: true
@@ -199,16 +201,18 @@ agents:
     min_lines: 200             # Below this line count, don't enhance
 
   guard:
-    provider: deepseek
-    model: deepseek-chat
+    provider: llamacpp
+    model: /Users/wicked/Qoding/ai/OmniCoder-Claude-uncensored-V2-Q4_K_M.gguf
+      #    model: deepseek-chat
     timeout: 600
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSTRUQTOR - Briq Planning
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: llamacpp
+    model: /Users/wicked/Qoding/ai/OmniCoder-Claude-uncensored-V2-Q4_K_M.gguf
+      #    model: deepseek-chat
     timeout: 600
     planning_context_limit_tokens:
 
@@ -220,8 +224,9 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: llamacpp
+    model: /Users/wicked/Qoding/ai/OmniCoder-Claude-uncensored-V2-Q4_K_M.gguf
+      #    model: deepseek-chat
     timeout: 600
     planning_context_limit_tokens:
 
@@ -229,8 +234,9 @@ agents:
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: llamacpp
+    model: /Users/wicked/Qoding/ai/OmniCoder-Claude-uncensored-V2-Q4_K_M.gguf
+      #    model: deepseek-chat
     timeout: 600
     planning_context_limit_tokens:
     
@@ -295,7 +301,7 @@ options:
 
   # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
   # NOTE: Only works when construqtor.provider is 'gemini'!
-  use_qontrabender: true
+  use_qontrabender: false
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Cheqpoint Configuration

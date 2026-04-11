@@ -216,7 +216,11 @@ Keys are stored in IntelliJ's **PasswordSafe** (encrypted credential store). The
 ### Local HTTP provider note
 `provider: local` still means QonQrete's internal helper agents. `provider: llamacpp` and `provider: ollama` are separate first-class HTTP inference providers for already-running local servers.
 
-`planning_context_limit_tokens` can be set at provider level or agent level and is used by QonQrete's budgeting and chunking planner. For Ollama's OpenAI-compatible `/v1` mode, that planning limit does not change the server-side `num_ctx`.
+`planning_context_limit_tokens` can be set at provider level or agent level and is used by QonQrete's budgeting and chunking planner. It is a QonQrete-side safety ceiling, not a server-side context reconfiguration switch.
+
+For Ollama's OpenAI-compatible `/v1` mode, that planning limit does not change the server-side `num_ctx`; configure the real Ollama context separately.
+
+For `llama.cpp`, QonQrete can budget honestly against the configured planning ceiling, but the actual `llama-server` context/window still has to be configured on the server to handle the workload.
 
 ## AI Configuration Panel
 
@@ -354,6 +358,32 @@ export OPENROUTER_API_KEY='...'
 export LLAMACPP_ENDPOINT='http://localhost:8080/v1'
 export OLLAMA_ENDPOINT='http://localhost:11434/v1'
 export OLLAMA_NATIVE_ENDPOINT='http://localhost:11434/api'
+```
+
+Ollama-specific runtime knobs currently shipped in config are:
+
+- `use_native_discovery`: enable or disable native `/api/*` discovery alongside `/v1`
+- `use_native_metadata`: enable or disable extra native metadata enrichment such as `/api/show` and `/api/ps`
+
+Unsupported knobs such as native transport switching or a Responses API path are intentionally not exposed in the shipped config because they are not implemented end-to-end yet.
+
+## Optional live local-provider tests
+
+Default CI remains offline. Real local-provider integration tests are opt-in:
+
+```bash
+cd .qonqrete
+
+QONQ_LIVE_LLAMACPP_TESTS=1 \
+QONQ_LLAMACPP_LIVE_MODEL=/absolute/path/to/model.gguf \
+LLAMACPP_ENDPOINT=http://localhost:8080/v1 \
+./.venv/bin/python -m unittest tests.test_live_local_provider_integration.LiveLlamacppIntegrationTest
+
+QONQ_LIVE_OLLAMA_TESTS=1 \
+QONQ_OLLAMA_LIVE_MODEL=qwen3:14b \
+OLLAMA_ENDPOINT=http://localhost:11434/v1 \
+OLLAMA_NATIVE_ENDPOINT=http://localhost:11434/api \
+./.venv/bin/python -m unittest tests.test_live_local_provider_integration.LiveOllamaIntegrationTest
 ```
 
 ## System requirements
