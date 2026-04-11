@@ -659,7 +659,17 @@ Actual briqs to organize:
         ai_model,
         prompt,
         context_files=[],
-        max_prompt_chars=50000
+        max_prompt_chars=50000,
+        prompt_sections=[{
+            'label': 'structured_planning_prompt',
+            'content': prompt,
+            'required': True,
+            'loss_policy': 'preserve',
+            'section_type': 'planning',
+        }],
+        agent_name='instruqtor',
+        task_type='planning',
+        output_tokens=2500,
     )
 
     json_match = re.search(r'(\{.*\})', response, re.DOTALL)
@@ -1366,7 +1376,21 @@ THIS IS A HARD REQUIREMENT. NON-COMPLIANCE WILL CAUSE SYSTEM FAILURE.
         
         # Call AI
         try:
-            response = lib_ai.run_ai_completion(ai_provider, ai_model, full_prompt)
+            response = lib_ai.run_ai_completion(
+                ai_provider,
+                ai_model,
+                full_prompt,
+                prompt_sections=[{
+                    'label': 'briq_generation_prompt',
+                    'content': full_prompt,
+                    'required': True,
+                    'loss_policy': 'chunkable',
+                    'section_type': 'planning',
+                }],
+                agent_name='instruqtor',
+                task_type='planning',
+                output_tokens=2000,
+            )
         except Exception as e:
             sys.stderr.write(f"InstruQtor AI call failed: {e}\n")
             if attempt < max_retries:

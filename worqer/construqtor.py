@@ -406,6 +406,14 @@ def parse_briq_metadata(briq_content: str) -> dict:
     return metadata
 
 
+def extract_briq_target_files(briq_content: str) -> list[str]:
+    targets = []
+    for candidate in re.findall(r'`([^`]+)`', briq_content):
+        if "/" in candidate or re.search(r"\.\w+$", candidate):
+            targets.append(candidate)
+    return sorted(set(targets))
+
+
 def build_group_context(metadata: dict, planning_payload: dict, component_contracts_payload: dict) -> str:
     build_groups = {
         item.get('build_group_id'): item
@@ -518,7 +526,17 @@ Keep it brief - max 200 words total.
         response = lib_ai.run_ai_completion(
             provider, model, prompt,
             context_files=[],
-            max_prompt_chars=60000
+            max_prompt_chars=60000,
+            prompt_sections=[{
+                'label': f'quick_review:{briq_name}',
+                'content': prompt,
+                'required': True,
+                'loss_policy': 'preserve',
+                'section_type': 'quick_review',
+            }],
+            agent_name='construqtor',
+            task_type='review',
+            output_tokens=500,
         )
         
         # Parse response
@@ -1189,7 +1207,7 @@ def process_briq_interleaved(
     interleaved_config: dict,
     review_provider: str = None,
     review_model: str = None,
-    constitutional_context: str = "",  # v1.0.4: QONTRACT + cycle1 tasq
+    constitutional_sections: dict | None = None,
     qontract_json_path: Path = None,   # v1.0.4: Path to qontract.json for per-briq guard
     contract_data: dict = None,         # v1.0.4: Loaded contract dict
     planning_payload: dict = None,
@@ -1259,22 +1277,36 @@ def process_briq_interleaved(
     is_contract_relevant = False
     if re.search(r'^Contract-Relevant:\s*yes', briq_content, re.MULTILINE | re.IGNORECASE):
         is_contract_relevant = True
+    constitutional_sections = constitutional_sections or {}
     grouped_context = build_group_context(
         briq_metadata,
         planning_payload or {},
         component_contracts_payload or {}
     )
     repair_context = load_repair_context(worqspace_root)
+    briq_targets = extract_briq_target_files(briq_content)
+    qontext_path = worqspace_root / "qontext.d"
+    filtered_context_files = []
+    if briq_targets and qontext_path.exists():
+        try:
+            filtered_context_files = lib_ai.filter_context_by_relevance(
+                all_context_files,
+                briq_targets,
+                str(qontext_path),
+                max_neighbors=1,
+            )
+        except Exception:
+            filtered_context_files = []
+    if not filtered_context_files:
+        filtered_context_files = all_context_files[:24]
+    filtered_context_files = sorted(dict.fromkeys(filtered_context_files))
     
     # Build prompt
-    prompt = f"""You are the 'construQtor'.
+    core_prompt = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan defined in the 'briq'.
 **CONTEXT:** You have been provided with the {context_type} of the existing codebase. Use this structural context to ensure your generated code integrates correctly with the existing project.
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
-{constitutional_context}
-{grouped_context}
-{repair_context}
 **MANDATORY NAMING CONVENTIONS (STRICT):**
 All function and method names MUST follow these verb prefixes for deterministic mapping:
 - `get_`, `fetch_`, `load_`, `read_`, `retrieve_`, `find_`, `lookup_`, `query_`, `select_` → Data retrieval
@@ -1297,10 +1329,64 @@ print("Hello, World!")
 
 **MODE:** {mode.upper()}
 {mode_prompt}
-
-**Plan (from Briq):**
-{briq_content}
 """
+    prompt_sections = [
+        {
+            'label': 'construqtor_core',
+            'content': core_prompt,
+            'required': True,
+            'loss_policy': 'preserve',
+            'section_type': 'instructions',
+        },
+        {
+            'label': 'briq_plan',
+            'content': f"**Plan (from Briq):**\n{briq_content}\n",
+            'required': True,
+            'loss_policy': 'preserve',
+            'section_type': 'task',
+            'source_files': [str(briq_file)],
+        },
+    ]
+    if constitutional_sections.get('qontract'):
+        prompt_sections.append({
+            'label': 'qontract',
+            'content': f"**PROJECT CONSTITUTION (QONTRACT — MUST OBEY):**\n{constitutional_sections['qontract']}\n",
+            'required': True,
+            'loss_policy': 'chunkable',
+            'section_type': 'contract',
+        })
+    if grouped_context.strip():
+        prompt_sections.append({
+            'label': 'grouped_build_context',
+            'content': grouped_context,
+            'required': True,
+            'loss_policy': 'preserve',
+            'section_type': 'build_group_context',
+        })
+    if repair_context.strip():
+        prompt_sections.append({
+            'label': 'repair_context',
+            'content': repair_context,
+            'required': True,
+            'loss_policy': 'chunkable',
+            'section_type': 'repair_context',
+        })
+    if constitutional_sections.get('cycle1_tasq'):
+        prompt_sections.append({
+            'label': 'cycle1_tasq_anchor',
+            'content': f"**BIG-PICTURE CONTEXT (Cycle 1 Tasq):**\n{constitutional_sections['cycle1_tasq']}\n",
+            'required': False,
+            'loss_policy': 'summarizable',
+            'section_type': 'task_anchor',
+        })
+    if constitutional_sections.get('structure_tree'):
+        prompt_sections.append({
+            'label': 'project_structure_tree',
+            'content': f"**PROJECT STRUCTURE:**\n```\n{constitutional_sections['structure_tree']}\n```\n",
+            'required': False,
+            'loss_policy': 'droppable',
+            'section_type': 'structure_tree',
+        })
     
     committed_written_files: set[str] = set()
 
@@ -1318,9 +1404,16 @@ print("Hello, World!")
         
         try:
             # STEP 1: Build (AI code generation)
-            current_prompt = prompt
+            current_prompt = core_prompt
+            current_sections = [dict(section) for section in prompt_sections]
             if retry_correction:
-                current_prompt = prompt + retry_correction
+                current_sections.append({
+                    'label': 'retry_correction',
+                    'content': retry_correction,
+                    'required': True,
+                    'loss_policy': 'preserve',
+                    'section_type': 'retry_correction',
+                })
                 print(f"     [RETRY] Including correction directive in prompt", flush=True)
             retry_correction = ""
             
@@ -1331,7 +1424,10 @@ print("Hello, World!")
                 ai_provider, 
                 ai_model, 
                 current_prompt, 
-                context_files=all_context_files
+                context_files=filtered_context_files,
+                prompt_sections=current_sections,
+                agent_name="construqtor",
+                task_type="code_generation",
             )
             
             if not ai_result or "```" not in ai_result:
@@ -1692,9 +1788,6 @@ def main():
         try:
             with open(cycle1_tasq_path, 'r', encoding='utf-8') as f:
                 cycle1_tasq_content = f.read()
-            # Truncate if very large but keep meaningful context
-            if len(cycle1_tasq_content) > 8000:
-                cycle1_tasq_content = cycle1_tasq_content[:8000] + "\n\n[...truncated for token budget...]"
             print(f"    Cycle1 Tasq: Loaded ({len(cycle1_tasq_content)} chars)", flush=True)
         except Exception as e:
             print(f"    Cycle1 Tasq: ⚠️ Could not load: {e}", flush=True)
@@ -1777,15 +1870,11 @@ def main():
     print(f"    Retry: {'enabled' if retry_config['enabled'] else 'disabled'} | Max attempts: {retry_config['max_attempts']}", flush=True)
     print(f"    Interleaved: {'enabled' if interleaved_config['enabled'] else 'disabled'} | Local validation: {interleaved_config['local_validation']} | AI review: {interleaved_config['ai_quick_review']}", flush=True)
 
-    # v1.0.4: Build constitutional context string for prompts
-    constitutional_parts = []
-    if qontract_content:
-        constitutional_parts.append(f"\n**PROJECT CONSTITUTION (QONTRACT — MUST OBEY):**\n{qontract_content}\n")
-    if cycle1_tasq_content:
-        constitutional_parts.append(f"\n**BIG-PICTURE CONTEXT (Cycle 1 Tasq):**\n{cycle1_tasq_content}\n")
-    if struqture_tree:
-        constitutional_parts.append(f"\n**PROJECT STRUCTURE:**\n```\n{struqture_tree}\n```\n")
-    constitutional_context = "\n".join(constitutional_parts)
+    constitutional_sections = {
+        "qontract": qontract_content,
+        "cycle1_tasq": cycle1_tasq_content,
+        "structure_tree": struqture_tree,
+    }
 
     # v1.0.4: Load contract data for per-briq QontractGuard gate
     qontract_json_path = qontract_path / "qontract.json"
@@ -1822,7 +1911,7 @@ def main():
             interleaved_config,
             review_provider,
             review_model,
-            constitutional_context=constitutional_context,
+            constitutional_sections=constitutional_sections,
             qontract_json_path=qontract_json_path,
             contract_data=contract_data,
             planning_payload=planning_payload,

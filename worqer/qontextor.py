@@ -590,7 +590,21 @@ Analyze the following file and generate a YAML structure that summarizes its pur
 **Generate the YAML for the file provided above:**
 """
     try:
-        raw_result = lib_ai.run_ai_completion(provider, model, prompt)
+        raw_result = lib_ai.run_ai_completion(
+            provider,
+            model,
+            prompt,
+            prompt_sections=[{
+                'label': f'qontextor:{file_path.name}',
+                'content': prompt,
+                'required': True,
+                'loss_policy': 'preserve',
+                'section_type': 'context_indexing',
+            }],
+            agent_name='qontextor',
+            task_type='planning',
+            output_tokens=1800,
+        )
         yaml_match = re.search(r'```yaml\n(.*?)\n```', raw_result, re.DOTALL)
         return yaml_match.group(1) if yaml_match else raw_result
     except Exception as e:

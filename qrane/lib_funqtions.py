@@ -5,6 +5,14 @@ Shared utility functions for Qonqrete (Math, Tokens, Formatting).
 import os
 import math
 
+try:
+    from worqer.ai_capabilities import chars_per_token_for_model
+except ImportError:
+    try:
+        from ai_capabilities import chars_per_token_for_model
+    except ImportError:
+        chars_per_token_for_model = None
+
 # --- Token Constants ---
 # Costs are per 1M tokens (Input / Output) as of late 2025 estimates
 PRICING = {
@@ -38,9 +46,15 @@ def estimate_tokens(text: str, model: str = "gemini-2.5-flash-lite") -> int:
     if not text:
         return 0
     
-    # Get model specifics or default to average (4 chars/token)
-    specs = PRICING.get(model, {"char_per_token": 4.0})
-    ratio = specs["char_per_token"]
+    ratio = None
+    if chars_per_token_for_model is not None:
+        try:
+            ratio = chars_per_token_for_model(model)
+        except Exception:
+            ratio = None
+    if ratio is None:
+        specs = PRICING.get(model, {"char_per_token": 4.0})
+        ratio = specs["char_per_token"]
     
     return math.ceil(len(text) / ratio)
 

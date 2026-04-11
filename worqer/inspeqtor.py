@@ -1787,7 +1787,16 @@ def run_per_briq_reviews(
                     config['model'],
                     prompt,
                     context_files=[],  # Context embedded in prompt for batched
-                    max_prompt_chars=config.get('batch_token_roof', 60000) * 4  # chars
+                    prompt_sections=[{
+                        'label': 'batched_review_prompt',
+                        'content': prompt,
+                        'required': True,
+                        'loss_policy': 'chunkable',
+                        'section_type': 'review_batch',
+                    }],
+                    agent_name='inspeqtor',
+                    task_type='review',
+                    output_tokens=min(4000, max(800, len(batch) * 180)),
                 )
                 
                 # Parse batch response
@@ -1889,8 +1898,11 @@ def run_per_briq_reviews(
                 prompt = build_briq_review_prompt(briq_name, briq_content, briq_changed)
                 
                 # Estimate cost
-                context_size = sum(len(Path(f).read_text(encoding='utf-8', errors='ignore')) for f in context_files if Path(f).exists())
-                input_tokens = estimate_tokens(prompt, config['model']) + (context_size // 4)
+                context_size_tokens = sum(
+                    estimate_tokens(Path(f).read_text(encoding='utf-8', errors='ignore'), config['model'])
+                    for f in context_files if Path(f).exists()
+                )
+                input_tokens = estimate_tokens(prompt, config['model']) + context_size_tokens
                 estimated_output_tokens = 500
                 input_cost = calculate_cost(input_tokens, config['model'], is_input=True)
                 output_cost = calculate_cost(estimated_output_tokens, config['model'], is_input=False)
@@ -1905,7 +1917,17 @@ def run_per_briq_reviews(
                     context_files=context_files,
                     max_prompt_chars=config['max_prompt_chars_per_briq'],
                     max_context_files=config['max_context_files_per_briq'],
-                    max_chars_per_file=config['max_chars_per_context_file']
+                    max_chars_per_file=config['max_chars_per_context_file'],
+                    prompt_sections=[{
+                        'label': f'briq_review:{briq_name}',
+                        'content': prompt,
+                        'required': True,
+                        'loss_policy': 'preserve',
+                        'section_type': 'review_prompt',
+                    }],
+                    agent_name='inspeqtor',
+                    task_type='review',
+                    output_tokens=1200,
                 )
                 
                 # Extract assessment
@@ -2554,7 +2576,16 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
                 config['model'],
                 meta_prompt,
                 context_files=[],
-                max_prompt_chars=100_000
+                prompt_sections=[{
+                    'label': 'meta_review_prompt',
+                    'content': meta_prompt,
+                    'required': True,
+                    'loss_policy': 'chunkable',
+                    'section_type': 'meta_review',
+                }],
+                agent_name='inspeqtor',
+                task_type='review',
+                output_tokens=2000,
             )
 
             final_content = f"""# CyQle {cycle_num} Final ReQap

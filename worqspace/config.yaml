@@ -50,6 +50,52 @@ repair:
   # Maximum same-run bounded repair passes after inspection emits repair intent.
   max_attempts: 2
 
+ai_budgeting:
+  dry_run_provider: deepseek
+  enable_no_loss_chunking: true
+  summarize_optional_sections: true
+  include_previous_log: true
+  previous_log_max_chars: 12000
+  max_preload_chunks_per_request: 24
+  chunk_target_input_tokens: 12000
+  audit_dir: audit/ai_payloads
+  task_output_tokens:
+    code_generation: 6000
+    review: 2000
+    planning: 2500
+  agent_output_tokens:
+    construqtor: 6000
+    inspeqtor: 2000
+    instruqtor: 2500
+  providers:
+    deepseek:
+      defaults:
+        safe_input_tokens: 32000
+        safe_output_tokens: 8000
+        total_context_window: 48000
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+    gemini:
+      defaults:
+        safe_input_tokens: 80000
+        safe_output_tokens: 8192
+        total_context_window: 100000
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+    anthropic:
+      defaults:
+        safe_input_tokens: 80000
+        safe_output_tokens: 8192
+        total_context_window: 100000
+        chars_per_token: 3.5
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INTERLEAVED PIPELINE (NEW in v0.8.3)
 # ═══════════════════════════════════════════════════════════════════════════════

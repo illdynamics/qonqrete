@@ -1,0 +1,38 @@
+# Live Repair-Continuation Proof Report
+
+- Real live model-backed run occurred: Yes.
+- Provider/model path used: configured `deepseek/deepseek-chat` path for Qrystallizer alias (`tasqleveler`), `guard`, `instruqtor`, `construqtor`, and `inspeqtor`; local providers remained configured for `calqulator`, `qontextor`, `qompressor`, and `qontrabender`.
+- Live attempts made: 3 total.
+- Repair/continuation actually exercised: Yes. Attempt 3 executed two bounded same-run repair continuations after inspection produced explicit repair plans, then stopped at a truthful terminal `RUN_PARTIAL` state when the bounded same-run repair allowance was exhausted.
+- Stages reached in the successful proof attempt (`qage_20260410_235023`): `INTAKE -> CLARIFICATION -> GUARD -> PLANNING -> ESTIMATION -> BUILD -> INSPECTION -> REPAIR -> BUILD -> INSPECTION -> REPAIR -> BUILD -> INSPECTION -> FINALIZE`.
+- Qrystallizer/front-door behavior exercised: Yes, via `tasqleveler` canonical clarification intake.
+- Guard ran before planning: Yes.
+- Planning/build/validation/realization/inspection executed in real runtime: Yes. Inspection consumed manifest-linked validation and realization bundles before verdict.
+- Legacy `reqap -> next tasq` accidental continuation path: Not observed as canonical. Attempt 3 used explicit manifest-linked same-run repair routing and produced continuation metadata when bounded repair was exhausted.
+- Key artifacts produced:
+  - `.qonqrete/worqspace/qage_20260410_235023/run-manifest.v1.json`
+  - `.qonqrete/worqspace/qage_20260410_235023/audit/timeline.md`
+  - `.qonqrete/worqspace/qage_20260410_235023/verdict/inspection-verdict.v1.json`
+  - `.qonqrete/worqspace/qage_20260410_235023/verdict/repair-plan.v1.json`
+  - `.qonqrete/worqspace/qage_20260410_235023/continuation/continuation-metadata.v1.json`
+  - realization and validation bundles linked from the manifest
+- What now exists in target repo root: `index.html`, `styles.css`, `app.js`.
+- Validation commands run:
+  - `env QONQ_NON_INTERACTIVE=1 ./.qonqrete/qonqrete.sh run -f /Users/wicked/x/test-run/tasq-live-prove-run-04.md --auto -c 2`
+  - `env QONQ_NON_INTERACTIVE=1 ./.qonqrete/qonqrete.sh run -f /Users/wicked/x/test-run/tasq-live-prove-run-04.md --auto -c 3`
+  - `node --check app.js`
+  - `rg -n "qonqrete-recipe-planner-recipes|qonqrete-recipe-planner-plan|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Breakfast|Lunch|Dinner|Snack|QonQrete Recipe Planner|Repair/continuation proof demo" index.html app.js styles.css`
+  - targeted Python JSON/artifact/linkage checks against the qage manifest, verdict, repair-plan, continuation metadata, and HTML/JS selector alignment
+- Validation results:
+  - `app.js` parses successfully with `node --check`.
+  - Required root files exist.
+  - Manifest, audit, verdict, repair-plan, and continuation metadata are coherent and present for attempt 3.
+  - Attempt 3 run manifest finalized as `RUN_PARTIAL` with canonical continuation model `EXPLICIT_REPAIR_PLAN_CANONICAL`.
+  - Root output is not truthfully complete: `app.js` does not wire the UI, does not attach the required DOM event listeners, and expects `recipe-ingredients`, `recipe-steps`, and `recipe-category` IDs that do not exist in `index.html`.
+- Tiny engine/runtime fix applied:
+  - Added `repair.max_attempts: 2` to `.qonqrete/worqspace/config.yaml` so bounded same-run repair could continue past the first repair cycle and exercise the deeper continuation path.
+- Remaining blocker:
+  - The engine now continues in bounded fashion, but construQtor still failed to complete the target application after two same-run repair passes on this beefier task, leaving the run truthfully partial.
+- Truthful terminal state: `RUN_PARTIAL` / continuable repair state.
+- Bounded continuation worked: Yes.
+- Is QonQrete now proven to continue until finished in bounded fashion: Not fully. This pass proves bounded repair/continuation routing is live and canonical, but it did not prove finish-on-this-task because the run exhausted bounded repair and stopped truthfully partial instead of reaching a completed usable app.
