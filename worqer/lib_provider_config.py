@@ -428,3 +428,25 @@ def resolve_local_provider(provider: str, config: dict[str, Any] | None, agent_n
         endpoint_candidates=list(options.get("endpoint_candidates", [])),
         native_endpoint_candidates=list(options.get("native_endpoint_candidates", [])),
     )
+
+
+def reorder_endpoint_candidates(
+    provider_options: dict[str, Any],
+    preferred_endpoint: str | None,
+) -> dict[str, Any]:
+    """Return provider options with the preferred endpoint moved to the front."""
+    if not preferred_endpoint:
+        return dict(provider_options or {})
+    reordered = dict(provider_options or {})
+    endpoint_candidates = list(reordered.get("endpoint_candidates", []) or [])
+    if preferred_endpoint in endpoint_candidates:
+        endpoint_candidates = [preferred_endpoint] + [item for item in endpoint_candidates if item != preferred_endpoint]
+        reordered["endpoint_candidates"] = endpoint_candidates
+        reordered["endpoint"] = preferred_endpoint
+    if reordered.get("native_endpoint_candidates"):
+        native_candidates = list(reordered.get("native_endpoint_candidates", []) or [])
+        preferred_native = paired_ollama_native_endpoint(preferred_endpoint, native_candidates)
+        if preferred_native and preferred_native in native_candidates:
+            reordered["native_endpoint_candidates"] = [preferred_native] + [item for item in native_candidates if item != preferred_native]
+            reordered["native_endpoint"] = preferred_native
+    return reordered

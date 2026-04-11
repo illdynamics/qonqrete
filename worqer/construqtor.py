@@ -411,7 +411,56 @@ def extract_briq_target_files(briq_content: str) -> list[str]:
     for candidate in re.findall(r'`([^`]+)`', briq_content):
         if "/" in candidate or re.search(r"\.\w+$", candidate):
             targets.append(candidate)
+    for candidate in re.findall(r'\b[\w./-]+\.(?:py|sh|txt|json|ya?ml|toml|md)\b', briq_content):
+        targets.append(candidate)
     return sorted(set(targets))
+
+
+def select_briq_context_files(
+    all_context_files: list[str],
+    briq_targets: list[str],
+    qontext_path: Path,
+) -> list[str]:
+    filtered_context_files: list[str] = []
+    if briq_targets and qontext_path.exists():
+        try:
+            filtered_context_files = lib_ai.filter_context_by_relevance(
+                all_context_files,
+                briq_targets,
+                str(qontext_path),
+                max_neighbors=1,
+            )
+        except Exception:
+            filtered_context_files = []
+
+    if filtered_context_files:
+        target_names = {Path(target).name for target in briq_targets}
+        for ctx_file in all_context_files:
+            if Path(ctx_file).name.replace(".q.yaml", "") in target_names:
+                filtered_context_files.append(ctx_file)
+        return sorted(dict.fromkeys(filtered_context_files))
+
+    preferred_exact = {"main.py", "run.sh", "requirements.txt", "pyproject.toml", "package.json"}
+    preferred_suffixes = {".py", ".sh", ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".txt"}
+    fallback_files: list[str] = []
+    for ctx_file in all_context_files:
+        path = Path(ctx_file)
+        name = path.name
+        suffix = path.suffix.lower()
+        if name.endswith(".q.yaml") or suffix == ".md" or name.startswith("."):
+            continue
+        if name in preferred_exact or suffix in preferred_suffixes:
+            fallback_files.append(ctx_file)
+
+    if not fallback_files:
+        fallback_files = [
+            ctx_file
+            for ctx_file in all_context_files
+            if not Path(ctx_file).name.endswith(".q.yaml") and Path(ctx_file).suffix.lower() != ".md"
+        ]
+    if not fallback_files:
+        fallback_files = list(all_context_files[:6])
+    return sorted(dict.fromkeys(fallback_files[:8]))
 
 
 def build_group_context(metadata: dict, planning_payload: dict, component_contracts_payload: dict) -> str:
@@ -1286,20 +1335,7 @@ def process_briq_interleaved(
     repair_context = load_repair_context(worqspace_root)
     briq_targets = extract_briq_target_files(briq_content)
     qontext_path = worqspace_root / "qontext.d"
-    filtered_context_files = []
-    if briq_targets and qontext_path.exists():
-        try:
-            filtered_context_files = lib_ai.filter_context_by_relevance(
-                all_context_files,
-                briq_targets,
-                str(qontext_path),
-                max_neighbors=1,
-            )
-        except Exception:
-            filtered_context_files = []
-    if not filtered_context_files:
-        filtered_context_files = all_context_files[:24]
-    filtered_context_files = sorted(dict.fromkeys(filtered_context_files))
+    filtered_context_files = select_briq_context_files(all_context_files, briq_targets, qontext_path)
     
     # Build prompt
     core_prompt = f"""You are the 'construQtor'.

@@ -28,7 +28,13 @@ class LiveLlamacppIntegrationTest(unittest.TestCase):
             raise unittest.SkipTest("set QONQ_LLAMACPP_LIVE_MODEL or LLAMACPP_MODEL")
 
     def test_models_preflight_and_reconciliation(self):
-        resolved, meta = lib_ai._select_llamacpp_model_id(self.model, self.endpoint, 30, os.environ.get("LLAMACPP_API_KEY"))
+        provider_options = lib_ai.resolve_agent_provider_options(
+            {"providers": {"llamacpp": {"endpoint": self.endpoint}}},
+            provider="llamacpp",
+        )
+        _, preflight = lib_ai._local_provider_preflight("llamacpp", self.model, provider_options, 60)
+        self.assertTrue(preflight["selected_endpoint"], f"llama.cpp preflight failed: {preflight}")
+        resolved, meta = lib_ai._select_llamacpp_model_id(self.model, preflight["selected_endpoint"], 30, os.environ.get("LLAMACPP_API_KEY"))
         self.assertTrue(resolved)
         self.assertIn("configured_model", meta)
 
@@ -41,7 +47,9 @@ class LiveLlamacppIntegrationTest(unittest.TestCase):
             timeout=120,
             config={"providers": {"llamacpp": {"endpoint": self.endpoint, "timeout": 120}}},
         )
-        self.assertTrue(result.text)
+        self.assertEqual(result.text.strip(), "OK", f"unexpected llama.cpp response: {result.text!r}")
+        self.assertIn("endpoint", result.provider_metadata)
+        self.assertIn("resolved_model", result.provider_metadata)
 
     def test_chunked_request_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -77,8 +85,18 @@ class LiveLlamacppIntegrationTest(unittest.TestCase):
                         },
                     },
                     output_tokens=32,
+                    audit_label="live_llamacpp_chunked_test",
                 )
-                self.assertTrue(response)
+                self.assertEqual(response.strip(), "CHUNKED_OK", f"unexpected chunked response: {response!r}")
+                audits = sorted((workspace / "audit" / "ai_payloads").glob("*live_llamacpp_chunked_test*.json"))
+                self.assertTrue(audits, "expected live chunked audit payload")
+                payload = json.loads(audits[-1].read_text(encoding="utf-8"))
+                self.assertTrue(payload["chunking_used"])
+                self.assertGreater(payload["number_of_chunks"], 0)
+                self.assertEqual(payload["planning_context_limit_tokens"], 8192)
+                self.assertEqual(payload["conversation_budgeting"]["planning_context_limit_tokens"], 8192)
+                self.assertIn("selected_endpoint", payload.get("endpoint_preflight", {}))
+                self.assertIn("endpoint", payload.get("provider_response_metadata", {}))
             except RuntimeError as exc:
                 message = str(exc)
                 self.assertIn("audit=", message)

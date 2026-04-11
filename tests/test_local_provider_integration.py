@@ -67,6 +67,41 @@ class LocalProviderIntegrationTest(unittest.TestCase):
         self.assertEqual(resolved, "raw-model")
         self.assertIn("models_preflight_error", meta)
 
+    def test_reorder_endpoint_candidates_promotes_reachable_choice(self):
+        reordered = lib_provider_config.reorder_endpoint_candidates(
+            {
+                "endpoint_candidates": [
+                    "http://localhost:8080/v1",
+                    "http://host.docker.internal:8080/v1",
+                ]
+            },
+            "http://host.docker.internal:8080/v1",
+        )
+        self.assertEqual(reordered["endpoint"], "http://host.docker.internal:8080/v1")
+        self.assertEqual(reordered["endpoint_candidates"][0], "http://host.docker.internal:8080/v1")
+
+    def test_llamacpp_preflight_rejects_models_probe_errors(self):
+        provider_options = {
+            "endpoint": "http://localhost:8080/v1",
+            "endpoint_candidates": [
+                "http://localhost:8080/v1",
+                "http://host.docker.internal:8080/v1",
+            ],
+        }
+        with mock.patch(
+            "lib_ai._select_llamacpp_model_id",
+            side_effect=[
+                ("model.gguf", {"models_preflight_error": "connection refused", "configured_model": "model.gguf"}),
+                ("resolved.gguf", {"resolved_model": "resolved.gguf", "configured_model": "model.gguf"}),
+            ],
+        ):
+            reordered, preflight = lib_ai._local_provider_preflight("llamacpp", "model.gguf", provider_options, timeout=30)
+
+        self.assertEqual(preflight["selected_endpoint"], "http://host.docker.internal:8080/v1")
+        self.assertEqual(reordered["endpoint"], "http://host.docker.internal:8080/v1")
+        self.assertFalse(preflight["attempts"][0]["reachable"])
+        self.assertIn("connection refused", preflight["attempts"][0]["error"])
+
     def test_ollama_endpoint_normalization_and_native_derivation(self):
         options = lib_provider_config.resolve_agent_provider_options(
             config={"providers": {"ollama": {"endpoint": "localhost:11434"}}},
@@ -258,6 +293,30 @@ class LocalProviderIntegrationTest(unittest.TestCase):
         )
         self.assertIn("openai=http://bad-host:11434/v1, native=http://bad-host:11434/api", str(raised.exception))
         self.assertIn("openai=http://good-host:11434/v1, native=http://good-host:11434/api", str(raised.exception))
+
+    @mock.patch("lib_ai._select_llamacpp_model_id")
+    def test_llamacpp_preflight_prefers_first_reachable_endpoint(self, mock_select):
+        def fake_select(model, endpoint, timeout, api_key):
+            if "localhost" in endpoint:
+                raise RuntimeError("connection error")
+            return "resolved.gguf", {"configured_model": model}
+
+        mock_select.side_effect = fake_select
+        reordered, meta = lib_ai._local_provider_preflight(
+            provider="llamacpp",
+            model="model.gguf",
+            provider_options={
+                "endpoint_candidates": [
+                    "http://localhost:8080/v1",
+                    "http://host.docker.internal:8080/v1",
+                ]
+            },
+            timeout=120,
+        )
+        self.assertEqual(reordered["endpoint_candidates"][0], "http://host.docker.internal:8080/v1")
+        self.assertEqual(meta["selected_endpoint"], "http://host.docker.internal:8080/v1")
+        self.assertFalse(meta["attempts"][0]["reachable"])
+        self.assertTrue(meta["attempts"][1]["reachable"])
 
     def test_validate_config_rejects_invalid_local_provider_config(self):
         errors = validate_config(

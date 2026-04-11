@@ -407,6 +407,146 @@ def parse_xml_briqs(content: str) -> list[dict]:
     return results
 
 
+def _extract_json_briqs(content: str) -> list[dict]:
+    stripped = content.strip()
+    candidates = []
+    fenced = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', stripped, re.IGNORECASE)
+    if fenced:
+        candidates.append(fenced.group(1).strip())
+    candidates.append(stripped)
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            for key in ('briqs', 'tasks', 'items'):
+                if isinstance(parsed.get(key), list):
+                    parsed = parsed[key]
+                    break
+        if not isinstance(parsed, list):
+            continue
+        briqs = []
+        for index, item in enumerate(parsed, start=1):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get('title') or item.get('name') or item.get('briq') or f"Task_{index}").strip()
+            body_parts = [
+                str(item.get('content') or '').strip(),
+                str(item.get('objective') or '').strip(),
+                str(item.get('details') or '').strip(),
+            ]
+            body = "\n".join(part for part in body_parts if part)
+            if title and body:
+                briqs.append({'title': title, 'content': body})
+        if briqs:
+            return briqs
+    return []
+
+
+def _extract_markdown_briqs(content: str) -> list[dict]:
+    blocks = []
+    heading_pattern = re.compile(r'^(?:#{1,6}\s+|\d+[.)]\s+|\-\s+\*\*|\*\s+\*\*)(.+)$', re.MULTILINE)
+    matches = list(heading_pattern.finditer(content))
+    for index, match in enumerate(matches):
+        title = match.group(1).strip().strip('*').strip(':')
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        body = content[start:end].strip()
+        if title and body:
+            blocks.append({'title': title, 'content': body})
+    if blocks:
+        return blocks
+
+    numbered_pattern = re.compile(
+        r'^\s*(\d+)[.)]\s+(.*?)(?=^\s*\d+[.)]\s+|\Z)',
+        re.DOTALL | re.MULTILINE,
+    )
+    for index, match in enumerate(numbered_pattern.finditer(content), start=1):
+        block = match.group(2).strip()
+        lines = [line.strip(" -*\t") for line in block.splitlines() if line.strip()]
+        if not lines:
+            continue
+        title = lines[0].rstrip(':')
+        body = "\n".join(lines[1:] or lines[:1]).strip()
+        if title and body:
+            blocks.append({'title': title, 'content': body})
+    if blocks:
+        return blocks
+
+    simple_lines = [line.strip() for line in content.splitlines() if line.strip()]
+    pair_blocks = []
+    idx = 0
+    while idx < len(simple_lines):
+        line = simple_lines[idx]
+        if re.match(r'^\d+[.)]\s+', line):
+            title = re.sub(r'^\d+[.)]\s+', '', line).strip().rstrip(':')
+            body_lines = []
+            idx += 1
+            while idx < len(simple_lines) and not re.match(r'^\d+[.)]\s+', simple_lines[idx]):
+                body_lines.append(simple_lines[idx].lstrip("-* ").strip())
+                idx += 1
+            body = "\n".join(body_lines).strip()
+            if title and body:
+                pair_blocks.append({'title': title, 'content': body})
+            continue
+        idx += 1
+    if pair_blocks:
+        return pair_blocks
+    return blocks
+
+
+def parse_briqs(content: str) -> tuple[list[dict], str | None]:
+    cleaned = clean_input_content(content)
+    if "\\n" in cleaned and "\n" not in cleaned:
+        cleaned = cleaned.replace("\\n", "\n")
+    for parser_name, parser in (
+        ('xml', parse_xml_briqs),
+        ('json', _extract_json_briqs),
+        ('markdown', _extract_markdown_briqs),
+    ):
+        briqs = parser(cleaned)
+        normalized = []
+        for item in briqs:
+            title = re.sub(r'\s+', ' ', str(item.get('title', '')).strip())
+            body = str(item.get('content', '')).strip()
+            if title and body:
+                normalized.append({'title': title, 'content': body})
+        if normalized:
+            return normalized, parser_name
+    return [], None
+
+
+def build_local_compact_planner_prompt(
+    task_content: str,
+    qodeyard_tree: str,
+    min_briqs: int,
+    max_briqs: int,
+    target_briqs: int,
+) -> str:
+    return f"""Return ONLY briqs. No intro. No analysis. No markdown fences.
+
+Output exactly this XML shape:
+<briq title="Backend">Implement ...</briq>
+<briq title="Validation">Verify ...</briq>
+
+Rules:
+- Produce between {min_briqs} and {max_briqs} briqs. Target {target_briqs}.
+- Keep each briq broad and practical.
+- Respect existing files. Extend or modify what exists; do not recreate existing files from scratch.
+- Stay strictly inside the task contract. Do not invent extra features.
+- Each briq body should be 2-6 short lines of direct implementation instructions.
+
+Existing qodeyard tree:
+```
+{qodeyard_tree[:3000]}
+```
+
+Task:
+{task_content[:7000]}
+"""
+
+
 def clean_filename_slug(text: str) -> str:
     """Converts a title into a readable, lowercase, underscore-separated slug."""
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', text)
@@ -534,6 +674,7 @@ def generate_structured_plan(
     max_briqs: int,
     target_briqs: int,
 ) -> dict:
+    planning_output_budget = 4000 if ai_provider.lower() in {'llamacpp', 'ollama', 'local'} else 2500
     prompt = f"""You are the Principal Software Architect for QonQrete planning.
 
 Return ONLY valid JSON. No markdown fences.
@@ -669,7 +810,7 @@ Actual briqs to organize:
         }],
         agent_name='instruqtor',
         task_type='planning',
-        output_tokens=2500,
+        output_tokens=planning_output_budget,
     )
 
     json_match = re.search(r'(\{.*\})', response, re.DOTALL)
@@ -1342,11 +1483,23 @@ def generate_briqs_with_enforcement(
     Will retry with stronger prompts if AI doesn't comply.
     """
     min_briqs, max_briqs, target_briqs, sens_prompt = get_sensitivity_config(sensitivity)
+    parse_modes_seen = []
+    local_provider = ai_provider.lower() in {'llamacpp', 'ollama', 'local'}
+    planning_output_budget = 4000 if local_provider else 2000
     
     for attempt in range(max_retries + 1):
         # Build enforcement prompt
-        if attempt == 0:
+        if local_provider and attempt >= 1 and sensitivity <= 2:
+            full_prompt = build_local_compact_planner_prompt(
+                task_content=task_content,
+                qodeyard_tree=qodeyard_tree,
+                min_briqs=min_briqs,
+                max_briqs=max_briqs,
+                target_briqs=target_briqs,
+            )
+        elif attempt == 0:
             enforcement = sens_prompt
+            full_prompt = base_prompt.replace("{SENSITIVITY_PROMPT}", enforcement)
         else:
             # Stronger enforcement on retry
             enforcement = f"""
@@ -1361,8 +1514,7 @@ If you have more than {max_briqs}, combine related briqs together.
 
 THIS IS A HARD REQUIREMENT. NON-COMPLIANCE WILL CAUSE SYSTEM FAILURE.
 """
-        
-        full_prompt = base_prompt.replace("{SENSITIVITY_PROMPT}", enforcement)
+            full_prompt = base_prompt.replace("{SENSITIVITY_PROMPT}", enforcement)
         
         # Estimate and log cost
         input_tokens = estimate_tokens(full_prompt, ai_model)
@@ -1389,7 +1541,7 @@ THIS IS A HARD REQUIREMENT. NON-COMPLIANCE WILL CAUSE SYSTEM FAILURE.
                 }],
                 agent_name='instruqtor',
                 task_type='planning',
-                output_tokens=2000,
+                output_tokens=planning_output_budget,
             )
         except Exception as e:
             sys.stderr.write(f"InstruQtor AI call failed: {e}\n")
@@ -1398,14 +1550,18 @@ THIS IS A HARD REQUIREMENT. NON-COMPLIANCE WILL CAUSE SYSTEM FAILURE.
             sys.exit(1)
         
         # Parse briqs
-        briqs = parse_xml_briqs(response)
+        briqs, parse_mode = parse_briqs(response)
+        if parse_mode:
+            parse_modes_seen.append(parse_mode)
         
         if not briqs:
             print(f"  [WARN] No valid briqs parsed, attempt {attempt + 1}", flush=True)
             if attempt < max_retries:
                 continue
-            # Fallback: create single briq from raw response
-            briqs = [{'title': 'Master_Plan_Fallback', 'content': response}]
+            raise RuntimeError(
+                "Planning produced no parseable briqs after bounded retries. "
+                f"Observed parse modes: {sorted(set(parse_modes_seen)) or ['none']}"
+            )
         
         briq_count = len(briqs)
         
@@ -1421,11 +1577,12 @@ THIS IS A HARD REQUIREMENT. NON-COMPLIANCE WILL CAUSE SYSTEM FAILURE.
             # Too few - retry with stronger prompt
             print(f"  [ENFORCE] Got {briq_count} briqs, need at least {min_briqs}. Retrying...", flush=True)
             if attempt >= max_retries:
-                # Last resort: accept what we have
-                print(f"  [WARN] Could not achieve minimum briq count after {max_retries + 1} attempts. Proceeding with {briq_count} briqs.", flush=True)
-                return briqs
-    
-    return briqs
+                raise RuntimeError(
+                    f"Planning produced only {briq_count} parseable briqs after bounded retries; "
+                    f"required minimum is {min_briqs}. Parse modes: {sorted(set(parse_modes_seen)) or ['none']}"
+                )
+
+    raise RuntimeError("Planning failed without returning parseable briqs")
 
 
 def main() -> None:

@@ -11,6 +11,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "worqer"))
 
 import lib_ai  # noqa: E402
+import instruqtor  # noqa: E402
+import construqtor  # noqa: E402
 
 
 class AIBudgetingDryRunTest(unittest.TestCase):
@@ -248,6 +250,39 @@ class AIBudgetingDryRunTest(unittest.TestCase):
             self.assertEqual(len(payload["chunk_transport"]["transmitted_chunks"]), preload_calls["count"])
             self.assertTrue(all(item["ack_succeeded"] for item in payload["chunk_transport"]["preload_history_preserved"]))
             self.assertIn("final generation boom", payload["error"])
+
+    def test_planning_parser_salvages_json_and_markdown_shapes(self):
+        json_briqs, json_mode = instruqtor.parse_briqs(
+            '[{"title":"Backend","objective":"Build API endpoints"},{"title":"Run Script","objective":"Add launch script"}]'
+        )
+        self.assertEqual(json_mode, "json")
+        self.assertEqual(len(json_briqs), 2)
+
+        markdown_briqs, markdown_mode = instruqtor.parse_briqs(
+            "1. Backend\\n- Build main.py with FastAPI endpoints\\n2. Run Script\\n- Add run.sh and requirements.txt"
+        )
+        self.assertEqual(markdown_mode, "markdown")
+        self.assertEqual(len(markdown_briqs), 2)
+
+    def test_construqtor_context_fallback_prefers_implementation_files(self):
+        all_context_files = [
+            "/tmp/qontext/main.py.q.yaml",
+            "/tmp/qontext/requirements.txt.q.yaml",
+            "/tmp/bloq/12-chunking-perfection-llamacpp-ollama-report.md",
+            "/tmp/bloq/llamacpp_provider_design_for_qonqrete.md",
+            "/tmp/bloq/main.py",
+            "/tmp/bloq/requirements.txt",
+            "/tmp/bloq/run.sh",
+            "/tmp/bloq/tasq-small.md",
+        ]
+
+        selected = construqtor.select_briq_context_files(all_context_files, [], Path("/tmp/qontext"))
+
+        self.assertEqual(selected, [
+            "/tmp/bloq/main.py",
+            "/tmp/bloq/requirements.txt",
+            "/tmp/bloq/run.sh",
+        ])
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ try:
     from worqer.lib_provider_config import (
         is_local_endpoint,
         paired_ollama_native_endpoint,
+        reorder_endpoint_candidates,
         resolve_agent_provider_options,
         resolve_local_provider,
     )
@@ -39,6 +40,7 @@ except ImportError:
     from lib_provider_config import (
         is_local_endpoint,
         paired_ollama_native_endpoint,
+        reorder_endpoint_candidates,
         resolve_agent_provider_options,
         resolve_local_provider,
     )
@@ -128,6 +130,16 @@ class ChunkTransportError(RuntimeError):
         self.retry_log = list(retry_log or [])
         self.transmitted_chunks = list(transmitted_chunks or [])
         self.final_failure = dict(final_failure or {})
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _default_api_timeout() -> int:
@@ -376,6 +388,8 @@ def _token_budget(
         default_output = task_defaults.get(task_type or "", caps.safe_output_tokens)
     if default_output is None:
         default_output = caps.safe_output_tokens
+    if caps.provider in {"llamacpp", "ollama"} and task_type in {"planning", "review"}:
+        default_output = max(int(default_output), 4000)
 
     output_budget = min(int(default_output), int(caps.safe_output_tokens))
     planning_limit = caps.planning_context_limit_tokens or caps.total_context_window or (caps.safe_input_tokens + output_budget)
@@ -465,6 +479,41 @@ def _chunk_text(text: str, max_chunk_chars: int) -> list[str]:
 
 def _system_message() -> str:
     return "Follow the user's instructions exactly. Do not omit required provided context."
+
+
+def _augment_messages_for_provider(
+    provider: str,
+    messages: list[dict[str, str]],
+    request_options: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    provider_l = (provider or "").lower()
+    if provider_l not in {"llamacpp", "ollama"}:
+        return messages
+    local_rule = "Return the final answer only. Never emit chain-of-thought, analysis, or <think> tags."
+    if request_options and request_options.get("ack_mode"):
+        local_rule = "Reply with the exact ACK only. Never emit chain-of-thought, analysis, or <think> tags."
+    updated = []
+    system_injected = False
+    for item in messages:
+        if item.get("role") == "system" and not system_injected:
+            updated.append({"role": "system", "content": f"{item.get('content', '').strip()}\n{local_rule}".strip()})
+            system_injected = True
+        else:
+            updated.append(item)
+    if not system_injected:
+        updated.insert(0, {"role": "system", "content": local_rule})
+    return updated
+
+
+def _strip_recoverable_think_preface(text: str) -> tuple[str, str]:
+    raw = (text or "").strip()
+    cleaned = raw
+    while cleaned.lower().startswith("<think>"):
+        end = cleaned.lower().find("</think>")
+        if end < 0:
+            return raw, raw
+        cleaned = cleaned[end + len("</think>"):].strip()
+    return cleaned or raw, raw
 
 
 def _build_preload_message(chunk: ChunkRecord) -> str:
@@ -714,6 +763,75 @@ def _select_llamacpp_model_id(configured_model: str, endpoint: str, timeout: int
     }
 
 
+def _local_provider_preflight(
+    provider: str,
+    model: str,
+    provider_options: dict[str, Any],
+    timeout: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Probe endpoint candidates and prefer the first reachable one for this request."""
+    provider_l = (provider or "").lower()
+    endpoint_candidates = list(provider_options.get("endpoint_candidates", []) or [])
+    native_endpoint_candidates = list(provider_options.get("native_endpoint_candidates", []) or [])
+    attempts: list[dict[str, Any]] = []
+
+    if provider_l not in {"llamacpp", "ollama"} or not endpoint_candidates:
+        return dict(provider_options or {}), {"provider": provider_l, "skipped": True, "attempts": attempts}
+
+    for endpoint in endpoint_candidates:
+        native_endpoint = None
+        try:
+            if provider_l == "llamacpp":
+                api_key = os.environ.get("LLAMACPP_API_KEY")
+                resolved_model, discovery = _select_llamacpp_model_id(model, endpoint, min(timeout, 30), api_key)
+                if discovery.get("models_preflight_error"):
+                    raise RuntimeError(discovery["models_preflight_error"])
+                attempts.append({
+                    "endpoint": endpoint,
+                    "reachable": True,
+                    "resolved_model": resolved_model,
+                    "discovery": discovery,
+                })
+            else:
+                use_native_discovery = bool(provider_options.get("use_native_discovery", True))
+                use_native_metadata = bool(provider_options.get("use_native_metadata", True))
+                native_endpoint = paired_ollama_native_endpoint(endpoint, native_endpoint_candidates) if use_native_discovery else None
+                resolved_model, discovery = _select_ollama_model_id(
+                    model,
+                    endpoint,
+                    native_endpoint,
+                    min(timeout, 30),
+                    use_native_discovery=use_native_discovery,
+                    use_native_metadata=use_native_metadata,
+                )
+                attempts.append({
+                    "endpoint": endpoint,
+                    "native_endpoint": native_endpoint,
+                    "reachable": True,
+                    "resolved_model": resolved_model,
+                    "discovery": discovery,
+                })
+            return reorder_endpoint_candidates(provider_options, endpoint), {
+                "provider": provider_l,
+                "selected_endpoint": endpoint,
+                "selected_native_endpoint": native_endpoint,
+                "attempts": attempts,
+            }
+        except Exception as exc:
+            attempts.append({
+                "endpoint": endpoint,
+                "native_endpoint": native_endpoint,
+                "reachable": False,
+                "error": str(exc),
+            })
+    return dict(provider_options or {}), {
+        "provider": provider_l,
+        "selected_endpoint": None,
+        "selected_native_endpoint": None,
+        "attempts": attempts,
+    }
+
+
 def _discover_ollama_native(
     native_endpoint: str,
     timeout: int,
@@ -924,6 +1042,7 @@ def _dispatch_local_openai_compatible(
     for endpoint in endpoint_candidates:
         native_endpoint = None
         try:
+            effective_messages = _augment_messages_for_provider(provider, messages, request_options=request_options)
             if provider == "llamacpp":
                 api_key = os.environ.get("LLAMACPP_API_KEY") or "sk-no-key-required"
                 resolved_model, discovery = _select_llamacpp_model_id(model, endpoint, timeout, None if api_key == "sk-no-key-required" else api_key)
@@ -945,10 +1064,11 @@ def _dispatch_local_openai_compatible(
                 )
 
             client = openai.OpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
-            request_kwargs = _build_local_openai_request_kwargs(provider, resolved_model, messages, output_tokens, provider_options, request_options)
+            request_kwargs = _build_local_openai_request_kwargs(provider, resolved_model, effective_messages, output_tokens, provider_options, request_options)
             response = client.chat.completions.create(timeout=timeout, **request_kwargs)
             choice = response.choices[0]
             finish_reason = getattr(choice, "finish_reason", None)
+            cleaned_text, raw_text = _strip_recoverable_think_preface(choice.message.content or "")
             provider_metadata = {
                 "endpoint": endpoint,
                 "resolved_model": resolved_model,
@@ -956,6 +1076,8 @@ def _dispatch_local_openai_compatible(
                 "usage": getattr(response, "usage", None).model_dump() if getattr(response, "usage", None) else None,
                 "discovery": discovery,
             }
+            if cleaned_text != raw_text:
+                provider_metadata["raw_text"] = raw_text
             if provider == "ollama":
                 ps_models = (((discovery.get("native_discovery") or {}).get("ps") or {}).get("models") or [])
                 observed_context = None
@@ -965,7 +1087,7 @@ def _dispatch_local_openai_compatible(
                         break
                 provider_metadata["observed_context_length"] = observed_context
             return DispatchResult(
-                text=(choice.message.content or "").strip(),
+                text=cleaned_text,
                 response_truncated=(finish_reason == "length"),
                 provider_metadata=provider_metadata,
             )
@@ -1105,6 +1227,8 @@ def _dispatch_with_chunking(
     transmitted_chunks: list[dict[str, Any]] = []
     max_retries = max(0, int(config.get("ai_budgeting", {}).get("preload_ack_max_retries", 2)))
     ack_budget = min(64, config.get("ai_budgeting", {}).get("ack_output_budget_tokens", 32))
+    if (provider or "").lower() in {"llamacpp", "ollama"}:
+        ack_budget = min(128, max(ack_budget, 96))
     for chunk in chunks:
         preload = {"role": "user", "content": chunk.preload_message}
         attempts = []
@@ -1376,6 +1500,15 @@ def run_ai_completion(
     chunk_transport_failure: dict[str, Any] | None = None
     transmitted_chunks: list[dict[str, Any]] = []
     resolved_timeout = _clamp_timeout(provider, timeout or plan["provider_options"].get("timeout"))
+    provider_options_for_dispatch = dict(plan["provider_options"])
+    endpoint_preflight: dict[str, Any] | None = None
+    if provider.lower() in {"llamacpp", "ollama"}:
+        provider_options_for_dispatch, endpoint_preflight = _local_provider_preflight(
+            provider=provider,
+            model=model,
+            provider_options=provider_options_for_dispatch,
+            timeout=resolved_timeout,
+        )
 
     audit_payload = {
         "schema_version": "ai-call-metadata.v2",
@@ -1385,7 +1518,7 @@ def run_ai_completion(
         "agent_name": agent_name,
         "audit_label": audit_label or agent_name or "ai_call",
         "capabilities": plan["capabilities"].to_dict(),
-        "provider_options": {key: value for key, value in plan["provider_options"].items() if key not in {"api_key"}},
+        "provider_options": {key: value for key, value in provider_options_for_dispatch.items() if key not in {"api_key"}},
         "input_token_estimate": plan["inline_tokens"] + sum(chunk.estimated_tokens for chunk in plan["chunks"]),
         "inline_input_token_estimate": plan["inline_tokens"],
         "output_token_budget": plan["budgets"]["safe_output_tokens"],
@@ -1417,7 +1550,10 @@ def run_ai_completion(
             "planning_context_limit_tokens": plan["budgets"]["planning_context_limit_tokens"],
             "final_conversation_tokens": _message_token_footprint(plan["final_messages"], plan["capabilities"].chars_per_token) + plan["budgets"]["safe_output_tokens"],
         }),
+        "resolved_timeout_seconds": resolved_timeout,
     }
+    if endpoint_preflight is not None:
+        audit_payload["endpoint_preflight"] = endpoint_preflight
 
     if len(plan["inline_prompt"]) > STRING_HARD_LIMIT:
         audit_payload["fallback_char_emergency_protection_used"] = True
@@ -1439,7 +1575,7 @@ def run_ai_completion(
                         chunks=plan["chunks"],
                         output_tokens=plan["budgets"]["safe_output_tokens"],
                         timeout=resolved_timeout,
-                        config=runtime_config,
+                        config=_deep_merge(runtime_config, {"providers": {provider.lower(): provider_options_for_dispatch}}),
                         agent_name=agent_name,
                     )
                 except ChunkTransportError as exc:
@@ -1462,7 +1598,7 @@ def run_ai_completion(
                     messages=messages,
                     output_tokens=plan["budgets"]["safe_output_tokens"],
                     timeout=resolved_timeout,
-                    config=runtime_config,
+                    config=_deep_merge(runtime_config, {"providers": {provider.lower(): provider_options_for_dispatch}}),
                     agent_name=agent_name,
                 )
         except Exception as exc:
@@ -1494,6 +1630,7 @@ def run_ai_completion(
     if dispatch_result is not None:
         audit_payload["response_truncation_detected"] = dispatch_result.response_truncated
         audit_payload["provider_response_metadata"] = dispatch_result.provider_metadata
+        audit_payload["response_text"] = dispatch_result.text
     if error_text is not None:
         audit_payload["error"] = error_text
 
