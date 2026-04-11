@@ -130,7 +130,7 @@ Run Options:
   -t, --tui                    Enable TUI Mode. ${Y}[EXPERIMENTAL]${R}
   -m, --mode <n>               Set Operational Mode (program, enterprise, security, etc).
   -b, --briq-sensitivity <N>   Set Granularity (0-16). Default: 6. Higher = more briqs!
-  -c, --cyqles <N>             Set max auto-cycles (1-50). Default: 3
+  -c, --cyqles <N>             Set max auto-cycles (1-50). Default: 12
   -n, --qonstruction-name <n>  Auto-save as qonstruction (non-interactive). v1.0.2
   -s, --sqrapyard              Legacy compatibility seed overlay from sqrapyard/ (not canonical).
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
@@ -519,7 +519,7 @@ sync_repo_outputs_from_qage() {
 
     local run_status
     run_status="$(read_manifest_value "$manifest_path" "run_status")"
-    if [ "$run_status" != "RUN_COMPLETED" ]; then
+    if [ "$run_status" != "RUN_COMPLETED" ] && [ "$run_status" != "RUN_PARTIAL" ]; then
         log_qrane "Repo-native export skipped: run status ${run_status:-unknown}."
         return 0
     fi
@@ -574,7 +574,11 @@ PY
         return 0
     fi
 
-    log_qrane "Repo-native export enabled. Syncing built outputs back into target repository."
+    if [ "$run_status" = "RUN_PARTIAL" ]; then
+        log_qrane "Repo-native export syncing partial run outputs back into target repository with non-terminal status disclosure."
+    else
+        log_qrane "Repo-native export enabled. Syncing built outputs back into target repository."
+    fi
     while IFS= read -r rel_path; do
         if [ -n "$rel_path" ]; then
             log_qrane "Repo-native export synced: ${rel_path}"
@@ -808,6 +812,8 @@ write_latest_run_pointer() {
     printf '%s\n' "$run_dir_name" > "$STATE_LATEST_RUN_FILE"
     ln -sfn "$run_host_path" "$STATE_LATEST_LINK"
     ln -sfn "$run_host_path" "${STATE_RUNS_DIR}/${run_dir_name}"
+    mkdir -p "${STATE_RUNS_DIR}/${run_dir_name}"
+    ln -sfn "$run_host_path" "${STATE_RUNS_DIR}/${run_dir_name}/qage-root"
 }
 
 read_manifest_value() {
@@ -1309,6 +1315,7 @@ case "$COMMAND" in
         mkdir -p "$RUN_HOST_PATH"/{task,guard,planning,estimation,build,validation,realization,verdict,continuation,audit}
         export QONQ_RUN_KIND="resume"
         export QONQ_LEGACY_QAGE_ID="$RUN_DIR_NAME"
+        export QONQ_CANONICAL_RUN_ROOT=".qonqrete/runs/${RUN_DIR_NAME}"
         export QONQ_RESUMED_FROM_QAGE="$QAGE_NAME"
         
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then 
@@ -1373,6 +1380,7 @@ case "$COMMAND" in
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
         export QONQ_RUN_KIND="run"
         export QONQ_LEGACY_QAGE_ID="$RUN_DIR_NAME"
+        export QONQ_CANONICAL_RUN_ROOT=".qonqrete/runs/${RUN_DIR_NAME}"
         unset QONQ_RESUMED_FROM_QAGE
 
         log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"

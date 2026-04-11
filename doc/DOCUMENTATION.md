@@ -111,13 +111,16 @@ Clean flow supports:
 
 ## 4. Agent reference
 
-## 4.1 `tasqleveler.py`
-Compatibility wrapper for canonical `qrystallizer.py`.
+## 4.1 `qrystallizer.py`
+Canonical intake / clarification stage.
 - cycle-1-only behavior
 - writes `task/task-spec.v1.json`, `task/clarification-log.v1.json`, and `task/clarification-summary.md`
-- does not remain the canonical intake authority
+- does not mutate the canonical task input
 
-## 4.2 `instruqtor.py`
+## 4.2 `tasqleveler.py`
+Legacy compatibility wrapper for canonical `qrystallizer.py`.
+
+## 4.3 `instruqtor.py`
 Planning agent.
 Responsibilities:
 - read the current tasq
@@ -125,7 +128,7 @@ Responsibilities:
 - generate QONTRACT files on cycle 1
 - honor sensitivity settings and decomposition logic
 
-## 4.3 `calqulator.py`
+## 4.4 `calqulator.py`
 Local estimation helper.
 Responsibilities:
 - estimate token/cost footprint

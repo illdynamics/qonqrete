@@ -2,10 +2,11 @@
 # v1.0.4-stable — Contract-enforced pipeline with qontract.d/
 #
 # PHASE 1 DEMO ORDER:
-#   tasqleveler(Qrystallizer) → guard → instruqtor → calqulator → construqtor → qontextor → qompressor → qontrabender → inspeqtor
+#   qrystallizer → guard → instruqtor → calqulator → construqtor → qontextor → qompressor → qontrabender → inspeqtor
 #
 # CANONICAL STAGE ALIASES (PHASE 1 BRIDGE):
-#   tasqleveler -> CLARIFICATION
+#   qrystallizer -> CLARIFICATION
+#   tasqleveler  -> CLARIFICATION (legacy compatibility alias only)
 #   guard       -> GUARD
 #   instruqtor  -> PLANNING
 #   calqulator  -> ESTIMATION
@@ -21,12 +22,13 @@
 # qontext.d: Dependency hints support artifact — runs BEFORE inspeqtor in actual YAML order.
 
 agents:
-  - name: tasqleveler
-    script: tasqleveler.py
+  - name: qrystallizer
+    script: qrystallizer.py
     input: "tasq.d/cyqle{N}_tasq.md"
     output: "tasq.d/cyqle{N}_tasq.md"
     description: |
-      Canonical Qrystallizer front door, exposed through the legacy tasqleveler alias.
+      Canonical Qrystallizer front door.
+      Legacy tasqleveler remains a compatibility alias only.
       Produces task/task-spec.v1.json, task/clarification-log.v1.json,
       and clarification-summary.md without mutating the canonical task input.
     cycle_1_only: true

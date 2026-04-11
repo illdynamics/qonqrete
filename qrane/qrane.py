@@ -62,6 +62,16 @@ AGENT_MODULE_DIR = PROJECT_ROOT / "worqer"
 
 class KillSignal(Exception): pass
 
+
+def get_agent_config(agent_configs: dict, agent_name: str) -> dict:
+    if agent_name in agent_configs:
+        return agent_configs.get(agent_name, {})
+    if agent_name == "qrystallizer":
+        return agent_configs.get("tasqleveler", {})
+    if agent_name == "tasqleveler":
+        return agent_configs.get("qrystallizer", {})
+    return {}
+
 def get_version():
     suffix = "-beta"
     v = os.environ.get("QONQ_VERSION")
@@ -234,6 +244,31 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
         # Default: don't display unrecognized lines
         return False
 
+    def iter_ready_lines(proc, reads, buffers):
+        readable, _, _ = select.select(reads, [], [], 0.05)
+        yielded = False
+        for stream in list(readable):
+            chunk = stream.read(1)
+            if chunk == "":
+                remainder = buffers.pop(stream, "")
+                if remainder:
+                    yielded = True
+                    yield stream, remainder
+                reads.remove(stream)
+                continue
+            buffers[stream] = buffers.get(stream, "") + chunk
+            while "\n" in buffers[stream]:
+                line, remainder = buffers[stream].split("\n", 1)
+                buffers[stream] = remainder
+                yielded = True
+                yield stream, line + "\n"
+        if not yielded and proc.poll() is not None:
+            for stream in list(reads):
+                remainder = buffers.pop(stream, "")
+                if remainder:
+                    yield stream, remainder
+                reads.remove(stream)
+
     event_start_msg = f"Initiating {agent_display_name}..."
     with open(events_log_path, 'a', encoding='utf-8') as f:
         f.write(f"[{time.strftime('%H:%M:%S')}] {event_start_msg}\n")
@@ -245,13 +280,10 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                  open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
 
                 reads = [proc.stdout, proc.stderr]
+                stream_buffers = {proc.stdout: "", proc.stderr: ""}
                 while True:
                     check_tui_keys(ui, proc)
-                    readable, _, _ = select.select(reads, [], [], 0.05)
-                    for r in readable:
-                        line = r.readline()
-                        if not line: reads.remove(r); continue
-
+                    for r, line in iter_ready_lines(proc, reads, stream_buffers):
                         qonsole_log.write(line)
 
                         clean = line.strip()
@@ -289,15 +321,11 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                  open(qonsole_log_path, 'a', encoding='utf-8') as qonsole_log:
 
                 reads = [proc.stdout, proc.stderr]
+                stream_buffers = {proc.stdout: "", proc.stderr: ""}
                 while True:
-                    readable, _, _ = select.select(reads, [], [], 0.05)
-                    if not readable and proc.poll() is not None: break
-                    for r in readable:
-                        line = r.readline()
-                        if not line:
-                            reads.remove(r)
-                            continue
-
+                    any_output = False
+                    for r, line in iter_ready_lines(proc, reads, stream_buffers):
+                        any_output = True
                         qonsole_log.write(line)
 
                         if r == proc.stderr:
@@ -310,6 +338,8 @@ def run_agent(agent_name: str, command: list[str], prefix: str, color: str, logg
                             spinner.stop()
                             print(f"{agent_prefix}{clean}")
                             spinner.start()
+                    if not any_output and proc.poll() is not None and not reads:
+                        break
 
             spinner.stop()
 
@@ -440,7 +470,29 @@ def prepare_same_run_repair_cycle(
             continue
         target_name = _rename_briq_for_cycle(source_path.name, target_cycle)
         target_path = briq_dir / target_name
-        shutil.copyfile(source_path, target_path)
+        try:
+            source_text = source_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        repair_block = "\n".join([
+            "",
+            "## Explicit Repair Context",
+            f"- Repair pass index: {repair_plan.get('repair_pass_index')}",
+            f"- Repair reason: {repair_plan.get('repair_reason_summary', 'Bounded targeted repair required.')}",
+            "- This briq is being re-executed as an explicit targeted repair pass.",
+            "- Address the required actions and evidence-linked issues below before making new changes.",
+            "",
+            "### Required Actions",
+            *[f"- {item}" for item in repair_plan.get("required_actions", [])],
+            "",
+            "### Evidence References",
+            *[f"- {item}" for item in repair_plan.get("evidence_refs", [])],
+            "",
+            "### Repair Constraints",
+            *[f"- {item}" for item in repair_plan.get("repair_constraints", [])],
+            "",
+        ])
+        target_path.write_text(source_text.rstrip() + "\n" + repair_block, encoding="utf-8")
         created_files.append(str(target_path.relative_to(path_manager.root)))
 
     if not created_files:
@@ -487,10 +539,11 @@ def write_continuation_metadata(
 ) -> str:
     continuation_path = continuation_metadata_path(workspace_root)
     continuation_path.parent.mkdir(parents=True, exist_ok=True)
+    run_id = os.environ.get("QONQ_LEGACY_QAGE_ID") or workspace_root.name
     payload = {
         "schema_version": "continuation-metadata.v1",
-        "continuation_id": f"{workspace_root.name}-continuation",
-        "source_run_id": workspace_root.name,
+        "continuation_id": f"{run_id}-continuation",
+        "source_run_id": run_id,
         "resume_point": repair_plan.get("next_lifecycle_transition", "CONTINUABLE"),
         "planning_reuse_mode": repair_plan.get("planning_reuse_mode", "reuse_locked_plan"),
         "continuation_reason": reason,
@@ -893,7 +946,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
     else:
         ui.log_main(f"{qrane_prefix}Initiating Qrew... (Mode: {final_mode})")
 
-    AGENT_COLORS = {"tasqleveler": Colors.YELLOW, "instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B, "qontrabender": Colors.MAGENTA}
+    AGENT_COLORS = {"qrystallizer": Colors.YELLOW, "tasqleveler": Colors.YELLOW, "instruqtor": Colors.LIME, "calqulator": Colors.GREEN, "construqtor": Colors.C, "inspeqtor": Colors.MAGENTA, "qontextor": Colors.YELLOW, "qompressor": Colors.B, "qontrabender": Colors.MAGENTA}
 
     # --- Initial Dual-Core Warmup (Sqrapyard Detection) ---
     # Checks if qodeyard was seeded. If so, generate Skeletons (Fast) and Context (Smart).
@@ -1030,7 +1083,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
 
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
-                agent_config = agent_configs.get(name, {})
+                agent_config = get_agent_config(agent_configs, name)
                 provider = agent_config.get('provider', None)
 
                 # Skip agents that only run on cycle 1 (e.g., TasqLeveler)
@@ -1135,7 +1188,7 @@ def run_orchestration(args, prefix, is_autonomous, config, ui):
                 previous_log_path = qonsole_log_path
                 if record_agent_completion:
                     record_agent_completion(worqspace, name, cycle, success=True)
-                if name == 'tasqleveler':
+                if name in {'qrystallizer', 'tasqleveler'}:
                     ready, status = load_task_spec_status(worqspace)
                     if ready:
                         no_midrun_questions = True

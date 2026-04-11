@@ -293,7 +293,7 @@ This is useful for preventing accidental expensive runs with high sensitivity or
 
 ## Main workflow
 
-1. **Clarify** — `tasqleveler` is now a compatibility wrapper for canonical `Qrystallizer`
+1. **Clarify** — `qrystallizer` is the canonical intake stage; `tasqleveler` remains only as a thin compatibility wrapper
 2. **Guard** — `guard` evaluates readiness and effective constraints before planning
 3. **Plan** — `instruqtor` emits execution blueprint, build groups, validation plan, and contract files
 4. **Estimate** — `calqulator` emits estimation artifacts

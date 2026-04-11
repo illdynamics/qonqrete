@@ -291,6 +291,7 @@ CONFIG_SCHEMA = {
                 "auto_cycle_limit": {"type": "integer", "minimum": 0, "maximum": 100},
                 "use_qompressor": {"type": "boolean"},
                 "use_qontextor": {"type": "boolean"},
+                "use_qrystallizer": {"type": "boolean"},
                 "use_tasqleveler": {"type": "boolean"}
             }
         }

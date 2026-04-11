@@ -90,8 +90,8 @@ CONFIDENCE_STATUSES = [
 ]
 
 STAGE_ALIAS_MAP = {
-    "tasqleveler": "CLARIFICATION",
     "qrystallizer": "CLARIFICATION",
+    "tasqleveler": "CLARIFICATION",
     "guard": "GUARD",
     "instruqtor": "PLANNING",
     "calqulator": "ESTIMATION",
@@ -160,6 +160,11 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def determine_validation_mode(workspace_root: Path) -> str:
+    validation_bundle = read_json(workspace_root / "validation" / "validation-bundle.v1.json")
+    if validation_bundle:
+        mode = validation_bundle.get("validation_execution_mode")
+        if mode in VALIDATION_EXECUTION_MODES:
+            return mode
     reqap_dir = workspace_root / "reqap.d"
     has_guard = any(reqap_dir.glob("cyqle*_qontract_guard.json")) or any(reqap_dir.glob("cyqle*_qontract_guard.md"))
     has_verification = any(reqap_dir.glob("cyqle*/cyqle*_verification.md"))
@@ -170,17 +175,29 @@ def determine_validation_mode(workspace_root: Path) -> str:
 
 def determine_evidence_status(workspace_root: Path) -> str:
     has_build = any(workspace_root.glob("exeq.d/cyqle*_summary.md")) and any(workspace_root.glob("exeq.d/cyqle*_changed.md"))
-    has_validation = determine_validation_mode(workspace_root) != "NONE"
-    has_inspection = any(workspace_root.glob("reqap.d/cyqle*_reqap.md"))
-    has_realization = (workspace_root / "realization" / "realization-bundle.v1.json").exists()
+    validation_bundle = read_json(workspace_root / "validation" / "validation-bundle.v1.json")
+    realization_bundle = read_json(workspace_root / "realization" / "realization-bundle.v1.json")
+    inspection_verdict = read_json(workspace_root / "verdict" / "inspection-verdict.v1.json")
+    has_validation = bool(validation_bundle) or determine_validation_mode(workspace_root) != "NONE"
+    has_inspection = bool(inspection_verdict) or any(workspace_root.glob("reqap.d/cyqle*_reqap.md"))
+    has_realization = bool(realization_bundle)
+    if realization_bundle:
+        status = realization_bundle.get("evidence_status")
+        if status in {"EVIDENCE_MISSING", "EVIDENCE_PARTIAL", "EVIDENCE_COMPLETE"}:
+            return status
     if has_build and has_validation and has_inspection and has_realization:
-        return "EVIDENCE_COMPLETE"
-    if has_build or has_validation or has_inspection:
+        return "EVIDENCE_PARTIAL"
+    if has_build or has_validation or has_inspection or has_realization:
         return "EVIDENCE_PARTIAL"
     return "EVIDENCE_MISSING"
 
 
 def determine_confidence_status(workspace_root: Path) -> str:
+    realization_bundle = read_json(workspace_root / "realization" / "realization-bundle.v1.json")
+    if realization_bundle:
+        confidence = realization_bundle.get("confidence")
+        if confidence in CONFIDENCE_STATUSES:
+            return confidence
     validation_mode = determine_validation_mode(workspace_root)
     if validation_mode == "NONE":
         return "CONFIDENCE_LOW"
@@ -253,7 +270,9 @@ def base_manifest(workspace_root: Path) -> dict[str, Any]:
     legacy_qage_id = os.environ.get("QONQ_LEGACY_QAGE_ID") or workspace_root.name
     resumed_from_qage = os.environ.get("QONQ_RESUMED_FROM_QAGE")
     run_kind = os.environ.get("QONQ_RUN_KIND", "run")
+    canonical_state_root = os.environ.get("QONQ_CANONICAL_RUN_ROOT") or f".qonqrete/runs/{legacy_qage_id}"
     raw_task_rel = rel_path(workspace_root, workspace_root / "tasq.d" / "cyqle1_tasq.md")
+    is_run_root_bridge = workspace_root.is_symlink() or "/.qonqrete/runs/" in str(workspace_root)
     manifest = {
         "schema_version": "run-manifest.v1",
         "run_id": legacy_qage_id,
@@ -275,6 +294,8 @@ def base_manifest(workspace_root: Path) -> dict[str, Any]:
             "partial_write_disclosure": "ConstruQtor stages scoped attempt writes, validates against an overlay workspace, and commits atomically with snapshot-based recovery metadata.",
             "continuation_model": "EXPLICIT_REPAIR_PLAN_CANONICAL_WITH_LEGACY_COMPATIBILITY_GATE",
             "canonical_manifest_authority": True,
+            "canonical_state_root": canonical_state_root,
+            "canonical_state_model": "RUN_ROOT_POINTER_BRIDGE_OVER_QAGE" if is_run_root_bridge else "RUN_ROOT_NATIVE",
         },
         "registry": {
             "stage_ids": STAGE_IDS,
@@ -728,7 +749,7 @@ def write_inspection_bridge(workspace_root: Path, cycle: int) -> str:
 def collect_agent_artifacts(workspace_root: Path, legacy_alias: str, cycle: int) -> tuple[list[str], list[str]]:
     artifacts: list[str] = []
     notes: list[str] = []
-    if legacy_alias == "tasqleveler":
+    if legacy_alias in {"qrystallizer", "tasqleveler"}:
         tasq_path = workspace_root / "tasq.d" / f"cyqle{cycle}_tasq.md"
         if tasq_path.exists():
             append_unique(artifacts, rel_path(workspace_root, tasq_path))
@@ -740,7 +761,10 @@ def collect_agent_artifacts(workspace_root: Path, legacy_alias: str, cycle: int)
         ]:
             if (workspace_root / rel_candidate).exists():
                 append_unique(artifacts, rel_candidate)
-        notes.append("Legacy tasqleveler alias now wraps canonical Qrystallizer intake without mutating tasq in place.")
+        if legacy_alias == "tasqleveler":
+            notes.append("Legacy tasqleveler alias now wraps canonical Qrystallizer intake without mutating tasq in place.")
+        else:
+            notes.append("Canonical Qrystallizer intake ran without mutating the canonical task input.")
     elif legacy_alias == "guard":
         bridge_path = write_guard_bridge(workspace_root)
         if bridge_path:
@@ -871,6 +895,35 @@ def sync_artifact_slots(workspace_root: Path) -> dict[str, Any]:
 def record_agent_completion(workspace_root: Path, legacy_alias: str, cycle: int, success: bool = True) -> dict[str, Any]:
     canonical_stage = STAGE_ALIAS_MAP.get(legacy_alias)
     artifacts, notes = collect_agent_artifacts(workspace_root, legacy_alias, cycle)
+    if legacy_alias == "inspeqtor":
+        validation_artifacts = [
+            path for path in artifacts
+            if path.startswith("validation/")
+            or path.endswith("_qontract_guard.md")
+            or path.endswith("_qontract_guard.json")
+            or path.endswith("_verification.md")
+        ]
+        realization_artifacts = [path for path in artifacts if path.startswith("realization/")]
+        if validation_artifacts:
+            complete_stage(
+                workspace_root,
+                "VALIDATION",
+                "inspeqtor:validation",
+                cycle,
+                artifacts=validation_artifacts,
+                notes=["Validation artifacts were produced inside the inspeqtor runtime boundary."],
+                success=success,
+            )
+        if realization_artifacts:
+            complete_stage(
+                workspace_root,
+                "REALIZATION",
+                "inspeqtor:realization",
+                cycle,
+                artifacts=realization_artifacts,
+                notes=["Realization artifacts were produced inside the inspeqtor runtime boundary."],
+                success=success,
+            )
     if canonical_stage:
         complete_stage(workspace_root, canonical_stage, legacy_alias, cycle, artifacts=artifacts, notes=notes, success=success)
     else:

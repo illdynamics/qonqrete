@@ -976,7 +976,7 @@ def write_planning_artifacts(
 ) -> None:
     planning_dir = worqspace_root / 'planning'
     planning_dir.mkdir(parents=True, exist_ok=True)
-    run_id = task_spec.get('run_id', worqspace_root.name) if task_spec else worqspace_root.name
+    run_id = task_spec.get('run_id', os.environ.get('QONQ_LEGACY_QAGE_ID') or worqspace_root.name) if task_spec else (os.environ.get('QONQ_LEGACY_QAGE_ID') or worqspace_root.name)
     blueprint = plan_payload.get('execution_blueprint', {})
 
     execution_blueprint = {
@@ -1658,12 +1658,41 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
         file_path = output_dir / filename
 
         briq_content = item['content']
+        build_group_id = group.get('build_group_id', f"bg-{component_id_from_title(item['title'])}")
+        scope_id = group.get('scope_id', f"scope_build_group_{build_group_id.replace('-', '_')}")
+        component_id = component.get('component_id', component_id_from_title(item['title']))
+        component_title = component.get('title', component_id.replace('-', ' ').title())
+        group_title = group.get('title', build_group_id)
+        group_objective = group.get('objective', component.get('summary', ''))
+        validation_focus = group.get('validation_focus', [])
+        constraints = component.get('constraints', [])
 
         # v1.0.4: Inject relevant invariants based on scope tags + add Contract-Relevant header
         scope_tags = []
-        contract_relevant = False
+        metadata_scope_tags = infer_scope_tags(
+            " ".join(
+                part
+                for part in (
+                    item['title'],
+                    component_id,
+                    component_title,
+                    build_group_id,
+                    scope_id,
+                    group_objective,
+                    " ".join(validation_focus),
+                    " ".join(constraints),
+                )
+                if part
+            ),
+            briq_content,
+        )
+        contract_relevant = bool(metadata_scope_tags and any(
+            tag in metadata_scope_tags for tag in ('schema', 'storage', 'routing', 'id')
+        ))
         if contract.get('invariants'):
             scope_tags = infer_scope_tags(item['title'], briq_content)
+            if not scope_tags:
+                scope_tags = metadata_scope_tags
             # Contract-relevant if scope includes schema, storage, routing, or id
             contract_relevant = bool(scope_tags and any(
                 t in scope_tags for t in ('schema', 'storage', 'routing', 'id')
@@ -1675,20 +1704,12 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
                 print(f"  - Wrote [Plan] {filename} (no invariants)", flush=True)
         else:
             print(f"  - Wrote [Plan] {filename}", flush=True)
+            scope_tags = metadata_scope_tags
 
         # Estimate tokens for this briq
         full_briq = f"# {item['title']}\n\n**ARCHITECT'S INSTRUCTION:**\n{briq_content}"
         briq_tokens = estimate_tokens(full_briq, ai_model)
         briq_cost = calculate_cost(briq_tokens, ai_model, is_input=True)
-
-        build_group_id = group.get('build_group_id', f"bg-{component_id_from_title(item['title'])}")
-        scope_id = group.get('scope_id', f"scope_build_group_{build_group_id.replace('-', '_')}")
-        component_id = component.get('component_id', component_id_from_title(item['title']))
-        component_title = component.get('title', component_id.replace('-', ' ').title())
-        group_title = group.get('title', build_group_id)
-        group_objective = group.get('objective', component.get('summary', ''))
-        validation_focus = group.get('validation_focus', [])
-        constraints = component.get('constraints', [])
 
         grouped_scope_section = "\n\n---\n**Grouped Scope Contract:**\n"
         grouped_scope_section += f"- Build Group: {build_group_id} ({group_title})\n"

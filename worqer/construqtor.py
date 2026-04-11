@@ -120,6 +120,40 @@ def get_write_strategy_config(config: dict) -> dict:
     return result
 
 
+def canonical_run_id(worqspace_root: Path) -> str:
+    return os.environ.get('QONQ_LEGACY_QAGE_ID') or worqspace_root.name
+
+
+def load_repair_context(worqspace_root: Path) -> str:
+    if os.environ.get("QONQ_REPAIR_MODE") != "1":
+        return ""
+    repair_plan_path = os.environ.get("QONQ_REPAIR_PLAN_PATH")
+    if not repair_plan_path:
+        return ""
+    try:
+        payload = json.loads(Path(repair_plan_path).read_text(encoding='utf-8'))
+    except Exception:
+        return ""
+    lines = [
+        "**EXPLICIT REPAIR MODE:** This build is a bounded targeted repair pass.",
+        f"**Repair Pass Index:** {payload.get('repair_pass_index')}",
+        f"**Repair Reason:** {payload.get('repair_reason_summary', 'Targeted repair required.')}",
+        "**Repair Constraints:**",
+    ]
+    for item in payload.get("repair_constraints", []):
+        lines.append(f"- {item}")
+    lines.append("**Required Actions:**")
+    for item in payload.get("required_actions", []):
+        lines.append(f"- {item}")
+    lines.append("**Target Build Groups:**")
+    for item in payload.get("target_build_groups", []):
+        lines.append(f"- {item}")
+    lines.append("**Target Briqs:**")
+    for item in payload.get("target_briq_files", []):
+        lines.append(f"- {item}")
+    return "\n".join(lines) + "\n"
+
+
 def get_mode_persona(mode: str) -> str:
     m = mode.lower()
     if m == 'enterprise': 
@@ -1024,7 +1058,7 @@ def stage_attempt_files(
     manifest = {
         "schema_version": "build-attempt.v1",
         "attempt_id": attempt_id,
-        "run_id": worqspace_root.name,
+        "run_id": canonical_run_id(worqspace_root),
         "build_group_id": metadata.get('build-group', 'ungrouped'),
         "scope_id": metadata.get('scope-id', 'scope_unknown'),
         "component_id": metadata.get('component-id', 'unassigned'),
@@ -1118,7 +1152,7 @@ def commit_staged_attempt(staged_attempt: dict, qodeyard: Path, worqspace_root: 
     recovery_manifest = {
         "schema_version": "recovery-metadata.v1",
         "attempt_id": staged_attempt["attempt_id"],
-        "run_id": worqspace_root.name,
+        "run_id": canonical_run_id(worqspace_root),
         "recovery_policy": "snapshot_before_commit",
         "recovery_available": True,
         "workspace_recovery_scope": "attempt_scoped",
@@ -1230,6 +1264,7 @@ def process_briq_interleaved(
         planning_payload or {},
         component_contracts_payload or {}
     )
+    repair_context = load_repair_context(worqspace_root)
     
     # Build prompt
     prompt = f"""You are the 'construQtor'.
@@ -1239,6 +1274,7 @@ def process_briq_interleaved(
 **OUTPUT FORMAT:** You MUST format your response using markdown code blocks. Each file must have its path specified after the language in the format `language:path/to/file.ext`.
 {constitutional_context}
 {grouped_context}
+{repair_context}
 **MANDATORY NAMING CONVENTIONS (STRICT):**
 All function and method names MUST follow these verb prefixes for deterministic mapping:
 - `get_`, `fetch_`, `load_`, `read_`, `retrieve_`, `find_`, `lookup_`, `query_`, `select_` → Data retrieval
@@ -1300,7 +1336,7 @@ print("Hello, World!")
                 result['error'] = "AI returned no code blocks"
                 continue
             
-            attempt_id = f"{worqspace_root.name}-cyqle{os.environ.get('CYCLE_NUM', '1')}-{briq_name}-attempt{attempt:02d}"
+            attempt_id = f"{canonical_run_id(worqspace_root)}-cyqle{os.environ.get('CYCLE_NUM', '1')}-{briq_name}-attempt{attempt:02d}"
             staged_attempt = stage_attempt_files(
                 ai_result,
                 qodeyard_path,
@@ -1951,7 +1987,7 @@ def main():
         build_report = {
             "schema_version": "build-report.v1",
             "build_report_id": f"{cycle_num}-{group_id}",
-            "run_id": worqspace_root.name,
+            "run_id": canonical_run_id(worqspace_root),
             "build_group_id": group_id,
             "status": group_status,
             "files": sorted(group_entry['written_files']),
@@ -1972,7 +2008,7 @@ def main():
         }
         changed_scope_manifest = {
             "schema_version": "changed-scope-manifest.v1",
-            "run_id": worqspace_root.name,
+            "run_id": canonical_run_id(worqspace_root),
             "build_group_id": group_id,
             "scope_id": group_entry['scope_id'],
             "write_strategy": write_strategy_config['mode'],

@@ -46,6 +46,10 @@ retry:
   # Delay between retries (seconds)
   retry_delay: 2
 
+repair:
+  # Maximum same-run bounded repair passes after inspection emits repair intent.
+  max_attempts: 2
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INTERLEAVED PIPELINE (NEW in v0.8.3)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -79,22 +83,27 @@ verification:
 
 agents:
   # ═══════════════════════════════════════════════════════════════════════════
-  # TASQLEVELER - Task Enhancement (OPTIONAL)
+  # QRYSTALLIZER - Canonical intake / clarification
+  # Legacy `tasqleveler` remains a compatibility alias only.
   # ═══════════════════════════════════════════════════════════════════════════
-  tasqleveler:
-    provider: deepseek
-    model: deepseek-chat
-    # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
+  qrystallizer:
+    provider: openai
+    model: gpt-4.1-mini
+    # Transitional compatibility knobs retained for the wrapper path.
     enabled: true
     min_complexity_score: 200  # Below this score, don't enhance
     min_lines: 200             # Below this line count, don't enhance
+
+  guard:
+    provider: openai
+    model: gpt-4.1-mini
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSTRUQTOR - Briq Planning
   # ═══════════════════════════════════════════════════════════════════════════
   instruqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: openai
+    model: gpt-4.1-mini
 
   calqulator:
     provider: local
@@ -104,15 +113,15 @@ agents:
   # CONSTRUQTOR - Code Generation (needs smarter model)
   # ═══════════════════════════════════════════════════════════════════════════
   construqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: openai
+    model: gpt-4.1-mini
 
   # ═══════════════════════════════════════════════════════════════════════════
   # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
   # ═══════════════════════════════════════════════════════════════════════════
   inspeqtor:
-    provider: deepseek
-    model: deepseek-chat
+    provider: openai
+    model: gpt-4.1-mini
     
     # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
     batch_mode: true                 # Group briqs into batches
@@ -185,8 +194,11 @@ options:
   # false = Autonomous mode (cheqpoints disabled)
   cheqpoint: false
 
-  # Max cycles in auto-mode (recommended: 3 for simple, 4-6 for complex)
-  auto_cycle_limit: 1
+  # Max cycles in auto-mode.
+  # Runtime semantics note: 0 is effectively unlimited because qrane only
+  # stops on the cycle cap when max_cycles > 0. This pass uses 12 explicitly
+  # to keep continuation bounded during the live proof run.
+  auto_cycle_limit: 12
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Cost Confirmation Gate (GateQeeper)

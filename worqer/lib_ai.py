@@ -407,8 +407,6 @@ def _run_openai(model, prompt, timeout=DEFAULT_API_TIMEOUT):
             content = chunk.choices[0].delta.content
             if content:
                 captured_chunks.append(content)
-                sys.stderr.write(content)
-                sys.stderr.flush()
         return "".join(captured_chunks).strip()
     except openai.APITimeoutError as e:
         raise TimeoutError(f"OpenAI API timeout after {timeout}s") from e
@@ -468,14 +466,18 @@ def _run_anthropic(model, prompt, timeout=DEFAULT_API_TIMEOUT):
 
 
 def _run_deepseek(model, prompt, timeout=DEFAULT_API_TIMEOUT):
-    """DeepSeek provider with streaming output and timeout."""
+    """DeepSeek provider with non-streaming completion and timeout.
+
+    DeepSeek streaming has shown cases where the content is fully emitted but the
+    stream never cleanly terminates, which stalls the stage after a valid model
+    response. Use the regular completion path here so bounded runs progress.
+    """
     provider = DeepSeekProvider(model=model, timeout=timeout)
-    captured_chunks = []
-    for chunk in provider.query_streaming(prompt):
-        captured_chunks.append(chunk)
-        sys.stderr.write(chunk)
+    response = provider.query(prompt, stream=False)
+    if response:
+        sys.stderr.write(response)
         sys.stderr.flush()
-    return "".join(captured_chunks).strip()
+    return (response or "").strip()
 
 
 def _run_qwen(model, prompt, timeout=DEFAULT_API_TIMEOUT):

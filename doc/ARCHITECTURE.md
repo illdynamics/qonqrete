@@ -76,8 +76,8 @@ Qrane:
 The repo currently contains these notable agents/utilities:
 
 #### AI / pipeline agents
-- `tasqleveler.py` (compatibility wrapper for `qrystallizer.py`)
 - `qrystallizer.py`
+- `tasqleveler.py` (legacy compatibility wrapper for `qrystallizer.py`)
 - `guard.py`
 - `instruqtor.py`
 - `construqtor.py`
@@ -99,11 +99,12 @@ The repo currently contains these notable agents/utilities:
 The current committed `worqspace/pipeline_config.yaml` bridges the canonical order as:
 
 ```text
-tasqleveler(Qrystallizer) → guard → instruqtor → calqulator → construqtor → qontextor/qompressor/qontrabender (support services) → inspeqtor
+qrystallizer → guard → instruqtor → calqulator → construqtor → qontextor/qompressor/qontrabender (support services) → inspeqtor
 ```
 
 Additional notes:
-- `tasqleveler` is no longer the canonical intake implementation; it aliases Qrystallizer
+- `qrystallizer` is the canonical intake implementation
+- `tasqleveler` remains only as a thin compatibility alias
 - `qontrabender` is trigger-driven rather than a simple always-on stage
 - `qodeyard/` remains the mutable build surface inside a run, while the manifest is the authoritative linkage layer
 - `bloq.d/`, `qontext.d/`, and `qache.d/` are support artifact domains, not canonical lifecycle stages

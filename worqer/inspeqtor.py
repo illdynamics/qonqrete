@@ -69,6 +69,10 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def canonical_run_id(worqspace_root: Path) -> str:
+    return os.environ.get("QONQ_LEGACY_QAGE_ID") or worqspace_root.name
+
+
 def load_optional_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -288,6 +292,66 @@ def evaluate_grouped_coherence(
     }
 
 
+def evaluate_frontend_contracts(worqspace_root: Path) -> list[dict]:
+    qodeyard = worqspace_root / "qodeyard"
+    index_path = qodeyard / "index.html"
+    js_path = qodeyard / "app.js"
+    issues: list[dict] = []
+    if not index_path.exists() or not js_path.exists():
+        return issues
+    try:
+        html = index_path.read_text(encoding="utf-8")
+        js = js_path.read_text(encoding="utf-8")
+    except Exception:
+        return issues
+
+    html_ids = set(re.findall(r'id="([^"]+)"', html))
+    js_ids = set(re.findall(r"getElementById\(['\"]([^'\"]+)['\"]\)", js))
+    missing_ids = sorted(js_ids - html_ids)
+    if missing_ids:
+        issues.append({
+            "severity": "error",
+            "scope": "frontend_contract",
+            "message": f"JavaScript references missing DOM ids: {', '.join(missing_ids)}",
+            "files": ["app.js", "index.html"],
+        })
+
+    required_handler_markers = [
+        "handle_recipe_submit",
+        "handle_search_input",
+        "handle_category_filter",
+        "handle_favorites_toggle",
+    ]
+    missing_handlers = [marker for marker in required_handler_markers if marker not in js]
+    if missing_handlers:
+        issues.append({
+            "severity": "error",
+            "scope": "frontend_contract",
+            "message": f"Required UI handlers are missing from app.js: {', '.join(missing_handlers)}",
+            "files": ["app.js"],
+        })
+
+    expected_bindings = ["recipe-form", "search", "category-filter", "favorites-only"]
+    absent_bindings = [marker for marker in expected_bindings if marker in html_ids and marker not in js]
+    if absent_bindings:
+        issues.append({
+            "severity": "error",
+            "scope": "frontend_contract",
+            "message": f"Expected interactive controls are not referenced in app.js: {', '.join(absent_bindings)}",
+            "files": ["app.js", "index.html"],
+        })
+
+    if "addEventListener" not in js:
+        issues.append({
+            "severity": "error",
+            "scope": "frontend_contract",
+            "message": "app.js does not attach any DOM event listeners.",
+            "files": ["app.js"],
+        })
+
+    return issues
+
+
 def build_validation_bundle(
     worqspace_root: Path,
     cycle_num: str,
@@ -365,6 +429,13 @@ def build_validation_bundle(
         }
         for issue in grouped_coherence["issues"]
     ])
+    issues.extend([
+        {
+            "source": "frontend_contract",
+            **issue,
+        }
+        for issue in evaluate_frontend_contracts(worqspace_root)
+    ])
 
     validation_status = "PASS"
     if any(check["status"] == "FAIL" for check in checks):
@@ -385,8 +456,8 @@ def build_validation_bundle(
 
     return {
         "schema_version": "validation-bundle.v1",
-        "validation_bundle_id": f"{worqspace_root.name}-validation-cyqle{cycle_num}",
-        "run_id": worqspace_root.name,
+        "validation_bundle_id": f"{canonical_run_id(worqspace_root)}-validation-cyqle{cycle_num}",
+        "run_id": canonical_run_id(worqspace_root),
         "cycle": int(cycle_num),
         "stage": "VALIDATION",
         "status": validation_status,
@@ -509,11 +580,16 @@ def build_realization_bundle(
             "reason": "Non-Python ecosystems currently rely on weaker deterministic coverage than Python.",
         })
 
-    evidence_status = "EVIDENCE_COMPLETE"
-    if validation_bundle.get("status") == "FAIL" or grouped_coherence["undeclared_changed_files"]:
-        evidence_status = "EVIDENCE_PARTIAL"
-    elif not changed_file_records:
+    evidence_status = "EVIDENCE_PARTIAL"
+    if not changed_file_records:
         evidence_status = "EVIDENCE_MISSING"
+    elif (
+        validation_bundle.get("status") == "PASS"
+        and validation_bundle.get("validation_execution_mode") in {"EXECUTED", "MIXED"}
+        and not grouped_coherence["undeclared_changed_files"]
+        and not unverified_behaviors
+    ):
+        evidence_status = "EVIDENCE_COMPLETE"
 
     confidence = "CONFIDENCE_HIGH"
     if validation_bundle.get("validation_execution_mode") == "NONE":
@@ -541,8 +617,8 @@ def build_realization_bundle(
 
     return {
         "schema_version": "realization-bundle.v1",
-        "realization_bundle_id": f"{worqspace_root.name}-realization-cyqle{cycle_num}",
-        "run_id": worqspace_root.name,
+        "realization_bundle_id": f"{canonical_run_id(worqspace_root)}-realization-cyqle{cycle_num}",
+        "run_id": canonical_run_id(worqspace_root),
         "cycle": int(cycle_num),
         "stage": "REALIZATION",
         "status": evidence_status,
@@ -656,8 +732,8 @@ def build_inspection_input_contract(
 
     return {
         "schema_version": "inspection-input.v1",
-        "inspection_input_id": f"{worqspace_root.name}-inspection-input-cyqle{cycle_num}",
-        "run_id": worqspace_root.name,
+        "inspection_input_id": f"{canonical_run_id(worqspace_root)}-inspection-input-cyqle{cycle_num}",
+        "run_id": canonical_run_id(worqspace_root),
         "cycle": int(cycle_num),
         "stage": "INSPECTION",
         "status": status,
@@ -798,8 +874,8 @@ def build_inspection_verdict(
 
     return {
         "schema_version": "inspection-verdict.v1",
-        "inspection_verdict_id": f"{worqspace_root.name}-inspection-verdict-cyqle{cycle_num}",
-        "run_id": worqspace_root.name,
+        "inspection_verdict_id": f"{canonical_run_id(worqspace_root)}-inspection-verdict-cyqle{cycle_num}",
+        "run_id": canonical_run_id(worqspace_root),
         "cycle": int(cycle_num),
         "stage": "INSPECTION",
         "status": verdict,
@@ -946,8 +1022,8 @@ def build_repair_plan(
 
     return {
         "schema_version": "repair-plan.v1",
-        "repair_plan_id": f"{worqspace_root.name}-repair-plan-cyqle{cycle_num}",
-        "source_run_id": worqspace_root.name,
+        "repair_plan_id": f"{canonical_run_id(worqspace_root)}-repair-plan-cyqle{cycle_num}",
+        "source_run_id": canonical_run_id(worqspace_root),
         "source_cycle": int(cycle_num),
         "source_verdict_ref": "verdict/inspection-verdict.v1.json",
         "repair_reason_summary": repair_reason_summary,
