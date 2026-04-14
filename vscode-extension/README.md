@@ -76,7 +76,7 @@ The extension uses a **marker file** with **polling fallback**:
 ## Orphan Cleanup
 
 On activation, the extension automatically:
-- Restores any orphaned `tasq.md` backup from interrupted sessions
+- Restores any orphaned legacy `tasq.md` backup from interrupted sessions
 - Cleans up stale marker files
 
 This handles the edge case where a previous session was hard-killed mid-run.
@@ -85,7 +85,7 @@ This handles the edge case where a previous session was hard-killed mid-run.
 
 ### Command Palette
 
-- **QonQrete: Run Tasq** — Run `worqspace/tasq.md`
+- **QonQrete: Run Tasq** — Run the default project task file
 - **QonQrete: Resume Run** — Resume from a Qage
 - **QonQrete: Init Workspace** — Build container image
 - **QonQrete: Clean Qages** — Remove Qage directories
@@ -94,13 +94,13 @@ This handles the edge case where a previous session was hard-killed mid-run.
 ### Context Menu
 
 - **tasq.md files**: Runs that specific tasq.md
-- **Other .md files**: Copies file as temporary tasq.md (original restored after run)
+- **Other .md files**: Runs the selected markdown file directly as task input
 
 ### Sidebar
 
-- **Configuration**: Sensitivity, cycles, mode, autonomous, sqrapyard
+- **Configuration**: Sensitivity, cycles, mode, autonomous, legacy sqrapyard overlay
 - **Advanced**: Qonstruction name, container engine, TUI, wonqrete
-- **Status**: Version, image, tasq.md, shell (with verification indicator)
+- **Status**: Version, image, default task file, shell (with verification indicator)
 - **Qage Browser**: Expandable list with artifact counts and file links
 
 ### Status Bar States
@@ -146,7 +146,7 @@ code --install-extension qonqrete-vscode-1.1.9.vsix
 | `qonqrete.defaultMode` | "program" | Mode |
 | `qonqrete.defaultAutonomous` | false | Autonomous mode |
 | `qonqrete.containerEngine` | "auto" | Container engine |
-| `qonqrete.useSqrapyard` | false | Seed from sqrapyard |
+| `qonqrete.useSqrapyard` | false | Enable legacy sqrapyard overlay |
 | `qonqrete.enableTui` | false | TUI mode |
 | `qonqrete.qonqretePath` | "" | Custom path to qonqrete.sh |
 
@@ -160,7 +160,7 @@ The extension correctly maps to real `qonqrete.sh` flags:
 | Cycles | `--cyqles N` |
 | Mode | `--mode MODE` |
 | Autonomous | `--auto` |
-| Qonstruction Name | `--qonstruction-name NAME` |
+| Qonstruction Name | `-n NAME` |
 | Sqrapyard | `--sqrapyard` |
 | Docker | `--docker` |
 | Podman | `--podman` |
@@ -188,8 +188,11 @@ Clean: `./qonqrete.sh clean --qage QAGE_NAME` or `--all`
 
 **Known Edge Cases:**
 - Hard terminal kills can lose marker file → `timeout` state
-- Temp tasq restoration depends on shell command chaining
 - Custom bash installs need `GIT_BASH` env var or settings
+
+## Validation Reality
+
+Deterministic validation in the current bridge is strongest for Python. Other ecosystems still run through the workflow, but deterministic compile/test coverage is weaker.
 
 ## Requirements
 

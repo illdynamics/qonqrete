@@ -417,6 +417,637 @@ def clean_filename_slug(text: str) -> str:
     return "_".join(slug.split('_')[:8]) if slug else "task"
 
 
+def load_optional_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2)
+        f.write("\n")
+
+
+def write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+
+def normalize_ref(text: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '', text.lower())
+
+
+def component_id_from_title(title: str) -> str:
+    slug = clean_filename_slug(title).replace('_', '-')
+    parts = [part for part in slug.split('-') if part and part not in {'build', 'create', 'update', 'implement', 'add', 'fix', 'refactor'}]
+    if not parts:
+        parts = ['general']
+    return "-".join(parts[:3])
+
+
+def summarize_briqs_for_planning(briqs: list[dict]) -> list[dict]:
+    summaries = []
+    for index, item in enumerate(briqs, start=1):
+        title = item['title'].strip()
+        content = item['content'].strip()
+        scope_tags = infer_scope_tags(title, content)
+        summaries.append({
+            'briq_index': index,
+            'briq_ref': f"briq-{index:03d}",
+            'title': title,
+            'component_hint': component_id_from_title(title),
+            'scope_tags': scope_tags,
+            'contract_relevant': bool(scope_tags and any(tag in scope_tags for tag in ('schema', 'storage', 'routing', 'id'))),
+            'objective': re.sub(r'\s+', ' ', content[:260]).strip(),
+        })
+    return summaries
+
+
+def build_planning_task_input(raw_task: str, task_spec: dict, guard_result: dict) -> str:
+    if not task_spec:
+        return raw_task
+
+    lines = [
+        "# Canonical Qrystalized Task Spec",
+        "",
+        f"Goal: {task_spec.get('goal', '').strip()}",
+        f"Readiness: {task_spec.get('status', 'UNKNOWN')}",
+        "",
+        "## Clarification Summary",
+        task_spec.get('clarification_summary', ''),
+        "",
+    ]
+
+    assumptions = task_spec.get('assumptions', [])
+    if assumptions:
+        lines.append("## Assumptions")
+        for item in assumptions:
+            lines.append(f"- {item.get('statement', '').strip()}")
+        lines.append("")
+
+    constraints = task_spec.get('constraints', [])
+    if constraints:
+        lines.append("## Clarified Constraints")
+        for item in constraints:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    unknowns = task_spec.get('non_blocking_unknowns', [])
+    if unknowns:
+        lines.append("## Non-Blocking Unknowns")
+        for item in unknowns:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    effective_constraints = guard_result.get('effective_constraints', [])
+    if effective_constraints:
+        lines.append("## Guard Effective Constraints")
+        for item in effective_constraints:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Raw Intake Reference",
+            raw_task.strip(),
+            "",
+        ]
+    )
+    return "\n".join(lines).strip()
+
+
+def generate_structured_plan(
+    ai_provider: str,
+    ai_model: str,
+    planning_task_content: str,
+    qodeyard_tree: str,
+    briq_summaries: list[dict],
+    sensitivity: int,
+    min_briqs: int,
+    max_briqs: int,
+    target_briqs: int,
+) -> dict:
+    prompt = f"""You are the Principal Software Architect for QonQrete planning.
+
+Return ONLY valid JSON. No markdown fences.
+
+Create a compact but useful structured plan for grouped execution. The output must be a JSON object with these keys:
+- architecture_foundation
+- execution_blueprint
+- dependency_interaction_contract
+- component_contracts
+- validation_plan
+- completion_criteria
+- estimation_basis
+
+Rules:
+1. Build groups must be practical execution scopes, not cosmetic labels.
+2. Every build group must reference component_ids and briq_refs from the provided briq list.
+3. Keep dependency rules structural and concise.
+4. Completion criteria must be concrete and auditable before coding begins.
+5. Validation plan must distinguish universal checks, language-specific checks, and project-specific checks.
+6. Do not invent user goals beyond the provided task.
+
+Required JSON shape:
+{{
+  "architecture_foundation": {{
+    "summary": "...",
+    "principles": ["..."],
+    "risk_focus": ["..."]
+  }},
+  "execution_blueprint": {{
+    "summary": "...",
+    "components": [
+      {{
+        "component_id": "string",
+        "title": "string",
+        "summary": "string",
+        "owned_scopes": ["component-group:string"]
+      }}
+    ],
+    "build_groups": [
+      {{
+        "build_group_id": "bg-string",
+        "title": "string",
+        "objective": "string",
+        "scope_id": "scope_build_group_string",
+        "component_refs": ["component_id"],
+        "briq_refs": ["briq-001"],
+        "validation_focus": ["..."]
+      }}
+    ]
+  }},
+  "dependency_interaction_contract": {{
+    "summary": "string",
+    "dependency_rules": ["..."],
+    "edges": [
+      {{
+        "from_component": "component_id",
+        "to_component": "component_id",
+        "type": "runtime_call|shared_state|config_dependency|validation_dependency",
+        "reason": "string"
+      }}
+    ],
+    "critical_interactions": ["..."]
+  }},
+  "component_contracts": [
+    {{
+      "component_id": "component_id",
+      "title": "string",
+      "summary": "string",
+      "inputs": ["..."],
+      "outputs": ["..."],
+      "dependencies": ["component_id"],
+      "constraints": ["..."],
+      "owned_scopes": ["component-group:string"],
+      "build_group_id": "bg-string"
+    }}
+  ],
+  "validation_plan": {{
+    "summary": "string",
+    "universal_checks": ["..."],
+    "language_specific_checks": ["..."],
+    "project_specific_checks": ["..."],
+    "build_group_checks": [
+      {{
+        "build_group_id": "bg-string",
+        "checks": ["..."]
+      }}
+    ],
+    "capability_notes": ["..."]
+  }},
+  "completion_criteria": {{
+    "summary": "string",
+    "criteria": ["..."],
+    "build_group_expectations": [
+      {{
+        "build_group_id": "bg-string",
+        "expected_outcomes": ["..."]
+      }}
+    ]
+  }},
+  "estimation_basis": {{
+    "complexity": "low|medium|high",
+    "rationale": ["..."],
+    "sensitivity": {sensitivity},
+    "expected_briq_range": [{min_briqs}, {max_briqs}],
+    "target_briqs": {target_briqs}
+  }}
+}}
+
+Current task context:
+{planning_task_content[:12000]}
+
+Current qodeyard tree:
+```
+{qodeyard_tree[:6000]}
+```
+
+Actual briqs to organize:
+{json.dumps(briq_summaries, indent=2)}
+"""
+
+    response = lib_ai.run_ai_completion(
+        ai_provider,
+        ai_model,
+        prompt,
+        context_files=[],
+        max_prompt_chars=50000
+    )
+
+    json_match = re.search(r'(\{.*\})', response, re.DOTALL)
+    if not json_match:
+        raise ValueError("No JSON object found in structured planning response")
+    return json.loads(json_match.group(1))
+
+
+def build_fallback_structured_plan(
+    goal: str,
+    briq_summaries: list[dict],
+    guard_result: dict,
+    sensitivity: int,
+    min_briqs: int,
+    max_briqs: int,
+    target_briqs: int,
+) -> dict:
+    components_map: dict[str, dict] = {}
+    build_groups_map: dict[str, dict] = {}
+    for summary in briq_summaries:
+        component_id = summary['component_hint']
+        component_title = summary['title'].replace('_', ' ')
+        build_group_id = f"bg-{component_id}"
+        scope_id = f"scope_build_group_{component_id.replace('-', '_')}"
+        components_map.setdefault(component_id, {
+            'component_id': component_id,
+            'title': component_title,
+            'summary': f"Component grouped around {component_title}.",
+            'owned_scopes': [f"component-group:{component_id}"],
+            'dependencies': [],
+        })
+        group = build_groups_map.setdefault(build_group_id, {
+            'build_group_id': build_group_id,
+            'title': component_title,
+            'objective': f"Implement and stabilize the {component_title} scope.",
+            'scope_id': scope_id,
+            'component_refs': [component_id],
+            'briq_refs': [],
+            'validation_focus': ['local syntax/import coherence', 'declared scope coherence'],
+        })
+        group['briq_refs'].append(summary['briq_ref'])
+
+    components = list(components_map.values())
+    build_groups = list(build_groups_map.values())
+    effective_constraints = guard_result.get('effective_constraints', [])
+    return {
+        'architecture_foundation': {
+            'summary': goal,
+            'principles': [
+                'Preserve existing repository patterns where possible.',
+                'Build by grouped scope rather than isolated briq text only.',
+            ],
+            'risk_focus': [
+                'Grouped coherence matters more than maximizing briq count.',
+                'Validation remains strongest for Python-centric deterministic checks.',
+            ],
+        },
+        'execution_blueprint': {
+            'summary': f"Grouped execution plan across {len(build_groups)} build group(s) and {len(components)} component contract(s).",
+            'components': components,
+            'build_groups': build_groups,
+        },
+        'dependency_interaction_contract': {
+            'summary': 'Dependency bridge generated from grouped planning heuristics.',
+            'dependency_rules': effective_constraints[:4] or ['No scope expansion without replanning.'],
+            'edges': [],
+            'critical_interactions': ['Build groups must preserve declared component boundaries.'],
+        },
+        'component_contracts': [
+            {
+                'component_id': component['component_id'],
+                'title': component['title'],
+                'summary': component['summary'],
+                'inputs': ['existing repository context', 'assigned briqs'],
+                'outputs': ['implemented files within owned scope'],
+                'dependencies': component.get('dependencies', []),
+                'constraints': effective_constraints[:3] or ['Preserve existing behavior unless explicitly changed.'],
+                'owned_scopes': component.get('owned_scopes', []),
+                'build_group_id': f"bg-{component['component_id']}",
+            }
+            for component in components
+        ],
+        'validation_plan': {
+            'summary': 'Bridge validation plan with grouped-scope handoff.',
+            'universal_checks': ['changed-file truth', 'manifest artifact completeness', 'group-to-briq linkage'],
+            'language_specific_checks': ['python syntax/import verification where applicable'],
+            'project_specific_checks': ['qontract guard for contract-relevant briqs'],
+            'build_group_checks': [
+                {
+                    'build_group_id': group['build_group_id'],
+                    'checks': ['files stay within declared scope', 'group briqs produce coherent outputs'],
+                }
+                for group in build_groups
+            ],
+            'capability_notes': ['Executed tests are not yet a canonical build-stage guarantee in the legacy runtime.'],
+        },
+        'completion_criteria': {
+            'summary': 'Bridge completion criteria for demo-ready grouped execution.',
+            'criteria': [
+                'Required planning artifacts exist and are manifest-linkable.',
+                'Every briq is assigned to a build group and component scope.',
+                'ConstruQtor consumes grouped scope metadata during build.',
+            ],
+            'build_group_expectations': [
+                {
+                    'build_group_id': group['build_group_id'],
+                    'expected_outcomes': [group['objective']],
+                }
+                for group in build_groups
+            ],
+        },
+        'estimation_basis': {
+            'complexity': 'high' if target_briqs >= 20 else ('medium' if target_briqs >= 8 else 'low'),
+            'rationale': [
+                f"Sensitivity {sensitivity} selected target briq count {target_briqs}.",
+                'Grouped planning reduces isolated execution drift.',
+            ],
+            'sensitivity': sensitivity,
+            'expected_briq_range': [min_briqs, max_briqs],
+            'target_briqs': target_briqs,
+        },
+    }
+
+
+def assign_briqs_to_groups(briq_summaries: list[dict], plan_payload: dict) -> dict[str, dict]:
+    blueprint = plan_payload.get('execution_blueprint', {})
+    component_contracts = {
+        item.get('component_id'): item
+        for item in plan_payload.get('component_contracts', [])
+        if item.get('component_id')
+    }
+    groups = {
+        item.get('build_group_id'): item
+        for item in blueprint.get('build_groups', [])
+        if item.get('build_group_id')
+    }
+    group_ref_map: dict[str, str] = {}
+    for group_id, group in groups.items():
+        for briq_ref in group.get('briq_refs', []):
+            group_ref_map[normalize_ref(briq_ref)] = group_id
+
+    default_group_id = next(iter(groups), None)
+    assignments: dict[str, dict] = {}
+    for summary in briq_summaries:
+        normalized_refs = [
+            normalize_ref(summary['briq_ref']),
+            normalize_ref(summary['title']),
+            normalize_ref(clean_filename_slug(summary['title'])),
+        ]
+        group_id = next((group_ref_map[key] for key in normalized_refs if key in group_ref_map), default_group_id)
+        if group_id is None:
+            group_id = f"bg-{summary['component_hint']}"
+        group = groups.get(group_id, {
+            'build_group_id': group_id,
+            'title': summary['title'],
+            'objective': f"Implement {summary['title']}",
+            'scope_id': f"scope_build_group_{summary['component_hint'].replace('-', '_')}",
+            'component_refs': [summary['component_hint']],
+            'validation_focus': [],
+        })
+        component_id = group.get('component_refs', [summary['component_hint']])[0]
+        component_contract = component_contracts.get(component_id, {
+            'component_id': component_id,
+            'title': component_id.replace('-', ' ').title(),
+            'summary': f"Component scope for {component_id}.",
+            'constraints': [],
+            'owned_scopes': [f"component-group:{component_id}"],
+        })
+        assignments[summary['briq_ref']] = {
+            'group': group,
+            'component': component_contract,
+        }
+    return assignments
+
+
+def render_architecture_foundation(plan_payload: dict, task_spec: dict) -> str:
+    foundation = plan_payload.get('architecture_foundation', {})
+    lines = [
+        "# Architecture Foundation",
+        "",
+        f"Goal: {task_spec.get('goal', foundation.get('summary', ''))}",
+        "",
+        "## Foundation Summary",
+        foundation.get('summary', ''),
+        "",
+        "## Principles",
+    ]
+    for item in foundation.get('principles', []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Risk Focus"])
+    for item in foundation.get('risk_focus', []):
+        lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_execution_blueprint(plan_payload: dict) -> str:
+    blueprint = plan_payload.get('execution_blueprint', {})
+    lines = [
+        "# Execution Blueprint",
+        "",
+        blueprint.get('summary', ''),
+        "",
+        "## Components",
+    ]
+    for component in blueprint.get('components', []):
+        lines.append(f"- `{component.get('component_id', 'component')}`: {component.get('summary', component.get('title', ''))}")
+    lines.extend(["", "## Build Groups"])
+    for group in blueprint.get('build_groups', []):
+        lines.append(f"- `{group.get('build_group_id', 'group')}`: {group.get('objective', group.get('title', ''))}")
+        lines.append(f"  Components: {', '.join(group.get('component_refs', [])) or 'n/a'}")
+        lines.append(f"  Briqs: {', '.join(group.get('briq_refs', [])) or 'n/a'}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_dependency_contract(plan_payload: dict) -> str:
+    contract = plan_payload.get('dependency_interaction_contract', {})
+    lines = [
+        "# Dependency & Interaction Contract",
+        "",
+        contract.get('summary', ''),
+        "",
+        "## Dependency Rules",
+    ]
+    for item in contract.get('dependency_rules', []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Edges"])
+    edges = contract.get('edges', [])
+    if edges:
+        for edge in edges:
+            lines.append(f"- `{edge.get('from_component', '?')}` -> `{edge.get('to_component', '?')}` ({edge.get('type', 'dependency')}): {edge.get('reason', '')}")
+    else:
+        lines.append("- No critical inter-component edges were declared in this bridge artifact.")
+    lines.extend(["", "## Critical Interactions"])
+    for item in contract.get('critical_interactions', []):
+        lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_component_contracts(plan_payload: dict) -> str:
+    lines = ["# Component Contracts", ""]
+    for component in plan_payload.get('component_contracts', []):
+        lines.append(f"## {component.get('component_id', 'component')}")
+        lines.append(component.get('summary', component.get('title', '')))
+        lines.append("")
+        lines.append(f"- Build Group: `{component.get('build_group_id', 'n/a')}`")
+        lines.append(f"- Inputs: {', '.join(component.get('inputs', [])) or 'n/a'}")
+        lines.append(f"- Outputs: {', '.join(component.get('outputs', [])) or 'n/a'}")
+        lines.append(f"- Dependencies: {', '.join(component.get('dependencies', [])) or 'none'}")
+        lines.append(f"- Owned Scopes: {', '.join(component.get('owned_scopes', [])) or 'n/a'}")
+        constraints = component.get('constraints', [])
+        if constraints:
+            lines.append("- Constraints:")
+            for item in constraints:
+                lines.append(f"  - {item}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def render_validation_plan(plan_payload: dict) -> str:
+    plan = plan_payload.get('validation_plan', {})
+    lines = [
+        "# Validation Plan",
+        "",
+        plan.get('summary', ''),
+        "",
+        "## Universal Checks",
+    ]
+    for item in plan.get('universal_checks', []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Language-Specific Checks"])
+    for item in plan.get('language_specific_checks', []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Project-Specific Checks"])
+    for item in plan.get('project_specific_checks', []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Build Group Checks"])
+    for item in plan.get('build_group_checks', []):
+        lines.append(f"- `{item.get('build_group_id', 'group')}`: {', '.join(item.get('checks', []))}")
+    lines.extend(["", "## Capability Notes"])
+    for item in plan.get('capability_notes', []):
+        lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_completion_criteria(plan_payload: dict) -> str:
+    criteria = plan_payload.get('completion_criteria', {})
+    lines = [
+        "# Completion Criteria",
+        "",
+        criteria.get('summary', ''),
+        "",
+        "## Criteria",
+    ]
+    for item in criteria.get('criteria', []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Build Group Expectations"])
+    for item in criteria.get('build_group_expectations', []):
+        lines.append(f"- `{item.get('build_group_id', 'group')}`: {', '.join(item.get('expected_outcomes', []))}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_planning_artifacts(
+    worqspace_root: Path,
+    cycle_num: str,
+    task_spec: dict,
+    guard_result: dict,
+    plan_payload: dict,
+    briq_summaries: list[dict],
+) -> None:
+    planning_dir = worqspace_root / 'planning'
+    planning_dir.mkdir(parents=True, exist_ok=True)
+    run_id = task_spec.get('run_id', worqspace_root.name) if task_spec else worqspace_root.name
+    blueprint = plan_payload.get('execution_blueprint', {})
+
+    execution_blueprint = {
+        'schema_version': 'execution-blueprint.v1',
+        'execution_blueprint_id': f"{run_id}-execution-blueprint-cyqle{cycle_num}",
+        'run_id': run_id,
+        'status': 'PLANNING',
+        'summary': blueprint.get('summary', ''),
+        'components': blueprint.get('components', []),
+        'dependencies': plan_payload.get('dependency_interaction_contract', {}).get('edges', []),
+        'build_groups': blueprint.get('build_groups', []),
+        'validation_plan_ref': 'planning/validation-plan.v1.json',
+        'completion_criteria_ref': 'planning/completion-criteria.v1.json',
+        'capability_mode': task_spec.get('capability_mode', 'MIXED_REASONING_EXECUTION') if task_spec else 'MIXED_REASONING_EXECUTION',
+        'planning_version': int(cycle_num),
+    }
+    dependency_contract = {
+        'schema_version': 'dependency-interaction-contract.v1',
+        'run_id': run_id,
+        'cycle': int(cycle_num),
+        **plan_payload.get('dependency_interaction_contract', {}),
+    }
+    component_contracts = {
+        'schema_version': 'component-contracts.v1',
+        'run_id': run_id,
+        'cycle': int(cycle_num),
+        'items': plan_payload.get('component_contracts', []),
+    }
+    validation_plan = {
+        'schema_version': 'validation-plan.v1',
+        'run_id': run_id,
+        'cycle': int(cycle_num),
+        'task_spec_ref': 'task/task-spec.v1.json' if task_spec else None,
+        'guard_result_ref': 'guard/guard-result.v1.json' if guard_result else None,
+        **plan_payload.get('validation_plan', {}),
+    }
+    completion_criteria = {
+        'schema_version': 'completion-criteria.v1',
+        'run_id': run_id,
+        'cycle': int(cycle_num),
+        **plan_payload.get('completion_criteria', {}),
+    }
+    build_groups = {
+        'schema_version': 'build-groups.v1',
+        'run_id': run_id,
+        'cycle': int(cycle_num),
+        'items': blueprint.get('build_groups', []),
+        'briq_inventory': briq_summaries,
+        'estimation_basis': plan_payload.get('estimation_basis', {}),
+    }
+
+    write_json(planning_dir / 'execution-blueprint.v1.json', execution_blueprint)
+    write_text(planning_dir / 'execution-blueprint.md', render_execution_blueprint(plan_payload))
+    write_text(planning_dir / 'architecture-foundation.md', render_architecture_foundation(plan_payload, task_spec or {}))
+    write_json(planning_dir / 'dependency-interaction-contract.v1.json', dependency_contract)
+    write_text(planning_dir / 'dependency-interaction-contract.md', render_dependency_contract(plan_payload))
+    write_json(planning_dir / 'component-contracts.v1.json', component_contracts)
+    write_text(planning_dir / 'component-contracts.md', render_component_contracts(plan_payload))
+    write_json(planning_dir / 'validation-plan.v1.json', validation_plan)
+    write_text(planning_dir / 'validation-plan.md', render_validation_plan(plan_payload))
+    write_json(planning_dir / 'completion-criteria.v1.json', completion_criteria)
+    write_text(planning_dir / 'completion-criteria.md', render_completion_criteria(plan_payload))
+    write_json(planning_dir / 'build-groups.v1.json', build_groups)
+    write_json(planning_dir / 'estimation-basis.v1.json', {
+        'schema_version': 'estimation-basis.v1',
+        'run_id': run_id,
+        'cycle': int(cycle_num),
+        **plan_payload.get('estimation_basis', {}),
+    })
+
+
 def get_sensitivity_config(level: int) -> tuple[int, int, int, str]:
     """
     Returns (min_briqs, max_briqs, target_briqs, prompt_text) for the given sensitivity level.
@@ -779,9 +1410,13 @@ def main() -> None:
     input_file = Path(sys.argv[1])
     output_dir = Path(sys.argv[2])
     cycle_num = os.environ.get('CYCLE_NUM', '1')
+    worqspace_root = Path(os.environ.get('QONQ_WORKSPACE', os.getcwd()))
+    task_spec = load_optional_json(worqspace_root / 'task' / 'task-spec.v1.json')
+    guard_result = load_optional_json(worqspace_root / 'guard' / 'guard-result.v1.json')
 
     print(f"--- Architect analyzing: {input_file.name} ---", flush=True)
     with open(input_file, 'r', encoding='utf-8') as f: task_content = clean_input_content(f.read())
+    planning_task_content = build_planning_task_input(task_content, task_spec, guard_result)
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -812,6 +1447,13 @@ def main() -> None:
     
     print(f"  [CONFIG] Sensitivity: {sensitivity} → Target: {target_briqs} briqs (range: {min_briqs}-{max_briqs})", flush=True)
     print(f"  [CONFIG] Strategy: {strategy} (batch_size: {batch_size}, batch_mode: {batch_mode})", flush=True)
+    if task_spec:
+        print(f"  [INPUT] Canonical Task Spec: {task_spec.get('status', 'UNKNOWN')} ({task_spec.get('task_spec_id', 'n/a')})", flush=True)
+    if guard_result:
+        print(f"  [INPUT] Guard Result: {guard_result.get('status', 'UNKNOWN')}", flush=True)
+        if guard_result.get('status') == 'FAIL':
+            print("  [FAIL-FAST] Guard blocked planning. Review guard/guard-result.v1.json.", flush=True)
+            sys.exit(1)
 
     # Gather Qodeyard Context
     qodeyard_path = Path(os.environ.get('QONQ_WORKSPACE', '/qonq')) / 'qodeyard'
@@ -892,7 +1534,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 ```
 
 **INPUT DOCUMENT:**
-{task_content}
+{planning_task_content}
 
 **BEGIN ATOMIC BREAKDOWN (Count your briqs to ensure compliance!):**
 """
@@ -907,7 +1549,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
             sensitivity=sensitivity,
             target_briqs=target_briqs,
             batch_size=batch_size,
-            task_content=task_content,
+            task_content=planning_task_content,
             qodeyard_tree=qodeyard_tree,
             universal_file_rule=universal_file_rule
         )
@@ -920,7 +1562,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
                 ai_model=ai_model,
                 base_prompt=planner_prompt,
                 sensitivity=sensitivity,
-                task_content=task_content,
+                task_content=planning_task_content,
                 qodeyard_tree=qodeyard_tree
             )
     else:
@@ -930,7 +1572,7 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
             ai_model=ai_model,
             base_prompt=planner_prompt,
             sensitivity=sensitivity,
-            task_content=task_content,
+            task_content=planning_task_content,
             qodeyard_tree=qodeyard_tree
         )
 
@@ -939,13 +1581,12 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
     # ═══════════════════════════════════════════════════════════════════════════
     # v1.0.4: QONTRACT GENERATION (Cycle 1 only)
     # ═══════════════════════════════════════════════════════════════════════════
-    worqspace_root = Path(os.environ.get('QONQ_WORKSPACE', os.getcwd()))
     qontract_dir = worqspace_root / 'qontract.d'
     contract = {}
 
     if cycle_num == '1':
         print(f"\n  📜 [QONTRACT] Generating project constitution from cycle1 tasq...", flush=True)
-        contract = extract_qontract_from_tasq(task_content, input_file.name)
+        contract = extract_qontract_from_tasq(planning_task_content, input_file.name)
         write_qontract(contract, qontract_dir)
         # Fail-fast: assert contract files were created
         md_check = qontract_dir / 'qontract.json'
@@ -964,9 +1605,54 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
                 print(f"  ⚠️  [QONTRACT] Could not load contract: {e}", flush=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # WRITE BRIQS (with v1.0.4 invariant injection)
+    # PHASE 3 BRIDGE: STRUCTURED PLANNING + GROUPED BUILD MODEL
+    # ═══════════════════════════════════════════════════════════════════════════
+    briq_summaries = summarize_briqs_for_planning(briqs)
+    try:
+        plan_payload = generate_structured_plan(
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            planning_task_content=planning_task_content,
+            qodeyard_tree=qodeyard_tree,
+            briq_summaries=briq_summaries,
+            sensitivity=sensitivity,
+            min_briqs=min_briqs,
+            max_briqs=max_briqs,
+            target_briqs=target_briqs,
+        )
+        print(f"  [PLAN] Structured grouped execution plan generated", flush=True)
+    except Exception as e:
+        print(f"  [PLAN] ⚠️ Structured plan AI generation failed, using deterministic fallback: {e}", flush=True)
+        plan_payload = build_fallback_structured_plan(
+            goal=task_spec.get('goal', extract_goal(planning_task_content)) if task_spec else extract_goal(planning_task_content),
+            briq_summaries=briq_summaries,
+            guard_result=guard_result,
+            sensitivity=sensitivity,
+            min_briqs=min_briqs,
+            max_briqs=max_briqs,
+            target_briqs=target_briqs,
+        )
+
+    write_planning_artifacts(
+        worqspace_root=worqspace_root,
+        cycle_num=cycle_num,
+        task_spec=task_spec,
+        guard_result=guard_result,
+        plan_payload=plan_payload,
+        briq_summaries=briq_summaries,
+    )
+    briq_assignments = assign_briqs_to_groups(briq_summaries, plan_payload)
+    print(f"  [PLAN] Build groups: {len(plan_payload.get('execution_blueprint', {}).get('build_groups', []))}", flush=True)
+    print(f"  [PLAN] Component contracts: {len(plan_payload.get('component_contracts', []))}", flush=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # WRITE BRIQS (with invariant injection + grouped scope metadata)
     # ═══════════════════════════════════════════════════════════════════════════
     for i, item in enumerate(briqs):
+        briq_ref = f"briq-{i + 1:03d}"
+        assignment = briq_assignments.get(briq_ref, {})
+        group = assignment.get('group', {})
+        component = assignment.get('component', {})
         step_slug = clean_filename_slug(item['title'])
         filename = f"cyqle{cycle_num}_tasq1_briq{i:03d}_{step_slug}.md"
         file_path = output_dir / filename
@@ -995,12 +1681,44 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
         briq_tokens = estimate_tokens(full_briq, ai_model)
         briq_cost = calculate_cost(briq_tokens, ai_model, is_input=True)
 
+        build_group_id = group.get('build_group_id', f"bg-{component_id_from_title(item['title'])}")
+        scope_id = group.get('scope_id', f"scope_build_group_{build_group_id.replace('-', '_')}")
+        component_id = component.get('component_id', component_id_from_title(item['title']))
+        component_title = component.get('title', component_id.replace('-', ' ').title())
+        group_title = group.get('title', build_group_id)
+        group_objective = group.get('objective', component.get('summary', ''))
+        validation_focus = group.get('validation_focus', [])
+        constraints = component.get('constraints', [])
+
+        grouped_scope_section = "\n\n---\n**Grouped Scope Contract:**\n"
+        grouped_scope_section += f"- Build Group: {build_group_id} ({group_title})\n"
+        grouped_scope_section += f"- Scope ID: {scope_id}\n"
+        grouped_scope_section += f"- Component: {component_id} ({component_title})\n"
+        if group_objective:
+            grouped_scope_section += f"- Group Objective: {group_objective}\n"
+        if validation_focus:
+            grouped_scope_section += f"- Validation Focus: {', '.join(validation_focus)}\n"
+        if constraints:
+            grouped_scope_section += "- Component Constraints:\n"
+            for item_constraint in constraints[:6]:
+                grouped_scope_section += f"  - {item_constraint}\n"
+        briq_content = briq_content + grouped_scope_section
+
         # v1.0.4: Build briq with frontmatter including scope + contract relevance
         scope_str = ', '.join(scope_tags) if scope_tags else 'none'
-        frontmatter = f"Scope: {scope_str}\nContract-Relevant: {'yes' if contract_relevant else 'no'}\n\n"
+        frontmatter = (
+            f"Scope: {scope_str}\n"
+            f"Contract-Relevant: {'yes' if contract_relevant else 'no'}\n"
+            f"Briq-Ref: {briq_ref}\n"
+            f"Build-Group: {build_group_id}\n"
+            f"Scope-ID: {scope_id}\n"
+            f"Component-ID: {component_id}\n"
+            f"Component-Title: {component_title}\n\n"
+        )
 
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(f"{frontmatter}# {item['title']} [Est: {briq_tokens:,} toks | {format_cost(briq_cost)}]\n\n**ARCHITECT'S INSTRUCTION:**\n{briq_content}")
+        print(f"    ↳ Grouped Scope: {build_group_id} | Component: {component_id} | Scope: {scope_id}", flush=True)
 
 
 if __name__ == '__main__':

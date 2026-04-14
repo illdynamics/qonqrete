@@ -27,7 +27,7 @@ class PathManager:
 
     @property
     def qache_dir(self) -> Path:
-        return self.root / "sqrapyard" / "qache.d"
+        return self.root / "qache.d"
 
     def get_tasq_dir(self) -> Path:
         return self.root / "tasq.d"

@@ -1,13 +1,24 @@
 # QonQrete Pipeline Configuration
 # v1.0.4-stable — Contract-enforced pipeline with qontract.d/
 #
-# PIPELINE ORDER (DO NOT CHANGE):
-#   instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
+# PHASE 1 DEMO ORDER:
+#   tasqleveler(Qrystallizer) → guard → instruqtor → calqulator → construqtor → qontextor → qompressor → qontrabender → inspeqtor
+#
+# CANONICAL STAGE ALIASES (PHASE 1 BRIDGE):
+#   tasqleveler -> CLARIFICATION
+#   guard       -> GUARD
+#   instruqtor  -> PLANNING
+#   calqulator  -> ESTIMATION
+#   construqtor -> BUILD
+#   inspeqtor   -> INSPECTION
+#
+# SUPPORT SERVICES (NOT CANONICAL LIFECYCLE STAGES):
+#   qontextor, qompressor, qontrabender
 #
 # CONTRACT: qontract.d/qontract.{md,json} — generated in cycle 1, mandatory thereafter.
 # QODEYARD: Primary truth source for current-cycle code.
-# bloq.d: Skeleton cache — runs AFTER inspeqtor, may be stale during inspeqtor.
-# qontext.d: Dependency hints — runs AFTER inspeqtor, may be stale during inspeqtor.
+# bloq.d: Skeleton cache support artifact — runs BEFORE inspeqtor in actual YAML order.
+# qontext.d: Dependency hints support artifact — runs BEFORE inspeqtor in actual YAML order.
 
 agents:
   - name: tasqleveler
@@ -15,11 +26,19 @@ agents:
     input: "tasq.d/cyqle{N}_tasq.md"
     output: "tasq.d/cyqle{N}_tasq.md"
     description: |
-      TasqLeveler v1.0.4-stable - Automatic Tasq Enhancement
-      RUNS ONCE: Only on Cycle 1. Supercharges tasq with dependency graph,
-      golden path tests, mock infrastructure, success criteria. +15-20% quality.
-      Original preserved as tasq_original.md.
-      To enable: uncomment this block. Does not alter relative stage order.
+      Canonical Qrystallizer front door, exposed through the legacy tasqleveler alias.
+      Produces task/task-spec.v1.json, task/clarification-log.v1.json,
+      and clarification-summary.md without mutating the canonical task input.
+    cycle_1_only: true
+
+  - name: guard
+    script: guard.py
+    input: "task/task-spec.v1.json"
+    output: "guard/guard-result.v1.json"
+    description: |
+      Canonical GUARD stage.
+      Evaluates the Qrystalized Task Spec before planning, emits Guard Result,
+      and hands effective constraints into instruqtor.
     cycle_1_only: true
 
   - name: instruqtor
@@ -27,6 +46,7 @@ agents:
     input: "tasq.d/cyqle{N}_tasq.md"
     output: briq.d/
     description: |
+      Canonical bridge alias: PLANNING.
       Reads cycle tasq and generates briqs. On cycle 1, also generates
       qontract.d/qontract.{md,json} (project constitution).
 
@@ -34,7 +54,7 @@ agents:
     script: calqulator.py
     input: "briq.d/"
     output: "briq.d/"
-    description: "Estimates token count and cost for each briq and annotates the files."
+    description: "Canonical bridge alias: ESTIMATION. Estimates token count and cost for each briq and annotates the files."
 
   - name: construqtor
     script: construqtor.py
@@ -43,6 +63,7 @@ agents:
       - "exeq.d/cyqle{N}_summary.md"
       - "exeq.d/cyqle{N}_changed.md"
     description: |
+      Canonical bridge alias: BUILD.
       Parses briqs and generates code. Fail-fast: requires qontract.d/ for cycles > 1.
       Per-briq QontractGuard gating with auto-retry on contract-relevant briqs.
       Context: qontract.d/qontract.md + cycle1 tasq + qontext.d/ + qodeyard tree.
@@ -51,13 +72,14 @@ agents:
     script: qontextor.py
     input: "exeq.d/cyqle{N}_changed.md"
     output: "qontext.d/"
-    description: "Updates qontext.d/ dependency hints based on changed files."
+    description: "Support service only in Phase 1 bridge. Updates qontext.d/ dependency hints based on changed files."
 
   - name: qompressor
     script: qompressor.py
     input: "qodeyard/"
     output: "bloq.d/"
     description: |
+      Support service only in Phase 1 bridge.
       Skeletonizer: mirrors qodeyard into bloq.d with stripped bodies.
       Deterministic summaries (AST-based). Valid Python output guaranteed.
       Correct indentation for module-level functions AND class methods.
@@ -69,7 +91,7 @@ agents:
       - "qodeyard/"
       - "qontext.d/"
     output: "qache.d/"
-    description: "Cache Bender — assembles hybrid cache payloads for Gemini context caching."
+    description: "Support service only in Phase 1 bridge. Cache Bender — assembles hybrid cache payloads for Gemini context caching."
     triggers:
       - "post_qompressor"
       - "pre_construqtor"
@@ -82,6 +104,7 @@ agents:
       - "exeq.d/cyqle{N}_changed.md"
     output: "reqap.d/cyqle{N}_reqap.md"
     description: |
+      Canonical bridge alias: INSPECTION.
       Multi-Stage Code Review (v1.0.4-stable):
       
       STAGE 0 - QontractGuard (deterministic, AST-based):

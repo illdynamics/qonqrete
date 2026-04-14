@@ -70,7 +70,7 @@ export async function executeCreateTasq(): Promise<void> {
     const doc = await vscode.workspace.openTextDocument(tasqPath);
     await vscode.window.showTextDocument(doc);
 
-    vscode.window.showInformationMessage('tasq.md created! Edit it and run QonQrete when ready.');
+    vscode.window.showInformationMessage('Starter task file created as tasq.md. Edit it and run QonQrete when ready.');
 }
 
 /**

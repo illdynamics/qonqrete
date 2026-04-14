@@ -1,5 +1,5 @@
 /**
- * QonQrete Run Tasq Commands
+ * QonQrete task-file run commands
  * 
  * @author WoNQ
  * @version 1.2.0
@@ -142,15 +142,15 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
         return;
     }
 
-    // Check if tasq.md exists (workspace root or internal)
+    // Check if a default task file exists (workspace root or internal compatibility copy)
     const hasTasq = await runner.hasTasqFile();
     if (!hasTasq) {
         const result = await vscode.window.showWarningMessage(
-            'No tasq.md found. Create one to define your build task.',
-            'Create tasq.md',
+            'No default task file found. Create a starter task file to define your build task.',
+            'Create Task File',
             'Cancel'
         );
-        if (result === 'Create tasq.md') {
+        if (result === 'Create Task File') {
             await vscode.commands.executeCommand('qonqrete.createTasq');
         }
         return;
@@ -163,9 +163,6 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
             return;
         }
     }
-
-    // Sync workspace-root tasq.md into internal runtime location
-    await runner.syncRootTasqToInternal();
 
     // Auto-init if image is missing
     const initStatus = await runner.isInitialized();
@@ -235,7 +232,7 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
 }
 
 /**
- * Execute run on a specific tasq.md file
+ * Execute run on a specific task markdown file
  */
 async function executeRunSpecificTasq(fileUri: vscode.Uri): Promise<void> {
     const runner = getRunner();
@@ -263,7 +260,7 @@ async function executeRunSpecificTasq(fileUri: vscode.Uri): Promise<void> {
         vscode.window.showInformationMessage(
             parentName === 'worqspace' 
                 ? 'Running QonQrete from selected workspace.'
-                : 'Running with selected file as temporary tasq.md.',
+                : 'Running QonQrete with the selected task file.',
             'Show Terminal'
         ).then(result => {
             if (result === 'Show Terminal') {
@@ -278,7 +275,7 @@ async function executeRunSpecificTasq(fileUri: vscode.Uri): Promise<void> {
 }
 
 /**
- * Execute run as QonQrete tasq (for non-tasq.md files)
+ * Execute run as a QonQrete task file (for non-default markdown files)
  */
 export async function executeRunAsQonqreteTasq(fileUri?: vscode.Uri): Promise<void> {
     // Check execution capability first
@@ -316,7 +313,7 @@ export async function executeRunAsQonqreteTasq(fileUri?: vscode.Uri): Promise<vo
     // Confirm with user
     const fileName = path.basename(filePath);
     const result = await vscode.window.showInformationMessage(
-        `Use "${fileName}" as temporary tasq.md for this QonQrete run?\n\nThe original tasq.md will be restored after the run completes.`,
+        `Use "${fileName}" as the task file for this QonQrete run?`,
         { modal: true },
         'Yes, Run',
         'Cancel'
@@ -386,7 +383,7 @@ export async function executeRunAsQonqreteTasq(fileUri?: vscode.Uri): Promise<vo
         await runner.runWithFile(filePath, config, folder);
         
         vscode.window.showInformationMessage(
-            `Running with "${fileName}" as temporary tasq.md. Original will be restored when done.`,
+            `Running QonQrete with "${fileName}" as the task file.`,
             'Show Terminal'
         ).then(result => {
             if (result === 'Show Terminal') {
@@ -458,16 +455,16 @@ export function registerRunTasqCommands(context: vscode.ExtensionContext): vscod
             
             const runner = getRunner();
             
-            // Check for tasq.md before showing config dialog
+            // Check for a default task file before showing config dialog
             const hasTasq = await runner.hasTasqFile();
             if (!hasTasq) {
                 const result = await vscode.window.showWarningMessage(
-                    'No tasq.md found. Create one at the workspace root or use "Run as QonQrete Tasq" on a markdown file.',
-                    'Create tasq.md',
+                    'No default task file found. Create one at the workspace root or run a markdown file directly as the task input.',
+                    'Create Task File',
                     'Cancel'
                 );
                 
-                if (result === 'Create tasq.md') {
+                if (result === 'Create Task File') {
                     const tasqPath = await runner.getTasqPath();
                     if (tasqPath) {
                         const uri = vscode.Uri.file(tasqPath);

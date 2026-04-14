@@ -22,6 +22,18 @@ WORKSPACE_DIR="${SCRIPT_DIR}/worqspace"
 CONFIG_FILE="${WORKSPACE_DIR}/pipeline_config.yaml"
 CONTAINER_WORKSPACE="/qonq"
 QONSTRUCTIONS_DIR="${WORKSPACE_DIR}/qonstructions"
+if [ "$(basename "$SCRIPT_DIR")" = ".qonqrete" ]; then
+    PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+    STATE_ROOT="$SCRIPT_DIR"
+    RUNTIME_DEPLOYED_IN_REPO=true
+else
+    PROJECT_ROOT="$SCRIPT_DIR"
+    STATE_ROOT="${PROJECT_ROOT}/.qonqrete"
+    RUNTIME_DEPLOYED_IN_REPO=false
+fi
+STATE_RUNS_DIR="${STATE_ROOT}/runs"
+STATE_LATEST_LINK="${STATE_RUNS_DIR}/latest"
+STATE_LATEST_RUN_FILE="${STATE_ROOT}/state/latest-run.txt"
 
 # --- DOCKER/PODMAN SECURITY FLAGS ---
 # These flags harden the container runtime:
@@ -94,38 +106,44 @@ show_help() {
     cat <<EOF
 $VERSION
 
-Usage: ./qonqrete.sh [COMMAND] [OPTIONS]
+Usage:
+  ./qonqrete.sh [COMMAND] [OPTIONS]
+  ./qonqrete.sh <task-file.md> [OPTIONS]
 
 Commands:
-  init              Build the Qage container image.
-  run               Start fresh QonQrete session (ignores sqrapyard by default).
-  resume            Resume from a previous Qage (interactive or -q <n>).
-  clean             Remove Qage directories (interactive or -q <n> or -A/--all).
+  init              Build the QonQrete container image.
+  run               Start a new run. Canonical task input is a task file.
+  resume            Continue from a previous run (interactive or -q <qage>).
+  status            Show the latest run state, manifest path, and audit locations.
+  audit             Show audit/manifest paths for the latest or selected run.
+  clean             Remove legacy qage run directories.
 
 Global Options:
   -h, --help        Show this help message.
   -V, --version     Show version information.
 
 Run Options:
+  -f, --task-file <path>       Use the given task file as canonical task input.
   -a, --auto                   Enable Autonomous Mode.
   -u, --user                   Force User-gated Mode.
+  --legacy-cycle-continuation  Re-enable legacy reqap -> next tasq continuation.
   -t, --tui                    Enable TUI Mode. ${Y}[EXPERIMENTAL]${R}
   -m, --mode <n>               Set Operational Mode (program, enterprise, security, etc).
   -b, --briq-sensitivity <N>   Set Granularity (0-16). Default: 6. Higher = more briqs!
   -c, --cyqles <N>             Set max auto-cycles (1-50). Default: 3
   -n, --qonstruction-name <n>  Auto-save as qonstruction (non-interactive). v1.0.2
-  -s, --sqrapyard              Seed from sqrapyard/ directory contents.
+  -s, --sqrapyard              Legacy compatibility overlay from sqrapyard/.
   -M, --msb                    Force Microsandbox (msb). ${Y}[EXPERIMENTAL]${R}
   -d, --docker                 Force Docker engine.
   -p, --podman                 Force Podman engine.
   -w, --wonqrete               Enable experimental mode.
 
-Resume Options:
-  -q, --qage <n>            Resume from specific Qage directory.
-  (no args)                    Interactive Qage selection (kubectx-style).
+Resume / Status / Audit Options:
+  -q, --qage <n>               Target a specific qage run directory.
+  (no args)                    Uses the latest run where applicable.
 
 Clean Options:
-  -q, --qage <n>            Clean specific Qage directory.
+  -q, --qage <n>               Clean specific Qage directory.
   -A, --all                    Clean ALL Qage directories (current behavior).
   (no args)                    Interactive Qage selection for deletion.
 
@@ -134,16 +152,14 @@ Environment Overrides:
   BUILD_BACKEND=buildx|plain       Override build backend auto-detection.
 
 Examples:
-  ./qonqrete.sh run                        # Fresh start, no sqrapyard
-  ./qonqrete.sh run -s                     # Start with sqrapyard contents
+  ./qonqrete.sh docs/demo-task.md          # Task-first run
+  ./qonqrete.sh run -f docs/demo-task.md   # Explicit task-file run
   ./qonqrete.sh run --auto --mode security # Autonomous security mode
-  ./qonqrete.sh run -b 6 -c 3              # Sensitivity 6, 3 cycles (default)
-  ./qonqrete.sh run -b 5 -c 6              # Complex project: sens 5, 6 cycles
+  ./qonqrete.sh run --auto --legacy-cycle-continuation
   ./qonqrete.sh run -a -n myproject        # Auto-save as 'myproject' qonstruction
-  ./qonqrete.sh run --podman               # Use Podman engine explicitly
-  ./qonqrete.sh resume                     # Interactive Qage picker
-  ./qonqrete.sh resume -q qage_20251226    # Resume specific Qage
-  ./qonqrete.sh clean                      # Interactive Qage deletion
+  ./qonqrete.sh resume                     # Continue latest/selected run
+  ./qonqrete.sh status                     # Latest manifest + stage summary
+  ./qonqrete.sh audit -q qage_20260410_123456
   ./qonqrete.sh clean -A                   # Delete ALL Qages
 EOF
 }
@@ -307,6 +323,10 @@ print_runtime_info() {
     log_qrane "Container engine: ${G}${CONTAINER_ENGINE}${R}"
     log_qrane "Build backend:    ${G}${BUILD_BACKEND_MODE}${R}"
     log_qrane "OS detected:      ${G}${DETECTED_OS}${R}"
+    if [ "$RUNTIME_DEPLOYED_IN_REPO" = true ]; then
+        log_qrane "Repo-native mode: ${G}${PROJECT_ROOT}${R}"
+        log_qrane "State root:       ${G}${STATE_ROOT}${R}"
+    fi
 
     if [ "$DETECTED_OS" = "MSYS" ]; then
         log_qrane "${Y}Git Bash detected. WSL2 is recommended for best compatibility.${R}"
@@ -425,7 +445,18 @@ select_qage_interactive() {
     for qage in "${qages[@]}"; do
         local ts="${qage#qage_}"
         local formatted_ts="${ts:0:4}-${ts:4:2}-${ts:6:2} ${ts:9:2}:${ts:11:2}:${ts:13:2}"
-        echo -e "${C}│${R}  ${G}${i})${R} ${qage}  ${Y}(${formatted_ts})${R}" >&2
+        local status_summary=""
+        local manifest_path="${WORKSPACE_DIR}/${qage}/run-manifest.v1.json"
+        if [ -f "$manifest_path" ]; then
+            local run_status lifecycle current_stage
+            run_status="$(grep -m1 '"run_status"' "$manifest_path" | sed -E 's/.*"run_status": "([^"]+)".*/\1/' || true)"
+            lifecycle="$(grep -m1 '"lifecycle_state"' "$manifest_path" | sed -E 's/.*"lifecycle_state": "([^"]+)".*/\1/' || true)"
+            current_stage="$(grep -m1 '"current_stage"' "$manifest_path" | sed -E 's/.*"current_stage": "([^"]+)".*/\1/' || true)"
+            if [ -n "$run_status" ] || [ -n "$current_stage" ]; then
+                status_summary="  ${C}[${current_stage:-unknown}/${run_status:-unknown}/${lifecycle:-unknown}]${R}"
+            fi
+        fi
+        echo -e "${C}│${R}  ${G}${i})${R} ${qage}  ${Y}(${formatted_ts})${R}${status_summary}" >&2
         ((i++))
     done
     
@@ -608,12 +639,13 @@ METAEOF
     fi
 }
 
-# --- TASQ.MD INTERACTIVE EDITOR ---
+# --- DEFAULT TASK FILE INTERACTIVE EDITOR ---
 create_tasq_interactive() {
     local tasq_path="$1"
     local editor="${EDITOR:-vim}"
+    mkdir -p "$(dirname "$tasq_path")"
     
-    log_qrane "No tasq.md found. Opening ${editor} to create one..."
+    log_qrane "No default task file found. Opening ${editor} to create the starter tasq.md..."
     
     cat > "$tasq_path" <<'TASQTPL'
 # TasQ - Define Your Objective
@@ -649,12 +681,12 @@ TASQTPL
     
     local content=$(grep -v '^#' "$tasq_path" | grep -v '^<!--' | grep -v '^\s*$' | head -1 || true)
     if [ -z "$content" ]; then
-        log_qrane "Warning: tasq.md appears to be empty or only contains comments."
+        log_qrane "Warning: the starter task file appears to be empty or only contains comments."
         echo -ne "${PREFIX_TPL/\{PREFIX\}/_QQ} Continue anyway? [y/N] "
         read -n 1 -r continue_anyway
         echo ""
         if [[ ! $continue_anyway =~ ^[Yy]$ ]]; then
-            log_qrane "Aborting. Please edit worqspace/tasq.md and try again."
+            log_qrane "Aborting. Please edit the task file and try again."
             return 1
         fi
     fi
@@ -673,6 +705,235 @@ normalize_mount_path() {
     else
         echo "$path"
     fi
+}
+
+ensure_state_dirs() {
+    mkdir -p "$STATE_RUNS_DIR" "$(dirname "$STATE_LATEST_RUN_FILE")"
+}
+
+resolve_absolute_path() {
+    local input_path="$1"
+    if [[ "$input_path" = /* ]]; then
+        printf '%s\n' "$input_path"
+    else
+        printf '%s\n' "$(cd "$PWD" && cd "$(dirname "$input_path")" 2>/dev/null && pwd)/$(basename "$input_path")"
+    fi
+}
+
+write_latest_run_pointer() {
+    local run_host_path="$1"
+    local run_dir_name
+    run_dir_name="$(basename "$run_host_path")"
+    ensure_state_dirs
+    printf '%s\n' "$run_dir_name" > "$STATE_LATEST_RUN_FILE"
+    ln -sfn "$run_host_path" "$STATE_LATEST_LINK"
+    ln -sfn "$run_host_path" "${STATE_RUNS_DIR}/${run_dir_name}"
+}
+
+read_manifest_value() {
+    local manifest_path="$1"
+    local field_name="$2"
+    if [ ! -f "$manifest_path" ]; then
+        return 0
+    fi
+    grep -m1 "\"${field_name}\"" "$manifest_path" | sed -E "s/.*\"${field_name}\": \"([^\"]+)\".*/\1/" || true
+}
+
+resolve_target_qage() {
+    if [ -n "$QAGE_NAME" ]; then
+        printf '%s\n' "${WORKSPACE_DIR}/${QAGE_NAME}"
+        return 0
+    fi
+
+    if [ -L "$STATE_LATEST_LINK" ]; then
+        readlink "$STATE_LATEST_LINK"
+        return 0
+    fi
+
+    if [ -f "$STATE_LATEST_RUN_FILE" ]; then
+        local latest_name
+        latest_name="$(cat "$STATE_LATEST_RUN_FILE" 2>/dev/null || true)"
+        if [ -n "$latest_name" ] && [ -d "${WORKSPACE_DIR}/${latest_name}" ]; then
+            printf '%s\n' "${WORKSPACE_DIR}/${latest_name}"
+            return 0
+        fi
+    fi
+
+    local latest_qage
+    latest_qage="$(ls -1dt "${WORKSPACE_DIR}"/qage_* 2>/dev/null | head -1 || true)"
+    if [ -n "$latest_qage" ]; then
+        printf '%s\n' "$latest_qage"
+        return 0
+    fi
+    return 1
+}
+
+show_run_status() {
+    local target_qage="$1"
+    local manifest_path="${target_qage}/run-manifest.v1.json"
+    local run_name
+    run_name="$(basename "$target_qage")"
+
+    if [ ! -d "$target_qage" ]; then
+        log_qrane "[ERROR] Run not found: ${target_qage}"
+        return 1
+    fi
+
+    echo "$VERSION"
+    echo "Run: ${run_name}"
+    echo "Run Root: ${target_qage}"
+    echo "Manifest: ${manifest_path}"
+    if [ -f "$manifest_path" ]; then
+        echo "Current Stage: $(read_manifest_value "$manifest_path" "current_stage")"
+        echo "Lifecycle: $(read_manifest_value "$manifest_path" "lifecycle_state")"
+        echo "Run Status: $(read_manifest_value "$manifest_path" "run_status")"
+        echo "Validation Mode: $(read_manifest_value "$manifest_path" "validation_execution_mode")"
+        echo "Evidence Status: $(read_manifest_value "$manifest_path" "evidence_status")"
+        echo "Confidence: $(read_manifest_value "$manifest_path" "confidence_status")"
+    else
+        echo "Manifest: missing"
+    fi
+    echo "Audit Timeline: ${target_qage}/audit/timeline.md"
+    echo "Audit Events: ${target_qage}/audit/events.ndjson"
+    echo "Task Spec: ${target_qage}/task/task-spec.v1.json"
+    echo "Validation Bundle: ${target_qage}/validation/validation-bundle.v1.json"
+    echo "Realization Bundle: ${target_qage}/realization/realization-bundle.v1.json"
+    echo "Inspection Verdict: ${target_qage}/verdict/inspection-verdict.v1.json"
+}
+
+show_run_audit() {
+    local target_qage="$1"
+    show_run_status "$target_qage" || return 1
+    local timeline_path="${target_qage}/audit/timeline.md"
+    if [ -f "$timeline_path" ]; then
+        echo ""
+        echo "Recent Audit Timeline:"
+        tail -n 12 "$timeline_path"
+    fi
+}
+
+task_input_path() {
+    if [ -n "${TASK_SOURCE_PATH:-}" ]; then
+        printf '%s\n' "$TASK_SOURCE_PATH"
+        return 0
+    fi
+    if [ "$RUNTIME_DEPLOYED_IN_REPO" = true ] && [ -f "${PROJECT_ROOT}/tasq.md" ]; then
+        printf '%s\n' "${PROJECT_ROOT}/tasq.md"
+        return 0
+    fi
+    printf '%s\n' "${WORKSPACE_DIR}/tasq.md"
+}
+
+prepare_task_input() {
+    local selected_task_path
+    selected_task_path="$(task_input_path)"
+
+    if [ "$selected_task_path" = "${WORKSPACE_DIR}/tasq.md" ] && [ ! -f "$selected_task_path" ]; then
+        create_tasq_interactive "$selected_task_path" || return 1
+    fi
+
+    if [ ! -f "$selected_task_path" ]; then
+        log_qrane "[ERROR] Task file not found: ${selected_task_path}"
+        return 1
+    fi
+
+    mkdir -p "$WORKSPACE_DIR"
+    if [ "$selected_task_path" != "${WORKSPACE_DIR}/tasq.md" ]; then
+        cp "$selected_task_path" "${WORKSPACE_DIR}/tasq.md"
+        log_qrane "Task file selected: ${selected_task_path}"
+        log_qrane "Canonical runtime task copy: ${WORKSPACE_DIR}/tasq.md"
+    else
+        log_qrane "Task file selected: ${selected_task_path}"
+    fi
+
+    export QONQ_TASK_SOURCE_PATH="$(resolve_absolute_path "$selected_task_path")"
+    export QONQ_TASK_SOURCE_LABEL="$(basename "$selected_task_path")"
+    return 0
+}
+
+seed_qodeyard_from_repo() {
+    local run_host_path="$1"
+    if [ "$RUNTIME_DEPLOYED_IN_REPO" != true ]; then
+        return 0
+    fi
+    if [ ! -d "$PROJECT_ROOT" ]; then
+        return 0
+    fi
+
+    local repo_file_count
+    repo_file_count="$(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.qonqrete' | wc -l | tr -d ' ')"
+    if [ "${repo_file_count:-0}" -eq 0 ]; then
+        return 0
+    fi
+
+    log_qrane "Repo-native import enabled. Seeding current repository into qodeyard."
+    mkdir -p "$run_host_path/qodeyard"
+    (
+        cd "$PROJECT_ROOT"
+        tar -cf - --exclude='.git' --exclude='.qonqrete' .
+    ) | (
+        cd "$run_host_path/qodeyard"
+        tar -xf -
+    )
+}
+
+seed_qodeyard_from_sqrapyard() {
+    local run_host_path="$1"
+    local sqrapyard_path="${WORKSPACE_DIR}/sqrapyard"
+    if [ "$USE_SQRAPYARD" != true ]; then
+        return 0
+    fi
+
+    log_qrane "Legacy sqrapyard compatibility overlay enabled."
+    if [ -d "$sqrapyard_path" ] && [ -n "$(ls -A "$sqrapyard_path" 2>/dev/null)" ]; then
+        cp -r "$sqrapyard_path"/* "$run_host_path/qodeyard/"
+        log_qrane "Sqrapyard overlay copied into qodeyard."
+    else
+        log_qrane "Sqrapyard flag used but sqrapyard is empty."
+    fi
+}
+
+image_exists() {
+    case "$CONTAINER_ENGINE" in
+        docker)
+            docker image inspect "$IMAGE_NAME" >/dev/null 2>&1 || docker image inspect "$IMAGE_NAME_LATEST" >/dev/null 2>&1 || docker image inspect "$IMAGE_NAME_LEGACY" >/dev/null 2>&1
+            ;;
+        podman)
+            podman image inspect "$IMAGE_NAME" >/dev/null 2>&1 || podman image inspect "$IMAGE_NAME_LATEST" >/dev/null 2>&1 || podman image inspect "$IMAGE_NAME_LEGACY" >/dev/null 2>&1
+            ;;
+        msb)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+build_runtime_image() {
+    log_qrane "Initializing QonQrete..."
+    BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V}"
+    engine_build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
+
+    case "$CONTAINER_ENGINE" in
+        docker)
+            docker tag "$IMAGE_NAME" "$IMAGE_NAME_LATEST" 2>/dev/null || true
+            docker tag "$IMAGE_NAME" "$IMAGE_NAME_LEGACY" 2>/dev/null || true
+            ;;
+        podman)
+            podman tag "$IMAGE_NAME" "$IMAGE_NAME_LATEST" 2>/dev/null || true
+            podman tag "$IMAGE_NAME" "$IMAGE_NAME_LEGACY" 2>/dev/null || true
+            ;;
+    esac
+    log_qrane "Image tagged: ${IMAGE_NAME}, ${IMAGE_NAME_LATEST}, ${IMAGE_NAME_LEGACY}"
+}
+
+ensure_runtime_image() {
+    if image_exists; then
+        return 0
+    fi
+    log_qrane "No local runtime image found. Auto-initializing before run."
+    build_runtime_image
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -714,6 +975,10 @@ run_container() {
         $run_mounts $dev_mounts \
         $api_env_vars \
         -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE" \
+        -e QONQ_RUN_KIND="${QONQ_RUN_KIND:-run}" \
+        -e QONQ_LEGACY_QAGE_ID="${QONQ_LEGACY_QAGE_ID:-}" \
+        -e QONQ_RESUMED_FROM_QAGE="${QONQ_RESUMED_FROM_QAGE:-}" \
+        -e QONQ_ENABLE_LEGACY_CONTINUATION="${QONQ_ENABLE_LEGACY_CONTINUATION:-}" \
         "$IMAGE_NAME" /bin/bash -c "$container_cmd"
 }
 
@@ -724,6 +989,8 @@ USE_SQRAPYARD=false
 QAGE_NAME=""
 CLEAN_ALL=false
 QONSTRUCTION_NAME=""
+TASK_SOURCE_PATH=""
+QONQ_ENABLE_LEGACY_CONTINUATION=""
 
 # Save env override before arg parsing might interfere
 CONTAINER_ENGINE_ENV="${CONTAINER_ENGINE:-}"
@@ -734,9 +1001,21 @@ detect_os
 
 if [[ $# -eq 0 ]]; then show_help; exit 0; fi
 
+case "${1:-}" in
+    init|run|resume|status|audit|clean|-*|"")
+        ;;
+    *)
+        if [ -f "$1" ]; then
+            COMMAND="run"
+            TASK_SOURCE_PATH="$(resolve_absolute_path "$1")"
+            shift
+        fi
+        ;;
+esac
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        init|run|resume|clean)
+        init|run|resume|status|audit|clean)
             COMMAND="$1"
             shift
             ;;
@@ -744,8 +1023,13 @@ while [[ $# -gt 0 ]]; do
         -V|--version) show_version; exit 0 ;;
 
         # Run/Resume options
+        -f|--task-file)
+            TASK_SOURCE_PATH="$(resolve_absolute_path "$2")"
+            shift 2
+            ;;
         -a|--auto) PY_ARGS="$PY_ARGS --auto"; shift ;;
         -u|--user) PY_ARGS="$PY_ARGS --user"; shift ;;
+        --legacy-cycle-continuation) QONQ_ENABLE_LEGACY_CONTINUATION="1"; shift ;;
         -t|--tui) PY_ARGS="$PY_ARGS --tui"; log_qrane "${Y}[EXPERIMENTAL]${R} TUI mode enabled."; shift ;;
         -w|--wonqrete) PY_ARGS="$PY_ARGS --wonqrete"; shift ;;
 
@@ -789,41 +1073,47 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$COMMAND" ]]; then
-    log_qrane "[ERROR] No command specified."; show_help; exit 1
+    if [ -n "$TASK_SOURCE_PATH" ]; then
+        COMMAND="run"
+    else
+        log_qrane "[ERROR] No command specified."; show_help; exit 1
+    fi
 fi
 
 # --- DETECT ENGINE + BUILD BACKEND ---
-detect_engine
-detect_build_backend
+if [[ "$COMMAND" =~ ^(init|run|resume|clean)$ ]]; then
+    detect_engine
+    detect_build_backend
 
-# macOS Podman: ensure machine is running (idempotent)
-ensure_podman_machine
+    # macOS Podman: ensure machine is running (idempotent)
+    ensure_podman_machine
 
-# Print runtime info
-print_runtime_info
+    # Print runtime info
+    print_runtime_info
+fi
 
 # --- EXECUTION ---
 cd "$SCRIPT_DIR"
 
 case "$COMMAND" in
     init)
-        log_qrane "Initializing QonQrete..."
-        BUILD_ARGS="--build-arg QONQ_VERSION=${QONQ_V}"
+        build_runtime_image
+        ;;
 
-        engine_build -t "$IMAGE_NAME" -f Dockerfile . --progress=plain $BUILD_ARGS
+    status)
+        target_qage="$(resolve_target_qage)" || {
+            log_qrane "[ERROR] No runs found."
+            exit 1
+        }
+        show_run_status "$target_qage"
+        ;;
 
-        # Also tag as :latest and legacy untagged name for backward compat
-        case "$CONTAINER_ENGINE" in
-            docker)
-                docker tag "$IMAGE_NAME" "$IMAGE_NAME_LATEST" 2>/dev/null || true
-                docker tag "$IMAGE_NAME" "$IMAGE_NAME_LEGACY" 2>/dev/null || true
-                ;;
-            podman)
-                podman tag "$IMAGE_NAME" "$IMAGE_NAME_LATEST" 2>/dev/null || true
-                podman tag "$IMAGE_NAME" "$IMAGE_NAME_LEGACY" 2>/dev/null || true
-                ;;
-        esac
-        log_qrane "Image tagged: ${IMAGE_NAME}, ${IMAGE_NAME_LATEST}, ${IMAGE_NAME_LEGACY}"
+    audit)
+        target_qage="$(resolve_target_qage)" || {
+            log_qrane "[ERROR] No runs found."
+            exit 1
+        }
+        show_run_audit "$target_qage"
         ;;
 
     clean)
@@ -888,6 +1178,7 @@ case "$COMMAND" in
 
     resume)
         log_qrane "QonQrete Resume Mode..."
+        ensure_runtime_image
         
         if [ -n "$QAGE_NAME" ]; then
             SOURCE_QAGE="${WORKSPACE_DIR}/${QAGE_NAME}"
@@ -903,6 +1194,9 @@ case "$COMMAND" in
         fi
         
         log_qrane "Resuming from: ${QAGE_NAME}"
+        if [ -n "$QONQ_ENABLE_LEGACY_CONTINUATION" ]; then
+            log_qrane "Legacy reqap continuation compatibility mode enabled for this resume."
+        fi
         
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
@@ -911,6 +1205,9 @@ case "$COMMAND" in
         log_qrane "Creating new Qage: ${RUN_DIR_NAME}"
         
         cp -r "$SOURCE_QAGE" "$RUN_HOST_PATH"
+        export QONQ_RUN_KIND="resume"
+        export QONQ_LEGACY_QAGE_ID="$RUN_DIR_NAME"
+        export QONQ_RESUMED_FROM_QAGE="$QAGE_NAME"
         
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then 
             cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"
@@ -918,9 +1215,10 @@ case "$COMMAND" in
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then 
             cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"
         fi
-        
+
+        prepare_task_input || exit 1
         if [ -f "${WORKSPACE_DIR}/tasq.md" ]; then
-            log_qrane "Using updated tasq.md from worqspace."
+            log_qrane "Using canonical task input for continuation."
             max_cycle=0
             if ls "$RUN_HOST_PATH/tasq.d"/cyqle*_tasq.md 1>/dev/null 2>&1; then
                 for f in "$RUN_HOST_PATH/tasq.d"/cyqle*_tasq.md; do
@@ -935,6 +1233,8 @@ case "$COMMAND" in
             next_cycle=$((max_cycle + 1))
             cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle${next_cycle}_tasq.md"
         fi
+
+        write_latest_run_pointer "$RUN_HOST_PATH"
         
         log_qrane "Handing off to Qrane in 3 seconds..."
         sleep 3
@@ -962,43 +1262,31 @@ case "$COMMAND" in
             exit 1
         fi
 
-        if [ ! -f "${WORKSPACE_DIR}/tasq.md" ]; then
-            create_tasq_interactive "${WORKSPACE_DIR}/tasq.md" || exit 1
-        fi
+        ensure_runtime_image
+        prepare_task_input || exit 1
 
         TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
         RUN_DIR_NAME="qage_${TIMESTAMP}"
         RUN_HOST_PATH="${WORKSPACE_DIR}/${RUN_DIR_NAME}"
+        export QONQ_RUN_KIND="run"
+        export QONQ_LEGACY_QAGE_ID="$RUN_DIR_NAME"
+        unset QONQ_RESUMED_FROM_QAGE
 
         log_qrane "Seeding worQspace in Qage at: $RUN_HOST_PATH"
+        if [ -n "$QONQ_ENABLE_LEGACY_CONTINUATION" ]; then
+            log_qrane "Legacy reqap continuation compatibility mode enabled for this run."
+        fi
 
         mkdir -p "$RUN_HOST_PATH"/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,qontext.d,bloq.d,briq.d,qontract.d}
 
         if [ -f "${WORKSPACE_DIR}/config.yaml" ]; then cp "${WORKSPACE_DIR}/config.yaml" "$RUN_HOST_PATH/"; fi
         if [ -f "${WORKSPACE_DIR}/pipeline_config.yaml" ]; then cp "${WORKSPACE_DIR}/pipeline_config.yaml" "$RUN_HOST_PATH/"; fi
 
-        SQRAPYARD_PATH="${WORKSPACE_DIR}/sqrapyard"
-        
-        if [ "$USE_SQRAPYARD" = true ]; then
-            log_qrane "Sqrapyard mode enabled (-s flag detected)."
-            if [ -d "$SQRAPYARD_PATH" ] && [ -n "$(ls -A "$SQRAPYARD_PATH" 2>/dev/null)" ]; then
-                log_qrane "Found qontent in sqrapyard, seeding this run..."
-                cp -r "$SQRAPYARD_PATH"/* "$RUN_HOST_PATH/qodeyard/"
-                
-                if [ -f "$SQRAPYARD_PATH/tasq.md" ]; then
-                    log_qrane "Note: sqrapyard/tasq.md found but using worqspace/tasq.md (master tasq takes precedence)."
-                fi
-            else
-                log_qrane "Sqrapyard flag used but sqrapyard is empty. Starting fresh."
-            fi
-        else
-            log_qrane "Fresh start mode (no sqrapyard seeding)."
-            if [ -d "$SQRAPYARD_PATH" ] && [ -n "$(ls -A "$SQRAPYARD_PATH" 2>/dev/null)" ]; then
-                log_qrane "${Y}Note:${R} Sqrapyard contains files. Use -s/--sqrapyard to seed from it."
-            fi
-        fi
+        seed_qodeyard_from_repo "$RUN_HOST_PATH"
+        seed_qodeyard_from_sqrapyard "$RUN_HOST_PATH"
         
         cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
+        write_latest_run_pointer "$RUN_HOST_PATH"
 
         log_qrane "Handing off to Qrane in 3 seconds..."
         sleep 3

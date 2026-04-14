@@ -51,11 +51,11 @@ class OpenConfigDialogAction : AnAction() {
             return
         }
 
-        // Check if tasq.md exists
+        // Check if a default task file exists
         if (!service.hasTasqFile()) {
             Messages.showErrorDialog(
                 project,
-                "No tasq.md found.\n\nUse 'Create tasq.md' to create one at the project root.",
+                "No default task file found.\n\nUse 'Create Task File' to create one at the project root.",
                 "QonQrete: No Tasq File"
             )
             return

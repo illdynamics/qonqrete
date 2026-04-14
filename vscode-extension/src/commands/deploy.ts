@@ -273,15 +273,15 @@ async function finalizeDeploy(
     progress.report({ message: 'Refreshing...', increment: 15 });
     runner.clearPathCache();
 
-    // Offer to create tasq.md
+    // Offer to create a starter task file
     const rootTasq = path.join(wsRoot, 'tasq.md');
     if (!fs.existsSync(rootTasq)) {
         const createTasq = await vscode.window.showInformationMessage(
-            'QonQrete deployed successfully! Create a tasq.md to get started?',
-            'Create tasq.md',
+            'QonQrete deployed successfully! Create a starter task file to get started?',
+            'Create Task File',
             'Skip'
         );
-        if (createTasq === 'Create tasq.md') {
+        if (createTasq === 'Create Task File') {
             await vscode.commands.executeCommand('qonqrete.createTasq');
         }
     } else {

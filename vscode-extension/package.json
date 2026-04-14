@@ -63,7 +63,7 @@
     "commands": [
       {
         "command": "qonqrete.createTasq",
-        "title": "QonQrete: Create tasq.md",
+        "title": "QonQrete: Create Task File",
         "icon": "$(new-file)"
       },
       {
@@ -88,7 +88,7 @@
       },
       {
         "command": "qonqrete.runAsQonqreteTasq",
-        "title": "QonQrete: Run as QonQrete Tasq",
+        "title": "QonQrete: Run Markdown as QonQrete Task",
         "icon": "$(play-circle)"
       },
       {
@@ -243,7 +243,7 @@
         "qonqrete.useSqrapyard": {
           "type": "boolean",
           "default": false,
-          "description": "Seed runs from sqrapyard directory contents by default."
+          "description": "Enable the legacy sqrapyard compatibility overlay by default."
         },
         "qonqrete.enableTui": {
           "type": "boolean",

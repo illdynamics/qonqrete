@@ -4,6 +4,7 @@ import sys
 import os
 import re
 import yaml
+import json
 from pathlib import Path
 
 # Ensure we can import from the qrane directory
@@ -95,6 +96,7 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
 
     # --- Process Briqs ---
     grand_total_tokens = 0
+    estimate_entries = []
     for briq_file in briq_files:
         with open(briq_file, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -111,6 +113,15 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
         cost = lib.calculate_cost(total_briq_tokens, model, is_input=True)
         grand_total_tokens += total_briq_tokens
 
+        metadata = {}
+        for line in content.splitlines():
+            if not line.strip():
+                break
+            if ':' not in line:
+                continue
+            key, value = line.split(':', 1)
+            metadata[key.strip().lower()] = value.strip()
+
         # Annotate File
         header_match = re.match(r"(# .*?)\n", content)
         if header_match:
@@ -124,12 +135,45 @@ def run_calqulation(briqs_dir: Path, qodeyard_path: Path, bloq_path: Path):
 
         # Log Table Row
         print(f"{briq_file.name:<{col_width}} | {total_briq_tokens:<12,} | {lib.format_cost(cost):<15}", flush=True)
+        estimate_entries.append({
+            'path': str(briq_file.relative_to(briqs_dir.parent)),
+            'build_group_id': metadata.get('build-group'),
+            'component_id': metadata.get('component-id'),
+            'scope_id': metadata.get('scope-id'),
+            'estimated_tokens': total_briq_tokens,
+            'estimated_cost': round(cost, 8),
+        })
 
     # --- Print Footer ---
     total_cost_formatted = lib.format_cost(lib.calculate_cost(grand_total_tokens, model, is_input=True))
     print(separator, flush=True)
     print(f"{'TOTAL CYCLE ESTIMATE':<{col_width}} | {grand_total_tokens:<12,} | {total_cost_formatted:<15}", flush=True)
     print(separator + "\n", flush=True)
+
+    estimation_dir = briqs_dir.parent / "estimation"
+    estimation_dir.mkdir(parents=True, exist_ok=True)
+    estimate_payload = {
+        'schema_version': 'estimate.v1',
+        'cycle': int(cycle_num),
+        'provider': provider,
+        'model': model,
+        'context_source': context_source_name,
+        'base_context_tokens': base_context_tokens,
+        'estimated_briqs': estimate_entries,
+        'total_estimated_tokens': grand_total_tokens,
+        'total_estimated_cost': round(lib.calculate_cost(grand_total_tokens, model, is_input=True), 8),
+    }
+    with open(estimation_dir / "estimate.v1.json", 'w', encoding='utf-8') as f:
+        json.dump(estimate_payload, f, indent=2)
+        f.write("\n")
+    with open(estimation_dir / "estimate.md", 'w', encoding='utf-8') as f:
+        f.write("# Estimate\n\n")
+        f.write(f"- Cycle: {cycle_num}\n")
+        f.write(f"- Provider: {provider}\n")
+        f.write(f"- Model: {model}\n")
+        f.write(f"- Base Context Tokens: {base_context_tokens:,}\n")
+        f.write(f"- Total Estimated Tokens: {grand_total_tokens:,}\n")
+        f.write(f"- Total Estimated Cost: {total_cost_formatted}\n")
 
 def main():
     if len(sys.argv) != 3:

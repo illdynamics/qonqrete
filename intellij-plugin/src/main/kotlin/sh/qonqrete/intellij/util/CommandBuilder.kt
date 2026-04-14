@@ -199,8 +199,8 @@ class CommandBuilder private constructor() {
     /**
      * Add the 'run' subcommand with configuration
      */
-    fun run(config: QonQreteRunConfig): CommandBuilder {
-        parts.add("run")
+    fun run(config: QonQreteRunConfig, taskFilePath: String? = null): CommandBuilder {
+        taskFilePath?.let { parts.add(ShellEscape.escape(it)) } ?: parts.add("run")
         
         // Always add sensitivity and cycles
         parts.add("--briq-sensitivity")
@@ -220,11 +220,8 @@ class CommandBuilder private constructor() {
         }
         
         // Qonstruction name (MUST be sanitized first)
-        // Pass the sanitized name using the short '-n' flag expected by the CLI.
         config.qonstructionName?.let { name ->
             val sanitized = QonQreteValidation.sanitizeQonstructionName(name)
-            // Use '-n' instead of the deprecated '--qonstruction-name' to ensure the
-            // runtime correctly renames the resulting qage directory to the provided name.
             parts.add("-n")
             parts.add(ShellEscape.escape(sanitized.sanitized))
         }
