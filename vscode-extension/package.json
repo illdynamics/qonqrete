@@ -2,7 +2,7 @@
   "name": "qonqrete",
   "displayName": "QonQrete",
   "description": "QonQrete is a deterministic AI coding agent for VS Code enabling autonomous code generation, local AI development, and secure sandboxed software construction workflows.",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "publisher": "QonQrete",
   "homepage": "https://qonqrete.sh",
   "icon": "assets/qonqrete-icon.png",
@@ -63,7 +63,7 @@
     "commands": [
       {
         "command": "qonqrete.createTasq",
-        "title": "QonQrete: Create tasq.md",
+        "title": "QonQrete: Create Task File",
         "icon": "$(new-file)"
       },
       {
@@ -88,7 +88,7 @@
       },
       {
         "command": "qonqrete.runAsQonqreteTasq",
-        "title": "QonQrete: Run as QonQrete Tasq",
+        "title": "QonQrete: Run Markdown as QonQrete Task",
         "icon": "$(play-circle)"
       },
       {
@@ -190,6 +190,11 @@
           "maximum": 16,
           "description": "Default briq sensitivity level (0-16). Higher values create more granular briqs."
         },
+        "qonqrete.defaultAutoBriqSensitivity": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use --auto-briq-sensitivity by default. When enabled, the manual default sensitivity slider is ignored unless you force -b."
+        },
         "qonqrete.defaultCycles": {
           "type": "number",
           "default": 1,
@@ -201,6 +206,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable autonomous mode by default (no user confirmations)."
+        },
+        "qonqrete.noSync": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skip repo-root sync-back by default and keep outputs in qage/qonstructions (--no-sync)."
         },
         "qonqrete.defaultMode": {
           "type": "string",
@@ -229,26 +239,19 @@
           "enum": [
             "auto",
             "docker",
-            "podman",
-            "msb"
+            "podman"
           ],
           "enumDescriptions": [
             "Auto-detect available container engine",
             "Force Docker",
-            "Force Podman",
-            "Force MicroSandbox (experimental)"
+            "Force Podman"
           ],
           "description": "Container engine to use for QonQrete execution."
         },
         "qonqrete.useSqrapyard": {
           "type": "boolean",
           "default": false,
-          "description": "Seed runs from sqrapyard directory contents by default."
-        },
-        "qonqrete.enableTui": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable TUI mode (experimental)."
+          "description": "Seed qodeyard from current repository by default (--seed-repo; legacy --sqrapyard alias)."
         },
         "qonqrete.qonqretePath": {
           "type": "string",

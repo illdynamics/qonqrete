@@ -1,6 +1,22 @@
 # QonQrete IntelliJ Plugin - Changelog
 
-## 1.2.0 - Workspace Deployment & Hassle-Free Bootstrap
+## 1.4.0 - Runtime Truth/Streaming Alignment
+
+### Changed
+- AI config UI now targets the four primary runtime agents only:
+  - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
+- Default primary-agent binding in the AI config flow is now:
+  - provider: `venice`
+  - model: `deepseek-v3.2`
+- Shared provider/model picker no longer exposes local-only runtime providers (`mlx`, `llama-cpp`).
+- Venice model suggestions now include `deepseek-v3.2`.
+- Added run-level `--no-sync` wiring to settings, dialogs, and tool window controls.
+- Corrected docs/UI default-value text to match runtime-backed defaults (`sensitivity=1`, `cycles=1`, `autonomous=true`).
+
+### Notes
+- Local runtime providers remain supported by core runtime config files, but are no longer presented in the shared tool-window AI provider picker.
+
+## 1.3.0 - Current Runtime Alignment
 
 ### Added
 - **Deploy to Workspace** action — one-click runtime install into `.qonqrete/`
@@ -8,7 +24,7 @@
 - **Auto-init** on first Run Tasq (builds container image automatically)
 - **Root tasq.md sync** — user-facing tasq at project root, auto-synced to runtime before runs
 - **.gitignore management** — auto-adds `.qonqrete/` on deploy
-- `.qonqrete/qonqrete.sh` added to path discovery (preferred over legacy paths)
+- `.qonqrete/qonqrete.sh` added to path discovery (preferred over older paths)
 - Tool window Deploy + Create Tasq buttons
 
 ### Changed
@@ -17,17 +33,6 @@
 - Identical behavior with VS Code extension
 
 ### Backward Compatible
-- Legacy paths remain as fallback detection
-- Legacy untagged image still detected
+- Older paths remain as fallback detection
+- Untagged compatibility image still detected
 - Existing worqspace-only workflows continue to work
-
-## 1.1.9 - Production Hardening
-
-- CommandBuilder utility for centralized command assembly
-- QonQreteValidation utility for input validation
-- ShellEscape utility for proper bash escaping
-- Daemon thread marker watcher
-- Auto-refresh on run complete
-- Tool window with qage browser and artifact tree
-- Status bar widget with version display
-- 40+ unit tests

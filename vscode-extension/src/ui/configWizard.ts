@@ -3,7 +3,7 @@
  * Provides VS Code UI dialogs for configuring QonQrete runs
  * 
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -29,7 +29,6 @@ const ENGINE_OPTIONS: vscode.QuickPickItem[] = [
     { label: 'auto', description: 'Auto-detect available engine', picked: true },
     { label: 'docker', description: 'Use Docker' },
     { label: 'podman', description: 'Use Podman' },
-    { label: 'msb', description: 'Use MicroSandbox (experimental)' },
 ];
 
 /**
@@ -40,12 +39,13 @@ function getDefaultConfig(): QonQreteRunConfig {
     
     return {
         sensitivity: config.get<number>('defaultSensitivity', 1),
+        autoSensitivity: config.get<boolean>('defaultAutoBriqSensitivity', false),
         cycles: config.get<number>('defaultCycles', 1),
         mode: config.get<string>('defaultMode', 'program'),
         autonomous: config.get<boolean>('defaultAutonomous', true),
+        noSync: config.get<boolean>('noSync', false),
         useSqrapyard: config.get<boolean>('useSqrapyard', false),
-        containerEngine: config.get<'auto' | 'docker' | 'podman' | 'msb'>('containerEngine', 'auto'),
-        enableTui: config.get<boolean>('enableTui', false),
+        containerEngine: config.get<'auto' | 'docker' | 'podman'>('containerEngine', 'auto'),
     };
 }
 
@@ -61,6 +61,7 @@ export async function showQuickConfigWizard(): Promise<QonQreteRunConfig | undef
         title: 'QonQrete Configuration (1/4)',
         prompt: 'Briq Sensitivity (0-16). Higher = more granular briqs',
         value: defaults.sensitivity.toString(),
+        ignoreFocusOut: true,
         validateInput: (value) => {
             const num = parseInt(value, 10);
             if (isNaN(num) || num < 0 || num > 16) {
@@ -122,12 +123,13 @@ export async function showQuickConfigWizard(): Promise<QonQreteRunConfig | undef
 
     return {
         sensitivity: parseInt(sensitivityInput, 10),
+        autoSensitivity: defaults.autoSensitivity ?? false,
         cycles: parseInt(cyclesInput, 10),
         mode: modeSelection.label,
         autonomous: autonomousSelection.label === 'Autonomous',
+        noSync: defaults.noSync,
         useSqrapyard: defaults.useSqrapyard,
         containerEngine: defaults.containerEngine,
-        enableTui: defaults.enableTui,
     };
 }
 
@@ -160,19 +162,19 @@ export async function showFullConfigWizard(): Promise<QonQreteRunConfig | undefi
             detail: 'When enabled, QonQrete runs without user intervention',
         },
         {
-            label: `$(package) Sqrapyard: ${defaults.useSqrapyard ? 'Yes' : 'No'}`,
-            description: 'Seed from sqrapyard',
-            detail: 'Use existing code from sqrapyard directory',
+            label: `$(package) Seed Repo: ${defaults.useSqrapyard ? 'Yes' : 'No'}`,
+            description: 'Seed from current repository',
+            detail: 'Use existing repository code as qodeyard starting state (--seed-repo)',
+        },
+        {
+            label: `$(sync-ignored) No Sync: ${defaults.noSync ? 'Yes' : 'No'}`,
+            description: 'Keep outputs in qage/qonstructions only',
+            detail: 'Skip repo-root sync-back after run (--no-sync)',
         },
         {
             label: `$(vm) Container: ${defaults.containerEngine}`,
             description: 'Container engine',
             detail: 'Docker, Podman, or auto-detect',
-        },
-        {
-            label: `$(terminal) TUI: ${defaults.enableTui ? 'Yes' : 'No'}`,
-            description: 'Terminal UI mode (experimental)',
-            detail: 'Enable text-based user interface',
         },
     ];
 
@@ -185,9 +187,9 @@ export async function showFullConfigWizard(): Promise<QonQreteRunConfig | undefi
         configItems[1].label = `$(symbol-number) Cycles: ${config.cycles}`;
         configItems[2].label = `$(symbol-misc) Mode: ${config.mode}`;
         configItems[3].label = `$(robot) Autonomous: ${config.autonomous ? 'Yes' : 'No'}`;
-        configItems[4].label = `$(package) Sqrapyard: ${config.useSqrapyard ? 'Yes' : 'No'}`;
-        configItems[5].label = `$(vm) Container: ${config.containerEngine}`;
-        configItems[6].label = `$(terminal) TUI: ${config.enableTui ? 'Yes' : 'No'}`;
+        configItems[4].label = `$(package) Seed Repo: ${config.useSqrapyard ? 'Yes' : 'No'}`;
+        configItems[5].label = `$(sync-ignored) No Sync: ${config.noSync ? 'Yes' : 'No'}`;
+        configItems[6].label = `$(vm) Container: ${config.containerEngine}`;
 
         const selected = await vscode.window.showQuickPick([
             ...configItems,
@@ -249,8 +251,10 @@ export async function showFullConfigWizard(): Promise<QonQreteRunConfig | undefi
             }
         } else if (selected.label.includes('Autonomous')) {
             config.autonomous = !config.autonomous;
-        } else if (selected.label.includes('Sqrapyard')) {
+        } else if (selected.label.includes('Seed Repo')) {
             config.useSqrapyard = !config.useSqrapyard;
+        } else if (selected.label.includes('No Sync')) {
+            config.noSync = !config.noSync;
         } else if (selected.label.includes('Container')) {
             const engineOptions = ENGINE_OPTIONS.map(opt => ({
                 ...opt,
@@ -260,10 +264,8 @@ export async function showFullConfigWizard(): Promise<QonQreteRunConfig | undefi
                 placeHolder: 'Select container engine',
             });
             if (engineSelection) {
-                config.containerEngine = engineSelection.label as 'auto' | 'docker' | 'podman' | 'msb';
+                config.containerEngine = engineSelection.label as 'auto' | 'docker' | 'podman';
             }
-        } else if (selected.label.includes('TUI')) {
-            config.enableTui = !config.enableTui;
         }
     }
 

@@ -3,7 +3,7 @@
  * Settings panel in Tools → QonQrete
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -30,13 +30,13 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
     private val settings = QonQreteSettingsState.getInstance()
 
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1))
+    private val autoSensitivityCheckbox = JBCheckBox("Auto briq sensitivity by default (-B)")
     private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1))
     private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web"))
     private val autonomousCheckbox = JBCheckBox("Autonomous mode by default")
-    private val sqrapyardCheckbox = JBCheckBox("Use Sqrapyard by default")
-    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman", "msb"))
-    private val tuiCheckbox = JBCheckBox("Enable TUI mode by default")
-    private val wonqreteCheckbox = JBCheckBox("Enable Wonqrete mode by default")
+    private val noSyncCheckbox = JBCheckBox("Skip repo-root sync by default (--no-sync)")
+    private val sqrapyardCheckbox = JBCheckBox("Seed repository by default (--seed-repo)")
+    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman"))
     private val autoOpenToolWindowCheckbox = JBCheckBox("Auto-open tool window on run")
     private val qageListLimitSpinner = JSpinner(SpinnerNumberModel(settings.qageListLimit, 1, 100, 1))
     private val markerTimeoutSpinner = JSpinner(SpinnerNumberModel(settings.markerTimeoutMinutes, 1, 240, 1))
@@ -65,14 +65,14 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
         val builder = FormBuilder.createFormBuilder()
             .addComponent(JBLabel("<html><b>Default Run Configuration</b></html>"))
             .addLabeledComponent("Briq Sensitivity:", sensitivitySpinner)
+            .addComponent(autoSensitivityCheckbox)
             .addLabeledComponent("Cycles:", cyclesSpinner)
             .addLabeledComponent("Mode:", modeCombo)
             .addLabeledComponent("Container Engine:", engineCombo)
             .addComponent(autonomousCheckbox)
+            .addComponent(noSyncCheckbox)
             .addComponent(sqrapyardCheckbox)
-            .addComponent(tuiCheckbox)
-            .addComponent(wonqreteCheckbox)
-            .addSeparator()
+                        .addSeparator()
             .addComponent(JBLabel("<html><b>Plugin Behavior</b></html>"))
             .addComponent(autoOpenToolWindowCheckbox)
             .addLabeledComponent("Max qages to show:", qageListLimitSpinner)
@@ -91,13 +91,13 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun isModified(): Boolean {
         return sensitivitySpinner.value != settings.defaultSensitivity ||
+            autoSensitivityCheckbox.isSelected != settings.defaultAutoBriqSensitivity ||
             cyclesSpinner.value != settings.defaultCycles ||
             modeCombo.selectedItem != settings.defaultMode ||
             autonomousCheckbox.isSelected != settings.defaultAutonomous ||
+            noSyncCheckbox.isSelected != settings.noSync ||
             sqrapyardCheckbox.isSelected != settings.useSqrapyard ||
             engineCombo.selectedItem != settings.containerEngine ||
-            tuiCheckbox.isSelected != settings.enableTui ||
-            wonqreteCheckbox.isSelected != settings.enableWonqrete ||
             autoOpenToolWindowCheckbox.isSelected != settings.autoOpenToolWindowOnRun ||
             qageListLimitSpinner.value != settings.qageListLimit ||
             markerTimeoutSpinner.value != settings.markerTimeoutMinutes ||
@@ -107,13 +107,13 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun apply() {
         settings.defaultSensitivity = sensitivitySpinner.value as Int
+        settings.defaultAutoBriqSensitivity = autoSensitivityCheckbox.isSelected
         settings.defaultCycles = cyclesSpinner.value as Int
         settings.defaultMode = modeCombo.selectedItem as String
         settings.defaultAutonomous = autonomousCheckbox.isSelected
+        settings.noSync = noSyncCheckbox.isSelected
         settings.useSqrapyard = sqrapyardCheckbox.isSelected
         settings.containerEngine = engineCombo.selectedItem as String
-        settings.enableTui = tuiCheckbox.isSelected
-        settings.enableWonqrete = wonqreteCheckbox.isSelected
         settings.autoOpenToolWindowOnRun = autoOpenToolWindowCheckbox.isSelected
         settings.qageListLimit = qageListLimitSpinner.value as Int
         settings.markerTimeoutMinutes = markerTimeoutSpinner.value as Int
@@ -123,13 +123,13 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun reset() {
         sensitivitySpinner.value = settings.defaultSensitivity
+        autoSensitivityCheckbox.isSelected = settings.defaultAutoBriqSensitivity
         cyclesSpinner.value = settings.defaultCycles
         modeCombo.selectedItem = settings.defaultMode
         autonomousCheckbox.isSelected = settings.defaultAutonomous
+        noSyncCheckbox.isSelected = settings.noSync
         sqrapyardCheckbox.isSelected = settings.useSqrapyard
         engineCombo.selectedItem = settings.containerEngine
-        tuiCheckbox.isSelected = settings.enableTui
-        wonqreteCheckbox.isSelected = settings.enableWonqrete
         autoOpenToolWindowCheckbox.isSelected = settings.autoOpenToolWindowOnRun
         qageListLimitSpinner.value = settings.qageListLimit
         markerTimeoutSpinner.value = settings.markerTimeoutMinutes

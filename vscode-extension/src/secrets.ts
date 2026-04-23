@@ -8,7 +8,7 @@
  * - Env vars take precedence over stored secrets
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -23,6 +23,12 @@ export const PROVIDER_ENV_MAP: Record<string, string> = {
     gemini: 'GOOGLE_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY',
     qwen: 'QWEN_API_KEY',
+    // v1.3.12: Venice requires its own dedicated key; no fallback.
+    venice: 'VENICE_API_KEY',
+    // v1.3.12: mlx and llama-cpp have optional API keys. They are NOT treated
+    // as required by the IDE layer.
+    mlx: 'MLX_API_KEY',
+    'llama-cpp': 'LLAMA_CPP_API_KEY',
 };
 
 /** All supported env key names */
@@ -33,10 +39,14 @@ export const ALL_API_KEYS = [
     'GOOGLE_API_KEY',
     'DEEPSEEK_API_KEY',
     'QWEN_API_KEY',
+    // v1.3.12
+    'VENICE_API_KEY',
+    'MLX_API_KEY',
+    'LLAMA_CPP_API_KEY',
 ] as const;
 
 /** Provider metadata */
-export const PROVIDERS: Record<string, { label: string; envKey: string; models: string[] }> = {
+export const PROVIDERS: Record<string, { label: string; envKey: string; models: string[]; optionalAuth?: boolean; notes?: string; uiSelectable?: boolean }> = {
     openai: {
         label: 'OpenAI',
         envKey: 'OPENAI_API_KEY',
@@ -66,6 +76,59 @@ export const PROVIDERS: Record<string, { label: string; envKey: string; models: 
         label: 'OpenRouter',
         envKey: 'OPENROUTER_API_KEY',
         models: ['anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'deepseek/deepseek-chat-v3'],
+    },
+    // v1.3.12: Venice API (OpenAI-compatible). VENICE_API_KEY required.
+    venice: {
+        label: 'Venice',
+        envKey: 'VENICE_API_KEY',
+        models: [
+            'deepseek-v3.2',
+            'venice-uncensored',
+            'qwen3-coder-480b-a35b-instruct-turbo',
+            'qwen3-235b',
+            'qwen3-235b-a22b-instruct',
+            'qwen3-235b-a22b-thinking',
+            'qwen3-next-80b',
+            'qwen3-4b',
+            'qwen-2.5-qwq-32b',
+            'qwen-2.5-coder-32b',
+            'qwen-2.5-vl',
+            'mistral-31-24b',
+            'mistral-small-3.2-24b-instruct',
+            'llama-3.3-70b',
+            'llama-3.2-3b',
+            'llama-3.1-405b',
+            'dolphin-2.9.2-qwen2-72b',
+            'deepseek-r1-671b',
+            'deepseek-r1-llama-70b',
+            'deepseek-coder-v2-lite',
+            'claude-opus-4.6',
+            'claude-sonnet-4.6',
+            'glm-5',
+            'glm-4.7-flash-heretic',
+            'minimax-2.5',
+        ],
+        notes: 'VENICE_API_KEY required. Model list is a snapshot — Venice may add more; use the Custom model option for any valid Venice model ID.',
+    },
+    // v1.3.12: MLX provider for local/LAN OpenAI-compatible runtimes.
+    // API key is OPTIONAL; api_base_url must be set in the per-agent config.
+    mlx: {
+        label: 'MLX (local/LAN)',
+        envKey: 'MLX_API_KEY',
+        models: [],
+        optionalAuth: true,
+        notes: 'Local MLX runtime. Set api_base_url per-agent in config.yaml. MLX_API_KEY is optional.',
+        uiSelectable: false,
+    },
+    // v1.3.12: Llama-cpp provider for local/LAN OpenAI-compatible runtimes.
+    // API key is OPTIONAL; api_base_url must be set in the per-agent config.
+    'llama-cpp': {
+        label: 'Llama-cpp (local/LAN)',
+        envKey: 'LLAMA_CPP_API_KEY',
+        models: [],
+        optionalAuth: true,
+        notes: 'Local llama.cpp runtime. Set api_base_url per-agent in config.yaml. LLAMA_CPP_API_KEY is optional.',
+        uiSelectable: false,
     },
 };
 

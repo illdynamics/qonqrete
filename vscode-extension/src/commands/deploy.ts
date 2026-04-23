@@ -3,7 +3,7 @@
  * Downloads and extracts the QonQrete runtime into <workspace>/.qonqrete/
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -261,8 +261,6 @@ async function finalizeDeploy(
     // Ensure executable on Unix
     try {
         fs.chmodSync(scriptPath, 0o755);
-        const entrypoint = path.join(qonqreteDir, 'entrypoint.sh');
-        if (fs.existsSync(entrypoint)) fs.chmodSync(entrypoint, 0o755);
     } catch {}
 
     // Step 5: .gitignore
@@ -273,15 +271,15 @@ async function finalizeDeploy(
     progress.report({ message: 'Refreshing...', increment: 15 });
     runner.clearPathCache();
 
-    // Offer to create tasq.md
+    // Offer to create a starter task file
     const rootTasq = path.join(wsRoot, 'tasq.md');
     if (!fs.existsSync(rootTasq)) {
         const createTasq = await vscode.window.showInformationMessage(
-            'QonQrete deployed successfully! Create a tasq.md to get started?',
-            'Create tasq.md',
+            'QonQrete deployed successfully! Create a starter task file to get started?',
+            'Create Task File',
             'Skip'
         );
-        if (createTasq === 'Create tasq.md') {
+        if (createTasq === 'Create Task File') {
             await vscode.commands.executeCommand('qonqrete.createTasq');
         }
     } else {

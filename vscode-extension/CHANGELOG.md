@@ -1,6 +1,22 @@
 # QonQrete VS Code Extension - Changelog
 
-## 1.2.0 - Workspace Deployment & Hassle-Free Bootstrap
+## 1.4.0 - Runtime Truth/Streaming Alignment
+
+### Changed
+- AI config UI now targets the four primary runtime agents only:
+  - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
+- Default primary-agent binding in the AI config flow is now:
+  - provider: `venice`
+  - model: `deepseek-v3.2`
+- Shared provider/model picker no longer exposes local-only runtime providers (`mlx`, `llama-cpp`).
+- Venice model suggestions now include `deepseek-v3.2`.
+- Added run-level `--no-sync` wiring to settings, config wizards, and sidebar (`qonqrete.noSync`).
+- Corrected docs/settings defaults to match runtime-backed values (`sensitivity=1`, `cycles=1`, `autonomous=true`).
+
+### Notes
+- Local runtime providers remain supported by core runtime config files, but are no longer presented in the shared sidebar/panel provider picker.
+
+## 1.3.0 - Current Runtime Alignment
 
 ### Added
 - **Deploy to Workspace** command — one-click runtime install into `.qonqrete/`
@@ -8,7 +24,7 @@
 - **Auto-init** on first Run Tasq (builds container image automatically)
 - **Root tasq.md sync** — user-facing tasq at workspace root, auto-synced to runtime before runs
 - **.gitignore management** — auto-adds `.qonqrete/` on deploy
-- `.qonqrete/qonqrete.sh` added to path discovery (preferred over legacy paths)
+- `.qonqrete/qonqrete.sh` added to path discovery (preferred over older paths)
 - Sidebar Deploy + Create Tasq buttons
 - Activation event for `workspaceContains:**/.qonqrete/qonqrete.sh`
 
@@ -22,19 +38,3 @@
 - Legacy paths (root `qonqrete.sh`, `qonqrete/qonqrete.sh`) remain as fallback
 - Legacy untagged `qonqrete-qage` image still detected
 - Existing worqspace-only workflows continue to work
-
-## 1.1.9 - Production Hardening
-
-- Shell detection with verification
-- Marker-based run state tracking
-- Orphan backup recovery
-- Qage browser with artifact details
-- Full config wizard (quick + full modes)
-- Status bar with run state display
-- Windows Git Bash / WSL support
-
-## 1.0.5 - Initial Extension
-
-- Basic run/resume/clean/init commands
-- Sidebar control panel
-- Terminal-based execution

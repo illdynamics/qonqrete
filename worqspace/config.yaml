@@ -1,234 +1,398 @@
-# QonQrete Configuration v1.0.4-stable
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# v1.0.2 NEW: INVERTED BRIQ SENSITIVITY SCALE!
-# Higher number = MORE briqs (more intuitive!)
-#
-# BRIQ SENSITIVITY SCALE (0-16):
-#   0  = Monolithic (1 briq)         - Single giant briq
-#   1  = Very Broad (2-3 briqs)      - Major chunks only
-#   2  = Broad (3-5 briqs)           - Large components
-#   3  = Feature-level (5-8 briqs)   - Per-feature
-#   4  = Component-level (8-12)      - Per-component
-#   5  = Balanced (10-15 briqs)      ← RECOMMENDED DEFAULT
-#   6  = Standard (15-20 briqs)      - Most files separate
-#   7  = High (20-30 briqs)          - Detailed split
-#   8  = Very High (30-40 briqs)     - Fine-grained
-#   9  = Atomic (40-60 briqs)        - Maximum detail
-#  10  = Ultra (50-75 briqs)         - Enterprise projects
-#  11  = Mega (60-90 briqs)          - Large enterprise
-#  12  = Hyper (75-110 briqs)        - Complex architectures
-#  13  = Extreme (90-130 briqs)      - Multi-layer systems
-#  14  = Maximum (110-160 briqs)     - Critical systems
-#  15  = Insane (130-200 briqs)      - Mega specifications
-#  16  = QONQRETE MAX (160-250)      - Enterprise mega-tasqs!
-#
-# v1.0.2 NEW: Non-interactive qonstruction save with -n flag
-# v1.0.2 NEW: Qontrabender only active when using Gemini for construqtor
-#
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# RETRY CONFIGURATION (v0.8.2+)
-# ═══════════════════════════════════════════════════════════════════════════════
+# QonQrete Config
 retry:
   # Enable/disable retry mechanism
   enabled: true
-  
-  # Maximum attempts per briq (1 = no retry, 3 = 2 retries)
-  max_attempts: 3
-  
-  # Stop entire cycle if a briq fails after all retries?
-  # true = stop immediately on briq failure (fail-fast)
-  # false = continue to next briq, collect all failures (fail-tolerant)
+
+  # Maximum attempts per briq (4 = initial attempt + bounded retries)
+  max_attempts: 4
+
+  # Stop entire cycle if a briq fails after all retries
   stop_on_briq_fail: false
-  
-  # Delay between retries (seconds)
+
+  # Delay between retries in seconds
   retry_delay: 2
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# INTERLEAVED PIPELINE (NEW in v0.8.3)
-# ═══════════════════════════════════════════════════════════════════════════════
-# Build → Review → Build → Review (per briq)
+repair:
+  # Maximum same-run repair attempts allowed for a single build pass.
+  # Legacy alias: max_attempts
+  # Same-run repairs consume max_total_iterations budget but do not increment max_build_passes.
+  max_attempts_per_build_pass: 2
+  max_attempts: 2
+  # When true, InstruQtor emits a bounded recommended retry/repair budget from
+  # task complexity. Explicit non-default overrides still win.
+  auto_repair_amount: true
+  # Deterministic bounded repair escalation (class + attempt aware).
+  repair_escalation:
+    enabled: true
+    max_level: 4
+    start_policy: failure_class
+    bump_policy: on_same_class_repeat
+
+# AI budgeting configuration
+ai_budgeting:
+  dry_run_provider: deepseek
+  enable_no_loss_chunking: true
+  summarize_optional_sections: true
+  include_previous_log: true
+  previous_log_max_chars: 6000
+  max_preload_chunks_per_request: 24
+  chunk_target_input_tokens: 12000
+  audit_dir: audit/ai_payloads
+
+  # General token configuration
+  task_output_tokens:
+    code_generation: 6000
+    review: 2000
+    planning: 2500
+  agent_output_tokens:
+    construqtor: 6000
+    inspeqtor: 2000
+    instruqtor: 2500
+
+  # Per provider budgeting configuration
+  providers:
+
+    deepseek:
+      defaults:
+        safe_input_tokens: 32000
+        safe_output_tokens: 8000
+        total_context_window: 48000
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+    openai:
+      defaults:
+        safe_input_tokens: 80000
+        safe_output_tokens: 8192
+        total_context_window: 100000
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+    gemini:
+      defaults:
+        safe_input_tokens: 80000
+        safe_output_tokens: 8192
+        total_context_window: 100000
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+    anthropic:
+      defaults:
+        safe_input_tokens: 80000
+        safe_output_tokens: 8192
+        total_context_window: 100000
+        chars_per_token: 3.5
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+    # v1.3.12: mlx provider — local / LAN OpenAI-compatible runtimes.
+    mlx:
+      defaults:
+        safe_input_tokens: 8192
+        safe_output_tokens: 8192
+        total_context_window: 16384
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+    # v1.3.12: llama-cpp provider — local / LAN OpenAI-compatible runtimes.
+    llama-cpp:
+      defaults:
+        safe_input_tokens: 4096
+        safe_output_tokens: 4096
+        total_context_window: 8192
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+    # v1.3.12: venice provider — Venice API (OpenAI-compatible).
+    # Accepts any valid Venice model ID; defaults are generous and
+    # per-agent `context_window` / `max_tokens` may narrow them per model.
+    venice:
+      defaults:
+        safe_input_tokens: 80000
+        safe_output_tokens: 8192
+        total_context_window: 100000
+        chars_per_token: 4.0
+        supports_multi_message_history: true
+        supports_chunk_preload: true
+        supports_system_messages: true
+
+# Per briQ build and review
 interleaved:
-  # Enable interleaved build + review per briq
   enabled: true
-  
-  # Run local validation after each briq (syntax, imports) - NO AI
   local_validation: true
-  
-  # Run lightweight AI review after each briq
-  # Set to false for faster builds, true for better quality assurance
   ai_quick_review: false
-  
-  # Retry briq build if AI review fails
   retry_on_review_fail: true
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# LOCAL VERIFICATION (v0.8.2+)
-# ═══════════════════════════════════════════════════════════════════════════════
+# Qualifier verification per file creation or modification
 verification:
-  # Enable local verification after all briqs complete
   enabled: true
-  
-  # What to check
   checks:
     syntax: true              # Python syntax validation (compile())
     imports: true             # Check if imports resolve to files
     skeleton_match: true      # Compare expected vs actual function signatures
 
+# Agent configuration settings
 agents:
-  # ═══════════════════════════════════════════════════════════════════════════
-  # TASQLEVELER - Task Enhancement (OPTIONAL)
-  # ═══════════════════════════════════════════════════════════════════════════
-  tasqleveler:
-    provider: openai
-    model: gpt-4.1-nano
-    # v1.0.4: Complexity scoring - skip enhancement for tiny tasqs
+
+  qrystallizer:
+    provider: venice
+    model: deepseek-v3.2
+    timeout: 600
     enabled: true
     min_complexity_score: 200  # Below this score, don't enhance
     min_lines: 200             # Below this line count, don't enhance
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # INSTRUQTOR - Briq Planning
-  # ═══════════════════════════════════════════════════════════════════════════
+    # v1.3.12: Per-agent capability overrides (apply to ANY provider).
+    #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
+    #   max_tokens:     override max output tokens for this agent.
+    #   context_window: override total context window (input + output) for this agent.
+    #   provider: mlx | llama-cpp | venice
+    #   model: "real-model-id" (for venice)
+
+  qonstrictor:
+    provider: local
+    model: qonstrictor
+    timeout: 600
+
+    # v1.3.12: Per-agent capability overrides (apply to ANY provider).
+    #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
+    #   max_tokens:     override max output tokens for this agent.
+    #   context_window: override total context window (input + output) for this agent.
+    #   provider: mlx | llama-cpp | venice
+    #   model: "real-model-id" (for venice)
+
   instruqtor:
-    provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
+    provider: venice
+    model: deepseek-v3.2
+    timeout: 600
+
+    # v1.3.12: Per-agent capability overrides (apply to ANY provider).
+    #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
+    #   max_tokens:     override max output tokens for this agent.
+    #   context_window: override total context window (input + output) for this agent.
+    #   provider: mlx | llama-cpp | venice
+    #   model: "real-model-id" (for venice)
 
   calqulator:
     provider: local
     model: calqulator
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # CONSTRUQTOR - Code Generation (needs smarter model)
-  # ═══════════════════════════════════════════════════════════════════════════
-  construqtor:
-    provider: openai
-    model: gpt-4.1-mini           # $1.25/$10.00 per 1M - best for code generation
+    # v1.3.12: Per-agent capability overrides (apply to ANY provider).
+    #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
+    #   max_tokens:     override max output tokens for this agent.
+    #   context_window: override total context window (input + output) for this agent.
+    #   provider: mlx | llama-cpp | venice
+    #   model: "real-model-id" (for venice)
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # INSPEQTOR - Code Review (v0.8.8 Batched Mode)
-  # ═══════════════════════════════════════════════════════════════════════════
+  construqtor:
+    provider: venice
+    model: deepseek-v3.2
+    timeout: 600
+    # coding_mode: heredoc | direct | hybrid
+    coding_mode: hybrid
+
+    # v1.3.12: Per-agent capability overrides (apply to ANY provider).
+    #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
+    #   max_tokens:     override max output tokens for this agent.
+    #   context_window: override total context window (input + output) for this agent.
+    # Uncomment and set as needed. Per-agent values take priority over
+    # provider defaults and CAPABILITY_TABLE entries in lib_ai.py.
+    # api_base_url: "http://localhost:8080/v1"
+    # max_tokens: 8192
+    # context_window: 16384
+
+    # v1.3.12: Example — use the mlx provider with a local MLX runtime.
+    #   provider: mlx
+    #   api_base_url: "http://localhost:1234/v1"
+    #   # max_tokens: 8192
+    #   # context_window: 16384
+    #   # MLX_API_KEY optional
+
+    # v1.3.12: Example — use the llama-cpp provider with a local llama.cpp runtime.
+    #   provider: llama-cpp
+    #   api_base_url: "http://localhost:8080/v1"
+    #   # max_tokens: 4096
+    #   # context_window: 8192
+    #   # LLAMA_CPP_API_KEY optional
+
+    # v1.3.12: Example — use the venice provider with a real Venice model ID.
+    # NOTE: Venice dispatch requires a non-empty model at runtime.
+    # Keep this set to a valid Venice model ID (for this repo the default
+    # target is deepseek-v3.2).
+    #   provider: venice
+    #   model: "deepseek-v3.2"
+    #   # api_base_url: "https://api.venice.ai/api/v1"   # default, override only if proxying
+    #   venice_parameters:
+    #     include_venice_system_prompt: false
+    #   # VENICE_API_KEY is REQUIRED and does NOT fall back to OPENAI_API_KEY.
+
   inspeqtor:
-    provider: openai
-    model: gpt-4.1-mini    # $0.10/$0.40 per 1M - cheap & smart enough
-    
-    # BATCHED REVIEW MODE (v0.8.6+) - 90% fewer API calls!
-    batch_mode: true                 # Group briqs into batches
-    batch_token_roof: 60000          # Max input tokens per batch (~240KB)
-    batch_max_briqs: 12              # Max briqs per batch (safety cap)
-    
-    # Legacy per-briq limits (used when batch_mode=false)
+    provider: venice
+    model: deepseek-v3.2
+    timeout: 600
+
+    # v1.3.12: Per-agent capability overrides (apply to ANY provider).
+    #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
+    #   max_tokens:     override max output tokens for this agent.
+    #   context_window: override total context window (input + output) for this agent.
+    #   provider: mlx | llama-cpp | venice
+    #   model: "real-model-id" (for venice)
+
+    batch_mode: true
+    batch_token_roof: 60000
+    batch_max_briqs: 12
+
+    # Per briQ limits when batch mode is turned off
     max_prompt_chars_per_briq: 500000
     max_context_files_per_briq: 40
     max_chars_per_context_file: 80000
-    
+
     # Context filtering
     use_filtered_context: true
     include_neighbor_depth: 1
 
+    # Executed smoketest stage (runs after qualification, before AI review).
+    # Enabled by default so InspeQtor gathers real runtime signal and feeds it into repair planning.
+    #
+    # Each adapter entry's command(s) MAY declare an `execution_kind` to tell
+    # the system how to classify its evidence. Semantics are honest:
+    #   - static:   parse/compile/syntax-only; does NOT exercise runtime code paths
+    #               (e.g. `python -m py_compile`, `bash -n`, `node --check`,
+    #                `tsc --noEmit`, HTML/CSS structural inspection)
+    #   - executed: actually runs program logic (e.g. `python -m unittest discover`,
+    #               `npm run smoke`, grounded CLI `--help`)
+    #   - auto:     let the classifier decide (conservative: unknown => static)
+    #
+    # When `execution_kind` is omitted, the classifier infers conservatively —
+    # a subprocess running successfully is NEVER sufficient to claim executed
+    # smoke. Static checks never masquerade as executed evidence downstream.
+    #
+    # Per-adapter shape (scalar):
+    #   command: "python -m py_compile"
+    #   execution_kind: static
+    #
+    # Per-adapter shape (structured list; each entry may have its own kind):
+    #   commands:
+    #     - command: "npm run smoke"
+    #       execution_kind: executed
+    #     - command: "npm run lint"
+    #       execution_kind: static
+    smoketest:
+      enabled: true
+      # scoped = only touched files/ecosystems, full = whole repository inventory
+      mode: scoped
+      timeout_seconds: 45
+      max_output_chars: 800
+      adapters:
+        python:
+          enabled: true
+          # Compile changed Python files without executing app logic.
+          command: 'python -m py_compile'
+          execution_kind: syntax
+          append_changed_files: true
+        shell:
+          enabled: true
+          # Syntax-check changed shell scripts.
+          command: 'bash -n'
+          execution_kind: syntax
+          append_changed_files: true
+        js_ts:
+          enabled: true
+          # Syntax-check changed JavaScript/TypeScript files when Node is available.
+          command: 'node --check'
+          execution_kind: syntax
+          append_changed_files: true
+        html_css:
+          enabled: true
+          # Basic structural smoke for changed HTML/CSS files without external linters.
+          # This is file inspection only — no runtime behavior exercised, so
+          # it is declared `static` even though it uses a python subprocess.
+          command: 'python -c "from pathlib import Path; import sys; bad=[]; files=sys.argv[1:]; [bad.append(f\"{p}: empty file\") if not Path(p).read_text(encoding=\"utf-8\").strip() else None for p in files]; [bad.append(f\"{p}: missing html/doctypish structure\") if p.lower().endswith(\".html\") and \"<html\" not in Path(p).read_text(encoding=\"utf-8\").lower() and \"<!doctype\" not in Path(p).read_text(encoding=\"utf-8\").lower() else None for p in files]; [bad.append(f\"{p}: no css rule blocks found\") if p.lower().endswith(\".css\") and \"{\" not in Path(p).read_text(encoding=\"utf-8\") and \"}\" not in Path(p).read_text(encoding=\"utf-8\") else None for p in files]; print(\"basic html/css smoke ok\" if not bad else \"\\n\".join(bad)); raise SystemExit(1 if bad else 0)"'
+          execution_kind: static
+          append_changed_files: true
+
   qontextor:
     provider: local
     model: qontextor
-    # local_mode: 'fast' = AST-only analysis
-    #             'complex' = AST + deep semantic analysis
-    local_mode: complex
+
+    # Modes: fast (shallow structural scan), complex (shared graph + language extractors for Python/shell/JS/TS/HTML/CSS)
+    local_mode: complex # ONLY when provider = local
 
   qompressor:
     provider: local
     model: qompressor
+    # Deterministic multi-language skeletonizer. Python uses stdlib AST. In the shipped container/provisioned environment, shell/JS-TS/HTML/CSS use native/adapted tooling.
+    # Reduced local environments may fall back. Tree-sitter fallback is optional and only activates after explicitly installing requirements-optional-tree-sitter.txt.
 
   qontrabender:
-    # NOTE: Qontrabender is ONLY active when construqtor uses Gemini!
-    # It's specifically designed for Gemini's context caching feature.
     provider: local
     model: qontrabender
-    
-    # ═══════════════════════════════════════════════════════════════════════════
-    # POLICY-DRIVEN CONFIGURATION (v0.8.0)
-    # ═══════════════════════════════════════════════════════════════════════════
-    
-    # Path to caching policy file (relative to worqspace)
     policy_file: "./caching_policy.yaml"
-    
-    # Select operational mode from caching_policy.yaml
-    # Available modes:
-    #   - local_fast:       Ultra-fast, skeleton only, no remote cache
-    #   - local_smart:      Default - variable fidelity, local only (RECOMMENDED)
-    #   - cyber_bedrock:    Remote cache for stable bedrock
-    #   - cyber_aggressive: Aggressive remote caching, more churn
+
+    # Cache manipulation modes:
+    #   - local_fast:        Ultra-fast, skeleton only, no remote cache
+    #   - local_smart:       Default - variable fidelity, local only (RECOMMENDED)
+    #   - cyber_bedrock:     Remote cache for stable bedrock
+    #   - cyber_aggressive:  Aggressive remote caching, more churn
     #   - paranoid_mincloud: Minimal cloud exposure, skeletons only
-    #   - debug_repro:      Maximum audit logging for debugging
+    #   - debug_repro:       Maximum audit logging for debugging
     mode: local_smart
 
+# General agent and run configuration
 options:
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Agent Enable/Disable
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # Enable/disable Qompressor (skeleton generation)
-  use_qompressor: true
-  
-  # Enable/disable Qontextor (context indexing)
-  use_qontextor: true
+  # Enable/disable token optimization agents in general
+  use_qompressor: false
+  use_qontextor: false
+  use_qontrabender: false
 
-  # Enable/disable Qontrabender (hybrid caching with policy-driven fidelity)
-  # NOTE: Only works when construqtor.provider is 'gemini'!
-  use_qontrabender: true
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Cheqpoint Configuration
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # true = User-gated mode (cheqpoints enabled)
-  # false = Autonomous mode (cheqpoints disabled)
+  # User approval gate per global iteration/pass boundary
   cheqpoint: false
 
-  # Max cycles in auto-mode (recommended: 3 for simple, 4-6 for complex)
-  auto_cycle_limit: 1
+  # Hard outer safety cap. Counts every actual pass: build + repair.
+  max_total_iterations: 4
+  # Compatibility alias for older configs / CLI wording.
+  auto_cycle_limit: 4
+  # Hard cap for non-repair build passes only.
+  max_build_passes: 4
+  # How InstruQtor estimated build passes are used. advisory = recorded only, scheduler = can continue with later build passes when allowed.
+  cycle_estimate_mode: scheduler
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Cost Confirmation Gate (GateQeeper)
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # When true, after CalQulator estimates the run cost, QonQrete will prompt
-  # you to confirm before proceeding. You must answer yes/no.
-  # When false (default), runs proceed without cost confirmation.
+  # Cost estimation gate
   cost_confirmation_gate: false
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Generation Settings (v1.0.2 - INVERTED ENFORCED Briq Ranges)
-  # ═══════════════════════════════════════════════════════════════════════════
-  
-  # Briq Granularity Control (0-16) - INVERTED & ENFORCED!
-  # v1.0.2: Higher number = MORE briqs! (more intuitive)
-  #
-  # SENSITIVITY SCALE:
-  #   0  = Monolithic    (exactly 1 briq)
-  #   1  = Very Broad    (2-3 briqs)
-  #   2  = Broad         (3-5 briqs)
-  #   3  = Feature-level (5-8 briqs)
-  #   4  = Component     (8-12 briqs)
-  #   5  = Balanced      (10-15 briqs)  ← RECOMMENDED DEFAULT
-  #   6  = Standard      (15-20 briqs)
-  #   7  = High Gran.    (20-30 briqs)
-  #   8  = Very High     (30-40 briqs)
-  #   9  = Atomic        (40-60 briqs)
-  #  10  = Ultra         (50-75 briqs)
-  #  11  = Mega          (60-90 briqs)
-  #  12  = Hyper         (75-110 briqs)
-  #  13  = Extreme       (90-130 briqs)
-  #  14  = Maximum       (110-160 briqs)
-  #  15  = Insane        (130-200 briqs)
-  #  16  = QONQRETE MAX  (160-250 briqs)
-  #
-  # RECOMMENDATIONS:
-  #   Simple projects (web server, API): sens=1-2, cycles=1-3
-  #   Medium projects (full-stack app):  sens=4-6, cycles=2-4
-  #   Complexer projects (multi-service):  sens=6-10, cycles=3-6
-  #   QonQrete exQavator sized projects: sens=10+, cycles=6+
+  # Automatic briQ sensisitivty
+  auto_briq_sens: true
+
+  # Manual briQ sensitivity (0-16) Higher number = more briQs, but on a bounded practical scale.
+  #   0  = Monolithic    (1 briq)
+  #   1  = Tiny split    (2 briqs)
+  #   2  = Very broad    (2-3 briqs)
+  #   3  = Broad         (3-4 briqs)
+  #   4  = Feature       (4-6 briqs)
+  #   5  = Balanced      (5-7 briqs)
+  #   6  = Detailed      (6-9 briqs)
+  #   7  = High          (8-12 briqs)
+  #   8  = Very High     (10-15 briqs)
+  #   9  = Atomic-ish    (12-18 briqs)
+  #  10  = Ultra         (15-22 briqs)
+  #  11  = Mega          (18-28 briqs)
+  #  12  = Hyper         (22-36 briqs)
+  #  13  = Extreme       (28-48 briqs)
+  #  14  = Maximum       (36-64 briqs)
+  #  15  = Insane        (48-84 briqs)
+  #  16  = QONQRETE MAX  (64-120 briqs)
   briq_sensitivity: 1
 
-  # Operational Mode
+  # Run Mode: program (functional), innovative (always suggest improvements), enterprise (include monitoring, logging and more)
   mode: program

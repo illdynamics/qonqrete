@@ -3,7 +3,7 @@
  * Full run configuration dialog
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -31,13 +31,13 @@ class QonQreteConfigDialog(
     private val settings = QonQreteSettingsState.getInstance()
 
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1))
+    private val autoSensitivityCheckbox = JBCheckBox("Auto briq sensitivity (-B)")
     private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1))
     private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web"))
     private val autonomousCheckbox = JBCheckBox("Autonomous mode (no human-in-the-loop)")
-    private val sqrapyardCheckbox = JBCheckBox("Use Sqrapyard (cache)")
-    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman", "msb"))
-    private val tuiCheckbox = JBCheckBox("Enable TUI mode")
-    private val wonqreteCheckbox = JBCheckBox("Enable Wonqrete mode")
+    private val noSyncCheckbox = JBCheckBox("No repo-root sync (--no-sync)")
+    private val sqrapyardCheckbox = JBCheckBox("Seed repository (--seed-repo)")
+    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman"))
     private val qonstructionNameField = JBTextField()
 
     private var validatedConfig: QonQreteRunConfig? = null
@@ -48,11 +48,11 @@ class QonQreteConfigDialog(
 
         // Set initial values
         modeCombo.selectedItem = settings.defaultMode
+        autoSensitivityCheckbox.isSelected = settings.defaultAutoBriqSensitivity
         autonomousCheckbox.isSelected = settings.defaultAutonomous
+        noSyncCheckbox.isSelected = settings.noSync
         sqrapyardCheckbox.isSelected = settings.useSqrapyard
         engineCombo.selectedItem = settings.containerEngine
-        tuiCheckbox.isSelected = settings.enableTui
-        wonqreteCheckbox.isSelected = settings.enableWonqrete
     }
 
     override fun createCenterPanel(): JComponent {
@@ -66,14 +66,14 @@ class QonQreteConfigDialog(
 
         val builder = FormBuilder.createFormBuilder()
             .addLabeledComponent("Briq Sensitivity:", sensitivityPanel)
+            .addComponent(autoSensitivityCheckbox)
             .addLabeledComponent("Cycles:", cyclesPanel)
             .addLabeledComponent("Mode:", modeCombo)
             .addLabeledComponent("Container Engine:", engineCombo)
             .addSeparator()
             .addComponent(autonomousCheckbox)
+            .addComponent(noSyncCheckbox)
             .addComponent(sqrapyardCheckbox)
-            .addComponent(tuiCheckbox)
-            .addComponent(wonqreteCheckbox)
             .addSeparator()
             .addLabeledComponent("Qonstruction Name:", qonstructionNameField)
             .addComponentToRightColumn(JBLabel("(optional, alphanumeric and _/- only)"))
@@ -110,14 +110,14 @@ class QonQreteConfigDialog(
 
         validatedConfig = QonQreteRunConfig(
             sensitivity = sensitivitySpinner.value as Int,
+            autoSensitivity = autoSensitivityCheckbox.isSelected,
             cycles = cyclesSpinner.value as Int,
             mode = modeCombo.selectedItem as String,
             autonomous = autonomousCheckbox.isSelected,
+            noSync = noSyncCheckbox.isSelected,
             qonstructionName = finalName,
             useSqrapyard = sqrapyardCheckbox.isSelected,
-            containerEngine = engineCombo.selectedItem as String,
-            enableTui = tuiCheckbox.isSelected,
-            enableWonqrete = wonqreteCheckbox.isSelected
+            containerEngine = engineCombo.selectedItem as String
         )
 
         super.doOKAction()

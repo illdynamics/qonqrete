@@ -7,11 +7,11 @@
 
 ![QonQrete](qonqrete.jpg)
 
-QonQrete is a **local-first, file-based AI software construction system** that runs a structured multi-agent build loop inside a hardened container. It plans work into briqs, generates code in a Qage, reviews the result, and iterates with either **user-gated cheQpoints** or **fully autonomous cycles**.
+QonQrete is a **local-first, file-based AI software construction system** that runs a structured multi-agent build loop inside a hardened container. It plans work into briqs, generates code in a Qage, reviews the result, and iterates with either **user-gated cheQpoints** or **fully autonomous global-iteration loops**.
 
 ## Version
 
-**Current repository version:** `v1.2.0`  
+**Current repository version:** `v1.4.0`  
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
@@ -28,22 +28,52 @@ This repository currently ships three things:
 
 The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-> **v1.2.0** — Workspace Deployment & Hassle-Free Bootstrap
+> **v1.4.0** — Truthful Inspection, Clean Streaming UX, Hybrid Venice Wiring
 
-QonQrete is a deterministic AI coding agent that builds software inside hardened containers. It takes a high-level task, decomposes it into briqs, generates code, reviews the result, and optionally continues into more cycles — all locally, all file-based, all yours.
+This release focuses on three coordinated fixes:
+
+- **Inspection truthfulness hardening**
+  - Final artifact evidence from `qodeyard/` is now explicitly authoritative in review prompts.
+  - Review snippets now carry deterministic metadata (`file_bytes`, `snippet_chars`, `snippet_truncated`) so prompt clipping is never mistaken for file truncation.
+  - InspeQtor review calls now disable previous-log injection for tactical/meta review to reduce stale relay influence.
+  - Verdict synthesis now prioritizes deterministic gates; advisory briq-review noise no longer blocks completion when deterministic checks pass.
+
+- **Frontend localStorage false-negative fix**
+  - Deterministic validation now resolves direct literals plus compact constant/alias/object indirection for localStorage keys (for example `const KEY`, alias chains, `STORAGE_KEYS.foo`).
+
+- **Streaming UX cleanup (without losing audit capture)**
+  - Outer Qrane heartbeat chatter removed.
+  - Inner ConstruQtor `[Still working] ...` chatter removed.
+  - Full raw stream capture to qonsole/audit remains intact.
+  - Terminal defaults to concise rendering for streamed heredoc payloads:
+    - `Writing <file>...`
+    - `Wrote <file>`
+  - TTY hotkeys:
+    - `TAB` => raw stream mode
+    - `Shift+TAB` => concise mode
+  - Mode hints are edge-triggered (single status messages), never prefixed per streamed line.
+
+- **Execution wiring defaults**
+  - Primary agent defaults are aligned to `venice / deepseek-v3.2`.
+  - ConstruQtor default coding mode is now `hybrid`.
+  - New launcher switch `-N/--no-sync` keeps outputs in qage/qonstruction paths and skips repo-root sync-back.
+
+> **v1.3.0** — Hardened Sandbox, Agent Renames, Legacy Cleanup
+
+QonQrete is a deterministic AI coding agent that builds software inside hardened containers. It takes a high-level task, decomposes it into briqs, generates code, reviews the result, and optionally continues into more build/repair passes when the runtime allows it — all locally, all file-based, all yours.
 
 ## Quick Start (IDE)
 
 ### VS Code
 1. Install **QonQrete** from the VS Code Marketplace
 2. `Ctrl+Shift+P` → **QonQrete: Deploy to Workspace**
-3. `Ctrl+Shift+P` → **QonQrete: Create tasq.md** — describe what to build
-4. `Ctrl+Shift+P` → **QonQrete: Run Tasq** — auto-init on first run
+3. `Ctrl+Shift+P` → **QonQrete: Create Task File** — creates the starter `tasq.md`
+4. `Ctrl+Shift+P` → **QonQrete: Run Tasq** — runs the default task file directly, auto-init on first run
 
 ### IntelliJ / JetBrains
 1. Install **QonQrete** from the JetBrains Marketplace
 2. `Ctrl+Shift+A` → **QonQrete: Deploy to Workspace**
-3. `Ctrl+Shift+A` → **QonQrete: Create tasq.md**
+3. `Ctrl+Shift+A` → **QonQrete: Create Task File**
 4. `Ctrl+Alt+Q` → **Run Tasq**
 
 ### What happens
@@ -64,37 +94,78 @@ my-project/
 # Prerequisites: Docker or Podman + AI API key(s)
 export OPENAI_API_KEY='...'
 
-# Build the runtime
+# Build the runtime once
 chmod +x qonqrete.sh
 ./qonqrete.sh init
 
-# Edit your task
-vim worqspace/tasq.md
+# Point QonQrete at any task file
+vim tasq.md
 
 # Run
-./qonqrete.sh run
+./qonqrete.sh tasq.md
+./qonqrete.sh run -f tasq.md
 ./qonqrete.sh run --auto --mode security -b 6 -c 3
+./qonqrete.sh status
 ```
+
+Task files are now the canonical front door for the CLI. `tasq.md` remains the default starter for compatibility, but the primary demo path is `qonqrete.sh <task-file>`.
 
 ## How It Works
 
+`cyqle{N}` folder numbering tracks the **global iteration index**. A repair pass stays attached to the most recent build pass and does **not** increment the build-pass count. By default, InstruQtor's estimated build-pass count is recorded as **advisory** unless scheduler mode is enabled. Resume honors explicitly queued next-pass metadata, and when interruption happens mid-pass it restores the interrupted active pass semantics instead of silently defaulting to build.
+
+
 ```
-User defines tasq.md
-  → TasqLeveler enhances the task (cycle 1)
+User defines a task file
+  → Qrystallizer clarifies the task (first build pass)
   → InstruQtor decomposes into briqs + generates QONTRACT
   → CalQulator estimates cost
   → ConstruQtor generates/modifies code in qodeyard/
   → InspeQtor reviews and produces reqap
-  → Qontextor indexes context
-  → Qompressor creates skeletons
-  → Repeat for N cycles
-```
+  → Qontextor indexes deterministic multi-language structural context (Python, shell, JS/TS, HTML/CSS)
+  → Qompressor creates deterministic multi-language structural skeletons (Python, shell, JS/TS, HTML/CSS)
+  → Repeat for N iterations when scheduler/repair continuation requires it
+  ```
 
-All execution happens inside a **hardened container** with:
+  ### Coding Modes
+
+  ConstruQtor supports three coding strategies via the `coding_mode` configuration:
+
+  - **`heredoc`:** Legacy mode. The AI generates file content wrapped in Markdown code blocks.
+  - **`direct`:** Advanced tool-based mode. The AI uses a dedicated `write_file_direct` tool to mutate files inside a hardened attempt-workspace (`validation-root`). This mode features iterative repair-forward validation within the sandbox before committing to `qodeyard`.
+  - **`hybrid` (Default):** Deterministic transport-policy mode. Default per-file policy is:
+    - new files → `heredoc`
+    - existing files → `direct`
+    Deterministic fallback/escalation forces `heredoc` for coherence/reliability when direct transport is fragile or output quality degrades.
+
+  All execution happens inside a **hardened container** with:
+
 - Read-only root filesystem
 - Dropped capabilities
 - Resource limits (memory, CPU, PIDs)
 - Non-root runtime
+
+## Qontextor context model
+
+Qontextor now defaults to a deterministic structural graph path. The local extractor stack builds shared graph records plus language-specific extraction for the current runtime:
+- Python via stdlib AST
+- Shell via `shfmt -tojson` when available in the shipped environment (heuristic fallback only in reduced environments)
+- JavaScript / TypeScript via a repo-shipped Node helper backed by the TypeScript Compiler API
+- HTML via a repo-shipped Node helper backed by `parse5`
+- CSS via a repo-shipped Node helper backed by `postcss`
+
+## Qompressor skeleton model
+
+Qompressor now defaults to adapter-based multi-language structural skeletonization for the current runtime:
+- Python AST skeletons
+- Shell skeletons backed by `shfmt -tojson` when available in the shipped environment
+- JavaScript / TypeScript skeletons backed by a repo-shipped Node helper using the TypeScript Compiler API
+- HTML skeletons backed by `parse5`
+- CSS skeletons backed by `postcss`
+
+Tree-sitter is an optional fallback path for unsupported parseable languages. It is **not** shipped by default; install `requirements-optional-tree-sitter.txt` when you want that fallback enabled. Use `python worqer/qontextor.py --capabilities` or `python worqer/qompressor.py --capabilities` to see exactly which native and fallback paths are active in your current runtime. The default test suite stays offline-safe; real Tree-sitter integration is an opt-in path for environments that deliberately install it.
+
+The default path is offline-safe and does **not** depend on embeddings.
 
 ## Architecture
 
@@ -119,39 +190,47 @@ qonqrete/
 | DeepSeek | `DEEPSEEK_API_KEY` |
 | Qwen | `QWEN_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
+| Venice | `VENICE_API_KEY` *(required, no fallback)* |
+| mlx | `MLX_API_KEY` *(optional — works without auth)* |
+| llama-cpp | `LLAMA_CPP_API_KEY` *(optional — works without auth)* |
 
 ## Container Engines
 
 - **Docker** (default, auto-detected)
 - **Podman** (auto-detected, macOS machine management included)
-- **MicroSandbox** (experimental)
-
 ## CLI Reference
 
 ```bash
 ./qonqrete.sh init                           # Build container image
-./qonqrete.sh run                            # Fresh run
+./qonqrete.sh tasq.md              # Task-first run
+./qonqrete.sh run -f tasq.md       # Explicit task-file run
 ./qonqrete.sh run --auto                     # Autonomous mode
-./qonqrete.sh run -b 6 -c 3                  # Sensitivity 6, 3 cycles
+./qonqrete.sh run -b 6 -c 3                  # Sensitivity 6, 3 total iterations (build + repair passes)
 ./qonqrete.sh run --mode security            # Security-focused mode
+./qonqrete.sh run --seed-repo                # Continue from current repo code (default run starts empty)
+./qonqrete.sh run --no-sync                  # Keep outputs in qage/qonstruction paths (skip repo-root sync-back)
 ./qonqrete.sh run -a -n myproject            # Auto + save as qonstruction
-./qonqrete.sh run -s                         # Seed from sqrapyard
 ./qonqrete.sh resume                         # Resume from previous qage
+./qonqrete.sh status                         # Latest run state + manifest paths
+./qonqrete.sh audit                          # Latest audit timeline + artifact paths
 ./qonqrete.sh clean                          # Interactive qage cleanup
 ./qonqrete.sh clean -A                       # Delete all qages
+python worqer/qontextor.py --capabilities    # Current extractor capability report
+python worqer/qompressor.py --capabilities   # Current compressor capability report
+python -m worqer.smoqetester qodeyard --cycle 1 --config worqspace/config.yaml --json
 ```
 
-## IDE Commands (v1.2.0)
+## IDE Commands (v1.4.0)
 
 Both VS Code and IntelliJ support identical commands:
 
 | Command | Description |
 |---------|-------------|
 | **Deploy to Workspace** | Install runtime into `.qonqrete/` |
-| **Create tasq.md** | Create starter template at project root |
-| **Configure Run** | Set sensitivity, cycles, mode, engine |
-| **Run Tasq** | Sync tasq → auto-init → execute |
-| **Run as QonQrete Tasq** | Run any markdown as temp tasq |
+| **Create Task File** | Create starter `tasq.md` at project root |
+| **Configure Run** | Set sensitivity, iteration/build caps, mode, engine |
+| **Run Tasq** | Run the default task file directly with auto-init when needed |
+| **Run as QonQrete Tasq** | Run any markdown file directly as task input |
 | **Resume Run** | Continue from previous qage |
 | **Clean Qages** | Delete old qage directories |
 | **Init Workspace** | Manually build container image |
@@ -169,6 +248,18 @@ Both VS Code and IntelliJ support identical commands:
 | `devops` | DevOps and infrastructure |
 | `web` | Web development |
 
+## Local Node helper setup
+
+The shipped container installs the default Node-based helper stack for JS/TS and HTML/CSS. For repo-local runs outside that container, install the pinned helper dependencies from `.qonqrete/package.json`:
+
+```bash
+cd .qonqrete
+npm install
+npm run qonq-native-capabilities
+```
+
+Runtime discovery prefers repo-local `node_modules` first, then global Node modules. Reduced local environments may still run, but Qontextor/Qompressor will honestly report and artifact any fallback path they had to use.
+
 ## Documentation
 
 - [Quickstart](doc/QUICKSTART.md)
@@ -176,6 +267,16 @@ Both VS Code and IntelliJ support identical commands:
 - [Documentation](doc/DOCUMENTATION.md)
 - [Terminology](doc/TERMINOLOGY.md)
 - [Release Notes](doc/RELEASE-NOTES.md)
+
+## Validation Reality
+
+Deterministic validation in the current bridge is strongest for Python. Other ecosystems still benefit from workflow orchestration, artifact capture, and AI review, but they do not yet have equivalent deterministic compile/test coverage.
+
+Smoketest evidence is explicitly classified:
+- `execution_kind=static` for static validation (syntax/type/parse style checks)
+- `execution_kind=executed` for genuine runtime smoke commands
+
+`validation_execution_mode` only reports `EXECUTED` or `MIXED` when genuine executed smoke evidence is present.
 
 ## Project
 
@@ -204,7 +305,7 @@ Keys are stored in IntelliJ's **PasswordSafe** (encrypted credential store). The
 ## AI Configuration Panel
 
 Both IDEs include a **"Set AI Configuration"** command that lets you:
-- Set the **provider** and **model** for each agent (TasqLeveler, InstruQtor, ConstruQtor, InspeQtor)
+- Set the **provider** and **model** for each AI agent (Qrystallizer, Qonstrictor, InstruQtor, ConstruQtor, InspeQtor)
 - Set **API keys** for each provider (stored securely)
 - See at a glance which keys are set and which are missing
 
@@ -231,65 +332,49 @@ GateQeeper: Cost estimate above. Proceed with this run? [y/N]
 
 You must answer `y` or `yes` to continue. Any other answer cancels the run.
 
-This is useful for preventing accidental expensive runs with high sensitivity or many cycles.
+This is useful for preventing accidental expensive runs with high sensitivity or many iterations.
 
-## v1.2.0 Highlights
+## v1.4.0 Snapshot Highlights
 
-- **One-click workspace deployment** from both IDEs
-- **Auto-init** builds container image on first run
-- **Root tasq.md** at workspace root (synced to runtime automatically)
-- **Versioned container images** (`qonqrete-qage:1.2.0`)
-- **Identical behavior** in VS Code and IntelliJ
-- No manual cloning, no manual init, no command line required
-
-## What changed between `v1.0.4-stable` and `v1.1.9-stable`
-
-### Core platform
-- container runtime auto-detection for Docker / Podman / MSB
-- enforced contract workflow via `qontract.d/`
-- stricter deterministic run behavior and anti-drift hardening
-- resume / clean / qonstruction workflow
-- sqrapyard seeding as an explicit opt-in flow
-- QONTRACT fail-fast enforcement on later cycles
-
-### VS Code integration
-- full VS Code extension with commands, sidebar, status bar, config UI, resume and clean flows
-- shell detection / verification and honest run-state handling
-- run `worqspace/tasq.md` directly from the IDE
-- run any Markdown file temporarily as a QonQrete tasq
-- qage browsing and manual packaging as `.vsix`
-
-### IntelliJ / JetBrains integration
-- IntelliJ plugin project with tool window, actions, settings, status widget, qage browser, and run controls
-- manual packaging flow via Gradle
-- local/manual installation path for JetBrains IDEs
+- **Truthful inspection + deterministic evidence upgrades** in final review paths
+- **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles
+- **Launcher `-N/--no-sync`** run control to keep output in qage/qonstruction paths
+- **Primary AI default alignment** to `venice / deepseek-v3.2` and ConstruQtor `hybrid` default mode
+- **Versioned container images** (`qonqrete-qage:1.4.0`)
+- **Aligned IDE behavior** in VS Code and IntelliJ around the same runtime and task-file model
 
 ## Core principles
 
 - **Isolation by design** — AI execution happens in a Qage container, not directly on the host.
-- **File-based communication** — tasqs, briqs, reviews, skeletons, contracts, and logs are visible on disk.
-- **Structured iteration** — QonQrete works in cyQles with planning, build, review, and checkpoint phases.
+- **File-based communication** — task specs, plans, build evidence, validation, realization, verdicts, and logs are visible on disk.
+- **Evidence-gated execution** — QonQrete runs clarification, planning, build, validation, realization, and inspection with bounded repair instead of implicit endless looping.
 - **Human control when wanted** — autonomous mode exists, but user-gated cheQpoints remain first-class.
 - **Local-first supporting stack** — several helper agents run fully locally with zero AI-token cost.
 
 ## Architecture in one glance
 
 - **`qonqrete.sh`** — host entrypoint and runtime bootstrap
-- **`qrane/`** — orchestrator, TUI, path handling, cost helpers
+- **`qrane/`** — orchestrator, path handling, and cost helpers
 - **`worqer/`** — agent scripts and security/provider utilities
-- **`worqspace/`** — config, task input, sqrapyard, qages, qonstructions
+- **`worqspace/`** — config, compatibility task copy, qages, qonstructions
 - **`vscode-extension/`** — VS Code integration
 - **`intellij-plugin/`** — JetBrains integration
 
 ## Main workflow
 
-1. **Enhance** — `tasqleveler` (optional, cycle 1 only)
-2. **Plan** — `instruqtor` creates briqs and contract files
-3. **Estimate** — `calqulator` estimates token/cost usage
-4. **Build** — `construqtor` generates and updates code in `qodeyard/`
-5. **Review** — `inspeqtor` validates and reviews results
-6. **Index / compress** — `qontextor` and `qompressor` refresh context artifacts
-7. **Checkpoint** — continue, tweaQ, or quit
+1. **Clarify** — `qrystallizer` is the canonical intake stage
+2. **Clarification Gate** — if readiness is `NOT_READY`, Qrane pauses in `BLOCKED` / `RUN_WAITING_FOR_INPUT` and captures bounded clarification responses
+3. **Qonstrictor** — `qonstrictor` evaluates readiness and effective constraints before planning as a fallback guard
+4. **Plan** — `instruqtor` emits execution blueprint, build groups, validation plan, and contract files
+5. **Estimate** — `calqulator` emits estimation artifacts
+6. **Build** — `construqtor` performs scoped staged writes with attempt/recovery evidence
+7. **Validate + Realize** — deterministic validation and realization bundles are produced before judgment
+8. **Inspect** — `inspeqtor` emits structured verdicts and repair plans
+9. **Continue only if justified** — bounded repair or explicit linked continuation when the repair plan warrants it
+
+Questioning policy:
+- only intake clarification asks user questions
+- once readiness is accepted, mid-run questioning is disabled
 
 ## Directory overview
 
@@ -303,7 +388,6 @@ qonqrete/
 │   ├── pipeline_config.yaml
 │   ├── caching_policy.yaml
 │   ├── tasq.md
-│   ├── sqrapyard/
 │   ├── qonstructions/
 │   └── qage_YYYYMMDD_HHMMSS/
 ├── doc/
@@ -320,6 +404,10 @@ The current repo supports these providers through `worqer/lib_ai.py` and config:
 - Anthropic
 - DeepSeek
 - Qwen
+- OpenRouter
+- Venice *(Venice API, OpenAI-compatible, requires `VENICE_API_KEY`)*
+- mlx *(local/LAN OpenAI-compatible runtimes; API key optional)*
+- llama-cpp *(local/LAN OpenAI-compatible runtimes; API key optional)*
 - `local` for non-remote helper agents
 
 Required environment variables depend on your selected providers:
@@ -331,6 +419,9 @@ export ANTHROPIC_API_KEY='...'
 export DEEPSEEK_API_KEY='...'
 export QWEN_API_KEY='...'
 export OPENROUTER_API_KEY='...'
+export VENICE_API_KEY='...'        # required for provider: venice
+export MLX_API_KEY='...'           # optional, used when provider: mlx
+export LLAMA_CPP_API_KEY='...'     # optional, used when provider: llama-cpp
 ```
 
 ## System requirements
@@ -341,7 +432,7 @@ QonQrete auto-detects container runtime support.
 Supported runtime paths in the current repo:
 - Docker
 - Podman
-- Microsandbox / MSB (**experimental**)
+- Docker / Podman
 
 ### Tested platform notes from the repo/docs
 - Linux + Docker / Docker Desktop
@@ -370,23 +461,26 @@ Optional engine forcing:
 Edit:
 
 ```text
-worqspace/tasq.md
+tasq.md
 ```
 
 ### 3. Run
 
 ```bash
-./qonqrete.sh run
+./qonqrete.sh tasq.md
 ```
 
 Useful variants:
 
 ```bash
+./qonqrete.sh run -f tasq.md
 ./qonqrete.sh run --auto
 ./qonqrete.sh run --user
-./qonqrete.sh run -s
 ./qonqrete.sh run -a -n myproject
-./qonqrete.sh run --mode security --briq-sensitivity 6 --cyqles 3
+./qonqrete.sh run --mode security --briq-sensitivity 6 --cyqles 3   # 3 total iterations max
+./qonqrete.sh run -B --cyqles 3                       # force auto briq sensitivity, 3 total iterations max
+./qonqrete.sh status
+./qonqrete.sh audit
 ```
 
 ### 4. Resume
@@ -395,6 +489,8 @@ Useful variants:
 ./qonqrete.sh resume
 ./qonqrete.sh resume -q qage_YYYYMMDD_HHMMSS
 ```
+
+If the source run ended in intake clarification waiting (`BLOCKED` / `RUN_WAITING_FOR_INPUT`), resume re-enters cycle-1 clarification semantics instead of skipping cycle-1-only intake stages.
 
 ### 5. Clean
 
@@ -453,26 +549,33 @@ As shipped in this repository, QonQrete is still fundamentally a **repo-local wo
 
 ```text
 Usage: ./qonqrete.sh [COMMAND] [OPTIONS]
+       ./qonqrete.sh <task-file.md> [OPTIONS]
 
 Commands:
   init
   run
   resume
+  status
+  audit
   clean
+  clean-outputs
 
 Run options:
+  -f, --task-file <path>
   -a, --auto
   -u, --user
-  -t, --tui
   -m, --mode <name>
-  -b, --briq-sensitivity <0-16>
-  -c, --cyqles <1-50>
+  -b, --briq-sensitivity <N>
+  -B, --auto-briq-sensitivity
+  -c, --cyqles <N>
   -n, --qonstruction-name <name>
-  -s, --sqrapyard
-  -M, --msb
+  --seed-repo
+  -s, --sqrapyard     (legacy alias for --seed-repo)
+  -N, --no-sync       (skip repo-root sync-back; keep qage/qonstruction output)
   -d, --docker
   -p, --podman
-  -w, --wonqrete
+  -q, --qage <name>   (resume/status/audit/clean target)
+  -A, --all           (clean all qages)
 ```
 
 ## Documentation map
@@ -488,7 +591,7 @@ Run options:
 - The bundled IDE integrations are present and usable, but official store publishing is a separate distribution step.
 - The repo snapshot does **not** implement a central per-user QonQrete engine installer / bootstrap flow.
 - The committed `worqspace/config.yaml` is a working configuration example, not a promise that every default value is ideal for every task.
-- `TUI` and `MSB` remain experimental paths.
+- The active runtime surface is the standard CLI plus IDE wrappers.
 - Qontrabender only becomes relevant when the active ConstruQtor provider is Gemini.
 
 ## License

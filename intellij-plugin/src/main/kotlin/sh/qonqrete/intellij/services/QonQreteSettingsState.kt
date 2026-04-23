@@ -3,7 +3,7 @@
  * Persistent application settings with all configuration options
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -24,13 +24,13 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
 
     data class State(
         var defaultSensitivity: Int = 1,
+        var defaultAutoBriqSensitivity: Boolean = false,
         var defaultCycles: Int = 1,
         var defaultMode: String = "program",
         var defaultAutonomous: Boolean = true,
+        var noSync: Boolean = false,
         var useSqrapyard: Boolean = false,
         var containerEngine: String = "auto",
-        var enableTui: Boolean = false,
-        var enableWonqrete: Boolean = false,
         var customQonqretePath: String = "",
         var customBashPath: String = "",
         var autoOpenToolWindowOnRun: Boolean = true,
@@ -59,6 +59,10 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
         get() = myState.defaultSensitivity
         set(value) { myState.defaultSensitivity = value.coerceIn(0, 16) }
 
+    var defaultAutoBriqSensitivity: Boolean
+        get() = myState.defaultAutoBriqSensitivity
+        set(value) { myState.defaultAutoBriqSensitivity = value }
+
     var defaultCycles: Int
         get() = myState.defaultCycles
         set(value) { myState.defaultCycles = value.coerceIn(1, 50) }
@@ -71,6 +75,10 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
         get() = myState.defaultAutonomous
         set(value) { myState.defaultAutonomous = value }
 
+    var noSync: Boolean
+        get() = myState.noSync
+        set(value) { myState.noSync = value }
+
     var useSqrapyard: Boolean
         get() = myState.useSqrapyard
         set(value) { myState.useSqrapyard = value }
@@ -78,14 +86,6 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
     var containerEngine: String
         get() = myState.containerEngine
         set(value) { myState.containerEngine = value }
-
-    var enableTui: Boolean
-        get() = myState.enableTui
-        set(value) { myState.enableTui = value }
-
-    var enableWonqrete: Boolean
-        get() = myState.enableWonqrete
-        set(value) { myState.enableWonqrete = value }
 
     var customQonqretePath: String
         get() = myState.customQonqretePath
@@ -117,27 +117,27 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
  */
 data class QonQreteRunConfig(
     val sensitivity: Int = 1,
+    val autoSensitivity: Boolean = false,
     val cycles: Int = 1,
     val mode: String = "program",
     val autonomous: Boolean = true,
+    val noSync: Boolean = false,
     val qonstructionName: String? = null,
     val useSqrapyard: Boolean = false,
-    val containerEngine: String = "auto",
-    val enableTui: Boolean = false,
-    val enableWonqrete: Boolean = false
+    val containerEngine: String = "auto"
 ) {
     companion object {
         fun fromSettings(): QonQreteRunConfig {
             val settings = QonQreteSettingsState.getInstance()
             return QonQreteRunConfig(
                 sensitivity = settings.defaultSensitivity,
+                autoSensitivity = settings.defaultAutoBriqSensitivity,
                 cycles = settings.defaultCycles,
                 mode = settings.defaultMode,
                 autonomous = settings.defaultAutonomous,
+                noSync = settings.noSync,
                 useSqrapyard = settings.useSqrapyard,
-                containerEngine = settings.containerEngine,
-                enableTui = settings.enableTui,
-                enableWonqrete = settings.enableWonqrete
+                containerEngine = settings.containerEngine
             )
         }
     }

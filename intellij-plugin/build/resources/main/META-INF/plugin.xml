@@ -1,0 +1,78 @@
+<!--
+  QonQrete IntelliJ Plugin
+  Plugin configuration - Production Ready
+
+  @author QonQrete
+  @version v1.4.0
+  @license AGPL-3.0
+-->
+<idea-plugin>
+  <change-notes><![CDATA[<h2>1.4.0 - Runtime Truth/Streaming Alignment</h2>
+<ul>
+    <li><b>Changed:</b> AI config UI targets primary runtime agents only (qrystallizer, instruqtor, construqtor, inspeqtor)</li>
+    <li><b>Changed:</b> Default AI binding aligned to venice / deepseek-v3.2</li>
+    <li><b>Changed:</b> Local-only providers (mlx, llama-cpp) hidden from shared provider picker</li>
+    <li><b>Added:</b> Run-level no-sync control wired to launcher (--no-sync)</li>
+    <li><b>Aligned:</b> Plugin docs/UI defaults match runtime-backed values (sensitivity=1, cycles=1, autonomous=true)</li>
+</ul>]]></change-notes>
+  <id>sh.qonqrete</id>
+  <name>QonQrete</name>
+  <version>1.4.0</version>
+  <idea-version since-build="233" />
+  <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
+  <description><![CDATA[<h2>QonQrete</h2>
+
+    <p>
+    QonQrete is a deterministic AI coding agent for IntelliJ enabling autonomous code generation,
+    local AI development, and secure sandboxed software construction workflows.
+    </p>
+
+    <h3>Features</h3>
+    <ul>
+        <li><b>Deploy to Workspace</b> – One-click runtime deployment into any project</li>
+        <li><b>Create Task File</b> – Starter task file at project root (`tasq.md` remains supported)</li>
+        <li><b>Run Tasq</b> – Execute QonQrete with the selected task file and auto-init when needed</li>
+        <li><b>Run Any Markdown</b> – Run any markdown file directly as the task input</li>
+        <li><b>Tool Window</b> – Control panel with status, config and qage browser</li>
+        <li><b>Status Widget</b> – Real-time status indicator in the IntelliJ status bar</li>
+        <li><b>Auto-Init</b> – Automatically builds container image on first run</li>
+        <li><b>Local-First Execution</b> – Runs fully local using your QonQrete runtime</li>
+    </ul>
+
+    <h3>Requirements</h3>
+    <ul>
+        <li>Bash shell (Git Bash on Windows, native on macOS/Linux)</li>
+        <li>Docker or Podman for container execution</li>
+    </ul>
+
+    <p>
+    Learn more at <a href="https://qonqrete.sh">qonqrete.sh</a>.
+    </p>]]></description>
+  <category>Code tools</category>
+  <depends>com.intellij.modules.platform</depends>
+  <extensions defaultExtensionNs="com.intellij">
+    <projectService serviceImplementation="sh.qonqrete.intellij.services.QonQreteProjectService" />
+    <applicationService serviceImplementation="sh.qonqrete.intellij.services.QonQreteSettingsState" />
+    <toolWindow id="QonQrete" anchor="right" icon="/icons/qonqreteToolWindowIcon.svg" factoryClass="sh.qonqrete.intellij.ui.QonQreteToolWindowFactory" />
+    <statusBarWidgetFactory id="QonQreteStatusWidget" implementation="sh.qonqrete.intellij.ui.QonQreteStatusWidgetFactory" order="after ReadOnlyAttribute" />
+    <projectConfigurable parentId="tools" instance="sh.qonqrete.intellij.ui.QonQreteSettingsConfigurable" id="sh.qonqrete.intellij.settings" displayName="QonQrete" nonDefaultProject="true" />
+    <postStartupActivity implementation="sh.qonqrete.intellij.services.QonQreteStartupActivity" />
+    <editorNotificationProvider implementation="sh.qonqrete.intellij.ui.TasqEditorNotificationProvider" />
+    <notificationGroup id="QonQrete Notifications" displayType="BALLOON" />
+  </extensions>
+  <actions>
+    <action id="QonQrete.DeployToWorkspace" class="sh.qonqrete.intellij.actions.DeployToWorkspaceAction" text="QonQrete: Deploy to Workspace" description="Deploy QonQrete runtime into the current project" icon="AllIcons.Actions.Download" />
+    <action id="QonQrete.CreateTasq" class="sh.qonqrete.intellij.actions.CreateTasqAction" text="QonQrete: Create Task File" description="Create a starter task file at project root" icon="AllIcons.Actions.New" />
+    <action id="QonQrete.SetAIConfig" class="sh.qonqrete.intellij.actions.SetAIConfigAction" text="QonQrete: Set AI Configuration" description="Configure AI providers, models, and API keys" icon="AllIcons.General.Settings" />
+    <action id="QonQrete.RunTasq" class="sh.qonqrete.intellij.actions.RunTasqAction" text="QonQrete: Run Tasq" description="Run QonQrete with the default project task file" icon="AllIcons.Actions.Execute">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt Q" />
+      <add-to-group group-id="RunMenu" anchor="last" />
+    </action>
+    <action id="QonQrete.RunAsQonqreteTasq" class="sh.qonqrete.intellij.actions.RunAsQonqreteTasqAction" text="QonQrete: Run as Tasq" description="Run current markdown file directly as the QonQrete task file" icon="AllIcons.Actions.Execute" />
+    <action id="QonQrete.InitWorkspace" class="sh.qonqrete.intellij.actions.InitWorkspaceAction" text="QonQrete: Init Workspace" description="Initialize QonQrete container image" icon="AllIcons.Actions.Download" />
+    <action id="QonQrete.ResumeRun" class="sh.qonqrete.intellij.actions.ResumeRunAction" text="QonQrete: Resume Run" description="Resume from existing qage" icon="AllIcons.Actions.Resume" />
+    <action id="QonQrete.CleanQages" class="sh.qonqrete.intellij.actions.CleanQagesAction" text="QonQrete: Clean Qages" description="Clean qage directories" icon="AllIcons.Actions.GC" />
+    <action id="QonQrete.ShowStatus" class="sh.qonqrete.intellij.actions.ShowStatusAction" text="QonQrete: Show Status" description="Show QonQrete status" icon="AllIcons.General.Information" />
+    <action id="QonQrete.OpenConfigDialog" class="sh.qonqrete.intellij.actions.OpenConfigDialogAction" text="QonQrete: Configure Run" description="Open run configuration dialog" icon="AllIcons.General.Settings" />
+  </actions>
+</idea-plugin>

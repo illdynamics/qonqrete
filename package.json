@@ -1,0 +1,23 @@
+{
+  "name": "qonqrete-qualifier-tools",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Repo-local and container-shipped Node tooling used by Qontextor, Qompressor, and the worqer/qualifier package for deterministic structural parsing and validation.",
+  "license": "SEE LICENSE FILE",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "qualifier-tools-versions": "echo biome: && biome --version && echo tsc: && tsc --version && echo html-validate: && html-validate --version && echo stylelint: && stylelint --version",
+    "qonq-native-capabilities": "node worqer/node_helpers/multilang_native.cjs capabilities"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "typescript": "5.6.3",
+    "html-validate": "9.2.2",
+    "stylelint": "16.10.0",
+    "stylelint-config-standard": "36.0.1",
+    "postcss": "8.5.6",
+    "parse5": "7.2.1"
+  }
+}

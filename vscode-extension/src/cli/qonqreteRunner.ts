@@ -3,7 +3,7 @@
  * Handles execution of qonqrete.sh commands
  * 
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -14,14 +14,14 @@ import { spawn } from 'child_process';
 
 export interface QonQreteRunConfig {
     sensitivity: number;
+    autoSensitivity?: boolean;
     cycles: number;
     mode: string;
     autonomous: boolean;
+    noSync: boolean;
     qonstructionName?: string;
     useSqrapyard: boolean;
-    containerEngine: 'auto' | 'docker' | 'podman' | 'msb';
-    enableTui: boolean;
-    enableWonqrete?: boolean;
+    containerEngine: 'auto' | 'docker' | 'podman';
 }
 
 export interface SanitizeResult {
@@ -469,7 +469,7 @@ export class QonQreteRunner {
     }
 
     /**
-     * Get the workspace-root tasq.md path (new v1.2.0 canonical location)
+     * Get the workspace-root tasq.md path (new v1.3.0 canonical location)
      */
     public async getRootTasqPath(preferredFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
         const wsFolder = preferredFolder || vscode.workspace.workspaceFolders?.[0];
@@ -557,7 +557,7 @@ export class QonQreteRunner {
             return { hasDockerfile: false, hasImage: false, engine: null };
         }
 
-        // Check versioned image first, then legacy untagged
+        // Check versioned image first, then the untagged compatibility alias
         const version = await this.getVersion(preferredFolder);
         const imageNames = [
             version ? `qonqrete-qage:${version}` : null,
@@ -755,7 +755,11 @@ export class QonQreteRunner {
     private buildRunArgs(config: QonQreteRunConfig): string[] {
         const args: string[] = ['run'];
 
-        args.push('--briq-sensitivity', config.sensitivity.toString());
+        if (config.autoSensitivity) {
+            args.push('--auto-briq-sensitivity');
+        } else {
+            args.push('--briq-sensitivity', config.sensitivity.toString());
+        }
         args.push('--cyqles', config.cycles.toString());
 
         if (config.mode && config.mode !== 'program') {
@@ -766,27 +770,37 @@ export class QonQreteRunner {
             args.push('--auto');
         }
 
+        if (config.noSync) {
+            args.push('--no-sync');
+        }
+
         if (config.qonstructionName) {
             args.push('--qonstruction-name', config.qonstructionName);
         }
 
         if (config.useSqrapyard) {
-            args.push('--sqrapyard');
+            args.push('--seed-repo');
         }
 
         if (config.containerEngine !== 'auto') {
             args.push(`--${config.containerEngine}`);
         }
 
-        if (config.enableTui) {
-            args.push('--tui');
-        }
-
-        if (config.enableWonqrete) {
-            args.push('--wonqrete');
-        }
-
         return args;
+    }
+
+    private buildRunCommand(config: QonQreteRunConfig, taskFilePath?: string): string {
+        const args = this.buildRunArgs(config);
+        if (!taskFilePath) {
+            return `./qonqrete.sh ${args.join(' ')}`;
+        }
+
+        const unixTaskPath = this.toUnixPath(taskFilePath);
+        const escapedTaskPath = this.escapeShellArg(unixTaskPath);
+        const runArgs = args.slice(1);
+        return runArgs.length > 0
+            ? `./qonqrete.sh ${escapedTaskPath} ${runArgs.join(' ')}`
+            : `./qonqrete.sh ${escapedTaskPath}`;
     }
 
     /**
@@ -852,10 +866,17 @@ export class QonQreteRunner {
             throw new Error('QonQrete script not found.');
         }
 
-        const args = this.buildRunArgs(config);
-        const command = `./qonqrete.sh ${args.join(' ')}`;
+        const taskFilePath = await this.getTasqPath(preferredFolder);
+        if (!taskFilePath || !fs.existsSync(taskFilePath)) {
+            throw new Error('No task file found.');
+        }
 
-        this.outputChannel.appendLine(`[QonQrete] Config: sens=${config.sensitivity}, cycles=${config.cycles}, mode=${config.mode}, auto=${config.autonomous}`);
+        const command = this.buildRunCommand(config, taskFilePath);
+
+        this.outputChannel.appendLine(
+            `[QonQrete] Config: sens=${config.sensitivity}, cycles=${config.cycles}, mode=${config.mode}, auto=${config.autonomous}, noSync=${config.noSync}`
+        );
+        this.outputChannel.appendLine(`[QonQrete] Task file: ${taskFilePath}`);
         
         await this.executeInTerminal(path.dirname(scriptPath), command, 'Running QonQrete');
     }
@@ -877,48 +898,9 @@ export class QonQreteRunner {
         }
 
         const workingDir = path.dirname(scriptPath);
-        const worqspaceTasq = path.join(workingDir, 'worqspace', 'tasq.md');
-        const backupPath = path.join(workingDir, 'worqspace', '.tasq.md.qonqrete-backup');
-
-        let hadOriginal = false;
-        if (fs.existsSync(worqspaceTasq)) {
-            fs.copyFileSync(worqspaceTasq, backupPath);
-            hadOriginal = true;
-            this.outputChannel.appendLine('[QonQrete] Backed up original tasq.md');
-        }
-
-        fs.copyFileSync(filePath, worqspaceTasq);
-        this.outputChannel.appendLine(`[QonQrete] Copied ${path.basename(filePath)} → worqspace/tasq.md`);
-
-        const markerPath = this.createMarkerPath(workingDir);
-        const unixMarkerPath = this.toUnixPath(markerPath);
-        const unixWorkingDir = this.toUnixPath(workingDir);
-        const unixBackup = this.toUnixPath(backupPath);
-        const unixTasq = this.toUnixPath(worqspaceTasq);
-
-        const args = this.buildRunArgs(config);
-        const runCommand = `./qonqrete.sh ${args.join(' ')}`;
-        
-        const restoreCmd = hadOriginal
-            ? `cp ${this.escapeShellArg(unixBackup)} ${this.escapeShellArg(unixTasq)} && rm -f ${this.escapeShellArg(unixBackup)} && echo "[QonQrete] Restored original tasq.md"`
-            : `echo "[QonQrete] No original to restore"`;
-
-        const fullCommand = `cd ${this.escapeShellArg(unixWorkingDir)} && ${runCommand}; _qexit=$?; ${restoreCmd}; echo $_qexit > ${this.escapeShellArg(unixMarkerPath)}; echo "[QonQrete exit code: $_qexit]"`;
-
-        this.updateRunStatus({
-            state: 'running',
-            startTime: new Date(),
-            command: runCommand,
-        });
-
-        this.watchMarkerFile(markerPath);
-
-        const secureEnv = await this.buildSecureEnvMap();
-        const terminal = this.getOrCreateTerminal(secureEnv);
-        terminal.show();
-        terminal.sendText(fullCommand);
-
-        this.outputChannel.appendLine(`[QonQrete] Running with temporary tasq from: ${filePath}`);
+        const command = this.buildRunCommand(config, filePath);
+        this.outputChannel.appendLine(`[QonQrete] Task file: ${filePath}`);
+        await this.executeInTerminal(workingDir, command, 'Running QonQrete task file');
     }
 
     public async runSpecificTasq(tasqFilePath: string, config: QonQreteRunConfig): Promise<void> {

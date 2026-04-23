@@ -2,10 +2,10 @@
  * QonQrete Status Widget Factory
  * Status bar widget showing shell state, run state, and version
  * 
- * v1.1.9: Now shows version in widget text
+ * v1.3.0: Now shows version in widget text
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
