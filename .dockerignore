@@ -1,39 +1,61 @@
-# -----------------------------
-# Secrets & Configuration
-# -----------------------------
-.env
-.dockerignore
-.ideas
-
-# -----------------------------
-# Git Metadata
-# -----------------------------
-# Exclude the entire .git history and config (Critical for size & security)
+# Git metadata
 .git
 .gitignore
 .gitattributes
 .gitmodules
+.dockerignore
 
-# -----------------------------
-# Generated Agent Files
-# -----------------------------
-**/bloq.d/*
-**/tasq.d/*
-**/exeq.d/*
-**/reqap.d/*
-**/qodeyard/*
+# Secrets
+.env
+.env.*
+!.env.example
 
-# -----------------------------
-# Logs & Runtime Data
-# -----------------------------
-**/struqture/*
-worqspace/qage**
-worqspace/qonstructions/*
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
 
-# -----------------------------
-# Python Cache
-# -----------------------------
-**/__pycache__
-**/*.pyc
-**/*.pyo
-**/*.pyd
+# Node / build
+node_modules/
+.npm/
+.pnpm-store/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+vscode-extension/node_modules/
+vscode-extension/build/
+intellij-plugin/build/
+
+# Logs / temp
+*.log
+tmp/
+temp/
+*.tmp
+
+# QonQrete runtime artifacts
+.qonqrete/
+qage_*/
+worqspace/qage_*/
+.qonqrete/worqspace/qage_*/
+worqspace/qonstructions/
+**/qodeyard/
+**/sqrapyard/
+**/bloq.d/
+**/tasq.d/
+**/exeq.d/
+**/reqap.d/
+**/struqture/
+
+# IDE / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

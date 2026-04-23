@@ -1,8 +1,8 @@
 # QonQrete Release Notes
 
-## v1.4.0 — Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment
+## v1.4.0 — MLcon Edition: Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment
 
-This release ships a coordinated patch pass across inspection truthfulness, terminal streaming UX, runtime wiring, and IDE plugin alignment.
+This release ships a coordinated patch pass across inspection truthfulness, terminal streaming UX, runtime wiring, and IDE plugin alignment, and corresponds to the MLcon-proven release snapshot.
 
 ### Inspection / Truthfulness
 - Final-file evidence from `qodeyard/` is now explicitly marked authoritative in InspeQtor review prompts.

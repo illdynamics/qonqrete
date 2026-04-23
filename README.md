@@ -1,4 +1,4 @@
-# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System
+# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.0 - MLcon Edition)
 ![Release](https://img.shields.io/github/v/release/illdynamics/qonqrete)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
@@ -12,6 +12,7 @@ QonQrete is a **local-first, file-based AI software construction system** that r
 ## Version
 
 **Current repository version:** `v1.4.0`  
+**Release context:** `v1.4.0 - MLcon Edition`  
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
@@ -28,7 +29,7 @@ This repository currently ships three things:
 
 The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-> **v1.4.0** — Truthful Inspection, Clean Streaming UX, Hybrid Venice Wiring
+> **v1.4.0 - MLcon Edition** — Truthful Inspection, Clean Streaming UX, Hybrid Venice Wiring
 
 This release focuses on three coordinated fixes:
 
@@ -138,11 +139,10 @@ User defines a task file
     - existing files → `direct`
     Deterministic fallback/escalation forces `heredoc` for coherence/reliability when direct transport is fragile or output quality degrades.
 
-  All execution happens inside a **hardened container** with:
+All execution happens inside a **hardened container** with:
 
 - Read-only root filesystem
 - Dropped capabilities
-- Resource limits (memory, CPU, PIDs)
 - Non-root runtime
 
 ## Qontextor context model
@@ -196,8 +196,8 @@ qonqrete/
 
 ## Container Engines
 
-- **Docker** (default, auto-detected)
-- **Podman** (auto-detected, macOS machine management included)
+- **Podman** (default auto-detected path)
+- **Docker** (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
 ## CLI Reference
 
 ```bash
@@ -208,7 +208,7 @@ qonqrete/
 ./qonqrete.sh run -b 6 -c 3                  # Sensitivity 6, 3 total iterations (build + repair passes)
 ./qonqrete.sh run --mode security            # Security-focused mode
 ./qonqrete.sh run --seed-repo                # Continue from current repo code (default run starts empty)
-./qonqrete.sh run --no-sync                  # Keep outputs in qage/qonstruction paths (skip repo-root sync-back)
+./qonqrete.sh run --no-sync                  # Skip repo-root sync-back only; qage/qodeyard artifacts remain
 ./qonqrete.sh run -a -n myproject            # Auto + save as qonstruction
 ./qonqrete.sh resume                         # Resume from previous qage
 ./qonqrete.sh status                         # Latest run state + manifest paths
@@ -334,7 +334,7 @@ You must answer `y` or `yes` to continue. Any other answer cancels the run.
 
 This is useful for preventing accidental expensive runs with high sensitivity or many iterations.
 
-## v1.4.0 Snapshot Highlights
+## v1.4.0 - MLcon Edition Snapshot Highlights
 
 - **Truthful inspection + deterministic evidence upgrades** in final review paths
 - **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles
@@ -410,6 +410,8 @@ The current repo supports these providers through `worqer/lib_ai.py` and config:
 - llama-cpp *(local/LAN OpenAI-compatible runtimes; API key optional)*
 - `local` for non-remote helper agents
 
+CalQulator default target for cost estimation is `gemini / gemini-2.5-flash-lite` unless overridden in `agents.calqulator`.
+
 Required environment variables depend on your selected providers:
 
 ```bash
@@ -430,9 +432,8 @@ export LLAMA_CPP_API_KEY='...'     # optional, used when provider: llama-cpp
 QonQrete auto-detects container runtime support.
 
 Supported runtime paths in the current repo:
-- Docker
-- Podman
-- Docker / Podman
+- Podman (default auto-detected path)
+- Docker (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
 
 ### Tested platform notes from the repo/docs
 - Linux + Docker / Docker Desktop

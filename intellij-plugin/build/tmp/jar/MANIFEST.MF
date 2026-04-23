@@ -1,9 +1,0 @@
-Manifest-Version: 1.0
-Created-By: Gradle 8.5
-Build-JVM: 17.0.18 (Eclipse Adoptium 17.0.18+8)
-Version: 1.4.0
-Build-Plugin: Gradle IntelliJ Plugin
-Build-Plugin-Version: 1.17.3
-Build-OS: Mac OS X 15.7.4 aarch64
-Build-SDK: IC-2023.3
-

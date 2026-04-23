@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 # worqer/calqulator.py
-import sys, os, re, yaml, json, math
+import math
+import os
+import re
+import sys
 from pathlib import Path
+
+import yaml
+
+try:
+    import lib_ai  # type: ignore
+except Exception:  # pragma: no cover - runtime fallback path
+    lib_ai = None
+
+DEFAULT_PROVIDER = "gemini"
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 # INTERNAL PRICING & LOGIC (Formerly lib_funqtions.py)
 PRICING = {
@@ -22,17 +35,55 @@ def calculate_cost(tokens: int, model: str, is_input: bool = True) -> float:
 def format_cost(cost: float) -> str:
     return f"${cost:.5f}" if cost < 0.01 else f"${cost:.2f}"
 
+def _manual_agent_ai_params(config: dict, agent_name: str, default_provider: str, default_model: str) -> tuple[str, str]:
+    agents = config.get("agents", {}) if isinstance(config, dict) else {}
+    agent_cfg = agents.get(agent_name, {}) if isinstance(agents, dict) else {}
+    provider = str(agent_cfg.get("provider", default_provider) or default_provider).strip()
+    model = str(agent_cfg.get("model", default_model) or default_model).strip()
+    return provider, model
+
+def _get_agent_ai_params(config: dict, agent_name: str, default_provider: str, default_model: str) -> tuple[str, str]:
+    if lib_ai is not None and hasattr(lib_ai, "get_agent_ai_params"):
+        try:
+            return lib_ai.get_agent_ai_params(config, agent_name, default_provider, default_model)
+        except Exception:
+            pass
+    return _manual_agent_ai_params(config, agent_name, default_provider, default_model)
+
+def resolve_calqulator_target(config: dict | None) -> tuple[str, str]:
+    cfg = config if isinstance(config, dict) else {}
+    provider, model = _get_agent_ai_params(cfg, "calqulator", DEFAULT_PROVIDER, DEFAULT_MODEL)
+    provider = str(provider or "").strip().lower()
+    model = str(model or "").strip()
+
+    # Backward compatibility: legacy configs used a local placeholder pair
+    # (`provider: local`, `model: calqulator`). In that case, preserve the
+    # previous "audit construqtor settings" behavior.
+    if provider in {"", "local"} or model.lower() in {"", "calqulator"}:
+        provider, model = _get_agent_ai_params(cfg, "construqtor", DEFAULT_PROVIDER, DEFAULT_MODEL)
+        provider = str(provider or "").strip().lower()
+        model = str(model or "").strip()
+
+    if not provider:
+        provider = DEFAULT_PROVIDER
+    if not model:
+        model = DEFAULT_MODEL
+    return provider, model
+
 def run_calqulation(briqs_dir: Path, qodeyard_path: Path):
+    del qodeyard_path  # Kept in signature for API stability.
+
+    cfg = {}
     try:
-        with open('config.yaml', 'r') as f: cfg = yaml.safe_load(f) or {}
-        # calqulator usually audits the construqtor's model
-        provider, model = lib_ai.get_agent_ai_params(cfg, 'construqtor', 'gemini', 'gemini-2.5-flash-lite')
-    except:
-        model = 'gemini-2.5-flash-lite'
+        with open("config.yaml", "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception:
+        cfg = {}
+    provider, model = resolve_calqulator_target(cfg)
 
     cycle_num = os.environ.get('CYCLE_NUM', '1')
     briq_files = sorted(briqs_dir.glob(f"cyqle{cycle_num}_*.md"))
-    print(f"--- Audit Report ({model}) ---", flush=True)
+    print(f"--- Audit Report ({provider}/{model}) ---", flush=True)
 
     for briq_file in briq_files:
         content = briq_file.read_text(encoding='utf-8')

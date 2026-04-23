@@ -80,9 +80,8 @@ tasks {
     buildSearchableOptions {
         enabled = false
     }
-    tasks {
-        runPluginVerifier {
-            ideVersions.set(listOf("2023.3", "2024.1"))
-        }
+
+    runPluginVerifier {
+        ideVersions.set(listOf("2023.3", "2024.1"))
     }
 }

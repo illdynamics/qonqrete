@@ -30,8 +30,9 @@ jobs:
           mkdir -p "$STAGING"
 
           # Copy runtime files (everything except IDE projects, CI, and dev-only files)
-          cp -r qonqrete.sh VERSION Dockerfile entrypoint.sh Sandboxfile \
-                requirements.txt LICENSE COPYRIGHT README.md \
+          cp -r qonqrete.sh VERSION Dockerfile \
+                requirements.txt requirements-optional-tree-sitter.txt package.json \
+                LICENSE COPYRIGHT README.md \
                 qonqrete.jpg \
                 qrane/ worqer/ worqspace/ doc/ \
                 "$STAGING/"

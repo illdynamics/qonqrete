@@ -134,6 +134,9 @@ BUILD_BACKEND_MODE=""
 # silently dead. Fixed: capture first, blank the working var second.
 _CONTAINER_ENGINE_FROM_ENV="${CONTAINER_ENGINE:-}"
 CONTAINER_ENGINE=""
+if [ -n "$_CONTAINER_ENGINE_FROM_ENV" ]; then
+    CONTAINER_ENGINE="$(printf '%s' "$_CONTAINER_ENGINE_FROM_ENV" | tr '[:upper:]' '[:lower:]')"
+fi
 
 detect_os() {
     local uname_s
@@ -158,12 +161,34 @@ detect_os() {
 }
 
 detect_engine() {
-    # Prefer Podman for rootless containerized execution. If it is unavailable,
-    # fall back to repo-native host execution rather than aborting the whole run.
-    if [ -n "$CONTAINER_ENGINE" ] && [ "$CONTAINER_ENGINE" != "podman" ] && [ "$CONTAINER_ENGINE" != "none" ]; then
-        log_qrane "${Y}[WARN]${R} Unknown CONTAINER_ENGINE='${CONTAINER_ENGINE}'. Auto-detecting."
-    fi
+    # Explicit engine requests from env/flags are honored first.
+    case "${CONTAINER_ENGINE:-}" in
+        docker)
+            if command -v docker >/dev/null 2>&1; then
+                return 0
+            fi
+            log_qrane "${Y}[WARN]${R} Docker requested but not found. Auto-detecting."
+            CONTAINER_ENGINE=""
+            ;;
+        podman)
+            if command -v podman >/dev/null 2>&1; then
+                return 0
+            fi
+            log_qrane "${Y}[WARN]${R} Podman requested but not found. Auto-detecting."
+            CONTAINER_ENGINE=""
+            ;;
+        none)
+            return 0
+            ;;
+        "")
+            ;;
+        *)
+            log_qrane "${Y}[WARN]${R} Unknown CONTAINER_ENGINE='${CONTAINER_ENGINE}'. Auto-detecting."
+            CONTAINER_ENGINE=""
+            ;;
+    esac
 
+    # Default behavior: prefer Podman; otherwise use repo-native host mode.
     if command -v podman >/dev/null 2>&1; then
         CONTAINER_ENGINE="podman"
     else

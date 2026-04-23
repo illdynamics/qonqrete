@@ -1,6 +1,7 @@
 # QonQrete Quickstart
 
 **Version:** `v1.4.0`
+**Release context:** `v1.4.0 - MLcon Edition`
 
 This is the shortest accurate path to get QonQrete running.
 
@@ -79,7 +80,7 @@ tasq.md
 ./qonqrete.sh audit
 ```
 
-`-N` / `--no-sync` keeps run output in Qage/Qonstruction paths and skips the final repo-root sync-back step.
+`-N` / `--no-sync` skips only the final repo-root sync-back step. Qage/Qonstruction output (including `qodeyard/`) remains available.
 
 ### 4. Resume / Clean
 

@@ -1,45 +1,62 @@
 # Secrets
-**/**.env
-**.env
+.env
+.env.*
+!.env.example
 
-# Ideas
-**.idea**
-**/**.idea**
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
 
-# Ignore generated agent files
-**bloq.d/*
-**tasq.d/*
-**exeq.d/*
-**reqap.d/*
-**qodeyard/*
-**sqrapyard/*
+# Node
+node_modules/
+.npm/
+.pnpm-store/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+vscode-extension/node_modules/
+vscode-extension/build/
+intellij-plugin/build/
 
-# Logs
-**struqture/*
+# OS
+.DS_Store
+Thumbs.db
 
-# Qages
-worqspace/qage**
-worqspace/sqrapyard**
-worqspace/struqture**
+# Logs / temp
+*.log
+tmp/
+temp/
+*.tmp
 
-# Qonstructions (saved project outputs - large, user-specific)
+# IDE (root-only; keep shared configs under vscode-extension/.vscode/)
+/.vscode/
+/.idea/
+
+# QonQrete runtime
+.qonqrete/
+**/bloq.d/
+**/tasq.d/
+**/exeq.d/
+**/reqap.d/
+**/qodeyard/
+**/sqrapyard/
+**/struqture/
+qage_*/
+worqspace/qage_*/
+.qonqrete/worqspace/qage_*/
+worqspace/sqrapyard*/
+worqspace/struqture*/
 worqspace/qonstructions/*
 !worqspace/qonstructions/.gitkeep
 
-# PyCache
-**__pycache**
-
-# Config Backups
-**.config_backup/*
-
-# Mac Crap
-**.DS_Store
-**/**.DS_Store**
-
-# venv
-**.venv**
-**/**.venv**
-
-# asdf
-**.tool-versions**
-**/**.tool-versions**
+# Local tooling
+.tool-versions

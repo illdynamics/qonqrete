@@ -108,7 +108,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Verify plugin compatibility
-        run: ./gradlew verifyPlugin
+        run: ./gradlew runPluginVerifier
         continue-on-error: true
 
   release:

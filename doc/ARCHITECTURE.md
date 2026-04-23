@@ -1,6 +1,7 @@
 # QonQrete Architecture
 
 **Version:** `v1.4.0`
+**Release context:** `v1.4.0 - MLcon Edition`
 
 This document describes the current repository architecture as shipped in the `v1.4.0` snapshot.
 
@@ -37,8 +38,8 @@ Responsibilities:
 - Qonstruction save / resume / clean flow
 
 The current CLI supports:
-- Docker
-- Podman
+- Podman (default auto-detected path)
+- Docker (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
 
 It also provides flags for:
 - autonomous vs user-gated operation
@@ -89,7 +90,7 @@ The repo currently contains these notable agents/utilities:
 - `qontrabender.py`
 - `qonfirmer.py`
 - `qualifier.py`
-- `runtime_checks.py`
+- `runtime_capabilities.py`
 - `lib_ai.py`
 - `lib_security.py`
 
@@ -174,7 +175,7 @@ On the first build pass, InstruQtor generates:
 
 ### Enforcement
 Later stages use:
-- `runtime_checks.py` to fail fast when a contract is required but missing
+- fail-fast checks in `qrane/lib_qrane.py` when contract artifacts are required but missing
 - `qonfirmer.py` for deterministic AST-based verification
 
 Current documented invariant types include:
@@ -206,7 +207,7 @@ Important security properties in the repo:
 - Qage container isolation
 - read-only root filesystem with writable workspace paths
 - reduced capability model for container execution
-- non-root runtime after entrypoint privilege drop
+- non-root runtime with no runtime privilege transition
 - path validation and jail enforcement in `lib_security.py`
 - API timeout / retry safety in `lib_ai.py`
 

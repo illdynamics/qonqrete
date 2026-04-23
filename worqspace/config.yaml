@@ -185,8 +185,8 @@ agents:
     #   model: "real-model-id" (for venice)
 
   calqulator:
-    provider: local
-    model: calqulator
+    provider: gemini
+    model: gemini-2.5-flash-lite
 
     # v1.3.12: Per-agent capability overrides (apply to ANY provider).
     #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).

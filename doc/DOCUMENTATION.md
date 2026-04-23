@@ -1,10 +1,11 @@
 # QonQrete Documentation
 
 **Version:** `v1.4.0`
+**Release context:** `v1.4.0 - MLcon Edition`
 
 This document is the synced technical reference for the current `v1.4.0` repository snapshot.
 
-## Current release deltas (`v1.4.0`)
+## Current release deltas (`v1.4.0 - MLcon Edition`)
 
 - Final inspection paths now treat final `qodeyard/` files as authoritative evidence over relay/log snippets.
 - Frontend localStorage deterministic validation now supports compact constant/alias/object key indirection.
@@ -79,8 +80,8 @@ Initialization:
 4. builds the Qage image
 
 Supported runtime paths in the repo:
-- Docker
-- Podman
+- Podman (default auto-detected path)
+- Docker (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
 
 ### 3.2 Fresh run
 
@@ -98,7 +99,7 @@ Current run flow:
 6. launch the container
 7. let Qrane execute clarification, qonstrictor, planning, build, validation/realization, and inspection
 8. by default, sync changed outputs back to repo root with non-seeded collision protection
-9. when `-N/--no-sync` is passed, skip that sync-back and keep output in Qage/Qonstruction paths (`lineage.repo_sync_mode = no_sync`)
+9. when `-N/--no-sync` is passed, skip only that repo-root sync-back and keep output in Qage/Qonstruction paths (`lineage.repo_sync_mode = no_sync`)
 10. optionally save as a qonstruction
 
 ### 3.3 Resume
@@ -164,6 +165,8 @@ Responsibilities:
 - estimate token/cost footprint
 - annotate planning flow with rough cost expectations
 - zero AI-token cost
+- default estimation target is `gemini / gemini-2.5-flash-lite`
+- per-project overrides remain supported via `agents.calqulator`
 
 ## 4.5 `construqtor.py`
 Code generation / modification agent.
@@ -447,7 +450,7 @@ The repository is designed around defense in depth.
 - isolated Qage container runtime
 - reduced capabilities
 - read-only root patterns with writable work areas
-- non-root execution after entrypoint privilege handling
+- non-root execution with no runtime privilege transition
 - tmpfs / resource-limiting patterns in runtime setup
 
 ### File/path safety
@@ -539,7 +542,7 @@ The user must confirm before ConstruQtor begins. This prevents accidental expens
 ### Behavior
 - Only triggers after CalQulator completes successfully
 - Skipped if CalQulator is skipped (e.g., local construqtor)
-- In non-interactive terminal usage, the gate shows as a log message instead of prompting
+- In non-interactive usage with closed stdin, the gate defaults to `No` and cancels the run
 
 ## 14. OpenRouter Provider Support
 
