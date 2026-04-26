@@ -8,12 +8,27 @@
 #     extraction (grep version = "..." build.gradle.kts) no longer matches and would
 #     yield "unknown". This workflow reads root VERSION directly instead.
 #   - build.gradle.kts targets JDK 17 (sourceCompatibility/targetCompatibility = 17)
-#     and the plugin verifier targets IntelliJ 2023.3 + 2024.1, both of which bundle
-#     JDK 17. We standardise on Temurin JDK 17 across all jobs.
+#     and the plugin verifier targets IntelliJ 2023.3+, all of which bundle JDK 17
+#     (or later JDKs that remain backward-compatible with 17 bytecode).
+#     We standardise on Temurin JDK 17 across all jobs.
 #   - Trigger paths now include the root VERSION file so a version bump alone
 #     can refresh the plugin artifact.
 #   - Auto-publish to JetBrains Marketplace remains intentionally disabled
 #     (left commented out below) per maintainer policy.
+#
+# Compatibility verification:
+#   The verify job spreads the JetBrains Plugin Verifier across one matrix
+#   slot per IntelliJ release line. Each runner rewrites the hardcoded
+#   `runPluginVerifier { ideVersions.set(listOf(...)) }` block in
+#   build.gradle.kts to its single assigned IDE version, runs the verifier,
+#   and uploads the per-version HTML report as a workflow artifact.
+#   This mirrors the JetBrains Marketplace one-row-per-IDE-version layout
+#   and provides isolated pass/fail signal per release line.
+#
+#   IMPORTANT: this is a pre-flight check for the maintainer. It does NOT
+#   produce or replace the verification rows shown on the JetBrains
+#   Marketplace plugin page — those are produced by JetBrains' own
+#   verifier service when the plugin is uploaded.
 
 name: Build IntelliJ Plugin
 
@@ -50,7 +65,9 @@ jobs:
 
       # JDK 17 matches:
       #   - intellij-plugin/build.gradle.kts source/target compatibility (17)
-      #   - bundled JDK of IntelliJ 2023.3 and 2024.1 (the verifier targets)
+      #   - bundled JDK of IntelliJ 2023.3 / 2024.x (the lowest verifier targets)
+      # Newer IDE lines (2025.x, 2026.x) ship JDK 21 but remain backward-
+      # compatible with 17 bytecode, so JDK 17 is still the right build JDK.
       # See https://plugins.jetbrains.com/docs/intellij/jdk-requirements.html
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -118,9 +135,26 @@ jobs:
   verify:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
+      # Don't cancel sibling matrix jobs if one IDE line fails — we want
+      # full per-version coverage in a single run.
+      fail-fast: false
       matrix:
-        intellij-version: ['2023.3', '2024.1']
+        # Mirrors the IDE release lines that JetBrains Marketplace verifies
+        # against. Each entry resolves to the latest patch release of that
+        # major.minor line at verification time. Plugin claims compat from
+        # build 233 onwards (since-build="233" in plugin.xml = 2023.3+),
+        # and there is no until-build cap.
+        intellij-version:
+          - '2023.3'
+          - '2024.1'
+          - '2024.2'
+          - '2024.3'
+          - '2025.1'
+          - '2025.2'
+          - '2025.3'
+          - '2026.1'
 
     steps:
       - name: Checkout repository
@@ -140,9 +174,57 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Verify plugin compatibility
+      # Cache the downloaded IDE distributions used by the Plugin Verifier.
+      # Each distro is ~1GB; without this, every matrix run re-downloads
+      # from JetBrains' CDN. Cache key is per IDE version so each runner
+      # has an isolated cache slot.
+      - name: Cache Plugin Verifier IDE distributions
+        uses: actions/cache@v4
+        with:
+          path: ~/.pluginVerifier/ides
+          key: pluginVerifier-ides-${{ matrix.intellij-version }}-v1
+          restore-keys: |
+            pluginVerifier-ides-${{ matrix.intellij-version }}-
+
+      - name: Pin verifier to ${{ matrix.intellij-version }}
+        # build.gradle.kts hardcodes:
+        #     runPluginVerifier { ideVersions.set(listOf("2023.3", "2024.1")) }
+        # We rewrite that single line per matrix run so each runner verifies
+        # exactly one IDE release line. Assumes the listOf(...) stays on a
+        # single line in build.gradle.kts — a multi-line listOf would
+        # require a different rewrite strategy.
+        run: |
+          set -euo pipefail
+          before_count=$(grep -cE 'ideVersions\.set\(listOf\([^)]*\)\)' build.gradle.kts || true)
+          if [ "$before_count" != "1" ]; then
+            echo "FATAL: expected exactly one ideVersions.set(listOf(...)) line in build.gradle.kts, found ${before_count}" >&2
+            grep -n "ideVersions" build.gradle.kts >&2 || true
+            exit 1
+          fi
+          sed -i.bak -E \
+            's|ideVersions\.set\(listOf\([^)]*\)\)|ideVersions.set(listOf("${{ matrix.intellij-version }}"))|' \
+            build.gradle.kts
+          echo "Pinned verifier IDE version: ${{ matrix.intellij-version }}"
+          grep -n "ideVersions" build.gradle.kts
+
+      - name: Verify plugin compatibility against ${{ matrix.intellij-version }}
+        # The Plugin Verifier exits 0 on warnings (deprecated/scheduled-for-removal
+        # API usages) and non-zero on real compatibility breakages.
+        # continue-on-error is intentional: with fail-fast: false above, this
+        # gives us per-version pass/fail surfacing without one IDE line breaking
+        # the whole release flow. Inspect the uploaded HTML reports for details.
+        # Flip this to false if you want strict gating on compat breakages.
         run: ./gradlew verifyPlugin
         continue-on-error: true
+
+      - name: Upload Plugin Verifier report (${{ matrix.intellij-version }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verifier-report-${{ matrix.intellij-version }}
+          path: intellij-plugin/build/reports/pluginVerifier/
+          retention-days: 14
+          if-no-files-found: ignore
 
   release:
     needs: [build, verify]
