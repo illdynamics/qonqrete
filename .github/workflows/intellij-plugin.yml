@@ -1,3 +1,20 @@
+# .github/workflows/intellij-plugin.yml
+# QonQrete IntelliJ plugin builder
+# Aligned to: v1.4.0 - MLcon Edition
+#
+# Notes for v1.4.0:
+#   - intellij-plugin/build.gradle.kts now reads version from rootProject.file("../VERSION")
+#     so the plugin version always equals the root VERSION file. The old regex-based
+#     extraction (grep version = "..." build.gradle.kts) no longer matches and would
+#     yield "unknown". This workflow reads root VERSION directly instead.
+#   - build.gradle.kts targets JDK 17 (sourceCompatibility/targetCompatibility = 17)
+#     and the plugin verifier targets IntelliJ 2023.3 + 2024.1, both of which bundle
+#     JDK 17. We standardise on Temurin JDK 17 across all jobs.
+#   - Trigger paths now include the root VERSION file so a version bump alone
+#     can refresh the plugin artifact.
+#   - Auto-publish to JetBrains Marketplace remains intentionally disabled
+#     (left commented out below) per maintainer policy.
+
 name: Build IntelliJ Plugin
 
 on:
@@ -6,11 +23,13 @@ on:
     tags: ['v*']
     paths:
       - 'intellij-plugin/**'
+      - 'VERSION'
       - '.github/workflows/intellij-plugin.yml'
   pull_request:
     branches: [main]
     paths:
       - 'intellij-plugin/**'
+      - 'VERSION'
       - '.github/workflows/intellij-plugin.yml'
   workflow_dispatch:
 
@@ -29,16 +48,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Use Java 21 for building and testing the IntelliJ plugin.  
-      # JetBrains IDEs released in 2024 and newer are built on JDK 21.  
-      # Older versions can still run plugins compiled with a newer JDK as long as 
-      # you target the appropriate IntelliJ SDK in build.gradle.  
-      # See https://plugins.jetbrains.com/docs/intellij/jdk-requirements.html for details.
+      # JDK 17 matches:
+      #   - intellij-plugin/build.gradle.kts source/target compatibility (17)
+      #   - bundled JDK of IntelliJ 2023.3 and 2024.1 (the verifier targets)
+      # See https://plugins.jetbrains.com/docs/intellij/jdk-requirements.html
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -48,26 +66,42 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Read root VERSION
+        id: version
+        # build.gradle.kts now reads the version from ../VERSION, so this
+        # is the same value the artifact will carry.
+        working-directory: ${{ github.workspace }}
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          if [ -z "$VERSION" ]; then
+            echo "FATAL: VERSION file is empty" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Plugin version (from root VERSION): $VERSION"
+
+      - name: Verify tag matches VERSION (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: ${{ github.workspace }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG_VERSION" ]; then
+            echo "FATAL: pushed tag ($GITHUB_REF_NAME -> $TAG_VERSION) does not match VERSION ($VERSION)" >&2
+            exit 1
+          fi
+          echo "Tag and VERSION agree: $VERSION"
+
       - name: Build plugin
         run: ./gradlew clean buildPlugin
 
       - name: Run tests
-        # Run the test suite but allow the CI pipeline to proceed even if some
-        # tests fail.  The QonQrete IntelliJ plugin has a handful of
-        # integration tests that depend on local runtime components which are
-        # unavailable in CI.  Marking this step with `continue-on-error: true`
-        # prevents spurious failures from blocking the build and allows
-        # downstream verification and packaging to continue.  Test reports are
-        # still generated and can be inspected if needed.
+        # The QonQrete IntelliJ plugin has a handful of integration tests
+        # that depend on local runtime components which are unavailable in CI.
+        # continue-on-error keeps spurious failures from blocking the build
+        # while still publishing test reports for inspection.
         run: ./gradlew test
         continue-on-error: true
-
-      - name: Extract version from build.gradle.kts
-        id: version
-        run: |
-          VERSION=$(grep -oP 'version = "\K[^"]+' build.gradle.kts || echo "unknown")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Version: $VERSION"
 
       - name: Verify plugin artifact
         run: |
@@ -92,12 +126,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Use JDK 21 when verifying plugin compatibility.  
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -120,12 +153,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Use JDK 21 when building release artifacts.  
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -163,20 +195,20 @@ jobs:
           generate_release_notes: true
 
       # ================================================================
-      # AUTO-PUBLISH TO JETBRAINS MARKETPLACE
-      # Uncomment the section below and add these GitHub secrets:
-      #   PUBLISH_TOKEN     - JetBrains Marketplace token
-      #   CERTIFICATE_CHAIN - Plugin signing certificate (optional)
-      #   PRIVATE_KEY        - Plugin signing private key (optional)
-      #   PRIVATE_KEY_PASSWORD - Private key password (optional)
+      # AUTO-PUBLISH TO JETBRAINS MARKETPLACE  (DISABLED BY DESIGN)
       #
-      # To get a token:
-      #   1. Go to https://plugins.jetbrains.com → Profile → My Tokens
-      #   2. Create a new token
-      #   3. Add as GitHub secret: Settings → Secrets → PUBLISH_TOKEN
+      # Per maintainer policy for v1.4.0 - MLcon Edition: plugin is NOT
+      # auto-published from CI. Releases are attached to the GitHub release
+      # and uploaded manually to the JetBrains Marketplace when reviewed.
       #
-      # Signing is optional but recommended for verified publisher status.
-      # See: https://plugins.jetbrains.com/docs/intellij/plugin-signing.html
+      # If you ever want to flip auto-publish on, add these GitHub secrets:
+      #   PUBLISH_TOKEN        - JetBrains Marketplace token
+      #   CERTIFICATE_CHAIN    - Plugin signing certificate (optional)
+      #   PRIVATE_KEY          - Plugin signing private key  (optional)
+      #   PRIVATE_KEY_PASSWORD - Private key password         (optional)
+      #
+      # Token: https://plugins.jetbrains.com -> Profile -> My Tokens
+      # Signing docs: https://plugins.jetbrains.com/docs/intellij/plugin-signing.html
       # ================================================================
       # - name: Sign plugin
       #   if: env.CERTIFICATE_CHAIN != null

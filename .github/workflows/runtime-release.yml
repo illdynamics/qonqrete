@@ -1,3 +1,15 @@
+# .github/workflows/runtime-release.yml
+# QonQrete runtime release packager
+# Aligned to: v1.4.0 - MLcon Edition
+#
+# v1.4.0 layout notes (vs older snapshots):
+#   - entrypoint.sh REMOVED (umask is inlined into the Dockerfile ENTRYPOINT)
+#   - Sandboxfile  REMOVED
+#   - package.json ADDED (root-level qualifier/qontextor/qompressor Node tooling)
+#   - requirements-optional-tree-sitter.txt ADDED (opt-in fallback)
+#   - tasq-small.md / tasq-medium.md / tasq-big.md ADDED (starter task files)
+#   - tests/ ADDED (shipped MLcon-edition test suite)
+
 name: Build Runtime Release
 
 on:
@@ -19,8 +31,24 @@ jobs:
         id: version
         run: |
           VERSION=$(cat VERSION | tr -d '[:space:]')
+          if [ -z "$VERSION" ]; then
+            echo "FATAL: VERSION file is empty" >&2
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Runtime version: $VERSION"
+
+      - name: Verify tag matches VERSION (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG_VERSION" ]; then
+            echo "FATAL: pushed tag ($GITHUB_REF_NAME -> $TAG_VERSION) does not match VERSION ($VERSION)" >&2
+            echo "Bump VERSION first, then re-tag." >&2
+            exit 1
+          fi
+          echo "Tag and VERSION agree: $VERSION"
 
       - name: Package runtime zip
         run: |
@@ -29,16 +57,34 @@ jobs:
 
           mkdir -p "$STAGING"
 
-          # Copy runtime files (everything except IDE projects, CI, and dev-only files)
-          cp -r qonqrete.sh VERSION Dockerfile entrypoint.sh Sandboxfile \
-                requirements.txt LICENSE COPYRIGHT README.md \
-                qonqrete.jpg \
-                qrane/ worqer/ worqspace/ doc/ \
-                "$STAGING/"
+          # Runtime distribution payload (v1.4.0 MLcon Edition).
+          # IDE plugin trees (vscode-extension/, intellij-plugin/) ship via
+          # their own workflows and are intentionally excluded here.
+          cp -r \
+            qonqrete.sh \
+            VERSION \
+            Dockerfile \
+            requirements.txt \
+            requirements-optional-tree-sitter.txt \
+            package.json \
+            LICENSE \
+            COPYRIGHT \
+            README.md \
+            qonqrete.jpg \
+            tasq-small.md \
+            tasq-medium.md \
+            tasq-big.md \
+            qrane/ \
+            worqer/ \
+            worqspace/ \
+            doc/ \
+            tests/ \
+            "$STAGING/"
 
           # Build the zip
           zip -r "qonqrete-v${VERSION}.zip" "$STAGING/" \
-            -x "*/.DS_Store" "*/__MACOSX/*" "*/__pycache__/*"
+            -x "*/.DS_Store" "*/__MACOSX/*" "*/__pycache__/*" \
+               "*/.gradle/*" "*/node_modules/*"
 
           ls -lh "qonqrete-v${VERSION}.zip"
           sha256sum "qonqrete-v${VERSION}.zip" > "qonqrete-v${VERSION}-SHA256.txt"
@@ -48,7 +94,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: qonqrete-runtime-${{ steps.version.outputs.version }}
-          path: qonqrete-v*.zip
+          path: |
+            qonqrete-v*.zip
+            qonqrete-v*-SHA256.txt
           retention-days: 30
 
       - name: Attach to GitHub Release

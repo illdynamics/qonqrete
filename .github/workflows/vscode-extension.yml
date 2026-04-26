@@ -1,4 +1,16 @@
 # .github/workflows/vscode-extension.yml
+# QonQrete VS Code extension builder
+# Aligned to: v1.4.0 - MLcon Edition
+#
+# Notes for v1.4.0:
+#   - vscode-extension/package.json carries its own "version" field (currently 1.4.0).
+#     Unlike the IntelliJ plugin, it does NOT read from root VERSION.
+#   - On tag pushes we still cross-check that the extension's package.json
+#     matches the pushed tag, so a forgotten bump fails loud instead of
+#     shipping a wrong-versioned VSIX.
+#   - Auto-publish to the VS Code Marketplace and Open VSX remains intentionally
+#     disabled (left commented out below) per maintainer policy.
+
 name: Build VS Code Extension
 
 on:
@@ -54,7 +66,24 @@ jobs:
         id: version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -z "$VERSION" ] || [ "$VERSION" = "undefined" ]; then
+            echo "FATAL: vscode-extension/package.json has no version" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Extension version: $VERSION"
+
+      - name: Verify tag matches package.json version (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG_VERSION" ]; then
+            echo "FATAL: pushed tag ($GITHUB_REF_NAME -> $TAG_VERSION) does not match vscode-extension/package.json version ($VERSION)" >&2
+            echo "Bump vscode-extension/package.json first, then re-tag." >&2
+            exit 1
+          fi
+          echo "Tag and package.json version agree: $VERSION"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -93,7 +122,10 @@ jobs:
       - name: Rename artifact
         run: |
           TAG="${GITHUB_REF_NAME}"
-          mv *.vsix "qonqrete-vscode-${TAG}.vsix"
+          # There should only be one .vsix produced; rename in place.
+          for f in *.vsix; do
+            mv "$f" "qonqrete-vscode-${TAG}.vsix"
+          done
           ls -lh *.vsix
 
       - name: Generate checksum
@@ -111,25 +143,27 @@ jobs:
           generate_release_notes: true
 
       # ================================================================
-      # AUTO-PUBLISH TO VS CODE MARKETPLACE
-      # Uncomment the section below and add VSCE_PAT as a GitHub secret
-      # to enable automatic publishing on tagged releases.
+      # AUTO-PUBLISH TO VS CODE MARKETPLACE  (DISABLED BY DESIGN)
       #
-      # To get a PAT:
-      #   1. Go to https://dev.azure.com → User Settings → Personal Access Tokens
-      #   2. Create token with "Marketplace (Manage)" scope
-      #   3. Add as GitHub secret: Settings → Secrets → VSCE_PAT
+      # Per maintainer policy for v1.4.0 - MLcon Edition: extension is NOT
+      # auto-published from CI. Releases are attached to the GitHub release
+      # and uploaded manually to the VS Code Marketplace when reviewed.
+      #
+      # If you ever want to flip auto-publish on, add VSCE_PAT as a GitHub
+      # secret and uncomment the publish step.
+      #
+      # PAT: https://dev.azure.com -> User Settings -> Personal Access Tokens
+      # Scope required: "Marketplace (Manage)"
       # ================================================================
       # - name: Publish to VS Code Marketplace
       #   run: vsce publish --no-dependencies -p ${{ secrets.VSCE_PAT }}
 
       # ================================================================
-      # AUTO-PUBLISH TO OPEN VSX REGISTRY (optional)
-      # Uncomment and add OVSX_PAT as a GitHub secret.
+      # AUTO-PUBLISH TO OPEN VSX REGISTRY  (DISABLED BY DESIGN)
       #
-      # To get a PAT:
-      #   1. Go to https://open-vsx.org → Settings → Access Tokens
-      #   2. Add as GitHub secret: Settings → Secrets → OVSX_PAT
+      # Same maintainer policy. To enable, add OVSX_PAT as a GitHub secret.
+      #
+      # PAT: https://open-vsx.org -> Settings -> Access Tokens
       # ================================================================
       # - name: Publish to Open VSX
       #   run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}
