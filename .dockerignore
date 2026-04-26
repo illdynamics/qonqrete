@@ -30,6 +30,14 @@
 worqspace/qage**
 worqspace/qonstructions/*
 
+# asdf
+.tool-versions
+**/.tool-versions
+
+# Python
+.venv
+**/.venv
+
 # -----------------------------
 # Python Cache
 # -----------------------------
@@ -37,3 +45,17 @@ worqspace/qonstructions/*
 **/*.pyc
 **/*.pyo
 **/*.pyd
+
+# Mac crap
+.DS_Store
+**/.DS_Store
+
+# Validator caches
+.ruff_cache
+**/.ruff_cache
+.pytest*
+**/.pytest*
+
+# IDE stuff
+intellij-plugin/build
+vscode-extension/node_modules

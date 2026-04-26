@@ -43,3 +43,7 @@ worqspace/qonstructions/*
 # asdf
 **.tool-versions**
 **/**.tool-versions**
+
+# IDE stuff
+intellij-plugin/build
+vscode-extension/node_modules
