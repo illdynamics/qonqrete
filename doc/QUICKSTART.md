@@ -47,8 +47,12 @@ The IDE uses your chosen task file directly. `tasq.md` remains the default start
 - At least one AI provider API key
 
 ```bash
-export OPENAI_API_KEY='...'
+# Default committed config expects Venice + Gemini:
+export VENICE_API_KEY='...'
 export GOOGLE_API_KEY='...'      # or GEMINI_API_KEY
+
+# Optional examples for non-default provider choices:
+export OPENAI_API_KEY='...'
 export ANTHROPIC_API_KEY='...'
 export DEEPSEEK_API_KEY='...'
 export QWEN_API_KEY='...'
@@ -100,7 +104,7 @@ Both VS Code and IntelliJ support the same commands:
 | Create Task File | Create starter `tasq.md` at project root |
 | Configure Run | Set sensitivity, cycles, mode, engine |
 | Run Tasq | Run the default task file directly with auto-init when needed |
-| Run as QonQrete Tasq | Run any markdown file directly as task input |
+| Run Markdown as Task | Run any markdown file directly as task input |
 | Resume Run | Continue from a previous qage |
 | Clean Qages | Delete old qage directories |
 

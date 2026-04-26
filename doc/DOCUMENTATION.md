@@ -82,6 +82,7 @@ Initialization:
 Supported runtime paths in the repo:
 - Podman (default auto-detected path)
 - Docker (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
+- Repo-native host mode (`CONTAINER_ENGINE=none`, and auto fallback when Podman is unavailable)
 
 ### 3.2 Fresh run
 
@@ -96,7 +97,7 @@ Current run flow:
 3. create a new `qage_YYYYMMDD_HHMMSS`
 4. default to an empty `qodeyard/` (no repo seed) and copy task material into `tasq.md` + `tasq.d/cyqle1_tasq.md`
 5. optionally seed repository code into `qodeyard/` when `--seed-repo` (or legacy `-s/--sqrapyard`) is used
-6. launch the container
+6. launch the runtime (container or repo-native host mode)
 7. let Qrane execute clarification, qonstrictor, planning, build, validation/realization, and inspection
 8. by default, sync changed outputs back to repo root with non-seeded collision protection
 9. when `-N/--no-sync` is passed, skip only that repo-root sync-back and keep output in Qage/Qonstruction paths (`lineage.repo_sync_mode = no_sync`)
@@ -324,7 +325,7 @@ worqspace/config.yaml
     - Attempt manifests include transport decision records and fallback reasons.
 
 #### agents.inspeqtor.smoketest
-- `enabled` (default: false)
+- `enabled` (default: true in the committed config)
 - `mode` (`scoped` or `full`)
 - `timeout_seconds`
 - `max_output_chars`
@@ -514,9 +515,9 @@ Install extension/plugin
 
 ### Image versioning
 Container images are now tagged with the version:
-- `qonqrete-qage:1.4.0` (example current version)
+- `qonqrete-qage:1.4.0` on macOS/Windows (example current version)
+- `qonqrete-qage:1.4.0-u<host_uid>` on Linux/WSL
 - `qonqrete-qage:latest` (convenience alias)
-- `qonqrete-qage` (untagged compatibility alias)
 
 ## 13. Cost Confirmation Gate (GateQeeper)
 

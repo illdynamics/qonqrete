@@ -40,12 +40,13 @@ Responsibilities:
 The current CLI supports:
 - Podman (default auto-detected path)
 - Docker (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
+- Repo-native host mode (`CONTAINER_ENGINE=none`, and auto fallback when Podman is unavailable)
 
 It also provides flags for:
 - autonomous vs user-gated operation
 - operational mode
 - briq sensitivity
-- total-iteration cap / build-pass cap
+- total-iteration cap (`--cyqles`; build-pass caps remain config-driven)
 - optional explicit repo seeding (`--seed-repo`, with legacy `-s/--sqrapyard` alias)
 - optional repo-root sync suppression (`-N/--no-sync`)
 - explicit runtime forcing
@@ -317,7 +318,7 @@ my-project/
 
 3. **Auto-init on first run**: If the container image doesn't exist, the IDE runs `./qonqrete.sh init` automatically.
 
-4. **Versioned images**: Container images are tagged `qonqrete-qage:<version>` (for example `qonqrete-qage:1.4.0`), with `:latest` plus an untagged compatibility alias.
+4. **Versioned images**: Container images are tagged `qonqrete-qage:<version>` (macOS/Windows) or `qonqrete-qage:<version>-u<host_uid>` (Linux/WSL), plus `:latest`.
 
 5. **Identical behavior in both IDEs**: VS Code and IntelliJ implement the same commands, same deployment model, same sync behavior.
 

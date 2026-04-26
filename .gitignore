@@ -46,4 +46,6 @@ worqspace/qonstructions/*
 
 # IDE stuff
 intellij-plugin/build
+intellij-plugin/node_modules
+vscode-extension/build
 vscode-extension/node_modules

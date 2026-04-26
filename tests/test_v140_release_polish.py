@@ -38,8 +38,24 @@ class CalqulatorDefaultsTests(unittest.TestCase):
         self.assertEqual(provider, "gemini")
         self.assertEqual(model, "gemini-2.5-flash")
 
+    def test_legacy_local_calqulator_without_construqtor_is_still_gemini_default(self):
+        cfg = {
+            "agents": {
+                "calqulator": {"provider": "local", "model": "calqulator"},
+            }
+        }
+        provider, model = calqulator.resolve_calqulator_target(cfg)
+        self.assertEqual(provider, "gemini")
+        self.assertEqual(model, "gemini-2.5-flash-lite")
+
 
 class LauncherNoSyncSemanticsTests(unittest.TestCase):
+    def _prepare_run_exports_block(self) -> str:
+        shell_text = (ROOT / "qonqrete.sh").read_text(encoding="utf-8")
+        start = shell_text.index("prepare_run_exports() {")
+        end = shell_text.index("\nfinalize_run_session() {", start)
+        return shell_text[start:end]
+
     def _finalize_run_session_block(self) -> str:
         shell_text = (ROOT / "qonqrete.sh").read_text(encoding="utf-8")
         start = shell_text.index("finalize_run_session() {")
@@ -56,6 +72,11 @@ class LauncherNoSyncSemanticsTests(unittest.TestCase):
         self.assertIn('save_qonstruction_non_interactive "$run_host_path" "$QONSTRUCTION_NAME"', block)
         self.assertIn('prompt_save_qonstruction "$run_host_path"', block)
         self.assertNotIn("delete_qage", block)
+
+    def test_prepare_run_exports_records_sync_mode_lineage(self):
+        block = self._prepare_run_exports_block()
+        self.assertIn('export QONQ_REPO_SYNC_MODE="sync_to_repo_root"', block)
+        self.assertIn('export QONQ_REPO_SYNC_MODE="no_sync"', block)
 
 
 class LauncherEngineSemanticsTests(unittest.TestCase):

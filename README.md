@@ -92,8 +92,10 @@ my-project/
 ## Quick Start (CLI)
 
 ```bash
-# Prerequisites: Docker or Podman + AI API key(s)
-export OPENAI_API_KEY='...'
+# Prerequisites: Podman or Docker + API keys for your configured providers.
+# Default config expects Venice for primary agents and Gemini for CalQulator:
+export VENICE_API_KEY='...'
+export GOOGLE_API_KEY='...'      # or GEMINI_API_KEY
 
 # Build the runtime once
 chmod +x qonqrete.sh
@@ -198,6 +200,7 @@ qonqrete/
 
 - **Podman** (default auto-detected path)
 - **Docker** (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
+- **Repo-native host mode** (`CONTAINER_ENGINE=none`, and also auto-selected when Podman is unavailable)
 ## CLI Reference
 
 ```bash
@@ -228,9 +231,9 @@ Both VS Code and IntelliJ support identical commands:
 |---------|-------------|
 | **Deploy to Workspace** | Install runtime into `.qonqrete/` |
 | **Create Task File** | Create starter `tasq.md` at project root |
-| **Configure Run** | Set sensitivity, iteration/build caps, mode, engine |
+| **Configure Run** | Set sensitivity, cycles, mode, engine, repo-seed, and no-sync |
 | **Run Tasq** | Run the default task file directly with auto-init when needed |
-| **Run as QonQrete Tasq** | Run any markdown file directly as task input |
+| **Run Markdown as Task** | Run any markdown file directly as task input |
 | **Resume Run** | Continue from previous qage |
 | **Clean Qages** | Delete old qage directories |
 | **Init Workspace** | Manually build container image |
@@ -305,7 +308,7 @@ Keys are stored in IntelliJ's **PasswordSafe** (encrypted credential store). The
 ## AI Configuration Panel
 
 Both IDEs include a **"Set AI Configuration"** command that lets you:
-- Set the **provider** and **model** for each AI agent (Qrystallizer, Qonstrictor, InstruQtor, ConstruQtor, InspeQtor)
+- Set the **provider** and **model** for each primary AI agent (Qrystallizer, InstruQtor, ConstruQtor, InspeQtor)
 - Set **API keys** for each provider (stored securely)
 - See at a glance which keys are set and which are missing
 
@@ -340,7 +343,7 @@ This is useful for preventing accidental expensive runs with high sensitivity or
 - **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles
 - **Launcher `-N/--no-sync`** run control to keep output in qage/qonstruction paths
 - **Primary AI default alignment** to `venice / deepseek-v3.2` and ConstruQtor `hybrid` default mode
-- **Versioned container images** (`qonqrete-qage:1.4.0`)
+- **Versioned container images** (`qonqrete-qage:<version>`; Linux/WSL builds include a host-UID suffix)
 - **Aligned IDE behavior** in VS Code and IntelliJ around the same runtime and task-file model
 
 ## Core principles
@@ -434,6 +437,7 @@ QonQrete auto-detects container runtime support.
 Supported runtime paths in the current repo:
 - Podman (default auto-detected path)
 - Docker (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
+- Repo-native host mode (`CONTAINER_ENGINE=none`, and auto fallback when Podman is unavailable)
 
 ### Tested platform notes from the repo/docs
 - Linux + Docker / Docker Desktop
