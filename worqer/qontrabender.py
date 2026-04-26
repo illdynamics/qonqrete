@@ -15,7 +15,7 @@ Features:
 
 The "Compositor" Pattern:
 - Qompressor handles Syntax (AST stripping)
-- Qontextor handles Semantics (embeddings, dependencies)
+- Qontextor handles structural context (symbols, relationships, dependencies)
 - Qontrabender handles Logistics (what goes to cloud, at what fidelity)
 
 Usage:
@@ -929,7 +929,7 @@ class Qontrabender:
         return self._matches_glob(rel_path, exclude_globs)
     
     def _load_qontext_intelligence(self, rel_path: str) -> Dict[str, Any]:
-        """Load semantic intelligence from qontext.d"""
+        """Load structural context intelligence from qontext.d"""
         qontext_schema = self.policy.get('qontext_schema', {})
         symbols_key = qontext_schema.get('symbols_key', 'symbols')
         deps_key = qontext_schema.get('deps_key', 'dependencies')

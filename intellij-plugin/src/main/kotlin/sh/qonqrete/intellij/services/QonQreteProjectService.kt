@@ -2,7 +2,7 @@
  * QonQrete Project Service
  * Core service handling shell detection, execution, and state tracking
  * 
- * v1.1.9 PRODUCTION HARDENING:
+ * v1.3.0 PRODUCTION HARDENING:
  * - Uses CommandBuilder for all command assembly
  * - Deterministic repo discovery with persistence
  * - Daemon threads for marker watching (proper JVM shutdown)
@@ -10,7 +10,7 @@
  * - All settings properly implemented and used
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -401,7 +401,7 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         val workingDir = File(scriptPath).parent
         if (!File(workingDir, "Dockerfile").exists()) return InitStatus(false, false, null)
         
-        // Check versioned image first, then legacy
+        // Check versioned image first, then the compatibility alias
         val version = getVersion()
         val imageNames = listOfNotNull(
             version?.let { "qonqrete-qage:$it" },
@@ -590,11 +590,14 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         // IDE-driven runs no longer force non-interactive saves.  Let the
         // underlying runtime decide whether to prompt the user based on
         // provided command-line flags (e.g. -n) instead of unconditionally
-        // setting the legacy QONQ_NON_INTERACTIVE environment variable.
+        // setting the compatibility QONQ_NON_INTERACTIVE environment variable.
 
         val allKeys = listOf(
             "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY",
-            "GOOGLE_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY"
+            "GOOGLE_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY",
+            // v1.3.12: new providers. VENICE_API_KEY is required when provider: venice;
+            // MLX_API_KEY / LLAMA_CPP_API_KEY are optional for mlx / llama-cpp providers.
+            "VENICE_API_KEY", "MLX_API_KEY", "LLAMA_CPP_API_KEY"
         )
         for (envKey in allKeys) {
             if (!System.getenv(envKey).isNullOrEmpty()) continue
@@ -690,26 +693,24 @@ class QonQreteProjectService(private val project: Project) : Disposable {
 
     fun run(config: QonQreteRunConfig) {
         val scriptPath = getQonQretePath() ?: throw IllegalStateException("QonQrete script not found")
-        executeWithVerifiedBash(File(scriptPath).parent, CommandBuilder.qonqrete().run(config).build(), "Running QonQrete")
+        val taskFilePath = getTasqPath() ?: throw IllegalStateException("No default task file found")
+        executeWithVerifiedBash(
+            File(scriptPath).parent,
+            CommandBuilder.qonqrete().run(config, taskFilePath).build(),
+            "Running QonQrete"
+        )
     }
 
     fun runWithFile(filePath: String, config: QonQreteRunConfig) {
         if (shellInfo.state != ShellState.READY) throw IllegalStateException("Shell not verified")
         val scriptPath = getQonQretePath() ?: throw IllegalStateException("QonQrete script not found")
         val workingDir = File(scriptPath).parent
-        val worqspaceTasq = File(workingDir, "worqspace/tasq.md")
-        val backupPath = File(workingDir, "worqspace/.tasq.md.qonqrete-backup")
-
-        var hadOriginal = false
-        if (worqspaceTasq.exists()) { worqspaceTasq.copyTo(backupPath, overwrite = true); hadOriginal = true }
-        File(filePath).copyTo(worqspaceTasq, overwrite = true)
 
         val markerPath = createMarkerPath(workingDir)
         currentMarkerPath = markerPath
         
-        val runCommand = CommandBuilder.qonqrete().run(config).build()
-        val restoreCommand = CommandBuilder.buildRestoreCommand(backupPath.absolutePath, worqspaceTasq.absolutePath, hadOriginal, shellInfo.isWindows)
-        val bashScript = CommandBuilder.buildBashScript(workingDir, runCommand, markerPath.toString(), restoreCommand, shellInfo.isWindows)
+        val runCommand = CommandBuilder.qonqrete().run(config, filePath).build()
+        val bashScript = CommandBuilder.buildBashScript(workingDir, runCommand, markerPath.toString(), null, shellInfo.isWindows)
 
         updateRunStatus(RunStatus(state = RunState.RUNNING, startTime = System.currentTimeMillis(), command = runCommand))
         startMarkerWatch(markerPath)

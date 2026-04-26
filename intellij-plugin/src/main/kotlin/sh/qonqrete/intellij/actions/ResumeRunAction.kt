@@ -2,10 +2,10 @@
  * Resume Run Action
  * Resume from existing qage with details popup
  * 
- * v1.1.9: Shows timestamps and artifact counts in selection popup
+ * v1.3.0: Shows timestamps and artifact counts in selection popup
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 

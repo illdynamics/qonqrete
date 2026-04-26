@@ -2,11 +2,18 @@
 
 IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first multi-agent AI orchestration system for autonomous code generation.
 
+## AI Configuration (v1.4.0)
+
+- The shared AI configuration dialog now targets the four primary runtime agents:
+  - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
+- Default binding is `venice / deepseek-v3.2`.
+- Local-only runtime providers (`mlx`, `llama-cpp`) are not shown in the shared provider/model picker.
+
 ## Features
 
-- **Run Tasq** - Execute QonQrete builds from your project root `tasq.md`
-- **Run Any Markdown** - Run any `.md` file as a temporary tasq
-- **Configuration** - Full config: sensitivity, cycles, mode, autonomous, sqrapyard, engine, TUI, wonqrete
+- **Run Tasq** - Execute QonQrete from the default project task file
+- **Run Any Markdown** - Run any `.md` file directly as the task input
+- **Configuration** - Full config: sensitivity, cycles, mode, autonomous, no-sync, repository seeding and engine
 - **Tool Window** - Control panel with status, config, qage browser
 - **Status Widget** - Real-time status with version in status bar
 - **Shell Verification** - Auto-detects and verifies bash shell
@@ -26,7 +33,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 ### From ZIP
 1. Build: `./gradlew buildPlugin`
 2. Install: Settings → Plugins → ⚙️ → Install Plugin from Disk
-3. Select `build/distributions/qonqrete-intellij-1.1.9.zip`
+3. Select `build/distributions/qonqrete-intellij-1.4.0.zip`
 
 ### From Source
 ```bash
@@ -39,7 +46,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 
 ### Quick Start
 1. Open a QonQrete project in IntelliJ
-2. Create or edit `tasq.md` at the project root
+2. Create or edit your project task file at the root (`tasq.md` remains the default starter)
 3. Press `Ctrl+Alt+Q` or use Tools → QonQrete → Run Tasq
 
 ### Tool Window
@@ -52,7 +59,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 - `Ctrl+Alt+Q` - Run Tasq
 
 ### Context Menu
-Right-click any `.md` file to "Run as QonQrete Tasq"
+Right-click any `.md` file to run it directly as the QonQrete task file
 
 ## Configuration
 
@@ -60,14 +67,14 @@ Settings → Tools → QonQrete:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Default Sensitivity | 6 | Briq sensitivity (0-16) |
-| Default Cycles | 3 | AI iteration cycles |
+| Default Sensitivity | 1 | Briq sensitivity (0-16) |
+| Default Auto Briq Sensitivity | false | Use `--auto-briq-sensitivity` |
+| Default Cycles | 1 | AI iteration cycles |
 | Default Mode | program | QonQrete mode |
-| Default Autonomous | false | Auto mode |
-| Use Sqrapyard | false | Incremental builds |
+| Default Autonomous | true | Auto mode |
+| Default No Sync | false | Keep outputs in qage/qonstructions (`--no-sync`) |
+| Seed Repo | false | Seed qodeyard from repository (`--seed-repo`) |
 | Container Engine | auto | docker/podman/auto |
-| Enable TUI | false | Terminal UI |
-| Enable Wonqrete | false | Experimental features |
 | Custom QonQrete Path | - | Override auto-detection |
 | Custom Bash Path | - | Override bash detection |
 | Auto Open Tool Window | true | Open on run |
@@ -76,8 +83,11 @@ Settings → Tools → QonQrete:
 
 ## Known Limitations
 
-- Hard-killing the terminal during temp tasq flow may interrupt restore (next startup will recover)
 - Windows requires Git Bash, WSL, or MSYS2 for bash shell
+
+## Validation Reality
+
+Deterministic validation in the current bridge is strongest for Python. Other ecosystems still run through the workflow, but deterministic compile/test coverage is weaker and should be treated accordingly.
 
 ## License
 

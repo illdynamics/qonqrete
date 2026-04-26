@@ -6,6 +6,13 @@
 
 This extension integrates the QonQrete Agentic AI System into VS Code.
 
+## AI Configuration (v1.4.0)
+
+- The shared AI configuration surface now targets the four primary runtime agents:
+  - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
+- Default binding is `venice / deepseek-v3.2`.
+- Local-only runtime providers (`mlx`, `llama-cpp`) are not shown in the shared provider/model picker.
+
 ## Platform Support
 
 | Platform | Status | Notes |
@@ -85,7 +92,7 @@ This handles the edge case where a previous session was hard-killed mid-run.
 
 ### Command Palette
 
-- **QonQrete: Run Tasq** — Run `worqspace/tasq.md`
+- **QonQrete: Run Tasq** — Run the default project task file
 - **QonQrete: Resume Run** — Resume from a Qage
 - **QonQrete: Init Workspace** — Build container image
 - **QonQrete: Clean Qages** — Remove Qage directories
@@ -94,13 +101,14 @@ This handles the edge case where a previous session was hard-killed mid-run.
 ### Context Menu
 
 - **tasq.md files**: Runs that specific tasq.md
-- **Other .md files**: Copies file as temporary tasq.md (original restored after run)
+- **Other .md files**: Runs the selected markdown file directly as task input
 
 ### Sidebar
 
-- **Configuration**: Sensitivity, cycles, mode, autonomous, sqrapyard
-- **Advanced**: Qonstruction name, container engine, TUI, wonqrete
-- **Status**: Version, image, tasq.md, shell (with verification indicator)
+- **Configuration**: Sensitivity, cycles, mode, autonomous, repo-seed toggle
+- **Run output control**: Optional `--no-sync` toggle to keep outputs in qage/qonstruction paths
+- **Advanced**: Qonstruction name, container engine
+- **Status**: Version, image, default task file, shell (with verification indicator)
 - **Qage Browser**: Expandable list with artifact counts and file links
 
 ### Status Bar States
@@ -134,20 +142,21 @@ cd vscode-extension
 npm install
 npm run compile
 npx vsce package
-code --install-extension qonqrete-vscode-1.1.9.vsix
+code --install-extension qonqrete-vscode-1.4.0.vsix
 ```
 
 ## Settings
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `qonqrete.defaultSensitivity` | 6 | Briq sensitivity (0-16) |
-| `qonqrete.defaultCycles` | 3 | Cycles (1-50) |
+| `qonqrete.defaultSensitivity` | 1 | Briq sensitivity (0-16) |
+| `qonqrete.defaultAutoBriqSensitivity` | false | Use `--auto-briq-sensitivity` by default |
+| `qonqrete.defaultCycles` | 1 | Cycles (1-50) |
 | `qonqrete.defaultMode` | "program" | Mode |
-| `qonqrete.defaultAutonomous` | false | Autonomous mode |
+| `qonqrete.defaultAutonomous` | true | Autonomous mode |
+| `qonqrete.noSync` | false | Skip repo-root sync-back by default (`--no-sync`) |
 | `qonqrete.containerEngine` | "auto" | Container engine |
-| `qonqrete.useSqrapyard` | false | Seed from sqrapyard |
-| `qonqrete.enableTui` | false | TUI mode |
+| `qonqrete.useSqrapyard` | false | Enable repository seeding (`--seed-repo`) |
 | `qonqrete.qonqretePath` | "" | Custom path to qonqrete.sh |
 
 ## CLI Flag Mapping
@@ -160,13 +169,11 @@ The extension correctly maps to real `qonqrete.sh` flags:
 | Cycles | `--cyqles N` |
 | Mode | `--mode MODE` |
 | Autonomous | `--auto` |
+| No Sync | `--no-sync` |
 | Qonstruction Name | `--qonstruction-name NAME` |
-| Sqrapyard | `--sqrapyard` |
+| Seed Repo | `--seed-repo` |
 | Docker | `--docker` |
 | Podman | `--podman` |
-| MicroSandbox | `--msb` |
-| TUI | `--tui` |
-| Wonqrete | `--wonqrete` |
 
 Resume: `./qonqrete.sh resume --qage QAGE_NAME [--auto]`
 Clean: `./qonqrete.sh clean --qage QAGE_NAME` or `--all`
@@ -188,8 +195,11 @@ Clean: `./qonqrete.sh clean --qage QAGE_NAME` or `--all`
 
 **Known Edge Cases:**
 - Hard terminal kills can lose marker file → `timeout` state
-- Temp tasq restoration depends on shell command chaining
 - Custom bash installs need `GIT_BASH` env var or settings
+
+## Validation Reality
+
+Deterministic validation in the current bridge is strongest for Python. Other ecosystems still run through the workflow, but deterministic compile/test coverage is weaker.
 
 ## Requirements
 

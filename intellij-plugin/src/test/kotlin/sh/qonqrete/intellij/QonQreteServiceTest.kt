@@ -2,10 +2,10 @@
  * QonQrete Service Tests
  * Tests for ACTUAL implementation utilities - not duplicated helpers
  *
- * v1.1.9: Tests real ShellEscape, QonQreteValidation, and CommandBuilder utilities
+ * v1.3.0: Tests real ShellEscape, QonQreteValidation, and CommandBuilder utilities
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -207,7 +207,21 @@ class QonQreteServiceTest {
     fun `CommandBuilder run with default config`() {
         val config = QonQreteRunConfig()
         val command = CommandBuilder.qonqrete().run(config).build()
-        assertEquals("./qonqrete.sh run --briq-sensitivity 6 --cyqles 3", command)
+        assertEquals("./qonqrete.sh run --briq-sensitivity 1 --cyqles 1 --auto", command)
+    }
+
+    @Test
+    fun `CommandBuilder run with auto sensitivity`() {
+        val config = QonQreteRunConfig(autoSensitivity = true, cycles = 3)
+        val command = CommandBuilder.qonqrete().run(config).build()
+        assertEquals("./qonqrete.sh run --auto-briq-sensitivity --cyqles 3 --auto", command)
+    }
+
+    @Test
+    fun `CommandBuilder run with no sync`() {
+        val config = QonQreteRunConfig(noSync = true)
+        val command = CommandBuilder.qonqrete().run(config).build()
+        assertTrue(command.contains("--no-sync"))
     }
 
     @Test
@@ -219,9 +233,7 @@ class QonQreteServiceTest {
             autonomous = true,
             qonstructionName = "my-build",
             useSqrapyard = true,
-            containerEngine = "docker",
-            enableTui = true,
-            enableWonqrete = true
+            containerEngine = "docker"
         )
         val command = CommandBuilder.qonqrete().run(config).build()
         
@@ -229,11 +241,9 @@ class QonQreteServiceTest {
         assertTrue(command.contains("--cyqles 5"))
         assertTrue(command.contains("--mode security"))
         assertTrue(command.contains("--auto"))
-        assertTrue(command.contains("--qonstruction-name my-build"))
-        assertTrue(command.contains("--sqrapyard"))
+        assertTrue(command.contains("-n my-build"))
+        assertTrue(command.contains("--seed-repo"))
         assertTrue(command.contains("--docker"))
-        assertTrue(command.contains("--tui"))
-        assertTrue(command.contains("--wonqrete"))
     }
 
     @Test
@@ -241,7 +251,7 @@ class QonQreteServiceTest {
         val config = QonQreteRunConfig(qonstructionName = "my build")
         val command = CommandBuilder.qonqrete().run(config).build()
         // Sanitization replaces space with underscore
-        assertTrue(command.contains("--qonstruction-name my_build"))
+        assertTrue(command.contains("-n my_build"))
     }
 
     @Test
@@ -337,15 +347,14 @@ class QonQreteServiceTest {
     @Test
     fun `QonQreteRunConfig defaults are correct`() {
         val config = QonQreteRunConfig()
-        assertEquals(6, config.sensitivity)
-        assertEquals(3, config.cycles)
+        assertEquals(1, config.sensitivity)
+        assertEquals(1, config.cycles)
         assertEquals("program", config.mode)
-        assertFalse(config.autonomous)
+        assertTrue(config.autonomous)
+        assertFalse(config.noSync)
         assertNull(config.qonstructionName)
         assertFalse(config.useSqrapyard)
         assertEquals("auto", config.containerEngine)
-        assertFalse(config.enableTui)
-        assertFalse(config.enableWonqrete)
     }
 
     @Test
@@ -355,8 +364,8 @@ class QonQreteServiceTest {
         
         assertEquals(10, modified.sensitivity)
         assertTrue(modified.autonomous)
-        assertEquals(6, original.sensitivity)
-        assertFalse(original.autonomous)
+        assertEquals(1, original.sensitivity)
+        assertTrue(original.autonomous)
     }
 
     // ========================================================================

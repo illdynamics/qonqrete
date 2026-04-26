@@ -3,7 +3,7 @@
  * Downloads and extracts QonQrete runtime into <project>/.qonqrete/
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -166,7 +166,6 @@ class DeployToWorkspaceAction : AnAction() {
                         throw Exception("qonqrete.sh not found after extraction")
                     }
                     scriptFile.setExecutable(true)
-                    File(qonqreteDir, "entrypoint.sh").takeIf { it.exists() }?.setExecutable(true)
 
                     // .gitignore
                     indicator.text = "Updating .gitignore..."

@@ -1,10 +1,7 @@
 # caching_policy.yaml
 # ═══════════════════════════════════════════════════════════════════════════════
-# Qontrabender Policy Configuration v1.0
+# Qontrabender Policy Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
-# Determines what gets compiled into cache payloads (local) and optionally remote cache.
-# Place in workspace root and reference from config.yaml.
-#
 # Select mode in config.yaml:
 #   qontrabender:
 #     policy_file: "./caching_policy.yaml"
@@ -13,74 +10,39 @@
 
 version: 1
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# DEFAULTS - Applied unless overridden by specific mode
-# ═══════════════════════════════════════════════════════════════════════════════
 defaults:
-  # Where Qontrabender writes its own artifacts
   qache_dir: "qache.d"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # VOLATILE DETECTION
-  # How to detect "volatile" files (exclude from cache; will be sent fresh via stdin)
-  # ─────────────────────────────────────────────────────────────────────────────
-  # NOTE: For local_smart mode, volatile detection should be CONSERVATIVE.
-  # Files just built are STABLE (not volatile). Only files ABOUT TO change are volatile.
   volatile_detection:
-    # Changed files manifest = files that WERE changed (now stable, not volatile!)
-    # Disable by default - this causes empty caches after build cycles
     use_changed_files_manifest: false
     changed_files_pattern: "exeq.d/*_changed.md"
-    
-    # Git diff = uncommitted changes (useful for interactive editing sessions)
-    use_git_diff_if_available: false   # Enable for cyber_* modes
+    use_git_diff_if_available: false
     git_diff_base: "HEAD"
-    
-    # Mtime fallback = recently modified files
-    # Disable by default - causes problems when running right after construQtor
     use_mtime_fallback: false
-    mtime_minutes: 5                   # Shorter window if enabled
-    
-    # Briq targets = files that WILL be edited in the NEXT cycle
-    # This is the CORRECT signal for volatility!
+    mtime_minutes: 5
     use_briq_targets: true
     briq_pattern: "briq.d/*.md"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # BUDGETS - Global size/token caps
-  # ─────────────────────────────────────────────────────────────────────────────
   budgets:
-    # "cached" = the stable payload (optionally uploaded to provider cache)
-    cached_max_chars: 1800000           # ~1.8MB text safety cap
-    cached_target_chars: 1200000        # target packing size
-    
-    # "hotset" = per-run stdin payload (volatile + targeted)
+    cached_max_chars: 1800000
+    cached_target_chars: 1200000
     hotset_max_chars: 350000
     hotset_target_chars: 220000
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # FILE LIMITS - Per-file size constraints
-  # ─────────────────────────────────────────────────────────────────────────────
   file_limits:
-    full_max_chars_per_file: 200000     # over this, prefer diff/summary/skeleton
-    skeleton_max_chars_per_file: 120000 # skeleton may also be huge; allow truncation
+    full_max_chars_per_file: 200000
+    skeleton_max_chars_per_file: 120000
     diff_max_chars_per_file: 120000
     max_files_in_cached: 250
     max_files_in_hotset: 80
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # TRUNCATION - How to handle oversized content
-  # ─────────────────────────────────────────────────────────────────────────────
   truncation:
-    strategy: "tail"                    # head|tail|middle (tail best for logs/diffs)
-    annotate_truncation: true           # insert markers into payload
+    strategy: "tail"
+    annotate_truncation: true
     include_reason: true
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # RENDER FORMAT - How to structure the payload
-  # ─────────────────────────────────────────────────────────────────────────────
   render:
-    file_wrapper: "xml"                 # xml|markdown
+    file_wrapper: "xml"
     xml:
       full_tag: "file"
       skeleton_tag: "skeleton"
@@ -93,27 +55,19 @@ defaults:
     markdown:
       show_headers: true
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # CLASSIFICATION - How to decide "core", "massive", etc.
-  # ─────────────────────────────────────────────────────────────────────────────
   classification:
-    # Weighting for "core utility" / centrality score
     signals:
-      dependency_rank_weight: 0.50      # from qontext.d dependency analysis
-      symbol_count_weight: 0.20         # number of symbols in file
-      inbound_refs_weight: 0.20         # how many other files reference this
-      doc_presence_weight: 0.10         # has docstrings/comments
-    
-    thresholds:
-      core_score_min: 0.65              # >= this = "core" file
-      massive_chars_min: 220000         # >= this = "massive" file
-      generated_score_min: 0.70         # >= this = likely generated
+      dependency_rank_weight: 0.50
+      symbol_count_weight: 0.20
+      inbound_refs_weight: 0.20
+      doc_presence_weight: 0.10
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # PATH PATTERNS - Include/exclude globs
-  # ─────────────────────────────────────────────────────────────────────────────
+    thresholds:
+      core_score_min: 0.65
+      massive_chars_min: 220000
+      generated_score_min: 0.70
+
   paths:
-    # Always ignore noise
     exclude_globs:
       - "**/.git/**"
       - "**/.venv/**"
@@ -140,7 +94,6 @@ defaults:
       - "**/*.dll"
       - "**/*.exe"
 
-    # Docs/schemas that are usually high ROI
     prefer_docs_globs:
       - "README*"
       - "docs/**"
@@ -157,7 +110,6 @@ defaults:
       - "**/*.ini"
       - "**/*.env.example"
 
-    # Treat these as likely generated/vendor (low ROI, prefer skeleton/omit)
     generated_globs:
       - "**/vendor/**"
       - "**/third_party/**"
@@ -167,29 +119,16 @@ defaults:
       - "**/*_pb2_grpc.py"
       - "**/*.swagger.json"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # LOGGING - Audit and debug settings
-  # ─────────────────────────────────────────────────────────────────────────────
   logging:
     verbose_decisions: false
     write_full_payload_artifacts: false
     write_inputs_refs: false
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# MODES - Predefined operational modes
-# ═══════════════════════════════════════════════════════════════════════════════
-
 modes:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # LOCAL_FAST - Ultra-fast local-only mode
-  # ─────────────────────────────────────────────────────────────────────────────
   local_fast:
     description: "Ultra-fast local-only. Mostly skeleton + tiny hotset. Minimal disk I/O. No remote cache."
-    
     remote_cache:
       enabled: false
-
     assembly:
       cached_payload:
         enabled: false
@@ -199,7 +138,6 @@ modes:
           - "recent_errors"
           - "changed_diffs"
           - "touched_files_full_if_small"
-
     fidelity:
       rules:
         - name: "touched_small_full"
@@ -210,21 +148,14 @@ modes:
         - name: "default_skeleton"
           when: {}
           use: "skeleton"
-
     budgets:
       cached_max_chars: 0
       hotset_max_chars: 200000
       hotset_target_chars: 150000
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # LOCAL_SMART - Best default mode
-  # ─────────────────────────────────────────────────────────────────────────────
   local_smart:
     description: "Best default. Variable fidelity locally; strong reproducibility; no provider dependency."
-    
     remote_cache:
       enabled: false
-
     assembly:
       cached_payload:
         enabled: true
@@ -232,7 +163,7 @@ modes:
           - "project_map"
           - "bedrock_docs"
           - "stable_core_files_variable_fidelity"
-          - "semantic_summaries"
+          - "structural_summaries"
           - "public_api_surface"
       hotset_payload:
         include:
@@ -240,7 +171,6 @@ modes:
           - "recent_errors"
           - "changed_diffs"
           - "touched_files_full_or_targeted_symbols"
-
     fidelity:
       rules:
         - name: "stable_core_full"
@@ -265,9 +195,6 @@ modes:
       include_full_for_touched_if_small: true
       full_for_touched_max_chars: 120000
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # CYBER_BEDROCK - Remote cache for stable bedrock
-  # ─────────────────────────────────────────────────────────────────────────────
   cyber_bedrock:
     description: "Remote cache holds stable bedrock (full for stable core + key docs). Hotset always stdin."
     
@@ -291,7 +218,7 @@ modes:
           - "project_map"
           - "bedrock_docs"
           - "stable_core_files_variable_fidelity"
-          - "semantic_summaries"
+          - "structural_summaries"
           - "schemas_and_interfaces"
       hotset_payload:
         include:
@@ -318,9 +245,6 @@ modes:
           when: {}
           use: "skeleton"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # CYBER_AGGRESSIVE - Aggressive remote caching
-  # ─────────────────────────────────────────────────────────────────────────────
   cyber_aggressive:
     description: "Remote cache is used aggressively. More full files go into cached payload; more churn."
     
@@ -394,7 +318,7 @@ modes:
           - "project_map"
           - "bedrock_docs"
           - "schemas_and_interfaces"
-          - "semantic_summaries"
+          - "structural_summaries"
           - "skeletons_only"
       hotset_payload:
         include:
@@ -408,9 +332,6 @@ modes:
           when: {}
           use: "skeleton"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # DEBUG_REPRO - Maximum audit and reproducibility
-  # ─────────────────────────────────────────────────────────────────────────────
   debug_repro:
     description: "Reproducibility + maximum audit. Writes full payload artifacts and detailed decision logs."
     
@@ -429,7 +350,7 @@ modes:
           - "project_map"
           - "bedrock_docs"
           - "stable_core_files_variable_fidelity"
-          - "semantic_summaries"
+          - "structural_summaries"
           - "public_api_surface"
       hotset_payload:
         include:
@@ -460,80 +381,48 @@ modes:
           when: {}
           use: "skeleton"
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# QONTEXT SCHEMA MAPPING
-# ═══════════════════════════════════════════════════════════════════════════════
-# Maps Qontextor-produced file metadata keys to what Qontrabender expects
 qontext_schema:
   file_path_key: "file_path"
   symbols_key: "symbols"
   deps_key: "dependencies"
-  embeddings_key: "embedding"
   inbound_refs_key: "inbound_refs"
   purpose_key: "purpose"
   last_changed_key: "last_changed"
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# INSPEQTOR POLICY (v0.9.0 - Two-Stage Review)
-# ═══════════════════════════════════════════════════════════════════════════════
-# Controls how InspeQtor manages context during code reviews to prevent
-# context explosion errors (400 - context_length_exceeded)
 inspeqtor:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # STAGE 1: Per-Briq Tactical Reviews
-  # ─────────────────────────────────────────────────────────────────────────────
   per_briq:
-    # Budget limits per individual briq review
-    max_prompt_chars: 500000              # ~500KB safety cap per briq
-    max_context_files: 40                 # Max .q.yaml files to include
-    max_chars_per_file: 80000             # Truncate large context files
+    max_prompt_chars: 500000
+    max_context_files: 40
+    max_chars_per_file: 80000
     
-    # Context filtering strategy
     context_filter:
-      enabled: true                       # Filter context to relevant files only
-      neighbor_depth: 1                   # Include direct dependencies (1-hop)
-      include_inbound_refs: true          # Include files that reference changed files
-      fallback_limit: 10                  # If filtering fails, limit to N random files
+      enabled: true
+      neighbor_depth: 1
+      include_inbound_refs: true
+      fallback_limit: 10
     
-    # Prompt optimization
     prompt:
-      max_code_chars_per_file: 50000      # Truncate very large code files in prompt
-      include_briq_content: true          # Include the briq specification
-      include_cycle_goal: false           # Defer cycle goal to meta-review
+      max_code_chars_per_file: 50000
+      include_briq_content: true
+      include_cycle_goal: false
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # STAGE 2: Global Meta-Review
-  # ─────────────────────────────────────────────────────────────────────────────
   meta_review:
-    # Budget limits for aggregation pass
-    max_prompt_chars: 100000              # Meta-review is text-only, much smaller
-    max_chars_per_briq_summary: 1500      # Truncate individual briq reqaps
+    max_prompt_chars: 100000
+    max_chars_per_briq_summary: 1500
     
-    # Content inclusion
     include:
       - cycle_goal                        # Original tasq.md
       - construqtor_summary               # What was built
       - per_briq_assessments              # Individual briq verdicts
       - per_briq_suggestions              # Suggestions from tactical reviews
     
-    # Content exclusion (keep it light!)
     exclude:
       - raw_code                          # NO code in meta-review
       - full_architectural_context        # NO .q.yaml files
       - previous_logs                     # NO log context
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # OUTPUT CONFIGURATION
-  # ─────────────────────────────────────────────────────────────────────────────
   output:
-    # Per-briq reqaps
-    briq_reqap_dir: "reqap.d/cyqle{N}"    # Directory for briq-level reqaps
+    briq_reqap_dir: "reqap.d/cyqle{N}"
     briq_reqap_pattern: "{briq_name}_reqap.md"
-    
-    # Final aggregated reqap
     final_reqap: "reqap.d/cyqle{N}_reqap.md"
-    
-    # Include individual briq reqaps in final?
     embed_briq_reqaps_in_final: true

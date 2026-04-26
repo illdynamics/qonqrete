@@ -3,7 +3,7 @@
  * Main entry point
  * 
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -269,13 +269,13 @@ async function updateStatusBar(): Promise<void> {
         } else if (!hasTasq) {
             statusBarItem.text = '$(beaker) QonQrete (no tasq)';
             statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-            statusBarItem.tooltip = 'No tasq.md found. Click to create one.';
+            statusBarItem.tooltip = 'No default task file found. Click to create the starter task file.';
             statusBarItem.command = 'qonqrete.runTasq';
         } else {
             // Fully ready and verified
             statusBarItem.text = '$(beaker) QonQrete Ready';
             statusBarItem.backgroundColor = undefined;
-            statusBarItem.tooltip = `QonQrete v${version || '?'}\nShell: ${shellInfo.shellType} (verified)\nClick to run tasq.md`;
+            statusBarItem.tooltip = `QonQrete v${version || '?'}\nShell: ${shellInfo.shellType} (verified)\nClick to run the default task file`;
             statusBarItem.command = 'qonqrete.runTasq';
         }
         

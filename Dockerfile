@@ -1,112 +1,141 @@
-# QonQrete Dockerfile - Security Hardened
-# v1.0.1-stable - Fixed HuggingFace cache permissions for Docker hardening
-# =============================================================================
-# Security Features:
-#   - Pinned base image with digest
-#   - Pinned Python dependencies
-#   - Non-root execution via gosu
-#   - HEALTHCHECK directive
-#   - Minimal attack surface
-#   - Pre-downloaded ML models (v1.0.1 fix)
-# =============================================================================
+# syntax=docker/dockerfile:1.7
+FROM python:3.11.8-bookworm
 
-# Pinned base image with digest for reproducibility
-FROM ubuntu:22.04@sha256:0e5e4a57c2499249aafc3b40fcd541e9a456aab7296681a3994d631587203f97
+# ----------------------------------------------------------------------------
+# Build args
+# ----------------------------------------------------------------------------
+# QONQ_VERSION is populated by qonqrete.sh from the canonical VERSION file.
+# Used for OCI labels here; at runtime qonqrete.sh passes it via `-e QONQ_VERSION`.
+ARG QONQ_VERSION=""
 
-# Avoid interactive prompts during installation
-ENV DEBIAN_FRONTEND=noninteractive
+# HOST_UID matches the container qrane user to the host user on Linux/WSL so
+# bind-mounted /qonq files are natively owned by the host user — no helper
+# chown/chmod gymnastics at runtime. On macOS/Windows Docker Desktop translates
+# ownership through its VM layer, so 1000 is fine and this arg is ignored.
+ARG HOST_UID=501
 
-# =============================================================================
-# 1. Install base dependencies, gosu for privilege dropping
-# =============================================================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
-    python-is-python3 \
-    git \
-    ca-certificates \
-    curl \
-    chafa \
-    vim \
-    gosu \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+# ----------------------------------------------------------------------------
+# OCI labels
+# ----------------------------------------------------------------------------
+LABEL org.opencontainers.image.title="QonQrete" \
+      org.opencontainers.image.version="${QONQ_VERSION}" \
+      org.opencontainers.image.source="https://qonqrete.sh"
 
-# =============================================================================
-# 2. Install Python packages with pinned versions
-# =============================================================================
+# ----------------------------------------------------------------------------
+# Environment
+# ----------------------------------------------------------------------------
+# QONQ_VERSION is deliberately NOT baked into ENV here. qonqrete.sh passes it
+# at runtime via `-e QONQ_VERSION` so the VERSION file remains the single source
+# of truth without needing a rebuild to change the display version.
+ENV DEBIAN_FRONTEND=noninteractive \
+    PATH="/usr/local/bin:${PATH}" \
+    PYTHONPATH="/qonqrete" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore \
+    HOST_UID=501
+
 WORKDIR /qonqrete
+
+# ----------------------------------------------------------------------------
+# Python deps
+# ----------------------------------------------------------------------------
+# requirements.txt now also pins Ruff, used by worqer/qualifier/adapters/python.py
+# for lint diagnostics. Qualifier gracefully no-ops if the binary is missing.
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r requirements.txt && \
-    rm -rf /root/.cache/pip
+RUN python -m pip install --no-cache-dir -r requirements.txt
 
-# =============================================================================
-# 3. Security Hardening - Create Users and Groups
-# =============================================================================
-RUN groupadd -r qrew
-RUN useradd -r -g qrew -m -d /home/qrane -s /bin/bash qrane
-RUN useradd -r -g qrew -m -d /home/worqer -s /bin/bash worqer
+# ----------------------------------------------------------------------------
+# OS packages
+# ----------------------------------------------------------------------------
+# gosu is NOT installed. We enter the container as qrane via USER directive;
+# no root-phase prep is needed because HOST_UID matching makes bind-mount
+# ownership natural.
+#
+# Qualifier/Qontextor/Qompressor additions:
+#   - shellcheck: static analysis used by worqer/qualifier/adapters/shell.py
+#   - shfmt:      formatting sanity check for shell scripts
+#   - curl + gnupg: required to fetch the NodeSource repo for Node.js 20
+# All four are standard Debian bookworm packages (shellcheck + shfmt ship
+# pre-built binaries, no compilation). Qualifier tolerates their absence
+# so adding them here is a hard capability upgrade, not a requirement.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    chafa \
+    curl \
+    git \
+    gnupg \
+    shellcheck \
+    shfmt \
+    vim-tiny \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-# Ensure pip scripts are in PATH for all users
-ENV PATH="/usr/local/bin:${PATH}"
+# ----------------------------------------------------------------------------
+# Node.js 20 + Qualifier node-based tools
+# ----------------------------------------------------------------------------
+# Node.js is installed so Qontextor/Qompressor can invoke small repo-shipped
+# helper scripts for JS/TS and HTML/CSS structural parsing, and so Qualifier
+# can invoke its JS/TS and HTML/CSS validators locally and deterministically.
+#
+# We install the four tools globally (under /usr/local/lib/node_modules
+# with shims in /usr/local/bin) so Qualifier's discovery module finds them
+# on PATH. A repo-local node_modules is ALSO supported — discovery checks
+# node_modules/.bin first — but we avoid shipping the repo's node_modules
+# in the image by default to keep it lean.
+#
+# Pinned versions MUST match the devDependencies block in package.json so
+# local dev and container behavior agree.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm install -g --no-audit --no-fund --loglevel=error \
+    @biomejs/biome@1.9.4 \
+    typescript@5.6.3 \
+    postcss@8.5.6 \
+    parse5@7.2.1 \
+    html-validate@9.2.2 \
+    stylelint@16.10.0 \
+    stylelint-config-standard@36.0.1 \
+ && npm cache clean --force
 
-# =============================================================================
-# 3a. Pre-download ML Models (v1.0.1 fix)
-# =============================================================================
-# Create a persistent cache directory OUTSIDE /home/qrane/.cache (which gets
-# mounted as tmpfs at runtime). This ensures the pre-downloaded models survive
-# the security hardening tmpfs mount.
-RUN mkdir -p /opt/hf_cache && chmod 755 /opt/hf_cache
-
-# Set HuggingFace environment variables BEFORE downloading
-ENV HF_HOME=/opt/hf_cache
-ENV SENTENCE_TRANSFORMERS_HOME=/opt/hf_cache
-ENV TRANSFORMERS_CACHE=/opt/hf_cache
-
-# Pre-download the sentence-transformers model during build (runs as root)
-# This ensures the model is available at runtime without needing write access
-RUN python3 -c "from sentence_transformers import SentenceTransformer; \
-    print('Pre-downloading all-MiniLM-L6-v2 model...'); \
-    SentenceTransformer('all-MiniLM-L6-v2'); \
-    print('Model cached successfully to /opt/hf_cache')"
-
-# Make cache readable by all users (model files are read-only at runtime)
-RUN chmod -R 755 /opt/hf_cache
-
-# Create runtime cache directories for sentence-transformers (for any runtime writes)
-RUN mkdir -p /home/qrane/.cache/huggingface && \
-    chown -R qrane:qrew /home/qrane/.cache
-
-# =============================================================================
-# 4. Copy project and set permissions
-# =============================================================================
+# ----------------------------------------------------------------------------
+# Project code + VERSION sanity
+# ----------------------------------------------------------------------------
 COPY . .
+RUN test -s /qonqrete/VERSION || \
+    (echo "FATAL: /qonqrete/VERSION missing or empty in build context" >&2 && exit 1)
 
-ENV PYTHONPATH="/qonqrete"
+# ----------------------------------------------------------------------------
+# qrane user — single-user model, UID matches host on Linux/WSL
+# ----------------------------------------------------------------------------
+# `-U` creates a private group (qrane:qrane) with same GID as UID. Debian UPG
+# convention. No shared qrew group — if multi-user /qonq access is ever needed,
+# introduce it then, with a concrete design.
+RUN set -eux \
+ && if getent passwd "${HOST_UID}" >/dev/null 2>&1; then \
+        echo "FATAL: UID ${HOST_UID} collides with a base-image system user." >&2; \
+        echo "       Rebuild with a different HOST_UID." >&2; \
+        exit 1; \
+    fi \
+ && useradd -u "${HOST_UID}" -U -m -d /home/qrane -s /bin/bash qrane \
+ && chown -R qrane:qrane /home/qrane /qonqrete \
+ && chmod -R u=rwX,g=,o= /qonqrete \
+ && chmod -R u=rwX,g=,o= /home/qrane
 
-RUN chown -R qrane:qrew /qonqrete && chmod -R 750 /qonqrete
-RUN mkdir -p /qonq && chown qrane:qrew /qonq && chmod 770 /qonq
-RUN mkdir -p /qonq/{tasq.d,exeq.d,reqap.d,qodeyard,struqture,qontext.d,bloq.d,briq.d} && \
-    chown -R worqer:qrew /qonq && chmod -R 2770 /qonq
-
-# =============================================================================
-# 5. Dynamic Versioning
-# =============================================================================
-ARG QONQ_VERSION
-ENV QONQ_VERSION=${QONQ_VERSION}
-
-# =============================================================================
-# 6. Entrypoint for Privilege Dropping
-# =============================================================================
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
-# =============================================================================
-# 7. HEALTHCHECK - Verify container is responsive
-# =============================================================================
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD gosu qrane python3 -c "import yaml, openai, anthropic; print('OK')" || exit 1
-
+# ----------------------------------------------------------------------------
+# Runtime identity
+# ----------------------------------------------------------------------------
+# All subsequent layers and the container process run as qrane. No root phase,
+# no gosu, no privilege transition, no caps needed.
+USER qrane
 WORKDIR /qonqrete
+
+# Inline entrypoint: sets a tight umask (files 0640, dirs 0750) then execs
+# whatever command is passed. No external script file needed.
+# The "--" becomes $0; everything Docker appends (CMD/args) becomes "$@".
+ENTRYPOINT ["/bin/bash", "-c", "umask 0027 && exec \"$@\"", "--"]

@@ -8,7 +8,7 @@
  * - Clear, auditable command assembly
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -199,12 +199,16 @@ class CommandBuilder private constructor() {
     /**
      * Add the 'run' subcommand with configuration
      */
-    fun run(config: QonQreteRunConfig): CommandBuilder {
-        parts.add("run")
+    fun run(config: QonQreteRunConfig, taskFilePath: String? = null): CommandBuilder {
+        taskFilePath?.let { parts.add(ShellEscape.escape(it)) } ?: parts.add("run")
         
-        // Always add sensitivity and cycles
-        parts.add("--briq-sensitivity")
-        parts.add(config.sensitivity.toString())
+        // Briq sensitivity mode and cycles
+        if (config.autoSensitivity) {
+            parts.add("--auto-briq-sensitivity")
+        } else {
+            parts.add("--briq-sensitivity")
+            parts.add(config.sensitivity.toString())
+        }
         parts.add("--cyqles")
         parts.add(config.cycles.toString())
         
@@ -218,38 +222,28 @@ class CommandBuilder private constructor() {
         if (config.autonomous) {
             parts.add("--auto")
         }
+
+        if (config.noSync) {
+            parts.add("--no-sync")
+        }
         
         // Qonstruction name (MUST be sanitized first)
-        // Pass the sanitized name using the short '-n' flag expected by the CLI.
         config.qonstructionName?.let { name ->
             val sanitized = QonQreteValidation.sanitizeQonstructionName(name)
-            // Use '-n' instead of the deprecated '--qonstruction-name' to ensure the
-            // runtime correctly renames the resulting qage directory to the provided name.
             parts.add("-n")
             parts.add(ShellEscape.escape(sanitized.sanitized))
         }
         
-        // Sqrapyard
+        // Repo seed (legacy setting key kept for compatibility)
         if (config.useSqrapyard) {
-            parts.add("--sqrapyard")
+            parts.add("--seed-repo")
         }
         
         // Container engine
         when (config.containerEngine) {
             "docker" -> parts.add("--docker")
             "podman" -> parts.add("--podman")
-            "msb" -> parts.add("--msb")
             // "auto" -> no flag needed
-        }
-        
-        // TUI
-        if (config.enableTui) {
-            parts.add("--tui")
-        }
-        
-        // Wonqrete
-        if (config.enableWonqrete) {
-            parts.add("--wonqrete")
         }
         
         return this

@@ -1,9 +1,9 @@
 /**
  * Run As QonQrete Tasq Action
- * Execute a non-canonical markdown file as a temporary tasq
+ * Execute a non-default markdown file as the direct task input
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -72,11 +72,10 @@ class RunAsQonqreteTasqAction : AnAction() {
 
         val filePath = virtualFile.path
 
-        // Confirm running non-canonical file
+        // Confirm running non-default task file
         val confirm = Messages.showYesNoDialog(
             project,
-            "Run '${virtualFile.name}' as a QonQrete tasq?\n\n" +
-            "This will temporarily replace the internal tasq.md and restore it after the run.",
+            "Run '${virtualFile.name}' as the QonQrete task file for this run?",
             "Run as QonQrete Tasq",
             Messages.getQuestionIcon()
         )
@@ -118,6 +117,9 @@ class RunAsQonqreteTasqAction : AnAction() {
                         "OPENROUTER_API_KEY" -> "OpenRouter"
                         "DEEPSEEK_API_KEY" -> "DeepSeek"
                         "QWEN_API_KEY" -> "Qwen"
+                        "VENICE_API_KEY" -> "Venice"
+                        "MLX_API_KEY" -> "MLX"
+                        "LLAMA_CPP_API_KEY" -> "Llama-cpp"
                         else -> key
                     }
                 }
@@ -141,9 +143,8 @@ class RunAsQonqreteTasqAction : AnAction() {
         // Get configuration
         var config = QonQreteRunConfig.fromSettings()
 
-        // Always prompt for a qonstruction name if none has been provided. This ensures the
-        // resulting qage directory is renamed to the provided name. If the user cancels
-        // the dialog, abort the run. Do not prompt again if a name is already set.
+        // Always prompt for a qonstruction name if none has been provided.
+        // If the user cancels the dialog, abort the run. Do not prompt again if a name is already set.
         if (config.qonstructionName == null) {
             val nameDialog = QonQreteQonstructionNameDialog(project, service)
             if (!nameDialog.showAndGet()) {

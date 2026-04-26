@@ -3,7 +3,7 @@
  * Build configuration - Production Ready
  *
  * @author QonQrete
- * @version v1.1.9
+ * @version v1.4.0
  * @license AGPL-3.0
  */
 
@@ -14,7 +14,9 @@ plugins {
 }
 
 group = "sh.qonqrete"
-version = "1.2.0"
+val runtimeVersion = rootProject.file("../VERSION").readText().trim()
+require(runtimeVersion.isNotBlank()) { "../VERSION is missing or empty" }
+version = runtimeVersion
 
 repositories {
     mavenCentral()
@@ -54,17 +56,13 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
-            <h2>1.2.0 - Workspace Deployment &amp; Hassle-Free Bootstrap</h2>
+            <h2>${runtimeVersion} - Runtime Truth/Streaming Alignment</h2>
             <ul>
-                <li><b>NEW:</b> "Deploy to Workspace" — one-click runtime install into any project (.qonqrete/)</li>
-                <li><b>NEW:</b> "Create tasq.md" — starter template at project root</li>
-                <li><b>NEW:</b> Auto-init on first run (builds container image automatically)</li>
-                <li><b>NEW:</b> Root tasq.md sync — user-facing tasq at project root, auto-synced to runtime</li>
-                <li><b>NEW:</b> .gitignore management — auto-adds .qonqrete/ on deploy</li>
-                <li><b>NEW:</b> Versioned container images (qonqrete-qage:1.2.0)</li>
-                <li><b>Improved:</b> Path discovery now checks .qonqrete/ first</li>
-                <li><b>Improved:</b> Deploy-first UX flow when runtime not found</li>
-                <li><b>Improved:</b> Identical behavior with VS Code extension</li>
+                <li><b>Changed:</b> AI config UI targets primary runtime agents only (qrystallizer, instruqtor, construqtor, inspeqtor)</li>
+                <li><b>Changed:</b> Default AI binding aligned to venice / deepseek-v3.2</li>
+                <li><b>Changed:</b> Local-only providers (mlx, llama-cpp) hidden from shared provider picker</li>
+                <li><b>Added:</b> Run-level no-sync control wired to launcher (--no-sync)</li>
+                <li><b>Aligned:</b> Plugin docs/UI defaults match runtime-backed values (sensitivity=1, cycles=1, autonomous=true)</li>
             </ul>
         """.trimIndent())
     }
@@ -82,9 +80,8 @@ tasks {
     buildSearchableOptions {
         enabled = false
     }
-    tasks {
-        runPluginVerifier {
-            ideVersions.set(listOf("2023.3", "2024.1"))
-        }
+
+    runPluginVerifier {
+        ideVersions.set(listOf("2023.3", "2024.1"))
     }
 }

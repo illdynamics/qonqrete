@@ -1,6 +1,6 @@
 # QonQrete Terminology
 
-**Version:** `v1.2.0`
+**Version:** `v1.4.0`
 
 This document defines the main vocabulary used in the current repository.
 
@@ -30,25 +30,25 @@ This document defines the main vocabulary used in the current repository.
 - **exeq.d** — execution summaries
 - **reqap.d** — review summaries
 - **qontract.d** — contract material (`qontract.md` + `qontract.json`)
-- **qontext.d** — semantic / structural context output
+- **qontext.d** — structural context and relationship output
 - **bloq.d** — compressed skeleton cache from Qompressor
 - **qache.d** — Qontrabender cache payload area
 - **struqture** — logs and event traces
-- **sqrapyard** — opt-in seed input area for bringing existing code into a run
+- **seed-repo mode** — opt-in run mode that seeds current repository content into `qodeyard/` before build (legacy alias: `-s/--sqrapyard`)
 - **Qonstruction** — a saved output snapshot under `worqspace/qonstructions/`
 
 ## Agent names
 
-- **TasqLeveler** — optional cycle-1 tasq enhancer
+- **Qrystallizer** — cycle-1 task clarification and readiness stage
 - **InstruQtor** — task planner and briq generator
 - **CalQulator** — local token/cost estimator
 - **ConstruQtor** — code generator / modifier
 - **InspeQtor** — reviewer
-- **Qontextor** — semantic / structural mapper
-- **Qompressor** — skeletonizer
+- **Qontextor** — deterministic multi-language structural mapper and context graph builder
+- **Qompressor** — deterministic multi-language structural skeletonizer (Python always first-class; shell/JS/TS/HTML/CSS first-class in the shipped/provisioned environment; optional Tree-sitter fallback)
 - **Qontrabender** — variable-fidelity cache compositor
-- **QontractGuard** — deterministic contract verifier
-- **LoQal Verifier** — deterministic syntax/import verification helper
+- **Qonfirmer** — deterministic contract verifier
+- **Qualifier** — deterministic syntax/import verification helper
 
 ## Runtime/config terms
 
@@ -56,13 +56,11 @@ This document defines the main vocabulary used in the current repository.
 - **Briq sensitivity** — decomposition granularity; higher means more briqs in the current system design
 - **Autonomous mode** — continue without user cheQpoints
 - **User-gated mode** — pause at cheQpoints
-- **wonqrete** — experimental mode flag in the CLI/TUI surface
 
 ## Runtime engine terms
 
-- **Container engine** — Docker, Podman, or MSB
+- **Container engine** — Docker or Podman
 - **Build backend** — the backend used to build the runtime image (for example `buildx` or plain build paths)
-- **MSB / Microsandbox** — experimental alternative sandbox path
 
 ## IDE integration terms
 

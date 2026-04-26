@@ -6,7 +6,7 @@
  * Never in settings.json, never in terminal commands, never in logs
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -17,34 +17,32 @@ import { getRunner } from '../cli/qonqreteRunner';
 import {
     PROVIDERS,
     PROVIDER_ENV_MAP,
-    ALL_API_KEYS,
     storeSecret,
     getSecret,
     hasApiKey,
 } from '../secrets';
 
-const AI_AGENTS = ['tasqleveler', 'instruqtor', 'construqtor', 'inspeqtor'] as const;
+const AI_AGENTS = ['qrystallizer', 'instruqtor', 'construqtor', 'inspeqtor'] as const;
 type AgentName = typeof AI_AGENTS[number];
 
 interface AgentConfig { provider: string; model: string; }
 
 function readAgentConfigs(configPath: string): Record<AgentName, AgentConfig> {
     const defaults: Record<AgentName, AgentConfig> = {
-        tasqleveler: { provider: 'openai', model: 'gpt-4.1-nano' },
-        instruqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
-        construqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
-        inspeqtor: { provider: 'openai', model: 'gpt-4.1-mini' },
+        qrystallizer: { provider: 'venice', model: 'deepseek-v3.2' },
+        instruqtor: { provider: 'venice', model: 'deepseek-v3.2' },
+        construqtor: { provider: 'venice', model: 'deepseek-v3.2' },
+        inspeqtor: { provider: 'venice', model: 'deepseek-v3.2' },
     };
     if (!fs.existsSync(configPath)) return defaults;
     try {
         const lines = fs.readFileSync(configPath, 'utf8').split('\n');
         let currentAgent: string | null = null;
         for (const line of lines) {
-            // Detect any 2-space-indented section header
             const agentMatch = line.match(/^\s{2}(\w+):\s*$/);
             if (agentMatch) {
-                // Only track AI agents we care about; clear for everything else
                 currentAgent = AI_AGENTS.includes(agentMatch[1] as AgentName) ? agentMatch[1] : null;
+                if (currentAgent) defaults[currentAgent as AgentName].model = ''; // Reset to catch if present
                 continue;
             }
             if (currentAgent && AI_AGENTS.includes(currentAgent as AgentName)) {
@@ -70,7 +68,6 @@ function writeAgentConfig(configPath: string, agent: AgentName, provider: string
                 inAgent = true; providerSet = false; modelSet = false; result.push(line); continue;
             }
             if (inAgent) {
-                // Exit agent on any other 2-space section header
                 if (line.match(/^\s{2}\w+:\s*$/) && !line.match(new RegExp(`^\\s{2}${agent}:\\s*$`))) {
                     inAgent = false;
                 }
@@ -78,9 +75,15 @@ function writeAgentConfig(configPath: string, agent: AgentName, provider: string
                     result.push(`    provider: ${provider}`); providerSet = true; continue;
                 }
                 if (inAgent && line.match(/^\s{4}model:\s*\S+/) && !modelSet) {
-                    result.push(`    model: ${model}`); modelSet = true; continue;
+                    if (model) result.push(`    model: ${model}`);
+                    modelSet = true; continue;
                 }
-                if (line.match(/^\s{0,2}\S/)) inAgent = false;
+                if (line.match(/^\s{0,2}\S/)) {
+                    if (inAgent && !modelSet && model) {
+                        result.push(`    model: ${model}`);
+                    }
+                    inAgent = false;
+                }
             }
             result.push(line);
         }
@@ -97,7 +100,9 @@ export function getRequiredApiKeys(configPath: string): string[] {
     const provs = new Set<string>();
     for (const agent of AI_AGENTS) {
         const p = configs[agent].provider;
-        if (p && p !== 'local') provs.add(p);
+        // v1.3.12: 'local' (internal helper agents) and local runtimes (mlx,
+        // llama-cpp) never require an API key at the IDE layer.
+        if (p && p !== 'local' && p !== 'mlx' && p !== 'llama-cpp') provs.add(p);
     }
     const keys: string[] = [];
     for (const p of provs) {
@@ -171,7 +176,9 @@ export async function executeSetAIConfig(): Promise<void> {
     }
 
     const currentConfigs = readAgentConfigs(configPath);
-    const providerNames = Object.keys(PROVIDERS);
+    const providerNames = Object.entries(PROVIDERS)
+        .filter(([, info]) => info.uiSelectable !== false)
+        .map(([id]) => id);
 
     let done = false;
     while (!done) {
@@ -191,7 +198,8 @@ export async function executeSetAIConfig(): Promise<void> {
 
         items.push({ label: '$(key) API Keys', kind: vscode.QuickPickItemKind.Separator });
 
-        for (const [, info] of Object.entries(PROVIDERS)) {
+        for (const providerId of providerNames) {
+            const info = PROVIDERS[providerId];
             const has = await hasApiKey(info.envKey);
             items.push({
                 label: `$(key) ${info.label}`,
@@ -236,11 +244,11 @@ export async function executeSetAIConfig(): Promise<void> {
             if (model.includes('Custom')) {
                 const custom = await vscode.window.showInputBox({
                     title: `${agentMatch}: Custom Model`,
-                    prompt: `Enter model name for ${provInfo.label}`,
+                    prompt: `Enter model name for ${provInfo.label}${provId === 'venice' ? ' (e.g. deepseek-v3.2)' : ''}`,
                     value: currentConfigs[agentMatch].model,
                 });
-                if (!custom) continue;
-                model = custom;
+                if (custom === undefined) continue;
+                model = custom.trim();
             }
 
             if (writeAgentConfig(configPath, agentMatch, provId, model)) {

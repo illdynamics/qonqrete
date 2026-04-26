@@ -2,7 +2,7 @@
  * QonQrete Tool Window Panel
  * Full control panel with status, config, and COMPLETE artifact browser
  * 
- * v1.1.9 IMPROVEMENTS:
+ * v1.3.0 IMPROVEMENTS:
  * - Auto-refresh when run completes via service.onRefresh()
  * - "Open Tasq" button for quick editing
  * - "Clean All" button with confirmation
@@ -11,7 +11,7 @@
  * - Implements Disposable for proper cleanup
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -53,10 +53,13 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
 
     // Config controls with tooltips
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1)).apply {
-        toolTipText = "Briq sensitivity (0-16). Lower = more briqs generated. Default: 6"
+        toolTipText = "Briq sensitivity (0-16). Higher = more briqs generated."
+    }
+    private val autoSensitivityCheckbox = JBCheckBox("Auto briq sens", settings.defaultAutoBriqSensitivity).apply {
+        toolTipText = "Enable automatic briq sensitivity detection (--auto-briq-sensitivity)"
     }
     private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1)).apply {
-        toolTipText = "Number of AI cycles (1-50). More cycles = more refinement. Default: 3"
+        toolTipText = "Number of AI cycles (1-50). More cycles = more refinement."
     }
     private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web")).apply {
         toolTipText = "QonQrete mode: program (general), enterprise, security, data, devops, or web"
@@ -64,17 +67,14 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private val autonomousCheckbox = JBCheckBox("Autonomous", settings.defaultAutonomous).apply {
         toolTipText = "Enable autonomous mode (--auto). AI makes decisions without prompts."
     }
-    private val sqrapyardCheckbox = JBCheckBox("Sqrapyard", settings.useSqrapyard).apply {
-        toolTipText = "Use sqrapyard for incremental builds (--sqrapyard)"
+    private val noSyncCheckbox = JBCheckBox("No Sync", settings.noSync).apply {
+        toolTipText = "Skip repo-root sync-back and keep output in qage/qonstructions (--no-sync)"
     }
-    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman", "msb")).apply {
-        toolTipText = "Container engine: auto (detect), docker, podman, or msb (MindstaQ)"
+    private val sqrapyardCheckbox = JBCheckBox("Seed Repo", settings.useSqrapyard).apply {
+        toolTipText = "Seed qodeyard from repository before run (--seed-repo)"
     }
-    private val tuiCheckbox = JBCheckBox("TUI", settings.enableTui).apply {
-        toolTipText = "Enable Terminal UI mode (--tui)"
-    }
-    private val wonqreteCheckbox = JBCheckBox("Wonqrete", settings.enableWonqrete).apply {
-        toolTipText = "Enable experimental Wonqrete features (--wonqrete)"
+    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman")).apply {
+        toolTipText = "Container engine: auto (detect), docker, or podman"
     }
     private val qonstructionNameField = JBTextField().apply {
         toolTipText = "Optional name for this build. Invalid characters will be replaced with underscores."
@@ -187,10 +187,10 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
 
         cgbc.gridx = 0; cgbc.gridy = 4; cgbc.gridwidth = 2
         val checkboxPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
+        checkboxPanel.add(autoSensitivityCheckbox)
         checkboxPanel.add(autonomousCheckbox)
+        checkboxPanel.add(noSyncCheckbox)
         checkboxPanel.add(sqrapyardCheckbox)
-        checkboxPanel.add(tuiCheckbox)
-        checkboxPanel.add(wonqreteCheckbox)
         configPanel.add(checkboxPanel, cgbc)
 
         cgbc.gridx = 0; cgbc.gridy = 5; cgbc.gridwidth = 1; cgbc.weightx = 0.0
@@ -514,7 +514,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         if (tasqPath != null && File(tasqPath).exists()) {
             openFileInEditor(tasqPath)
         } else {
-            service.notify("QonQrete", "No tasq.md found", NotificationType.WARNING)
+            service.notify("QonQrete", "No default task file found", NotificationType.WARNING)
         }
     }
 
@@ -549,26 +549,23 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
 
         return QonQreteRunConfig(
             sensitivity = sensitivitySpinner.value as Int,
+            autoSensitivity = autoSensitivityCheckbox.isSelected,
             cycles = cyclesSpinner.value as Int,
             mode = modeCombo.selectedItem as String,
             autonomous = autonomousCheckbox.isSelected,
+            noSync = noSyncCheckbox.isSelected,
             qonstructionName = finalName,
             useSqrapyard = sqrapyardCheckbox.isSelected,
-            containerEngine = engineCombo.selectedItem as String,
-            enableTui = tuiCheckbox.isSelected,
-            enableWonqrete = wonqreteCheckbox.isSelected
+            containerEngine = engineCombo.selectedItem as String
         )
     }
 
     private fun executeRun() {
         val (canRun, reason, _) = service.canExecute()
         if (!canRun) { service.notify("QonQrete", reason ?: "Cannot run", NotificationType.WARNING); return }
-        if (!service.hasTasqFile()) { service.notify("QonQrete", "No tasq.md found. Use 'Create tasq.md' first.", NotificationType.WARNING); return }
+        if (!service.hasTasqFile()) { service.notify("QonQrete", "No default task file found. Use 'Create Task File' first.", NotificationType.WARNING); return }
 
         FileDocumentManager.getInstance().saveAllDocuments()
-
-        // Sync workspace-root tasq.md into internal runtime location
-        service.syncRootTasqToInternal()
 
         // Auto-init if image is missing
         val initStatus = service.isInitialized()
@@ -603,6 +600,9 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
                         "OPENROUTER_API_KEY" -> "OpenRouter"
                         "DEEPSEEK_API_KEY" -> "DeepSeek"
                         "QWEN_API_KEY" -> "Qwen"
+                        "VENICE_API_KEY" -> "Venice"
+                        "MLX_API_KEY" -> "MLX"
+                        "LLAMA_CPP_API_KEY" -> "Llama-cpp"
                         else -> key
                     }
                 }

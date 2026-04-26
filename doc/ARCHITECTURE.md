@@ -1,8 +1,9 @@
 # QonQrete Architecture
 
-**Version:** `v1.2.0`
+**Version:** `v1.4.0`
+**Release context:** `v1.4.0 - MLcon Edition`
 
-This document describes the current repository architecture as shipped in the `v1.2.0` snapshot.
+This document describes the current repository architecture as shipped in the `v1.4.0` snapshot.
 
 ## High-level model
 
@@ -29,24 +30,24 @@ qonqrete/
 
 ### `qonqrete.sh`
 Responsibilities:
-- command parsing (`init`, `run`, `resume`, `clean`)
+- command parsing (`init`, `run`, `resume`, `status`, `audit`, `clean`, `clean-outputs`)
 - OS detection
 - container engine detection
 - build backend detection
-- qage creation and workspace seeding
+- qage creation and manifest-linked workspace seeding
 - Qonstruction save / resume / clean flow
 
 The current CLI supports:
-- Docker
-- Podman
-- MSB / Microsandbox (experimental)
+- Podman (default auto-detected path)
+- Docker (explicit via `--docker` or `CONTAINER_ENGINE=docker`)
 
 It also provides flags for:
 - autonomous vs user-gated operation
 - operational mode
 - briq sensitivity
-- cycle limit
-- sqrapyard seeding
+- total-iteration cap / build-pass cap
+- optional explicit repo seeding (`--seed-repo`, with legacy `-s/--sqrapyard` alias)
+- optional repo-root sync suppression (`-N/--no-sync`)
 - explicit runtime forcing
 - qonstruction save naming
 
@@ -57,17 +58,18 @@ Main files:
 - `qrane.py` — orchestrator main loop
 - `loader.py` — CLI/UI helper behavior
 - `paths.py` — path manager
-- `tui.py` — TUI implementation
 - `lib_funqtions.py` — pricing helpers
 
 ### Runtime responsibilities
 Qrane:
 - reads `worqspace/config.yaml`
-- resolves final mode / sensitivity / cycle count
+- resolves final mode / sensitivity / execution caps (total iterations, build passes, repair attempts)
 - validates required API keys for configured providers
-- runs the configured pipeline in order
-- performs checkpoint handling
-- promotes reQap output into the next task flow when continuing
+- runs the configured pipeline in canonical stage order
+- maintains the run manifest and audit trail
+- performs bounded repair and continuation routing
+- distinguishes queued-next-pass resume from interrupted-active-pass resume to preserve truthful pass lineage
+- derives validation execution mode from explicit validation/smoketest evidence so markdown presence alone does not overclaim executed coverage
 
 ## Layer 3 — Agent layer
 
@@ -75,9 +77,10 @@ Qrane:
 The repo currently contains these notable agents/utilities:
 
 #### AI / pipeline agents
-- `tasqleveler.py`
-- `instruqtor.py`
-- `construqtor.py`
+- `qrystallizer.py` — canonical intake agent; synthesizes high-quality goals and clarified intent context from user answers when the raw task is vague, falling back truthfully to raw context when answers are unresolved.
+- `qonstrictor.py`
+- `instruqtor.py` — planning agent; consumes clarified intent and synthesized goals as first-class inputs to ensure accurate briq decomposition.
+- `construqtor.py` — generates/modifies code in `qodeyard/` via `heredoc` (Markdown fences), `direct` (tool-based), or deterministic `hybrid` coding mode. Supports iterative repair-forward validation in a `validation-root` sandbox.
 - `inspeqtor.py`
 
 #### local / deterministic helpers
@@ -85,25 +88,27 @@ The repo currently contains these notable agents/utilities:
 - `qontextor.py`
 - `qompressor.py`
 - `qontrabender.py`
-- `qontract_guard.py`
-- `loqal_verifier.py`
-- `runtime_checks.py`
+- `qonfirmer.py`
+- `qualifier.py`
+- `runtime_capabilities.py`
 - `lib_ai.py`
 - `lib_security.py`
 
 ## Pipeline order
 
-The current committed `worqspace/pipeline_config.yaml` documents the intended order as:
+The current committed `worqspace/pipeline_config.yaml` bridges the canonical order as:
 
 ```text
-instruqtor → calqulator → construqtor → inspeqtor → qontextor → qompressor
+qrystallizer → qonstrictor → instruqtor → calqulator → construqtor → qontextor/qompressor/qontrabender (support services) → inspeqtor
 ```
 
 Additional notes:
-- `tasqleveler` is optional and cycle-1-only
+- `qrystallizer` is the canonical intake implementation
+- intake clarification can pause runs in explicit `BLOCKED` / `RUN_WAITING_FOR_INPUT` state when readiness is `NOT_READY`
+- clarification-blocked resume re-enters cycle-1 intake semantics so `cycle_1_only` intake stages are not skipped
 - `qontrabender` is trigger-driven rather than a simple always-on stage
-- the docs and code still treat `qodeyard/` as the primary source of truth for current code
-- `bloq.d/` and `qontext.d/` are support context layers, not the canonical code output
+- `qodeyard/` remains the mutable build surface inside a run, while the manifest is the authoritative linkage layer
+- `bloq.d/`, `qontext.d/`, and `qache.d/` are support artifact domains, not canonical lifecycle stages
 
 ## Artifact model
 
@@ -117,40 +122,61 @@ Typical contents:
 
 ```text
 tasq.d/
+task/
+qontract.d/
 briq.d/
 qontract.d/
+planning/
+estimation/
 qodeyard/
 exeq.d/
+build/
+validation/
+realization/
+verdict/
+continuation/
 reqap.d/
 qontext.d/
 bloq.d/
 struqture/
+audit/
+run-manifest.v1.json
 ```
 
 ### Meaning of the main directories
-- `tasq.d/` — cycle-specific task material
+- `tasq.d/` — compatibility pass task material (`cyqle{N}` folders map to global iteration index)
+- `task/` — canonical task spec, clarification log, and intake summary
+- `qontract.d/` — Qonstrictor and QONTRACT artifacts
 - `briq.d/` — generated work units
 - `qontract.d/` — human + machine-readable contract
-- `qodeyard/` — generated / modified code, current truth source
+- `planning/` — execution blueprint, validation plan, build groups, completion criteria
+- `estimation/` — estimation artifacts
+- `qodeyard/` — generated / modified code build surface
 - `exeq.d/` — execution summaries
-- `reqap.d/` — review / recap output
-- `qontext.d/` — semantic / structural context output
-- `bloq.d/` — compressed structural skeletons
-- `struqture/` — logs
+- `build/` — build-group reports and per-attempt staged/recovery evidence
+- `validation/` — validation bundles
+- `realization/` — observed-outcome bundles
+- `verdict/` — inspection verdicts and repair plans
+- `continuation/` — continuation metadata
+- `reqap.d/` — review and iteration recap output
+- `qontext.d/` — deterministic structural context output
+- `bloq.d/` — compressed structural skeletons (Python, shell, JS/TS, HTML/CSS first-class; optional Tree-sitter fallback for other parseable code)
+- `struqture/` — per-agent logs
+- `audit/` — manifest-linked audit timeline and event stream
 
 ## QONTRACT enforcement model
 
-The repository uses a contract-first model for later cycles.
+The repository uses a contract-first model for later build passes and repair passes.
 
 ### Generation
-On cycle 1, InstruQtor generates:
+On the first build pass, InstruQtor generates:
 - `qontract.d/qontract.md`
 - `qontract.d/qontract.json`
 
 ### Enforcement
 Later stages use:
-- `runtime_checks.py` to fail fast when a contract is required but missing
-- `qontract_guard.py` for deterministic AST-based verification
+- fail-fast checks in `qrane/lib_qrane.py` when contract artifacts are required but missing
+- `qonfirmer.py` for deterministic AST-based verification
 
 Current documented invariant types include:
 - forbidden imports
@@ -172,7 +198,7 @@ QonQrete uses multiple context layers to keep prompts smaller and more structure
 | Execution | `exeq.d/` | build summaries |
 | Review | `reqap.d/` | review output |
 | Skeletons | `bloq.d/` | compressed code structure |
-| Semantic map | `qontext.d/` | symbol / dependency hints |
+| Structural context map | `qontext.d/` | symbol / relationship hints |
 | Cache | `qache.d/` | Qontrabender payloads when used |
 
 ## Security model
@@ -181,7 +207,7 @@ Important security properties in the repo:
 - Qage container isolation
 - read-only root filesystem with writable workspace paths
 - reduced capability model for container execution
-- non-root runtime after entrypoint privilege drop
+- non-root runtime with no runtime privilege transition
 - path validation and jail enforcement in `lib_security.py`
 - API timeout / retry safety in `lib_ai.py`
 
@@ -245,6 +271,16 @@ flowchart TD
     Qompressor --> Bloq[bloq.d]
 ```
 
+## Qontextor extractor model
+
+Qontextor local mode is now a shared structural graph pipeline with registry-dispatched extractors. Today the first-class deterministic paths in the shipped/provisioned environment are:
+- Python AST structural graphing
+- shell structure and command/env mapping via `shfmt -tojson` in the shipped environment
+- JS/TS module, DOM, and storage mapping via a repo-shipped TypeScript helper
+- HTML/CSS linkage graphing via repo-shipped `parse5`/`postcss` helpers
+
+This path is structural and offline-safe by default. Reduced local environments can fall back, and the active capability set is surfaced via the capability report and run manifests.
+
 ## Related docs
 
 - [README.md](../README.md)
@@ -253,7 +289,7 @@ flowchart TD
 - [TERMINOLOGY.md](./TERMINOLOGY.md)
 - [RELEASE-NOTES.md](./RELEASE-NOTES.md)
 
-## Workspace Deployment Model (v1.2.0)
+## Workspace Deployment Model (v1.2.0+)
 
 Starting with v1.2.0, the IDE integrations implement a **workspace-local hidden runtime** deployment model:
 
@@ -281,11 +317,11 @@ my-project/
 
 3. **Auto-init on first run**: If the container image doesn't exist, the IDE runs `./qonqrete.sh init` automatically.
 
-4. **Versioned images**: Container images are now tagged `qonqrete-qage:<version>` (e.g., `qonqrete-qage:1.2.0`), with `:latest` and legacy untagged aliases for backward compat.
+4. **Versioned images**: Container images are tagged `qonqrete-qage:<version>` (for example `qonqrete-qage:1.4.0`), with `:latest` plus an untagged compatibility alias.
 
 5. **Identical behavior in both IDEs**: VS Code and IntelliJ implement the same commands, same deployment model, same sync behavior.
 
 ### Deployment source
 
-Primary: versioned GitHub release zip (`qonqrete-v1.2.0.zip`)
+Primary: versioned GitHub release zip (`qonqrete-v1.4.0.zip`)
 Fallback: shallow git clone if zip download fails

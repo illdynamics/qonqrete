@@ -3,7 +3,7 @@
  * WebView-based control panel
  * 
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
@@ -120,7 +120,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         try {
             const hasTasq = await runner.hasTasqFile();
             if (!hasTasq) {
-                vscode.window.showWarningMessage('No tasq.md found. Use "Create tasq.md" first.');
+                vscode.window.showWarningMessage('No default task file found. Use "Create Task File" first.');
                 return;
             }
 
@@ -192,12 +192,13 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 },
                 defaultConfig: {
                     sensitivity: config.get<number>('defaultSensitivity', 1),
+                    autoSensitivity: config.get<boolean>('defaultAutoBriqSensitivity', false),
                     cycles: config.get<number>('defaultCycles', 1),
                     mode: config.get<string>('defaultMode', 'program'),
                     autonomous: config.get<boolean>('defaultAutonomous', true),
+                    noSync: config.get<boolean>('noSync', false),
                     useSqrapyard: config.get<boolean>('useSqrapyard', false),
                     containerEngine: config.get<string>('containerEngine', 'auto'),
-                    enableTui: config.get<boolean>('enableTui', false),
                 },
             },
         });
@@ -423,6 +424,11 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 </div>
             </div>
 
+            <div class="checkbox-row">
+                <input type="checkbox" id="autoSensitivity">
+                <label for="autoSensitivity">Auto briq sensitivity (-B)</label>
+            </div>
+
             <div class="form-group">
                 <label>Cycles</label>
                 <input type="number" id="cycles" min="1" max="50" value="1">
@@ -447,7 +453,12 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
 
             <div class="checkbox-row">
                 <input type="checkbox" id="useSqrapyard">
-                <label for="useSqrapyard">Seed from Sqrapyard</label>
+                <label for="useSqrapyard">Seed from Repo (--seed-repo)</label>
+            </div>
+
+            <div class="checkbox-row">
+                <input type="checkbox" id="noSync">
+                <label for="noSync">No Sync (--no-sync)</label>
             </div>
             
             <button class="expand-btn" onclick="toggleAdvanced()">▸ Advanced</button>
@@ -464,19 +475,9 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                         <option value="auto">Auto-detect</option>
                         <option value="docker">Docker</option>
                         <option value="podman">Podman</option>
-                        <option value="msb">MicroSandbox</option>
                     </select>
                 </div>
                 
-                <div class="checkbox-row">
-                    <input type="checkbox" id="enableTui">
-                    <label for="enableTui">TUI Mode</label>
-                </div>
-                
-                <div class="checkbox-row">
-                    <input type="checkbox" id="enableWonqrete">
-                    <label for="enableWonqrete">Wonqrete Mode</label>
-                </div>
             </div>
         </div>
 
@@ -484,7 +485,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             <div class="section-title">Actions</div>
             <button class="btn-primary" id="runBtn" onclick="runTasq()">▶ Run Tasq</button>
             <button class="btn-secondary" onclick="deployWorkspace()">⬡ Deploy</button>
-            <button class="btn-secondary" onclick="createTasq()">+ Create tasq.md</button>
+            <button class="btn-secondary" onclick="createTasq()">+ Create Task File</button>
             <button class="btn-secondary" onclick="setAIConfig()">🤖 AI Config</button>
             <button class="btn-secondary" onclick="resumeRun()">⟳ Resume</button>
             <button class="btn-secondary" onclick="initWorkspace()">⚙ Init</button>
@@ -628,12 +629,13 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             if (data.defaultConfig) {
                 document.getElementById('sensitivity').value = data.defaultConfig.sensitivity;
                 document.getElementById('sensitivityValue').textContent = data.defaultConfig.sensitivity;
+                document.getElementById('autoSensitivity').checked = !!data.defaultConfig.autoSensitivity;
                 document.getElementById('cycles').value = data.defaultConfig.cycles;
                 document.getElementById('mode').value = data.defaultConfig.mode;
                 document.getElementById('autonomous').checked = data.defaultConfig.autonomous;
+                document.getElementById('noSync').checked = !!data.defaultConfig.noSync;
                 document.getElementById('useSqrapyard').checked = data.defaultConfig.useSqrapyard;
                 document.getElementById('containerEngine').value = data.defaultConfig.containerEngine;
-                document.getElementById('enableTui').checked = data.defaultConfig.enableTui;
             }
         }
 
@@ -753,14 +755,14 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             const name = document.getElementById('qonstructionName').value.trim();
             return {
                 sensitivity: parseInt(document.getElementById('sensitivity').value, 10),
+                autoSensitivity: document.getElementById('autoSensitivity').checked,
                 cycles: parseInt(document.getElementById('cycles').value, 10),
                 mode: document.getElementById('mode').value,
                 autonomous: document.getElementById('autonomous').checked,
+                noSync: document.getElementById('noSync').checked,
                 useSqrapyard: document.getElementById('useSqrapyard').checked,
                 qonstructionName: name || undefined,
                 containerEngine: document.getElementById('containerEngine').value,
-                enableTui: document.getElementById('enableTui').checked,
-                enableWonqrete: document.getElementById('enableWonqrete').checked,
             };
         }
 

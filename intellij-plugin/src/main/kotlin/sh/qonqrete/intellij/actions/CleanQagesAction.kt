@@ -3,7 +3,7 @@
  * Clean qage directories with confirmation
  *
  * @author WoNQ
- * @version 1.2.0
+ * @version VERSION
  * @license AGPL-3.0
  */
 
