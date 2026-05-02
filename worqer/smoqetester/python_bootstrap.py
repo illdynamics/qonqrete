@@ -42,82 +42,83 @@ def provision_validation_env(worqspace_root: Path, qodeyard_path: Path) -> tuple
     
     cache_root = worqspace_root / ".validation-env-cache" / "python"
     venv_dir = cache_root / m_hash
+    lock_path = cache_root / f"{m_hash}.lock"
+    
+    timeout = int(os.environ.get("QONQ_BOOTSTRAP_TIMEOUT", 600))
     
     # Path handling for both repo-native and containerized modes
-    # In containerized mode, bin/python is standard.
-    # On Windows (less likely here but good to be safe), it might be Scripts/python.exe
     venv_python = venv_dir / "bin" / "python"
     if os.name == "nt":
         venv_python = venv_dir / "Scripts" / "python.exe"
     complete_marker = venv_dir / ".bootstrap_complete"
 
-    if venv_python.exists() and complete_marker.exists():
-        return str(venv_python), None
-    if venv_dir.exists():
-        # Stale/partial cache entries are unsafe to reuse.
-        shutil.rmtree(venv_dir, ignore_errors=True)
-
-    # Provision new venv
     try:
-        venv_dir.parent.mkdir(parents=True, exist_ok=True)
+        cache_root.mkdir(parents=True, exist_ok=True)
         
-        # Create venv
-        print(f"[DEBUG] Creating venv in {venv_dir} using {sys.executable}", flush=True)
-        cp = subprocess.run(
-            [sys.executable, "-m", "venv", str(venv_dir)],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        print(f"[DEBUG] venv created. stdout: {cp.stdout}, stderr: {cp.stderr}", flush=True)
-        
-        # Install dependencies
-        # 1. Update pip
-        subprocess.run(
-            [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        
-        # 2. Install found manifests
-        if (qodeyard_path / "requirements.txt").is_file():
-            print(f"[DEBUG] Installing requirements.txt", flush=True)
-            subprocess.run(
-                [str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"],
-                cwd=str(qodeyard_path),
-                check=True,
-                capture_output=True,
-                text=True
-            )
-        
-        if (qodeyard_path / "pyproject.toml").is_file():
-            print(f"[DEBUG] Installing pyproject.toml", flush=True)
-            subprocess.run(
-                [str(venv_python), "-m", "pip", "install", "."],
-                cwd=str(qodeyard_path),
-                check=True,
-                capture_output=True,
-                text=True
-            )
-        elif (qodeyard_path / "setup.py").is_file() or (qodeyard_path / "setup.cfg").is_file():
-            print(f"[DEBUG] Installing setup.py/cfg", flush=True)
-            subprocess.run(
-                [str(venv_python), "-m", "pip", "install", "."],
-                cwd=str(qodeyard_path),
-                check=True,
-                capture_output=True,
-                text=True
-            )
+        # v1.4.0: Harden with file lock and timeouts
+        import fcntl
+        with open(lock_path, "w") as lock_file:
+            try:
+                # Non-blocking attempt first to avoid silent hang
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except (BlockingIOError, OSError):
+                # Another process is provisioning, wait for it
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
+                
+            # Revalidate after lock acquisition
+            if venv_python.exists() and complete_marker.exists():
+                return str(venv_python), None
 
-        complete_marker.write_text("ok\n", encoding="utf-8")
-        return str(venv_python), None
+            if venv_dir.exists():
+                # Stale/partial cache entries are unsafe to reuse.
+                shutil.rmtree(venv_dir, ignore_errors=True)
+
+            venv_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Common pip safety flags
+            pip_install = [str(venv_python), "-m", "pip", "install", "--no-input", "--disable-pip-version-check", "--quiet"]
+
+            # 1. Create venv
+            subprocess.run(
+                [sys.executable, "-m", "venv", str(venv_dir)],
+                check=True, capture_output=True, text=True, timeout=timeout
+            )
+            
+            # 2. Update pip
+            subprocess.run(
+                pip_install + ["--upgrade", "pip"],
+                check=True, capture_output=True, text=True, timeout=timeout
+            )
+            
+            # 3. Install found manifests
+            if (qodeyard_path / "requirements.txt").is_file():
+                subprocess.run(
+                    pip_install + ["-r", "requirements.txt"],
+                    cwd=str(qodeyard_path),
+                    check=True, capture_output=True, text=True, timeout=timeout
+                )
+            
+            if (qodeyard_path / "pyproject.toml").is_file():
+                subprocess.run(
+                    pip_install + ["."],
+                    cwd=str(qodeyard_path),
+                    check=True, capture_output=True, text=True, timeout=timeout
+                )
+            elif (qodeyard_path / "setup.py").is_file() or (qodeyard_path / "setup.cfg").is_file():
+                subprocess.run(
+                    pip_install + ["."],
+                    cwd=str(qodeyard_path),
+                    check=True, capture_output=True, text=True, timeout=timeout
+                )
+
+            complete_marker.write_text("ok\n", encoding="utf-8")
+            return str(venv_python), None
         
+    except subprocess.TimeoutExpired:
+        return None, f"Python bootstrap timed out after {timeout}s"
     except subprocess.CalledProcessError as e:
-        # Cleanup failed venv attempt
         if venv_dir.exists():
             shutil.rmtree(venv_dir, ignore_errors=True)
-        
         err_msg = f"Python bootstrap failed during dependency installation.\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}"
         return None, err_msg
     except Exception as e:

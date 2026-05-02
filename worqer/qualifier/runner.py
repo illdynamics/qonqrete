@@ -240,6 +240,7 @@ def run_verification(
     cycle_num: str,
     config: dict,
     changed_files: Optional[Iterable[Union[str, Path]]] = None,
+    tier: str = "low",
 ) -> VerificationReport:
     """Run all verification checks on the qodeyard.
 
@@ -263,6 +264,7 @@ def run_verification(
                      runner operates in SCOPED mode: only those files
                      are qualified, and only adapters that actually
                      match at least one scoped file are loaded.
+      tier:          Task tier (low, medium, high) for severity gating.
     """
     qodeyard_path = Path(qodeyard_path)
     if qontext_path is not None:
@@ -277,6 +279,7 @@ def run_verification(
         qontext_path=qontext_path,
         config=config or {},
         python_checks=dict(checks_config),
+        tier=str(tier).lower(),
     )
 
     # ── Phase 1: decide scoped vs full, then scan ───────────────────────

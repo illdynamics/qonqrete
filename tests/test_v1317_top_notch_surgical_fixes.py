@@ -344,6 +344,25 @@ class ConstruqtorFixTests(unittest.TestCase):
             "exact_literal_8000",
         )
 
+    def test_run_sh_policy_resolves_exact_variable_from_task_contract(self):
+        task_dir = self.root / "task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task-spec.v1.json").write_text(
+            json.dumps(
+                {
+                    "clarified_task_body": (
+                        "Add run.sh and launch exactly this uvicorn command:\n"
+                        "python -m uvicorn main:app --reload --port $PORT\n"
+                    )
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            construqtor.resolve_run_sh_port_policy(self.root),
+            "exact_variable_port",
+        )
+
     def test_run_sh_exact_literal_policy_accepts_exact_command(self):
         errors = construqtor.validate_run_sh_constraints(
             "#!/bin/bash\npython -m uvicorn main:app --reload --port 8000\n",

@@ -298,7 +298,11 @@ def decide_post_inspection(state: ExecutionState, limits: ExecutionLimits, inspe
         verdict.get("task_completed")
         or verdict_status == "SUCCESS"
     )
-    if "repair_required" in verdict:
+    
+    # NEW v1.4: Enforce verdict consistency. SUCCESS cannot pair with repair_required=True.
+    if task_completed and verdict_status == "SUCCESS":
+        repair_required = False
+    elif "repair_required" in verdict:
         repair_required = bool(verdict.get("repair_required"))
     else:
         repair_required = verdict_status in {"PARTIAL", "FAILURE"} and not task_completed

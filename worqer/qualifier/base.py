@@ -43,6 +43,8 @@ class QualifyContext:
     # A scratch dict the runner can stash cross-adapter lookups in
     # (e.g. "a tsconfig.json exists at path X"). Not persisted.
     scratch: dict = field(default_factory=dict)
+    # v1.4.0: Task tier (low, medium, high) for severity gating.
+    tier: str = "low"
 
 
 class Adapter(ABC):

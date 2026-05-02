@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Iterable, Optional, Union
 
 from .base import Adapter, SmoketestContext, rel_name, truncate_output
-from .models import STATUS_ERROR, SmoketestReport, SmoketestResult
+from .dependency_gate import run_dependency_gate
+from .models import STATUS_ERROR, SmoketestReport, SmoketestResult, EXECUTION_KIND_STATIC
 from .registry import adapter_for_file, load_adapter
 
 
@@ -32,29 +33,33 @@ _SKIP_DIR_NAMES = {
     ".parcel-cache",
     "coverage",
     "__MACOSX",
+    "attempts",
+    "validation-root",
+    "recovery",
+    "staging",
+    "reqap.d",
+    ".qonqrete",
+    "qonstructions",
+    "struqture",
+    "exeq.d",
+    "qontext.d",
+    "bloq.d",
+    "tasq.d",
+    "briq.d",
+    "qontract.d",
+    "qache.d",
+    "planning",
+    "sqrapyard",
 }
 
-_DEFAULT_SMOKE_CONFIG = {
-    "enabled": False,
-    "mode": "scoped",
-    "timeout_seconds": 45,
-    "max_output_chars": 800,
-}
 
-_DEFAULT_ADAPTER_CONFIG = {
-    "enabled": True,
-    "command": None,
-    "commands": None,
-    "append_changed_files": False,
-    "allow_script_execution": False,
-    "require_dependencies": True,
-    "auto_tsc_no_emit": True,
-    "auto_unittest_discover": True,
-    "auto_cli_help": False,
-}
+def _path_has_skip_segment(rel: Path) -> bool:
+    """True if any path component is in the skip-dir exclusion set."""
+    return any(part in _SKIP_DIR_NAMES for part in rel.parts)
 
 
 def _iter_source_files(root: Path) -> Iterable[Path]:
+    """Yield source files under root, skipping known noise dirs."""
     if not root.exists():
         return
     stack = [root]
@@ -75,14 +80,11 @@ def _iter_source_files(root: Path) -> Iterable[Path]:
                 yield entry
 
 
-def _path_has_skip_segment(rel: Path) -> bool:
-    return any(part in _SKIP_DIR_NAMES for part in rel.parts)
-
-
 def normalize_scoped_files(
     qodeyard_path: Path,
     changed_files: Optional[Iterable[Union[str, Path]]],
 ) -> list[Path]:
+    """Normalize a caller-supplied scope manifest into usable file Paths."""
     if not changed_files:
         return []
 
@@ -146,40 +148,30 @@ def _normalize_smoke_config(config: dict | None) -> dict:
         (full.get("agents") or {})
         .get("inspeqtor", {})
         .get("smoketest", {})
-    ) or {}
-
-    root["enabled"] = bool(smoke.get("enabled", root["enabled"]))
-    mode = str(smoke.get("mode", root["mode"]) or root["mode"]).strip().lower()
-    root["mode"] = mode if mode in {"scoped", "full"} else "scoped"
-
-    try:
-        root["timeout_seconds"] = max(1, int(smoke.get("timeout_seconds", root["timeout_seconds"])))
-    except Exception:
-        root["timeout_seconds"] = _DEFAULT_SMOKE_CONFIG["timeout_seconds"]
-
-    try:
-        root["max_output_chars"] = max(64, int(smoke.get("max_output_chars", root["max_output_chars"])))
-    except Exception:
-        root["max_output_chars"] = _DEFAULT_SMOKE_CONFIG["max_output_chars"]
-
-    adapters_cfg = smoke.get("adapters") if isinstance(smoke.get("adapters"), dict) else {}
-    root["adapters"] = {}
-    adapter_names = set(["python", "shell", "js_ts", "html_css"])
-    adapter_names.update(adapters_cfg.keys())
-    for adapter_name in sorted(adapter_names):
-        merged = dict(_DEFAULT_ADAPTER_CONFIG)
-        adapter_payload = adapters_cfg.get(adapter_name)
-        if isinstance(adapter_payload, dict):
-            merged.update(adapter_payload)
-        merged["enabled"] = bool(merged.get("enabled", True))
-        root["adapters"][adapter_name] = merged
-
+    )
+    if isinstance(smoke, dict):
+        for k, v in smoke.items():
+            if k in root:
+                root[k] = v
     return root
 
 
+_DEFAULT_SMOKE_CONFIG = {
+    "enabled": True,
+    "mode": "scoped",
+    "timeout_seconds": 60,
+    "max_output_chars": 8000,
+    "adapters": {},
+}
+
+_DEFAULT_ADAPTER_CONFIG = {
+    "enabled": True,
+}
+
+
 def _append_report_result(report: SmoketestReport, result: SmoketestResult, max_chars: int) -> None:
-    result.stdout = truncate_output(result.stdout or "", max_chars)
-    result.stderr = truncate_output(result.stderr or "", max_chars)
+    result.stdout = truncate_output(result.stdout, max_chars)
+    result.stderr = truncate_output(result.stderr, max_chars)
     report.add_result(result)
 
 
@@ -223,18 +215,43 @@ def run_smoketest(
     else:
         active_files = sorted(_iter_source_files(qodeyard_path))
         if smoke_config["mode"] == "scoped":
-            # No explicit scope input was provided; run full inventory deterministically.
             report.mode = "full"
 
     buckets = _group_files_by_adapter(active_files)
     report.total_files = len(active_files)
+
+    if bool((smoke_config.get("dependency_gate") or {}).get("enabled", True)):
+        dep_ctx = SmoketestContext(
+            qodeyard_path=qodeyard_path,
+            cycle_num=str(cycle_num),
+            config=config or {},
+            smoke_config=smoke_config,
+            adapter_config={},
+            mode=report.mode,
+            timeout_seconds=smoke_config["timeout_seconds"],
+            max_output_chars=smoke_config["max_output_chars"],
+        )
+        try:
+            dep_results = run_dependency_gate(dep_ctx, active_files) or []
+        except Exception as exc:
+            dep_results = [SmoketestResult(
+                adapter="dependency_gate",
+                name="dependency_gate:crash",
+                status=STATUS_ERROR,
+                executed=False,
+                execution_kind=EXECUTION_KIND_STATIC,
+                message=f"Dependency gate crashed: {exc}",
+            )]
+        for item in dep_results:
+            _append_report_result(report, item, smoke_config["max_output_chars"])
+
     if not buckets:
         report.add_result(SmoketestResult(
             adapter="smoketest",
             name="no_supported_files",
             status="SKIP",
             executed=False,
-            execution_kind="static",
+            execution_kind=EXECUTION_KIND_STATIC,
             message="No supported files found for smoketest adapters.",
         ))
         return report
@@ -250,7 +267,7 @@ def run_smoketest(
                 name="adapter_disabled",
                 status="SKIP",
                 executed=False,
-                execution_kind="static",
+                execution_kind=EXECUTION_KIND_STATIC,
                 message="Adapter disabled by config.",
                 related_files=sorted(set(related)),
             ))
@@ -264,7 +281,7 @@ def run_smoketest(
                 name="loader",
                 status=STATUS_ERROR,
                 executed=False,
-                execution_kind="static",
+                execution_kind=EXECUTION_KIND_STATIC,
                 message=f"Adapter failed to load: {exc}",
                 related_files=sorted(set(related)),
             ))
@@ -290,7 +307,7 @@ def run_smoketest(
                 name="preflight",
                 status=STATUS_ERROR,
                 executed=False,
-                execution_kind="static",
+                execution_kind=EXECUTION_KIND_STATIC,
                 message=f"Preflight crashed: {exc}",
                 related_files=sorted(set(related)),
             )]
@@ -311,7 +328,7 @@ def run_smoketest(
                     name="runner",
                     status=STATUS_ERROR,
                     executed=False,
-                    execution_kind="static",
+                    execution_kind=EXECUTION_KIND_STATIC,
                     message=f"Adapter crashed: {exc}",
                     related_files=sorted(set(related)),
                 )]
@@ -327,7 +344,7 @@ def run_smoketest(
                 name="project_smoketest",
                 status=STATUS_ERROR,
                 executed=False,
-                execution_kind="static",
+                execution_kind=EXECUTION_KIND_STATIC,
                 message=f"Project smoketest crashed: {exc}",
                 related_files=sorted(set(related)),
             )]
@@ -343,7 +360,7 @@ def run_smoketest(
                     name="file_smoketest",
                     status=STATUS_ERROR,
                     executed=False,
-                    execution_kind="static",
+                    execution_kind=EXECUTION_KIND_STATIC,
                     message=f"File smoketest crashed for {rel_name(file_path, qodeyard_path)}: {exc}",
                     file=rel_name(file_path, qodeyard_path),
                     files=[rel_name(file_path, qodeyard_path)],

@@ -4,20 +4,20 @@ retry:
   enabled: true
 
   # Maximum attempts per briq (4 = initial attempt + bounded retries)
-  max_attempts: 4
+  max_attempts: 2
 
   # Stop entire cycle if a briq fails after all retries
   stop_on_briq_fail: false
 
   # Delay between retries in seconds
-  retry_delay: 2
+  retry_delay: 1
 
 repair:
   # Maximum same-run repair attempts allowed for a single build pass.
   # Legacy alias: max_attempts
   # Same-run repairs consume max_total_iterations budget but do not increment max_build_passes.
-  max_attempts_per_build_pass: 2
-  max_attempts: 2
+  max_attempts_per_build_pass: 1
+  max_attempts: 1
   # When true, InstruQtor emits a bounded recommended retry/repair budget from
   # task complexity. Explicit non-default overrides still win.
   auto_repair_amount: true
@@ -34,9 +34,9 @@ ai_budgeting:
   enable_no_loss_chunking: true
   summarize_optional_sections: true
   include_previous_log: true
-  previous_log_max_chars: 6000
-  max_preload_chunks_per_request: 24
-  chunk_target_input_tokens: 12000
+  previous_log_max_chars: 12000
+  max_preload_chunks_per_request: 48
+  chunk_target_input_tokens: 24000
   audit_dir: audit/ai_payloads
 
   # General token configuration
@@ -54,19 +54,19 @@ ai_budgeting:
 
     deepseek:
       defaults:
-        safe_input_tokens: 32000
-        safe_output_tokens: 8000
-        total_context_window: 48000
-        chars_per_token: 4.0
+        safe_input_tokens: 616000
+        safe_output_tokens: 384000
+        total_context_window: 1000000
+        chars_per_token: 3.33
         supports_multi_message_history: true
         supports_chunk_preload: true
         supports_system_messages: true
 
     openai:
       defaults:
-        safe_input_tokens: 80000
-        safe_output_tokens: 8192
-        total_context_window: 100000
+        safe_input_tokens: 922000
+        safe_output_tokens: 128000
+        total_context_window: 1050000
         chars_per_token: 4.0
         supports_multi_message_history: true
         supports_chunk_preload: true
@@ -74,9 +74,9 @@ ai_budgeting:
 
     gemini:
       defaults:
-        safe_input_tokens: 80000
-        safe_output_tokens: 8192
-        total_context_window: 100000
+        safe_input_tokens: 983040
+        safe_output_tokens: 65536
+        total_context_window: 1048576
         chars_per_token: 4.0
         supports_multi_message_history: true
         supports_chunk_preload: true
@@ -84,10 +84,10 @@ ai_budgeting:
 
     anthropic:
       defaults:
-        safe_input_tokens: 80000
-        safe_output_tokens: 8192
-        total_context_window: 100000
-        chars_per_token: 3.5
+        safe_input_tokens: 872000
+        safe_output_tokens: 128000
+        total_context_window: 1000000
+        chars_per_token: 4.0
         supports_multi_message_history: true
         supports_chunk_preload: true
         supports_system_messages: true
@@ -122,7 +122,7 @@ ai_budgeting:
         safe_input_tokens: 80000
         safe_output_tokens: 8192
         total_context_window: 100000
-        chars_per_token: 4.0
+        chars_per_token: 3.33
         supports_multi_message_history: true
         supports_chunk_preload: true
         supports_system_messages: true
@@ -146,8 +146,8 @@ verification:
 agents:
 
   qrystallizer:
-    provider: venice
-    model: deepseek-v3.2
+    provider: deepseek
+    model: deepseek-chat
     timeout: 600
     enabled: true
     min_complexity_score: 200  # Below this score, don't enhance
@@ -173,8 +173,8 @@ agents:
     #   model: "real-model-id" (for venice)
 
   instruqtor:
-    provider: venice
-    model: deepseek-v3.2
+    provider: deepseek
+    model: deepseek-chat
     timeout: 600
 
     # v1.3.12: Per-agent capability overrides (apply to ANY provider).
@@ -185,8 +185,8 @@ agents:
     #   model: "real-model-id" (for venice)
 
   calqulator:
-    provider: gemini
-    model: gemini-2.5-flash-lite
+    provider: local
+    model: calqulator
 
     # v1.3.12: Per-agent capability overrides (apply to ANY provider).
     #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
@@ -196,8 +196,8 @@ agents:
     #   model: "real-model-id" (for venice)
 
   construqtor:
-    provider: venice
-    model: deepseek-v3.2
+    provider: deepseek
+    model: deepseek-chat
     timeout: 600
     # coding_mode: heredoc | direct | hybrid
     coding_mode: hybrid
@@ -238,8 +238,8 @@ agents:
     #   # VENICE_API_KEY is REQUIRED and does NOT fall back to OPENAI_API_KEY.
 
   inspeqtor:
-    provider: venice
-    model: deepseek-v3.2
+    provider: deepseek
+    model: deepseek-chat
     timeout: 600
 
     # v1.3.12: Per-agent capability overrides (apply to ANY provider).
@@ -352,19 +352,19 @@ agents:
 # General agent and run configuration
 options:
   # Enable/disable token optimization agents in general
-  use_qompressor: false
-  use_qontextor: false
-  use_qontrabender: false
+  use_qompressor: true
+  use_qontextor: true
+  use_qontrabender: true
 
   # User approval gate per global iteration/pass boundary
   cheqpoint: false
 
   # Hard outer safety cap. Counts every actual pass: build + repair.
-  max_total_iterations: 4
+  max_total_iterations: 2
   # Compatibility alias for older configs / CLI wording.
   auto_cycle_limit: 4
   # Hard cap for non-repair build passes only.
-  max_build_passes: 4
+  max_build_passes: 2
   # How InstruQtor estimated build passes are used. advisory = recorded only, scheduler = can continue with later build passes when allowed.
   cycle_estimate_mode: scheduler
 

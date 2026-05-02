@@ -212,6 +212,31 @@ def normalize_smoketest_status(value: str | None) -> str:
     return "PARTIAL"
 
 
+def normalize_failure_kind(value: str | None, *, environment_blocked: bool = False) -> str:
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "blocking_code_failures": "code_behavior_mismatch",
+        "dependency_declaration_failures": "dependency_not_declared",
+        "environment_dependency_missing": "package_registry_unavailable",
+        "tooling_missing": "unavailable_external_tool",
+        "validator_degraded": "validator_degraded",
+        "shellscript_contract_mismatch": "shellscript_contract_mismatch",
+        "shellscript_syntax_error": "shellscript_syntax_error",
+        "shellscript_runtime_error": "shellscript_runtime_error",
+        "dependency_not_declared": "dependency_not_declared",
+        "dependency_resolution_failed": "dependency_resolution_failed",
+        "package_registry_unavailable": "package_registry_unavailable",
+        "unavailable_external_tool": "unavailable_external_tool",
+        "skipped_unsafe_command": "skipped_unsafe_command",
+        "code_behavior_mismatch": "code_behavior_mismatch",
+    }
+    if raw in mapping:
+        return mapping[raw]
+    if environment_blocked:
+        return "environment_blocked"
+    return raw or "code_behavior_mismatch"
+
+
 def is_success_assessment(value: str | None) -> bool:
     return str(value or "").strip().strip("[]").upper() == "SUCCESS"
 
@@ -358,16 +383,17 @@ def summarize_smoketest_counts(smoke_payload: dict | None) -> dict:
             derived_executed += 1
 
     # Aggregate executed-ish kinds for high-level flags
+    # v1.4.0: use explicit None checks to avoid explicit 0 being falsy
     total_executed = (
-        (executed_count or derived_executed) + 
-        (boot_count or derived_boot) + 
-        (http_count or derived_http) + 
-        (ws_count or derived_ws) + 
-        (browser_count or derived_browser)
+        (executed_count if executed_count is not None else derived_executed) + 
+        (boot_count if boot_count is not None else derived_boot) + 
+        (http_count if http_count is not None else derived_http) + 
+        (ws_count if ws_count is not None else derived_ws) + 
+        (browser_count if browser_count is not None else derived_browser)
     )
     total_static = (
-        (static_count or derived_static) + 
-        (syntax_count or derived_syntax)
+        (static_count if static_count is not None else derived_static) + 
+        (syntax_count if syntax_count is not None else derived_syntax)
     )
 
     return {
@@ -376,13 +402,13 @@ def summarize_smoketest_counts(smoke_payload: dict | None) -> dict:
         "has_executed_evidence": total_executed > 0,
         "has_static_evidence": total_static > 0,
         "granular": {
-            "static": static_count or derived_static,
-            "syntax": syntax_count or derived_syntax,
-            "boot": boot_count or derived_boot,
-            "http": http_count or derived_http,
-            "ws": ws_count or derived_ws,
-            "browser": browser_count or derived_browser,
-            "executed": executed_count or derived_executed,
+            "static": static_count if static_count is not None else derived_static,
+            "syntax": syntax_count if syntax_count is not None else derived_syntax,
+            "boot": boot_count if boot_count is not None else derived_boot,
+            "http": http_count if http_count is not None else derived_http,
+            "ws": ws_count if ws_count is not None else derived_ws,
+            "browser": browser_count if browser_count is not None else derived_browser,
+            "executed": executed_count if executed_count is not None else derived_executed,
         },
         "commands_executed": _int_or_zero(payload.get("commands_executed")),
         "commands_skipped": _int_or_zero(payload.get("commands_skipped")),
@@ -875,16 +901,24 @@ def classify_repair_failure_for_plan(inspection_verdict: dict, validation_bundle
     issues = inspection_verdict.get("issues", []) if isinstance(inspection_verdict, dict) else []
     summaries = " ".join(str(item.get("summary", "")) for item in issues).lower()
     validation_issues = validation_bundle.get("issues", []) if isinstance(validation_bundle, dict) else []
-    failure_kinds = {str(item.get("failure_kind", "")).strip() for item in validation_issues}
+    failure_kinds = {
+        normalize_failure_kind(
+            str(item.get("failure_kind", "")).strip(),
+            environment_blocked=bool(item.get("environment_blocked", False)),
+        )
+        for item in validation_issues
+    }
 
     if "required deliverable files exist in qodeyard" in summaries and "missing" in summaries:
         return "required_output_missing", "required deliverables are missing from qodeyard"
     if "collateral churn" in summaries or "suspiciously tiny" in summaries or "overrewrite" in summaries:
         return "collateral_churn_overrewrite", "suspected collateral churn or excessive rewrite detected"
-    if any(kind in {"blocking_code_failures", "dependency_declaration_failures"} for kind in failure_kinds):
+    if any(kind in {"code_behavior_mismatch", "dependency_not_declared", "dependency_resolution_failed", "shellscript_contract_mismatch", "shellscript_syntax_error", "shellscript_runtime_error"} for kind in failure_kinds):
         return "exact_validator_violation", "deterministic validation violations were reported"
-    if any(kind in {"environment_dependency_missing", "tooling_missing"} for kind in failure_kinds):
+    if any(kind in {"package_registry_unavailable", "unavailable_external_tool", "validator_degraded"} for kind in failure_kinds):
         return "runtime_syntax_launch_failure", "runtime/tooling checks were blocked or failed"
+    if "skipped_unsafe_command" in failure_kinds:
+        return "runtime_syntax_launch_failure", "unsafe command policy blocked execution"
     if "qonfirmer" in summaries or "deterministic issue" in summaries:
         return "exact_validator_violation", "inspection reported deterministic contract violations"
     if "scope" in summaries or "briq" in summaries:
@@ -971,8 +1005,34 @@ def mark_substep_failure(failures: list[dict], substep: str, error: Exception | 
 def detect_validation_execution_mode(qonfirmer_report, verification_results, smoketest_report=None) -> str:
     smoke_payload = smoketest_report_to_dict(smoketest_report) or {}
     smoke_counts = summarize_smoketest_counts(smoke_payload)
-    has_static = bool(qonfirmer_report or verification_results) or smoke_counts["static_count"] > 0
+    
+    # v1.4.0: Hardened non-vacuous static detection
+    # Qonfirmer: must have actually checked rules or be explicitly OK (from tests)
+    has_qonfirmer = False
+    if qonfirmer_report:
+        if isinstance(qonfirmer_report, dict):
+            has_qonfirmer = bool(qonfirmer_report.get("ok") or qonfirmer_report.get("rules_checked", 0) > 0)
+        else:
+            has_qonfirmer = bool(getattr(qonfirmer_report, "passed", False) or getattr(qonfirmer_report, "rules_checked", 0) > 0)
+    
+    # Verification results: exclude purely informational/diagnostic rows (e.g. "tool not found")
+    real_static_check_count = 0
+    if isinstance(verification_results, list):
+        for res in verification_results:
+            if not isinstance(res, dict):
+                continue
+            # Skip informational noise and explicitly skipped checks
+            if res.get("severity") == "info" or res.get("status") == "SKIP" or res.get("passed") is None:
+                continue
+            real_static_check_count += 1
+    elif isinstance(verification_results, dict):
+        # Some tests pass a single dict
+        if verification_results.get("passed") or verification_results.get("errors", 0) > 0:
+            real_static_check_count = 1
+
+    has_static = has_qonfirmer or real_static_check_count > 0 or smoke_counts["static_count"] > 0
     has_executed = smoke_counts["executed_count"] > 0
+    
     if has_static and has_executed:
         return "MIXED"
     if has_executed:
@@ -984,12 +1044,20 @@ def detect_validation_execution_mode(qonfirmer_report, verification_results, smo
 
 def detect_repo_languages(qodeyard_path: Path) -> dict:
     python_files = []
+    js_ts_files = []
+    shell_files = []
+    other_code_files = []
     non_python_files = []
     
     known_extensionless = {
         'dockerfile', 'makefile', 'gnumakefile', 'jenkinsfile', 
         'gemfile', 'rakefile', 'procfile', 'vagrantfile', 
         'justfile', 'capfile', 'podfile', 'cmakelists.txt',
+    }
+    code_extensions = {
+        '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+        '.sh', '.bash', '.zsh',
+        '.rb', '.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.cs', '.php', '.py', '.pyi'
     }
 
     for file_path in qodeyard_path.rglob("*"):
@@ -999,18 +1067,36 @@ def detect_repo_languages(qodeyard_path: Path) -> dict:
         # Skip common non-source directories if they happen to be in qodeyard
         if '.git' in file_path.parts or '__pycache__' in file_path.parts:
             continue
+        if '.venv' in file_path.parts or 'node_modules' in file_path.parts:
+            continue
 
-        if file_path.suffix == ".py":
-            python_files.append(str(file_path.relative_to(qodeyard_path)))
-        elif file_path.suffix:
-            non_python_files.append(str(file_path.relative_to(qodeyard_path)))
+        rel_path = str(file_path.relative_to(qodeyard_path))
+        suffix = file_path.suffix.lower()
+
+        if suffix in {".py", ".pyi"}:
+            python_files.append(rel_path)
+        elif suffix in {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}:
+            js_ts_files.append(rel_path)
+            non_python_files.append(rel_path)
+        elif suffix in {".sh", ".bash", ".zsh"}:
+            shell_files.append(rel_path)
+            non_python_files.append(rel_path)
+        elif suffix in code_extensions:
+            other_code_files.append(rel_path)
+            non_python_files.append(rel_path)
+        elif suffix:
+            non_python_files.append(rel_path)
         else:
             name_lower = file_path.name.lower()
             if name_lower in known_extensionless or os.access(file_path, os.X_OK):
-                non_python_files.append(str(file_path.relative_to(qodeyard_path)))
+                other_code_files.append(rel_path)
+                non_python_files.append(rel_path)
 
     return {
         "python_files": sorted(python_files),
+        "js_ts_files": sorted(js_ts_files),
+        "shell_files": sorted(shell_files),
+        "other_code_files": sorted(other_code_files),
         "non_python_files": sorted(non_python_files),
     }
 
@@ -1983,6 +2069,36 @@ def build_inspection_verdict(
         "basis": inspection_input.get("required_inputs", {}),
     })
 
+    # v1.4.0: Hardened tier-aware evidence gate
+    tier = str(completion_criteria.get("tier", "low")).lower()
+    val_mode = validation_bundle.get("validation_execution_mode", "NONE")
+    smoke_counts = validation_bundle.get("smoketest_counts", {})
+    has_real_executed = smoke_counts.get("executed_count", 0) > 0
+
+    if tier in {"medium", "high"}:
+        # Medium/High tasks MUST have real execution evidence if the project contains code.
+        repo_langs = detect_repo_languages(worqspace_root / "qodeyard")
+        code_bearing_files = (
+            repo_langs.get("python_files", []) or 
+            repo_langs.get("js_ts_files", []) or 
+            repo_langs.get("shell_files", []) or 
+            repo_langs.get("other_code_files", [])
+        )
+        
+        if code_bearing_files:
+            evidence_ok = has_real_executed and val_mode in {"EXECUTED", "MIXED"}
+            criteria_results.append({
+                "criterion": f"Tier-appropriate execution evidence present (tier={tier}).",
+                "status": "PASS" if evidence_ok else "FAIL",
+                "basis": {
+                    "tier": tier,
+                    "validation_execution_mode": val_mode,
+                    "executed_count": smoke_counts.get("executed_count", 0),
+                    "has_real_executed_evidence": has_real_executed,
+                    "code_bearing_files_detected": len(code_bearing_files),
+                }
+            })
+
     required_files = [
         str(item).strip().replace("\\", "/")
         for item in completion_criteria.get("required_files", [])
@@ -2038,48 +2154,149 @@ def build_inspection_verdict(
         issue for issue in valid_issues
         if issue.get("severity") == "error"
     ]
-    
-    # v1.3.9: Distinguish code defects from validator-environment defects
-    blocking_code_failures = [
+
+    for issue in deterministic_failures:
+        issue["normalized_failure_kind"] = normalize_failure_kind(
+            issue.get("failure_kind"),
+            environment_blocked=bool(issue.get("environment_blocked", False)),
+        )
+
+    shellscript_contract_failures = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") in {"blocking_code_failures", None} 
-        and not issue.get("environment_blocked", False)
+        if issue.get("normalized_failure_kind") == "shellscript_contract_mismatch"
+    ]
+    shellscript_syntax_failures = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "shellscript_syntax_error"
+    ]
+    shellscript_runtime_failures = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "shellscript_runtime_error"
     ]
     dependency_declaration_failures = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") == "dependency_declaration_failures"
+        if issue.get("normalized_failure_kind") == "dependency_not_declared"
     ]
-    environment_blockers = [
+    dependency_resolution_failures = [
         issue for issue in deterministic_failures
-        if issue.get("environment_blocked", True) or issue.get("failure_kind") == "environment_dependency_missing"
+        if issue.get("normalized_failure_kind") == "dependency_resolution_failed"
+    ]
+    unsafe_command_skips = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "skipped_unsafe_command"
     ]
     tooling_missing = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") == "tooling_missing"
+        if issue.get("normalized_failure_kind") == "unavailable_external_tool"
+    ]
+    registry_blockers = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "package_registry_unavailable"
     ]
     validator_degraded = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") == "validator_degraded"
+        if issue.get("normalized_failure_kind") == "validator_degraded"
     ]
-    
+    blocking_code_failures = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") in {"code_behavior_mismatch", "environment_blocked"}
+        and not issue.get("environment_blocked", False)
+    ]
+    environment_blockers = [
+        issue for issue in deterministic_failures
+        if issue.get("environment_blocked", False)
+        or issue.get("normalized_failure_kind") in {"package_registry_unavailable", "unavailable_external_tool"}
+    ]
+
     validation_status = normalize_tri_state_status(validation_bundle.get("status"), default="FAIL")
     explicit_evidence_status = str(realization_bundle.get("evidence_status") or "").strip().upper()
     criteria_failures = any(item["status"] == "FAIL" for item in criteria_results)
+    verdict_classification = "PASS"
 
-    if blocking_code_failures or validation_status == "FAIL":
+    if unsafe_command_skips:
         verdict = "FAILURE"
+        verdict_classification = "SKIPPED_UNSAFE_COMMAND"
+    elif shellscript_syntax_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: shellscript syntax error"
+    elif shellscript_contract_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: shellscript contract mismatch"
+    elif shellscript_runtime_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: shellscript runtime error"
     elif dependency_declaration_failures:
-        verdict = "FAILURE" # Dependency declaration is still a project defect
-    elif environment_blockers or tooling_missing or validator_degraded:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: dependency not declared"
+    elif dependency_resolution_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: dependency resolution failed"
+    elif registry_blockers:
         verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: package registry unavailable"
+    elif tooling_missing:
+        verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: unavailable external tool"
+    elif validator_degraded:
+        verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: validator degraded"
+    elif blocking_code_failures or validation_status == "FAIL":
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: code behavior mismatch"
+    elif environment_blockers:
+        verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: runtime environment failure"
     elif criteria_failures:
         verdict = "PARTIAL"
+        verdict_classification = "PARTIAL: completion criteria unresolved"
     elif explicit_evidence_status and explicit_evidence_status != "EVIDENCE_COMPLETE":
         verdict = "PARTIAL"
+        verdict_classification = f"PARTIAL: {explicit_evidence_status}"
     else:
-        # Deterministic validation + completion criteria are the authoritative
-        # gate for completion. AI tactical/meta review remains advisory.
         verdict = "SUCCESS"
+        verdict_classification = "PASS"
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # NEW v1.4: HARNESS OVERRIDE
+    # ═══════════════════════════════════════════════════════════════════════════
+    harness_result_file = worqspace_root / "qontract.d" / "harness-result.v1.json"
+    if harness_result_file.exists():
+        try:
+            import json as _json_mod
+            with open(harness_result_file, 'r', encoding='utf-8') as f:
+                hr = _json_mod.load(f)
+            if hr.get("passed") and hr.get("completion_override", {}).get("allowed"):
+                verdict = "SUCCESS"
+                verdict_classification = "PASS"
+                explicit_evidence_status = "EVIDENCE_COMPLETE"
+                deterministic_failures = []
+                blocking_code_failures = []
+                dependency_declaration_failures = []
+                dependency_resolution_failures = []
+                shellscript_contract_failures = []
+                shellscript_syntax_failures = []
+                shellscript_runtime_failures = []
+                unsafe_command_skips = []
+                environment_blockers = []
+                registry_blockers = []
+                tooling_missing = []
+                validator_degraded = []
+                criteria_failures = False
+                print("  📜 [HARNESS] Authoritative harness PASSED. Forcing completion override.", flush=True)
+            elif not hr.get("passed"):
+                verdict = "FAILURE"
+                verdict_classification = str(hr.get("verdict_classification") or "FAIL: code behavior mismatch")
+                print("  ❌ [HARNESS] Authoritative harness FAILED. Forcing failure verdict.", flush=True)
+                for vio in hr.get("violations", []):
+                    deterministic_failures.append({
+                        "message": vio.get("message", "Harness failed."),
+                        "severity": "error",
+                        "file": vio.get("file", ""),
+                        "failure_kind": "blocking_code_failures"
+                    })
+                blocking_code_failures = deterministic_failures
+        except Exception as e:
+            print(f"  ⚠️ [HARNESS] Error loading harness-result: {e}", flush=True)
 
     confidence = realization_bundle.get("confidence", "CONFIDENCE_LOW")
     unresolved_issues = []
@@ -2105,7 +2322,7 @@ def build_inspection_verdict(
             "source": issue.get("source"),
             "file": issue.get("file"),
             "line": issue.get("line"),
-            "failure_kind": issue.get("failure_kind"),
+            "failure_kind": issue.get("normalized_failure_kind") or issue.get("failure_kind"),
             "missing_module": issue.get("missing_module"),
             "environment_blocked": bool(issue.get("environment_blocked", False)),
         })
@@ -2137,11 +2354,26 @@ def build_inspection_verdict(
     if verdict == "SUCCESS":
         completion_assessment = "Observed build, validation, and realization evidence satisfy the current completion criteria."
         next_transition = "COMPLETED"
+    elif unsafe_command_skips:
+        completion_assessment = "Execution was intentionally blocked due to unsafe shellscript commands; manual intervention is required."
+        next_transition = "REPAIRING"
+    elif shellscript_syntax_failures:
+        completion_assessment = "Shellscript syntax failures block completion."
+        next_transition = "REPAIRING"
+    elif shellscript_contract_failures:
+        completion_assessment = "Shellscript contract mismatches block completion."
+        next_transition = "REPAIRING"
+    elif shellscript_runtime_failures:
+        completion_assessment = "Shellscript runtime failures block completion."
+        next_transition = "REPAIRING"
     elif blocking_code_failures:
         completion_assessment = "Deterministic code defects block completion and require bounded repair."
         next_transition = "REPAIRING"
     elif dependency_declaration_failures:
         completion_assessment = "Missing or incorrect dependency declarations block completion; project manifests require repair."
+        next_transition = "REPAIRING"
+    elif dependency_resolution_failures:
+        completion_assessment = "Dependency resolution failed with declared manifests; repair dependency constraints before retry."
         next_transition = "REPAIRING"
     elif environment_blockers or tooling_missing or validator_degraded:
         completion_assessment = "Validation is blocked by environment or missing tooling; validator state is DEGRADED/BLOCKED."
@@ -2167,6 +2399,7 @@ def build_inspection_verdict(
         "cycle": int(cycle_num),
         "stage": "INSPECTION",
         "status": verdict,
+        "verdict_classification": verdict_classification,
         "deterministic_gate": "FAIL" if deterministic_failures else "PASS",
         "completion_criteria_results": criteria_results,
         "completion_criteria_summary": completion_criteria.get("summary"),
@@ -3984,6 +4217,10 @@ def main() -> None:
     verification_enabled = full_config_with_smoketest.get('verification', {}).get('enabled', True)
     verification_results = None
 
+    # v1.4.0: Task tier awareness
+    completion_criteria = load_optional_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    tier = str(completion_criteria.get("tier", "low")).lower()
+
     if verification_enabled:
         try:
             import qualifier
@@ -3994,6 +4231,7 @@ def main() -> None:
                 cycle_num,
                 full_config_with_smoketest,
                 changed_files=scoped_changed_files or None,
+                tier=tier,
             )
 
             verification_output = reqap_dir / f"cyqle{cycle_num}" / f"cyqle{cycle_num}_verification.md"
@@ -4553,16 +4791,29 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
         # v1.3.9: Ground meta-review in deterministic root causes
         deterministic_root_causes = []
         for issue in deterministic_failures:
-            f_kind = issue.get("failure_kind")
-            if f_kind == "environment_dependency_missing":
-                deterministic_root_causes.append(f"ENVIRONMENT BLOCKER: Declared dependency '{issue.get('missing_module')}' is missing from validator.")
-            elif f_kind == "dependency_declaration_failures":
-                deterministic_root_causes.append(f"DEPENDENCY DECLARATION DEFECT: Dependency '{issue.get('missing_module')}' is imported but NOT declared in project manifests.")
-            elif f_kind == "tooling_missing":
-                deterministic_root_causes.append(f"ENVIRONMENT BLOCKER: Required tooling is missing from validator.")
+            f_kind = normalize_failure_kind(
+                issue.get("failure_kind"),
+                environment_blocked=bool(issue.get("environment_blocked", False)),
+            )
+            if f_kind == "package_registry_unavailable":
+                deterministic_root_causes.append("ENVIRONMENT BLOCKER: Package registry/network is unavailable in validator environment.")
+            elif f_kind == "dependency_not_declared":
+                deterministic_root_causes.append(f"DEPENDENCY DECLARATION DEFECT: Dependency '{issue.get('missing_module')}' is imported but NOT declared in manifests.")
+            elif f_kind == "dependency_resolution_failed":
+                deterministic_root_causes.append("DEPENDENCY RESOLUTION FAILURE: Declared dependency constraints could not be resolved.")
+            elif f_kind == "unavailable_external_tool":
+                deterministic_root_causes.append("ENVIRONMENT BLOCKER: Required external tool is unavailable in validator.")
             elif f_kind == "validator_degraded":
                 deterministic_root_causes.append(f"VALIDATOR DEGRADED: {issue.get('message')}")
-            elif f_kind == "blocking_code_failures" or not issue.get("environment_blocked", False):
+            elif f_kind == "shellscript_contract_mismatch":
+                deterministic_root_causes.append(f"SHELLSCRIPT CONTRACT FAILURE: {issue.get('message')}")
+            elif f_kind == "shellscript_syntax_error":
+                deterministic_root_causes.append(f"SHELLSCRIPT SYNTAX FAILURE: {issue.get('message')}")
+            elif f_kind == "shellscript_runtime_error":
+                deterministic_root_causes.append(f"SHELLSCRIPT RUNTIME FAILURE: {issue.get('message')}")
+            elif f_kind == "skipped_unsafe_command":
+                deterministic_root_causes.append(f"SAFETY BLOCK: {issue.get('message')}")
+            elif f_kind == "code_behavior_mismatch" or not issue.get("environment_blocked", False):
                 deterministic_root_causes.append(f"CODE DEFECT: {issue.get('message')}")
             else:
                 deterministic_root_causes.append(f"DETERMINISTIC FAILURE: {issue.get('message')}")

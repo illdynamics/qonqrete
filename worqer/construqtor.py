@@ -132,6 +132,15 @@ except ImportError:
     def normalize_file_hints(values):  # type: ignore
         return []
 
+try:
+    from shellscript_validation import pick_shell_mode, validate_run_sh_contract
+except ImportError:
+    try:
+        from worqer.shellscript_validation import pick_shell_mode, validate_run_sh_contract  # type: ignore
+    except ImportError:
+        pick_shell_mode = None
+        validate_run_sh_contract = None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION DEFAULTS
@@ -789,9 +798,25 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
                 result['passed'] = False
         elif file_path.suffix == '.sh' and file_path.exists():
             result['files_checked'] += 1
+            shell_content = ""
+            try:
+                shell_content = file_path.read_text(encoding='utf-8')
+            except Exception as exc:
+                result['syntax_errors'].append(f"{file_name}: could not read shell script ({exc})")
+                result['passed'] = False
+                continue
+
+            shell_mode = pick_shell_mode(file_path, shell_content) if pick_shell_mode else "sh"
+            shell_bin = shutil.which(shell_mode) or shutil.which("sh")
+            if not shell_bin:
+                result['syntax_errors'].append(
+                    f"{file_name}: shell interpreter unavailable for syntax check ({shell_mode})"
+                )
+                result['passed'] = False
+                continue
 
             shell_check = subprocess.run(
-                ['sh', '-n', str(file_path)],
+                [shell_bin, '-n', str(file_path)],
                 capture_output=True,
                 text=True,
             )
@@ -802,13 +827,6 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
                 result['passed'] = False
 
             if file_name == 'run.sh':
-                try:
-                    shell_content = file_path.read_text(encoding='utf-8')
-                except Exception as exc:
-                    result['constraint_errors'].append(f"{file_name}: could not read run.sh ({exc})")
-                    result['passed'] = False
-                    continue
-
                 policy = resolve_run_sh_port_policy(qodeyard_path.parent)
                 run_sh_errors = validate_run_sh_constraints(shell_content, policy)
                 if run_sh_errors:
@@ -900,6 +918,18 @@ def run_scoped_qualification(
     # survives the trip into the qualifier's Python adapter.
     config = load_config(worqspace_root / 'config.yaml')
 
+    # v1.4.0: Task tier awareness
+    tier = "low"
+    criteria_path = worqspace_root / 'planning' / 'completion-criteria.v1.json'
+    if criteria_path.exists():
+        try:
+            import json as _json
+            with open(criteria_path, 'r', encoding='utf-8') as f:
+                _criteria_doc = _json.load(f)
+                tier = str(_criteria_doc.get('tier', 'low')).lower()
+        except Exception:
+            pass
+
     try:
         report = qualifier.run_verification(
             qodeyard_path,
@@ -907,6 +937,7 @@ def run_scoped_qualification(
             str(cycle_label),
             config,
             changed_files=written_files or None,
+            tier=tier,
         )
     except Exception as exc:
         # Never let a qualifier crash kill the briq pipeline. Surface
@@ -916,6 +947,23 @@ def run_scoped_qualification(
             f"qualifier crashed during scoped run: {exc}"
         )
         return result
+
+    # v1.4.0: Interleaved integration validation
+    # Catch wiring/integration issues (missing DOM IDs, router registration, etc) early.
+    try:
+        from integration_checks import collect_scope_validation_issues
+        integration_issues = collect_scope_validation_issues(
+            worqspace_root,
+            scope_files=written_files or None
+        )
+        for issue in integration_issues:
+            # We treat integration errors as constraint errors to trigger immediate repair
+            if issue.get('severity') == 'error':
+                result['passed'] = False
+                result['constraint_errors'].append(issue.get('message') or issue.get('summary'))
+    except (ImportError, Exception) as exc:
+        # Integration checker is an upgrade, not a blocker.
+        pass
 
     result['files_checked'] = int(report.files_checked or 0)
 
@@ -1160,6 +1208,7 @@ def resolve_run_sh_port_policy(worqspace_root: Path) -> str:
 
     Returns:
       - "exact_literal_8000": task explicitly requires exact literal launch cmd.
+      - "exact_variable_port": task explicitly requires exact `$PORT` launch cmd.
       - "port_variable": task explicitly requires $PORT-style invocation.
       - "generic": no explicit strict port style found.
     """
@@ -1170,6 +1219,15 @@ def resolve_run_sh_port_policy(worqspace_root: Path) -> str:
     exact_literal_cmd = "python -m uvicorn main:app --reload --port 8000"
     if exact_literal_cmd in blob and "must launch exactly" in blob:
         return "exact_literal_8000"
+
+    exact_var_cmd = "python -m uvicorn main:app --reload --port $port"
+    exact_var_markers = (
+        "must launch exactly",
+        "launch exectly this uvicorn command",
+        "launch exactly this uvicorn command",
+    )
+    if exact_var_cmd in blob and any(marker in blob for marker in exact_var_markers):
+        return "exact_variable_port"
 
     if (
         "--port $port" in blob
@@ -1183,65 +1241,10 @@ def resolve_run_sh_port_policy(worqspace_root: Path) -> str:
 
 
 def validate_run_sh_constraints(shell_content: str, policy: str) -> list[str]:
-    errors: list[str] = []
-    content = shell_content or ""
-
-    has_python_uvicorn = bool(
-        re.search(r'python3?\s+-m\s+uvicorn\s+main:app\b', content, flags=re.IGNORECASE)
-    )
-    if not has_python_uvicorn:
-        errors.append("must launch `python -m uvicorn main:app`")
-
-    if policy == "exact_literal_8000":
-        exact_cmd = bool(
-            re.search(
-                r'python3?\s+-m\s+uvicorn\s+main:app\s+--reload\s+--port\s+8000\b',
-                content,
-                flags=re.IGNORECASE,
-            )
-        )
-        if not exact_cmd:
-            errors.append(
-                "must launch exactly `python -m uvicorn main:app --reload --port 8000`"
-            )
-        return errors
-
-    has_port_arg = bool(
-        re.search(
-            r'--port\s+(?:["\']?\$PORT["\']?|["\']?\$\{PORT\}["\']?|\d+\b)',
-            content,
-            flags=re.IGNORECASE,
-        )
-    )
-    if not has_port_arg:
-        errors.append("uvicorn command must include a valid --port argument")
-
-    hardcoded_numeric_port = bool(
-        re.search(r"--port\s+\d+\b", content, flags=re.IGNORECASE)
-    )
-
-    if policy == "port_variable":
-        uses_port_var = bool(
-            re.search(
-                r"--port\s+[\"']?\$PORT[\"']?|--port\s+[\"']?\$\{PORT\}[\"']?",
-                content,
-                flags=re.IGNORECASE,
-            )
-        )
-        if not uses_port_var:
-            errors.append(
-                "uvicorn command must pass the PORT variable instead of a literal value"
-            )
-        if hardcoded_numeric_port:
-            errors.append("hardcoded numeric port literal found in uvicorn command")
-        if re.search(r'PORT\s*[:=+-]*\s*[\'"]?\d+[\'"]?', content, flags=re.IGNORECASE):
-            errors.append(
-                "hardcoded numeric PORT assignment found; derive PORT without duplicating the literal from main.py"
-            )
-    elif hardcoded_numeric_port:
-        errors.append("hardcoded numeric port literal found in uvicorn command")
-
-    return errors
+    if validate_run_sh_contract is None:
+        # Fallback for stripped environments where helper import failed.
+        return ["shellscript validator unavailable; could not enforce run.sh launch contract"]
+    return validate_run_sh_contract(shell_content, policy)
 
 
 
@@ -5632,6 +5635,47 @@ def main():
             print(f"\n[STOP] stop_on_briq_fail=true, halting cycle after {briq_file.name}", flush=True)
             stopped_early = True
             break
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # NEW v1.4: HARNESS EXECUTION & HYGIENE
+    # ═══════════════════════════════════════════════════════════════════════════
+    import shutil
+    import contract_harness
+    harness = contract_harness.load_harness(worqspace_root)
+    if harness:
+        print("  📜 [HARNESS] Running acceptance harness...", flush=True)
+        harness_result = contract_harness.run_harness(qodeyard_path, harness, apply_fixes=False)
+        qontract_dir = worqspace_root / 'qontract.d'
+        with open(qontract_dir / 'harness-result.v1.json', 'w') as f:
+            import json as json_mod
+            json_mod.dump(harness_result, f, indent=2)
+        with open(qontract_dir / 'harness-result.md', 'w') as f:
+            f.write(contract_harness.render_result_markdown(harness_result))
+        if not harness_result.get("passed"):
+            print("  ❌ [HARNESS] Failed. Directives available for repair plan.", flush=True)
+            # If harness fails, force failure state to trigger repair unless we are halting
+            if failure_count == 0 and partial_count == 0:
+                failure_count += 1
+                all_results.append({
+                    'briq_file': 'harness_validation',
+                    'status': 'failure',
+                    'written_files': [],
+                    'attempts': 1,
+                    'error': 'Harness failed',
+                    'exeq_path': None
+                })
+        else:
+            print("  ✅ [HARNESS] Passed.", flush=True)
+
+        print("  🧹 [HYGIENE] Cleaning up runtime noise...", flush=True)
+        for p in [".pytest_cache", ".ruff_cache", "__pycache__"]:
+            target_dir = qodeyard_path / p
+            if target_dir.exists():
+                shutil.rmtree(target_dir, ignore_errors=True)
+        for f in [".DS_Store", ".qonqrete_fastapi_probe.py", ".test_behavior.py"]:
+            target_file = qodeyard_path / f
+            if target_file.exists():
+                target_file.unlink(missing_ok=True)
 
     # Determine overall status
     if failure_count > 0:

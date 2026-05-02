@@ -1785,6 +1785,7 @@ def write_planning_artifacts(
         'schema_version': 'completion-criteria.v1',
         'run_id': run_id,
         'cycle': int(cycle_num),
+        'tier': plan_payload.get('estimation_basis', {}).get('auto_repair_budget', {}).get('tier', 'low'),
         **plan_payload.get('completion_criteria', {}),
         'required_files': merged_required_files,
     }
@@ -2458,6 +2459,18 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 
 **BEGIN ATOMIC BREAKDOWN (Count your briqs to ensure compliance!):**
 """
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # NEW v1.4: HARNESS GENERATION (Before briqs)
+    # ═══════════════════════════════════════════════════════════════════════════
+    import contract_harness
+    harness_class = contract_harness.detect_harness_class(planning_task_content)
+    if harness_class:
+        print(f"  📜 [HARNESS] Detected authoritative harness: {harness_class}", flush=True)
+        harness = contract_harness.build_harness(planning_task_content)
+        contract_harness.write_harness(worqspace_root, harness)
+        # Add compact harness summary to planner_prompt
+        planner_prompt += f"\n\n**AUTHORITATIVE HARNESS:**\nYou MUST ensure these required files are built: {', '.join(harness.get('required_files', []))}\n"
 
     print("Splitting briqs", flush=True)
     # v1.0.3: Generate briqs using single-shot enforcement

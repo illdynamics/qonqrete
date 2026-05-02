@@ -1141,7 +1141,8 @@ def continuation_metadata_path(workspace_root: Path) -> Path:
 def load_inspection_artifacts(workspace_root: Path) -> tuple[dict, dict]:
     verdict = load_optional_json(inspection_verdict_path(workspace_root))
     if not verdict:
-        verdict = load_optional_json(workspace_root / "verdict" / "inspection-verdict-bridge.v1.json")
+        # NEW v1.4: Require canonical inspection verdict. No bridge fallback allowed.
+        pass
     return (
         verdict,
         load_optional_json(repair_plan_path(workspace_root)),

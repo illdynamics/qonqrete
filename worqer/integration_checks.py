@@ -326,6 +326,23 @@ def _resolve_js_storage_key(
             seen=seen_tokens | {token},
         )
 
+    # v1.4.0: Support simple template literals like `${PREFIX}-key`
+    template_match = re.match(r"^[`](.*?)[`]$", text)
+    if template_match:
+        content = template_match.group(1)
+        resolved_parts = []
+        last_pos = 0
+        for m in re.finditer(r"\$\{(.*?)\}", content):
+            resolved_parts.append(content[last_pos:m.start()])
+            var_expr = m.group(1).strip()
+            val = _resolve_js_storage_key(var_expr, const_exprs, object_exprs, depth=depth+1, seen=seen_tokens)
+            if val is None:
+                return None # Unresolvable segment
+            resolved_parts.append(val)
+            last_pos = m.end()
+        resolved_parts.append(content[last_pos:])
+        return "".join(resolved_parts)
+
     return None
 
 
@@ -352,112 +369,111 @@ def _collect_localstorage_keys(js: str) -> set[str]:
 def evaluate_frontend_group_contracts(worqspace_root: Path, scope_files: list[str] | None = None) -> list[dict]:
     qodeyard = worqspace_root / "qodeyard"
     scope_set = set(normalize_file_hints(scope_files)) if scope_files else set()
-    html_path = qodeyard / "index.html"
-    js_path = qodeyard / "app.js"
-    css_path = qodeyard / "styles.css"
-    html = _read_text(html_path)
-    js = _read_text(js_path)
-    task_text = _load_task_text(worqspace_root)
+    
+    # v1.4.0: Resolve requirements from planning artifacts
+    criteria = _load_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    required_files = normalize_file_hints(criteria.get("required_files", []))
+    
+    html_targets = [f for f in required_files if f.endswith((".html", ".htm"))]
+    if not html_targets and (qodeyard / "index.html").exists():
+        html_targets = ["index.html"]
 
-    if scope_set and not ({"index.html", "app.js", "styles.css"} & scope_set):
+    # Only run if relevant files are in scope
+    relevant_extensions = {".html", ".htm", ".js", ".css"}
+    if scope_set and not any(Path(s).suffix.lower() in relevant_extensions for s in scope_set):
         return []
 
     issues: list[dict] = []
-    if html:
-        local_scripts = re.findall(r"<script[^>]+src=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE)
-        local_styles = re.findall(r"<link[^>]+href=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE)
-        missing_script_refs = [ref for ref in local_scripts if not ref.startswith(("http://", "https://")) and not (qodeyard / normalize_file_hint(ref)).exists()]
-        missing_style_refs = [ref for ref in local_styles if not ref.startswith(("http://", "https://")) and not (qodeyard / normalize_file_hint(ref)).exists()]
-        if missing_script_refs:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": f"Missing local HTML references: {', '.join(sorted(set(missing_script_refs)))}",
-                "files": ["index.html"],
-            })
-        if missing_style_refs:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": f"Missing local stylesheet references: {', '.join(sorted(set(missing_style_refs)))}",
-                "files": ["index.html"],
-            })
-        if js_path.exists() and "app.js" not in local_scripts:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": "index.html does not reference required local script app.js",
-                "files": ["index.html", "app.js"],
-            })
-        if css_path.exists() and "styles.css" not in local_styles:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": "index.html does not reference required local stylesheet styles.css",
-                "files": ["index.html", "styles.css"],
-            })
+    task_text = _load_task_text(worqspace_root)
+    
+    all_js_files = [f for f in required_files if f.endswith(".js")]
+    all_css_files = [f for f in required_files if f.endswith(".css")]
 
-    if html and js:
+    for html_rel in html_targets:
+        html_path = qodeyard / html_rel
+        if not html_path.exists():
+            continue
+        
+        html = _read_text(html_path)
+        local_scripts = [normalize_file_hint(s) for s in re.findall(r"<script[^>]+src=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE)]
+        local_styles = [normalize_file_hint(s) for s in re.findall(r"<link[^>]+href=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE)]
+        
+        for ref in local_scripts + local_styles:
+            if not ref.startswith(("http://", "https://", "//")) and not (html_path.parent / ref).exists():
+                issues.append({
+                    "source": "frontend_contract",
+                    "severity": "error",
+                    "scope": "frontend_contract",
+                    "message": f"{html_rel} references missing local file: {ref}",
+                    "files": [html_rel],
+                })
+
+        # Heuristic: if JS/CSS files exist and are required, ensure the primary HTML references them.
+        # We only apply this to the 'main' HTML (usually index.html or the only one).
+        if html_rel == "index.html" or len(html_targets) == 1:
+            for js_rel in all_js_files:
+                if js_rel not in local_scripts and Path(js_rel).name not in local_scripts:
+                    issues.append({
+                        "source": "frontend_contract",
+                        "severity": "error",
+                        "scope": "frontend_contract",
+                        "message": f"{html_rel} does not reference required local script {js_rel}",
+                        "files": [html_rel, js_rel],
+                    })
+            for css_rel in all_css_files:
+                if css_rel not in local_styles and Path(css_rel).name not in local_styles:
+                    issues.append({
+                        "source": "frontend_contract",
+                        "severity": "error",
+                        "scope": "frontend_contract",
+                        "message": f"{html_rel} does not reference required local stylesheet {css_rel}",
+                        "files": [html_rel, css_rel],
+                    })
+
+        # Content/Behavior validation
         html_ids = _collect_html_ids(html)
-        js_ids = _collect_js_id_refs(js)
-        missing_ids = sorted(js_ids - html_ids)
-        if missing_ids:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": f"JavaScript references missing DOM ids: {', '.join(missing_ids)}",
-                "files": ["app.js", "index.html"],
-            })
-        if "addEventListener" not in js:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": "app.js does not register any addEventListener handlers for interactive UI behavior",
-                "files": ["app.js"],
-            })
+        for js_rel in local_scripts:
+            js_path = qodeyard / js_rel
+            if not js_path.exists(): continue
+            js = _read_text(js_path)
+            js_ids = _collect_js_id_refs(js)
+            missing_ids = sorted(js_ids - html_ids)
+            if missing_ids:
+                issues.append({
+                    "source": "frontend_contract",
+                    "severity": "error",
+                    "scope": "frontend_contract",
+                    "message": f"{js_rel} references missing DOM ids in {html_rel}: {', '.join(missing_ids)}",
+                    "files": [js_rel, html_rel],
+                })
+            if "addEventListener" not in js and "onclick" not in html.lower():
+                issues.append({
+                    "source": "frontend_contract",
+                    "severity": "warning",
+                    "scope": "frontend_contract",
+                    "message": f"{js_rel} appears to lack interactive event handlers",
+                    "files": [js_rel],
+                })
 
     storage_keys = _extract_exact_localstorage_keys(task_text)
-    if storage_keys and js:
-        used_keys = sorted(_collect_localstorage_keys(js))
+    if storage_keys:
+        used_keys = set()
+        for js_rel in all_js_files:
+            js_path = qodeyard / js_rel
+            if js_path.exists():
+                used_keys.update(_collect_localstorage_keys(_read_text(js_path)))
+        
         missing_keys = [key for key in storage_keys if key not in used_keys]
-        extra_keys = [key for key in used_keys if key not in storage_keys]
         if missing_keys:
             issues.append({
                 "source": "frontend_contract",
                 "severity": "error",
                 "scope": "frontend_contract",
-                "message": f"app.js is missing required localStorage keys: {', '.join(missing_keys)}",
-                "files": ["app.js"],
-            })
-        if extra_keys:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": f"app.js uses undeclared localStorage keys: {', '.join(extra_keys)}",
-                "files": ["app.js"],
-            })
-
-    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    if all(day.lower() in task_text.lower() for day in weekdays) and html:
-        missing_days = [day for day in weekdays if day not in html and day.lower() not in html.lower()]
-        if missing_days:
-            issues.append({
-                "source": "frontend_contract",
-                "severity": "error",
-                "scope": "frontend_contract",
-                "message": f"Meal-plan day labels missing from HTML: {', '.join(missing_days)}",
-                "files": ["index.html"],
+                "message": f"Required localStorage keys missing from JS implementation: {', '.join(missing_keys)}",
+                "files": all_js_files[:1] or ["app.js"],
             })
 
     return issues
-
 
 
 def _collect_python_symbols(module_text: str) -> set[str]:
@@ -465,7 +481,6 @@ def _collect_python_symbols(module_text: str) -> set[str]:
     for pattern in [r"^class\s+([A-Za-z_][A-Za-z0-9_]*)", r"^def\s+([A-Za-z_][A-Za-z0-9_]*)", r"^([A-Za-z_][A-Za-z0-9_]*)\s*="]:
         symbols.update(re.findall(pattern, module_text or "", flags=re.MULTILINE))
     return symbols
-
 
 
 def evaluate_python_fastapi_integration(worqspace_root: Path, scope_files: list[str] | None = None) -> list[dict]:
@@ -482,14 +497,17 @@ def evaluate_python_fastapi_integration(worqspace_root: Path, scope_files: list[
     symbol_index = {rel: _collect_python_symbols(text) for rel, text in module_texts.items()}
     issues: list[dict] = []
 
+    # Local Import Integrity
     for rel, text in module_texts.items():
+        # Match both 'import x' and 'from x import y'
+        # This is a bit redundant with Qualifier but provides ConstruQtor with immediate integration feedback
         for match in re.finditer(r"^from\s+([A-Za-z0-9_./]+)\s+import\s+(.+)$", text, flags=re.MULTILINE):
             module_name = match.group(1).replace(".", "/")
-            if module_name.startswith("fastapi") or module_name.startswith("pydantic"):
-                continue
+            if module_name.startswith(("fastapi", "pydantic", "starlette")): continue
+            
             import_path = normalize_file_hint(f"{module_name}.py")
-            if import_path not in symbol_index:
-                continue
+            if import_path not in symbol_index: continue
+            
             imported_names = [part.strip().split(" as ")[0].strip() for part in match.group(2).split(",")]
             missing = [name for name in imported_names if name and name != "*" and name not in symbol_index.get(import_path, set())]
             if missing:
@@ -501,31 +519,42 @@ def evaluate_python_fastapi_integration(worqspace_root: Path, scope_files: list[
                     "files": [rel, import_path],
                 })
 
-    if "main.py" in module_texts:
-        main_text = module_texts["main.py"]
-        route_files = [rel for rel in python_files if rel.endswith("_routes.py") or rel.startswith("routes/")]
-        missing_route_refs = []
-        for rel in route_files:
-            stem = Path(rel).stem.replace("_routes", "")
-            if stem and stem not in main_text and Path(rel).stem not in main_text:
-                missing_route_refs.append(rel)
-        if route_files and "include_router" not in main_text:
-            issues.append({
+    # FastAPI Router Wiring
+    # Discover app entrypoint (planning-driven)
+    criteria = _load_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    required_files = normalize_file_hints(criteria.get("required_files", []))
+    
+    main_py_candidates = [f for f in required_files if f.endswith("main.py")] or ["main.py"]
+    for main_rel in main_py_candidates:
+        if main_rel not in module_texts: continue
+        main_text = module_texts[main_rel]
+        
+        # Discover route modules
+        route_files = [rel for rel in python_files if rel != main_rel and (rel.endswith("_routes.py") or "routes/" in rel or "api/" in rel)]
+        if not route_files: continue
+        
+        if "include_router" not in main_text and "FastAPI" in main_text:
+             issues.append({
                 "source": "python_integration",
                 "severity": "error",
                 "scope": "python_integration",
-                "message": "main.py does not include_router any route modules",
-                "files": ["main.py"] + route_files,
+                "message": f"{main_rel} appears to omit router registration despite route modules being present",
+                "files": [main_rel] + route_files[:3],
             })
-        elif missing_route_refs:
-            issues.append({
-                "source": "python_integration",
-                "severity": "error",
-                "scope": "python_integration",
-                "message": f"main.py appears to omit route-module registration for: {', '.join(sorted(missing_route_refs))}",
-                "files": ["main.py"] + sorted(missing_route_refs),
-            })
+        else:
+            # Check for specific missing registrations
+            for r_rel in route_files:
+                stem = Path(r_rel).stem
+                if stem not in main_text and stem.replace("_routes", "") not in main_text:
+                    issues.append({
+                        "source": "python_integration",
+                        "severity": "error",
+                        "scope": "python_integration",
+                        "message": f"{main_rel} does not appear to register router from {r_rel}",
+                        "files": [main_rel, r_rel],
+                    })
 
+    # Task-specific integration constraints
     task_text = _load_task_text(worqspace_root)
     if "storage/uploads" in task_text.lower():
         for rel, text in module_texts.items():
@@ -540,7 +569,6 @@ def evaluate_python_fastapi_integration(worqspace_root: Path, scope_files: list[
                     })
 
     return issues
-
 
 
 def collect_scope_validation_issues(

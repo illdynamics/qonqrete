@@ -78,7 +78,7 @@ class JsTsAdapter(Adapter):
         # produce meaningful results because TypeScript is project-based.
         if has_ts_project and tsc is not None:
             ctx.scratch["js_ts:tsc_results"] = _run_tsc_project(
-                tsc, ctx.qodeyard_path,
+                tsc, ctx.qodeyard_path, ctx
             )
             results.extend(ctx.scratch["js_ts:tsc_results"])
 
@@ -94,11 +94,20 @@ class JsTsAdapter(Adapter):
 
         biome = find_binary("biome", cwd=ctx.qodeyard_path)
         if biome is not None:
-            results.extend(_run_biome(file_path, rel, biome))
+            results.extend(_run_biome(file_path, rel, biome, ctx))
         else:
-            node = find_binary("node", cwd=ctx.qodeyard_path)
-            if node is not None and file_path.suffix.lower() in {".js", ".jsx", ".cjs", ".mjs"}:
-                results.extend(_run_node_check(file_path, rel, node))
+            ext = file_path.suffix.lower()
+            if ext in {".js", ".cjs", ".mjs"}:
+                node = find_binary("node", cwd=ctx.qodeyard_path)
+                if node is not None:
+                    results.extend(_run_node_check(file_path, rel, node))
+            elif ext == ".jsx":
+                results.append(result_info(rel, "js_ts:jsx-check", "JSX syntax check skipped (neither biome nor JSX-aware parser available)."))
+            elif ext in {".ts", ".tsx"}:
+                # If tsc results exist in scratch, we've already covered it.
+                # If not, and biome is also missing, be honest.
+                if not ctx.scratch.get("js_ts:tsc_results"):
+                    results.append(result_info(rel, "js_ts:ts-check", "TypeScript check skipped (neither biome nor tsc available)."))
 
         return results
 
@@ -111,6 +120,7 @@ def _run_node_check(
     node_bin: str,
 ) -> list[VerificationResult]:
     try:
+        # node --check only for vanilla JS
         proc = subprocess.run(
             [node_bin, "--check", str(file_path)],
             capture_output=True, text=True, timeout=15,
@@ -181,16 +191,18 @@ def _run_biome(
     file_path: Path,
     rel: str,
     biome_bin: str,
+    ctx: QualifyContext,
 ) -> list[VerificationResult]:
     """Biome in diagnostic mode. We ask for JSON via --reporter=json."""
+    timeout = int(ctx.config.get("verification", {}).get("timeout_seconds_biome", 30))
     try:
         proc = subprocess.run(
             [biome_bin, "check", "--reporter=json", "--no-errors-on-unmatched",
              str(file_path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        return [result_warn(rel, "js_ts:biome", "biome timed out")]
+        return [result_warn(rel, "js_ts:biome", f"biome timed out (>{timeout}s)")]
     except Exception as exc:
         return [result_warn(rel, "js_ts:biome", f"biome failed: {exc}")]
 
@@ -216,9 +228,7 @@ def _run_biome(
             rel, "js_ts:biome", f"biome: {text[:300]}",
         )]
 
-    # Biome JSON shape has varied across versions. We accept either a
-    # top-level "diagnostics" list or a "summary"/"files" structure and
-    # pull what we can find.
+    # Biome JSON shape has varied across versions.
     diagnostics = []
     if isinstance(payload, dict):
         diagnostics = payload.get("diagnostics") or []
@@ -276,12 +286,12 @@ def _is_non_blocking_biome_category(category: str) -> bool:
 def _run_tsc_project(
     tsc_bin: str,
     qodeyard: Path,
+    ctx: QualifyContext,
 ) -> list[VerificationResult]:
-    """Run tsc --noEmit over the qodeyard. Project-based, so one shot.
+    """Run tsc --noEmit over the qodeyard using a temporary config.
 
-    v1.3.10: uses the shared infra skip list so tsc never ends up
-    type-checking files inside validation-root/, attempts/, build/,
-    node_modules/, etc.
+    v1.4.0: Uses a temporary tsconfig.qonqrete.json to exclude infrastructure
+    directories and ensure stable operation despite qodeyard pollution.
     """
     try:
         from ..runner import _SKIP_DIR_NAMES as _SKIP
@@ -306,37 +316,49 @@ def _run_tsc_project(
                 elif e.is_file():
                     yield e
 
-    # Prefer running against the nearest tsconfig.json if present; else
-    # just fall back to an all-files sweep with --noEmit --allowJs=false.
-    tsconfigs = [f for f in _safe_walk(qodeyard) if f.name == "tsconfig.json"]
-    if tsconfigs:
-        # Pick the shallowest tsconfig — least surprising default
-        tsconfig = min(tsconfigs, key=lambda p: len(p.parts))
-        cmd = [tsc_bin, "--noEmit", "--pretty", "false", "-p", str(tsconfig)]
-    else:
-        # No tsconfig — only check the .ts/.tsx files explicitly
-        ts_files = [
-            str(f) for f in _safe_walk(qodeyard)
-            if f.is_file() and (f.suffix == ".ts" or f.suffix == ".tsx")
-        ]
-        if not ts_files:
-            return []
-        cmd = [tsc_bin, "--noEmit", "--pretty", "false"] + ts_files
+    # Find the real tsconfig.json if it exists
+    existing_tsconfigs = [f for f in _safe_walk(qodeyard) if f.name == "tsconfig.json"]
+    base_tsconfig = min(existing_tsconfigs, key=lambda p: len(p.parts)) if existing_tsconfigs else None
 
+    # Create temporary config to isolate project from QonQrete infra
+    temp_config_path = qodeyard / "tsconfig.qonqrete.json"
+    infra_excludes = sorted(list(_SKIP)) + ["**/validation-root/**", "**/attempts/**", "**/recovery/**"]
+    
+    config_data = {
+        "compilerOptions": {
+            "noEmit": True,
+            "skipLibCheck": True,
+            "allowJs": True,
+            "checkJs": False,
+        },
+        "exclude": infra_excludes
+    }
+    if base_tsconfig:
+        config_data["extends"] = f"./{base_tsconfig.name}"
+
+    timeout = int(ctx.config.get("verification", {}).get("timeout_seconds_tsc", 120))
+    
     try:
+        temp_config_path.write_text(json.dumps(config_data), encoding="utf-8")
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120,
+            [tsc_bin, "-p", str(temp_config_path), "--pretty", "false"],
+            capture_output=True, text=True, timeout=timeout,
             cwd=str(qodeyard),
         )
     except subprocess.TimeoutExpired:
-        return [result_warn("-", "js_ts:tsc", "tsc timed out (>120s)")]
+        return [result_warn("-", "js_ts:tsc", f"tsc timed out (>{timeout}s)")]
     except Exception as exc:
         return [result_warn("-", "js_ts:tsc", f"tsc invocation failed: {exc}")]
+    finally:
+        if temp_config_path.exists():
+            try:
+                temp_config_path.unlink()
+            except OSError: pass
 
     if proc.returncode == 0:
         return [result_pass("-", "js_ts:tsc", "tsc --noEmit clean")]
 
-    # Parse each tsc diagnostic line: "path/to/file.ts(line,col): error TSxxxx: message"
+    # Parse each tsc diagnostic line
     import re
     pattern = re.compile(
         r"^(?P<path>.+?)\((?P<line>\d+),(?P<col>\d+)\):\s+"
