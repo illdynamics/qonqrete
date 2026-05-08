@@ -114,6 +114,17 @@ Project must contain exactly these files:
         targets = inspeqtor.extract_briq_file_targets(briq)
         self.assertEqual(set(targets), {"index.html", "styles.css", "app.js"})
 
+    def test_instruqtor_extract_target_files_handles_qodeyard_prefixed_paths(self):
+        briq = """
+Create /qodeyard/requirements.txt with dependencies.
+Create /qodeyard/run.sh as startup script.
+Keep main.py as the app module.
+"""
+        targets = instruqtor.extract_target_files_from_briq(briq)
+        self.assertIn("requirements.txt", targets)
+        self.assertIn("run.sh", targets)
+        self.assertIn("main.py", targets)
+
     def test_extract_briq_file_targets_parses_required_files_yaml(self):
         briq = """
 required-files:

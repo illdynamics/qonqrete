@@ -445,7 +445,7 @@ function getDefaultConfig(): QonQreteRunConfig {
 /**
  * Register the run tasq commands
  */
-export function registerRunTasqCommands(context: vscode.ExtensionContext): vscode.Disposable[] {
+export function registerRunTasqCommands(_context: vscode.ExtensionContext): vscode.Disposable[] {
     return [
         vscode.commands.registerCommand('qonqrete.runTasq', executeRunTasq),
         vscode.commands.registerCommand('qonqrete.runAsQonqreteTasq', executeRunAsQonqreteTasq),

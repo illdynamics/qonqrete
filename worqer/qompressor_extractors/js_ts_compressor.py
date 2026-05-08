@@ -246,7 +246,9 @@ class JsTsCompressor(Compressor):
         if selectors:
             parts.append('selectors: ' + ', '.join(selectors[:4]))
         if events:
+            event_calls = [f'addEventListener("{event}")' for event in events[:4]]
             parts.append('events: ' + ', '.join(events[:4]))
+            parts.append('listeners: ' + ', '.join(event_calls))
         if storage:
             parts.extend(storage)
         if not parts:

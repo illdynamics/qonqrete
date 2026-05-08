@@ -31,10 +31,58 @@ from lib_qrane import (  # noqa: E402
     record_pass_state,
     write_inspection_bridge,
 )
-from qrane import inspection_exit_is_recoverable  # noqa: E402
+from qrane import PathManager, inspection_exit_is_recoverable, run_pre_construqtor_context_refresh, should_skip_agent  # noqa: E402
 
 
 class ExecutionModelTests(unittest.TestCase):
+    def test_qrane_runs_qontrabender_for_non_gemini(self):
+        self.assertFalse(
+            should_skip_agent(
+                name="qontrabender",
+                use_qompressor=True,
+                use_qontextor=True,
+                use_qontrabender=True,
+                is_repair_pass=False,
+                construqtor_provider="deepseek",
+            )
+        )
+
+    def test_qrane_pre_construqtor_qontrabender_pipeline_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            for name in ("qodeyard", "bloq.d", "qontext.d", "qache.d", "struqture"):
+                (workspace / name).mkdir(parents=True, exist_ok=True)
+            calls = []
+
+            def fake_run(name, cmd, prefix, color, log_path, env):
+                calls.append((name, cmd))
+                return True
+
+            run_pre_construqtor_context_refresh(
+                path_manager=PathManager(workspace),
+                agent_module_dir=ROOT / "worqer",
+                prefix="t",
+                agent_colors={},
+                run_agent_func=fake_run,
+                env={},
+                use_qompressor=True,
+                use_qontextor=True,
+                use_qontrabender=True,
+                worqspace=workspace,
+                cycle=2,
+            )
+
+            qontrabender_calls = [cmd for name, cmd in calls if name == "qontrabender"]
+            self.assertEqual(len(qontrabender_calls), 1)
+            self.assertEqual(qontrabender_calls[0][1:], [
+                str(ROOT / "worqer" / "qontrabender.py"),
+                str(workspace / "bloq.d"),
+                str(workspace / "qodeyard"),
+                str(workspace / "qontext.d"),
+                str(workspace / "qache.d"),
+            ])
+            self.assertNotIn("--check", qontrabender_calls[0])
+
     def test_advisory_mode_no_repair_needed_stops_after_first_build(self):
         limits = resolve_execution_limits({"options": {"max_total_iterations": 4, "max_build_passes": 3}, "repair": {"max_attempts_per_build_pass": 2}})
         state = ExecutionState(cycle_estimate_mode=ESTIMATE_MODE_ADVISORY)
@@ -158,6 +206,24 @@ class ExecutionModelTests(unittest.TestCase):
         decision = decide_post_inspection(state, limits, {}, {})
         self.assertEqual(decision.action, "stop_partial")
         self.assertEqual(decision.reason, "inspection_artifacts_missing")
+
+    def test_hard_gate_pass_forces_stop_even_if_status_is_partial(self):
+        limits = resolve_execution_limits({"options": {"max_total_iterations": 4, "max_build_passes": 3}, "repair": {"max_attempts_per_build_pass": 2}})
+        state = ExecutionState(cycle_estimate_mode=ESTIMATE_MODE_ADVISORY)
+        start_next_pass(state, PASS_BUILD)
+        decision = decide_post_inspection(
+            state,
+            limits,
+            {
+                "status": "PARTIAL",
+                "hard_gate_status": "PASS",
+                "repair_needed": False,
+                "task_completed": True,
+            },
+            {"same_run_repair_eligible": True},
+        )
+        self.assertEqual(decision.action, "stop")
+        self.assertEqual(decision.reason, "completed")
 
     def test_limit_aliases_and_estimate_mode_defaults(self):
         limits = resolve_execution_limits({"options": {"auto_cycle_limit": 7}, "repair": {"max_attempts": 4}})
@@ -528,6 +594,14 @@ class ManifestResumeTests(unittest.TestCase):
         self.assertIn('if [ "$SYNC_TO_REPO" = true ]; then', shell_text)
         self.assertIn('sync_repo_outputs_from_qage "$run_host_path"', shell_text)
         self.assertIn("Repo-native export skipped by --no-sync", shell_text)
+
+    def test_qrane_exits_nonzero_for_partial_failed_or_blocked_terminal_states(self):
+        qrane_text = (ROOT / "qrane" / "qrane.py").read_text(encoding="utf-8")
+        self.assertIn("if session_failed or partial_stop:", qrane_text)
+        self.assertIn("final_exit_code = 1", qrane_text)
+        self.assertIn("elif blocked_stop:", qrane_text)
+        self.assertIn("final_exit_code = 2", qrane_text)
+        self.assertIn("sys.exit(final_exit_code)", qrane_text)
 
     def test_determine_validation_mode_prefers_bundle_execution_mode(self):
         with tempfile.TemporaryDirectory() as tmp:

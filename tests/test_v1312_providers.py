@@ -121,6 +121,10 @@ class TestV1312Providers(unittest.TestCase):
 
     @patch('lib_ai._openai_client_for_provider')
     def test_venice_dispatch_with_params(self, mock_client_factory):
+        import lib_ai
+        # Explicitly set the mock on the imported module to be absolutely sure
+        lib_ai._openai_client_for_provider = mock_client_factory
+        
         self.config["agents"]["test_agent"] = {
             "provider": "venice",
             "model": "venice-model",

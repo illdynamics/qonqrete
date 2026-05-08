@@ -43,6 +43,66 @@ required-files:
         required = instruqtor.extract_required_files_from_task(task)
         self.assertEqual(required, ["index.html", "styles.css", "app.js"])
 
+    def test_extract_required_files_from_task_handles_qodeyard_prefixed_paths(self):
+        task = """
+Create /qodeyard/requirements.txt with dependencies.
+Create /qodeyard/run.sh to launch the service.
+Use main.py as the entrypoint.
+"""
+        required = instruqtor.extract_required_files_from_task(task)
+        self.assertIn("requirements.txt", required)
+        self.assertIn("run.sh", required)
+        self.assertIn("main.py", required)
+
+    def test_extract_required_files_from_task_ignores_forbidden_mentions(self):
+        task = """
+Project must contain exactly these files:
+- index.html
+- styles.css
+- app.js
+
+Do not add `main.py`.
+Do not include `run.sh`.
+No extra files.
+"""
+        required = instruqtor.extract_required_files_from_task(task)
+        self.assertIn("index.html", required)
+        self.assertIn("styles.css", required)
+        self.assertIn("app.js", required)
+        self.assertNotIn("main.py", required)
+        self.assertNotIn("run.sh", required)
+
+    def test_write_planning_artifacts_uses_authoritative_required_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir) / "worqspace"
+            workspace.mkdir(parents=True, exist_ok=True)
+            plan_payload = {
+                "execution_blueprint": {
+                    "summary": "test",
+                    "components": [],
+                    "build_groups": [],
+                },
+                "validation_plan": {},
+                "completion_criteria": {
+                    "required_files": ["main.py", "requirements.txt", "run.sh"],
+                },
+                "estimation_basis": {},
+            }
+            authoritative_required = ["index.html", "styles.css", "app.js"]
+            instruqtor.write_planning_artifacts(
+                worqspace_root=workspace,
+                cycle_num="1",
+                task_spec={"run_id": "qage_test"},
+                qonstrictor_result={},
+                plan_payload=plan_payload,
+                briq_summaries=[],
+                required_files=authoritative_required,
+            )
+            completion = json.loads(
+                (workspace / "planning" / "completion-criteria.v1.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(sorted(completion.get("required_files", [])), sorted(authoritative_required))
+
     def test_parse_json_payload_repairs_truncated_object(self):
         payload = instruqtor.parse_json_payload('{"architecture_foundation": {"summary": "ok"}, "execution_blueprint": {"summary": "plan"}', expected='object')
         self.assertIsInstance(payload, dict)

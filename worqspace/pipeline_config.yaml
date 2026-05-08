@@ -76,9 +76,13 @@ agents:
   - name: qontrabender
     script: qontrabender.py
     description: |
-      Gemini Server-Side Cache manipulation agent. Takes control about what will be added to the cache both locally and remotely.
-      Support service only in Phase 1 bridge. Cache Bender — assembles hybrid cache payloads for Gemini context caching.
-      Only works with Google Gemini, but you can leave it turned on and it will be ignored if construQtor provider is not gemini.
+      Provider-aware cache/context assembly support service. It prepares stable background bundles and hotset payloads before ConstruQtor.
+      Qontrabender runs for all providers when enabled:
+      - Gemini may use explicit context caching only when real SDK support/config are available.
+      - Anthropic may use cache_control for the stable prefix only.
+      - OpenAI/DeepSeek use stable-prefix automatic caching.
+      - Local providers use local bundle assembly only.
+      Qrane refreshes qompressor, qontextor, and qontrabender before each ConstruQtor build/repair pass; post-ConstruQtor refresh remains optional.
     input: 
       - "bloq.d/"
       - "qodeyard/"

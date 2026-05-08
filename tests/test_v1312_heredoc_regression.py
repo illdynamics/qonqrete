@@ -51,7 +51,7 @@ console.log('hi');
         self.assertIn("index.js", extracted)
         self.assertEqual(extracted["index.js"], "console.log('hi');")
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_heredoc_interleaved_process(self, mock_val, mock_ai):
         mock_val.return_value = {'passed': True, 'files_checked': 1, 'syntax_errors': [], 'constraint_errors': [], 'import_warnings': []}

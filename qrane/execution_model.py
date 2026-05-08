@@ -294,19 +294,36 @@ def decide_post_inspection(state: ExecutionState, limits: ExecutionLimits, inspe
     if not verdict:
         return ContinuationDecision("stop_partial", "inspection_artifacts_missing")
     verdict_status = _normalize_verdict_status(verdict.get("status") or verdict.get("assessment"))
+    hard_gate_status = str(verdict.get("hard_gate_status") or "").strip().upper()
     task_completed = bool(
         verdict.get("task_completed")
         or verdict_status == "SUCCESS"
+        or hard_gate_status == "PASS"
     )
-    if "repair_required" in verdict:
+    
+    # NEW v1.4: Enforce verdict consistency. SUCCESS cannot pair with repair_required=True.
+    if "repair_needed" in verdict:
+        repair_required = bool(verdict.get("repair_needed"))
+    elif task_completed and verdict_status == "SUCCESS":
+        repair_required = False
+    elif "repair_required" in verdict:
         repair_required = bool(verdict.get("repair_required"))
     else:
         repair_required = verdict_status in {"PARTIAL", "FAILURE"} and not task_completed
+    if hard_gate_status == "PASS":
+        repair_required = False
+        task_completed = True
     same_run_eligible = bool(repair.get("same_run_repair_eligible"))
     inspection_integrity = str(verdict.get("inspection_integrity") or "").strip().upper()
 
     if repair_required:
         if same_run_eligible:
+            same_fix_repeat_limit = _int_or_none(repair.get("same_fix_repeat_limit"))
+            if same_fix_repeat_limit is None or same_fix_repeat_limit <= 0:
+                same_fix_repeat_limit = 3
+            same_fix_repeat_count = _int_or_none(repair.get("same_fix_repeat_count")) or 0
+            if same_fix_repeat_count >= same_fix_repeat_limit:
+                return ContinuationDecision("stop_partial", "same_fix_repeat_cap_hit")
             if total_iteration_cap_reached(state, limits):
                 return ContinuationDecision("stop_partial", "total_iteration_cap_hit")
             if repair_cap_reached(state, limits):

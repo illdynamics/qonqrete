@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import ast
 import json
+import re
+import sys
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -39,9 +41,8 @@ from ..models import VerificationResult
 # ─── preserved allowlists (verbatim from v1.3.0 monolith) ──────────────────
 
 # Imports under these prefixes are NOT checked as "missing local module" —
-# they are stdlib or well-known third-party packages that are expected to
-# be resolved at runtime, not from the qodeyard tree.
-STDLIB_PREFIXES = [
+# they are stdlib modules.
+STDLIB_PREFIXES = {
     "os", "sys", "re", "json", "yaml", "time", "datetime", "pathlib",
     "typing", "collections", "itertools", "functools", "dataclasses",
     "logging", "subprocess", "threading", "multiprocessing", "asyncio",
@@ -51,13 +52,34 @@ STDLIB_PREFIXES = [
     "unittest", "pytest", "mock", "tempfile", "glob", "platform",
     "signal", "warnings", "traceback", "contextlib", "enum",
     "struct", "pickle", "queue", "concurrent",
+}
+# v1.4.0: Dynamic stdlib detection (Python 3.10+)
+if hasattr(sys, "stdlib_module_names"):
+    STDLIB_PREFIXES.update(sys.stdlib_module_names)
+
+# Known third-party packages that must be declared in manifests.
+KNOWN_THIRD_PARTY_PREFIXES = {
     "numpy", "pandas", "requests", "flask", "django", "sqlalchemy",
     "openai", "anthropic", "google", "transformers", "torch", "tensorflow",
     "cryptography", "grpc", "proto", "pydantic", "aiohttp", "click",
     "typer", "rich", "fastapi", "celery", "redis", "pymongo",
-]
+}
 
-LOCAL_PREFIX_HINTS = ("src.", "lib.", "app.", "core.", "utils.", "tests.")
+# Common mapping from import name to package name in requirements.txt
+IMPORT_TO_PACKAGE_MAP = {
+    "bs4": "beautifulsoup4",
+    "PIL": "pillow",
+    "sklearn": "scikit-learn",
+    "yaml": "pyyaml",
+    "cv2": "opencv-python",
+}
+
+DECLARED_BY_TRANSITIVE_PROVIDER = {
+    # FastAPI declares pydantic transitively.
+    "pydantic": {"fastapi"},
+}
+
+LOCAL_PREFIX_HINTS = ["src.", "lib.", "app.", "core.", "utils.", "tests."]
 
 # Symbols in qontext skeletons that are NOT functions — we must not flag
 # these as "expected function missing".
@@ -73,11 +95,10 @@ IGNORE_SKELETON_SYMBOLS = {
     "Type", "TypeVar", "Generic", "Protocol", "Literal", "Final",
     "Sequence", "Mapping", "Iterable", "Iterator", "Generator",
     "Awaitable", "Coroutine", "AsyncGenerator", "ClassVar",
-    "numpy", "pandas", "requests", "flask", "django", "fastapi",
-    "openai", "anthropic", "google", "grpc", "proto", "pydantic",
-    "sqlalchemy", "pytest", "click", "typer", "rich", "aiohttp",
     "Path", "Field", "dataclass", "Enum", "ABC",
 }
+IGNORE_SKELETON_SYMBOLS.update(STDLIB_PREFIXES)
+IGNORE_SKELETON_SYMBOLS.update(KNOWN_THIRD_PARTY_PREFIXES)
 
 
 # ─── adapter ───────────────────────────────────────────────────────────────
@@ -127,20 +148,21 @@ class PythonAdapter(Adapter):
                     file_path,
                     rel,
                     ctx.qodeyard_path,
+                    ctx=ctx,
                     local_python_files=local_python_files,
                 )
             )
 
         if do_skeleton and ctx.qontext_path is not None:
             results.extend(
-                _compare_with_qontext(file_path, rel, ctx.qontext_path)
+                _compare_with_qontext(file_path, rel, ctx.qontext_path, ctx=ctx)
             )
 
         # Ruff — additive. Runs if binary available. Missing → no-op
         # (preflight already surfaced the info row).
         ruff_bin = find_binary("ruff")
         if ruff_bin is not None:
-            results.extend(_run_ruff(file_path, rel, ruff_bin))
+            results.extend(_run_ruff(file_path, rel, ruff_bin, ctx))
 
         return results
 
@@ -184,64 +206,172 @@ def _extract_imports(file_path: Path) -> list[tuple[str, int]]:
     return imports
 
 
+def _collect_manifest_dependencies(qodeyard_path: Path) -> set[str]:
+    """Collect declared package names from common Python manifests."""
+    deps = set()
+    # requirements.txt
+    reqs = qodeyard_path / "requirements.txt"
+    if reqs.exists():
+        try:
+            text = reqs.read_text(encoding="utf-8", errors="ignore")
+            for line in text.splitlines():
+                line = line.strip()
+                if not line or line.startswith(("#", "-r", "-e")):
+                    continue
+                # Match name before version specifiers or environment markers
+                match = re.match(r'^([a-zA-Z0-9\-_.]+)', line)
+                if match:
+                    deps.add(match.group(1).lower().replace("_", "-"))
+        except Exception:
+            pass
+
+    # pyproject.toml (simple regex parser to avoid toml dependency)
+    pyproject = qodeyard_path / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            text = pyproject.read_text(encoding="utf-8", errors="ignore")
+            # Look for dependencies = [ ... ]
+            m = re.search(r'dependencies\s*=\s*\[(.*?)\]', text, re.DOTALL)
+            if m:
+                for dep in re.findall(r'["\']([a-zA-Z0-9\-_.]+)', m.group(1)):
+                    deps.add(dep.lower().replace("_", "-"))
+        except Exception:
+            pass
+    return deps
+
+
+def _is_declared_or_transitively_covered(package_name: str, manifest_dependencies: set[str]) -> bool:
+    if package_name in manifest_dependencies:
+        return True
+    providers = DECLARED_BY_TRANSITIVE_PROVIDER.get(package_name, set())
+    return any(provider in manifest_dependencies for provider in providers)
+
+
+def _detect_local_package_roots(qodeyard_path: Path) -> list[str]:
+    """Dynamically detect local package roots (dirs with __init__.py or project name)."""
+    roots = []
+    # 1. Any top-level dir with __init__.py is a local package
+    if qodeyard_path.exists():
+        try:
+            for entry in qodeyard_path.iterdir():
+                if entry.is_dir() and (entry / "__init__.py").exists():
+                    roots.append(entry.name)
+        except OSError:
+            pass
+
+    # 2. Check pyproject.toml for project name
+    pyproject = qodeyard_path / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            text = pyproject.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r'^name\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
+            if m:
+                roots.append(m.group(1).replace("-", "_"))
+        except Exception:
+            pass
+    return sorted(set(roots))
+
+
+def _resolve_local_import(
+    module_name: str,
+    qodeyard_path: Path,
+    local_python_files: list[Path],
+) -> bool:
+    """True if the module can be resolved locally in the qodeyard."""
+    module_parts = module_name.split(".")
+    
+    # Direct relative-to-root check
+    possible_paths = [
+        qodeyard_path / "/".join(module_parts) / "__init__.py",
+        qodeyard_path / ("/".join(module_parts) + ".py"),
+    ]
+
+    # Handle common 'src.' or 'lib.' patterns if they exist
+    if len(module_parts) > 1:
+        possible_paths.extend([
+            qodeyard_path / "/".join(module_parts[1:]) / "__init__.py",
+            qodeyard_path / ("/".join(module_parts[1:]) + ".py"),
+        ])
+
+    # Check the probes
+    if any(p.exists() for p in possible_paths):
+        return True
+
+    # Recursive search for final module name in the index
+    final_module = module_parts[-1]
+    for f in local_python_files:
+        if f.name == f"{final_module}.py":
+            return True
+        elif f.name == "__init__.py" and f.parent.name == final_module:
+            return True
+            
+    return False
+
+
 def _check_imports(
     file_path: Path,
     rel: str,
     qodeyard_path: Path,
+    ctx: QualifyContext,
     local_python_files: list[Path] | None = None,
 ) -> list[VerificationResult]:
     results: list[VerificationResult] = []
     imports = _extract_imports(file_path)
 
+    # Cache dynamic lookups in ctx.scratch
+    local_package_roots = ctx.scratch.get("python_local_package_roots")
+    if local_package_roots is None:
+        local_package_roots = _detect_local_package_roots(qodeyard_path)
+        ctx.scratch["python_local_package_roots"] = local_package_roots
+
+    manifest_dependencies = ctx.scratch.get("python_manifest_dependencies")
+    if manifest_dependencies is None:
+        manifest_dependencies = _collect_manifest_dependencies(qodeyard_path)
+        ctx.scratch["python_manifest_dependencies"] = manifest_dependencies
+
+    python_index = local_python_files or _collect_local_python_files(qodeyard_path)
+
     for module_name, line_num in imports:
-        # Skip stdlib and well-known third-party
-        if any(
-            module_name == p or module_name.startswith(p + ".")
-            for p in STDLIB_PREFIXES
-        ):
+        root_module = module_name.split(".")[0]
+
+        # 1. Standard Library?
+        if root_module in STDLIB_PREFIXES:
             continue
 
-        # Only check imports that look like local project imports
-        if not module_name.startswith(LOCAL_PREFIX_HINTS):
+        # 2. Local Project?
+        is_local_hint = any(module_name.startswith(p) for p in LOCAL_PREFIX_HINTS)
+        is_local_root = root_module in local_package_roots
+        
+        if is_local_hint or is_local_root:
+            if not _resolve_local_import(module_name, qodeyard_path, python_index):
+                results.append(result_warn(
+                    file_path=rel,
+                    check_type="import",
+                    message=f"Local module '{module_name}' not found in qodeyard",
+                    line_number=line_num,
+                ))
             continue
 
-        module_parts = module_name.split(".")
-
-        possible_paths = [
-            qodeyard_path / "/".join(module_parts) / "__init__.py",
-            qodeyard_path / ("/".join(module_parts) + ".py"),
-        ]
-
-        # Also check without the first component
-        if len(module_parts) > 1:
-            possible_paths.extend([
-                qodeyard_path / "/".join(module_parts[1:]) / "__init__.py",
-                qodeyard_path / ("/".join(module_parts[1:]) + ".py"),
-            ])
-
-        # Recursive search for final module name.
-        # File index is cached per run in ctx.scratch to avoid repeated full
-        # qodeyard walks for each Python file in a scoped qualification pass.
-        final_module = module_parts[-1]
-        search_files = local_python_files or _collect_local_python_files(qodeyard_path)
-        for f in search_files:
-            if f.name == f"{final_module}.py":
-                possible_paths.append(f)
-            elif f.name == "__init__.py" and f.parent.name == final_module:
-                possible_paths.append(f)
-
-        found = any(p.exists() for p in possible_paths)
-        if not found:
-            results.append(result_warn(
-                file_path=rel,
-                check_type="import",
-                message=f"Local module '{module_name}' not found in qodeyard",
-                line_number=line_num,
-            ))
+        # 3. Third-party?
+        # Check against manifest declaration
+        package_name = IMPORT_TO_PACKAGE_MAP.get(root_module, root_module).lower().replace("_", "-")
+        if _is_declared_or_transitively_covered(package_name, manifest_dependencies):
+            continue
+            
+        # Undeclared dependency
+        severity = "error" if ctx.tier in {"medium", "high"} else "warning"
+        results.append(VerificationResult(
+            file_path=rel,
+            check_type="import:undeclared",
+            passed=False,
+            message=f"Undeclared third-party dependency: '{root_module}' (not in requirements.txt or pyproject.toml)",
+            line_number=line_num,
+            severity=severity,
+        ))
 
     if not results:
         results.append(result_pass(
-            rel, "import", "All local imports resolved"
+            rel, "import", "All imports resolved"
         ))
 
     return results
@@ -307,6 +437,7 @@ def _compare_with_qontext(
     file_path: Path,
     rel: str,
     qontext_path: Path,
+    ctx: QualifyContext,
 ) -> list[VerificationResult]:
     results: list[VerificationResult] = []
     qontext_file = qontext_path / (file_path.name + ".q.yaml")
@@ -339,10 +470,14 @@ def _compare_with_qontext(
                 if name and name[0].isupper() and symbol_type != "function":
                     continue
                 if name and name not in actual_signatures:
-                    results.append(result_warn(
+                    # v1.4.0: Tier-aware severity for skeleton mismatch
+                    severity = "error" if ctx.tier in {"medium", "high"} else "warning"
+                    results.append(VerificationResult(
                         file_path=rel,
                         check_type="signature",
+                        passed=False,
                         message=f"Expected function '{name}' not found",
+                        severity=severity,
                     ))
     except Exception:
         # Non-fatal — matches v1.3.0 behaviour
@@ -354,18 +489,20 @@ def _run_ruff(
     file_path: Path,
     rel: str,
     ruff_bin: str,
+    ctx: QualifyContext,
 ) -> list[VerificationResult]:
     """Run ruff check in JSON mode and normalize diagnostics."""
+    timeout = int(ctx.config.get("verification", {}).get("timeout_seconds_ruff", 30))
     try:
         proc = subprocess.run(
             [ruff_bin, "check", "--output-format=json", "--force-exclude",
              "--no-fix", str(file_path)],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        return [result_warn(rel, "python:ruff", "ruff timed out (>30s)")]
+        return [result_warn(rel, "python:ruff", f"ruff timed out (>{timeout}s)")]
     except Exception as exc:
         return [result_warn(rel, "python:ruff", f"ruff invocation failed: {exc}")]
 

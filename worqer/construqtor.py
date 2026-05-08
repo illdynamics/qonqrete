@@ -34,7 +34,15 @@ import shutil
 import subprocess
 import hashlib
 import threading
+import shlex
 from pathlib import Path
+from context_bundle import (
+    build_bundle_prompt_sections,
+    build_context_bundle,
+    validate_qache_manifest_for_construqtor,
+    validate_bundle_invariants,
+    get_context_strategy_config,
+)
 
 
 def _runtime_version() -> str:
@@ -132,6 +140,15 @@ except ImportError:
     def normalize_file_hints(values):  # type: ignore
         return []
 
+try:
+    from shellscript_validation import pick_shell_mode, validate_run_sh_contract
+except ImportError:
+    try:
+        from worqer.shellscript_validation import pick_shell_mode, validate_run_sh_contract  # type: ignore
+    except ImportError:
+        pick_shell_mode = None
+        validate_run_sh_contract = None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION DEFAULTS
@@ -199,6 +216,13 @@ DEFAULT_WRITE_STRATEGY = {
 
 DEFAULT_CONTEXT_FILES_PER_ATTEMPT = 12
 RETRY_CONTEXT_FILES_PER_ATTEMPT = 8
+DEFAULT_CONTEXT_STRATEGY = {
+    "normal": "hybrid_fidelity",
+    "repair": "repair_truth",
+    "direct_dependencies_full_if_small_max_chars": 90000,
+    "max_full_neighbors": 24,
+    "max_indirect_neighbors": 40,
+}
 
 _HTML_AUTOFIX_EXTENSIONS = {'.html', '.htm'}
 
@@ -540,6 +564,12 @@ def get_write_strategy_config(config: dict) -> dict:
     env_mode = str(os.environ.get("QONQ_CODING_MODE", "")).strip().lower()
     if env_mode:
         result['coding_mode'] = env_mode
+
+    provider_l = str(agent_cfg.get('provider') or '').strip().lower()
+    if provider_l == 'codeseeq' and result.get('coding_mode') in {'direct', 'hybrid'}:
+        result['requested_coding_mode'] = result.get('coding_mode')
+        result['coding_mode'] = 'heredoc'
+        result['codeseeq_cli_forced_heredoc'] = True
     
     # v1.3.15: Strict validation of coding_mode (additive hybrid mode)
     valid_modes = {'heredoc', 'direct', 'hybrid'}
@@ -594,11 +624,20 @@ def get_write_strategy_config(config: dict) -> dict:
     _int_cfg("placeholder_small_content_max_bytes", 64, 4096)
         
     print(f"     [Config] Active coding_mode: {result['coding_mode']}", flush=True)
+    if result.get('codeseeq_cli_forced_heredoc'):
+        print(
+            "     [Config] provider=codeseeq uses heredoc transport because QonQrete-level tool_calls are not supported.",
+            flush=True,
+        )
         
     return result
 
 
 def canonical_run_id(worqspace_root: Path) -> str:
+    for env_key in ("QONQ_RUN_ID", "QONQ_RUN_NAME", "QONSTRUCTION_NAME"):
+        raw = str(os.environ.get(env_key, "")).strip()
+        if raw:
+            return Path(raw).name
     return worqspace_root.name
 
 
@@ -612,12 +651,34 @@ def load_repair_context(worqspace_root: Path) -> str:
         payload = json.loads(Path(repair_plan_path).read_text(encoding='utf-8'))
     except Exception:
         return ""
+    sqrewdriver_brief = ""
+    sqrewdriver_brief_path = os.environ.get("QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH", "").strip()
+    if sqrewdriver_brief_path:
+        try:
+            brief_path = Path(sqrewdriver_brief_path)
+            if brief_path.exists() and brief_path.is_file():
+                sqrewdriver_brief = brief_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            sqrewdriver_brief = ""
     lines = [
         "**EXPLICIT REPAIR MODE:** This build is a bounded targeted repair pass.",
+        "**STRUCTURED SCOPE AUTHORITY:** `repair-plan.v1.json` defines allowed edits, locked files, and validation scope.",
+    ]
+    if sqrewdriver_brief:
+        lines.extend(
+            [
+                "",
+                "**SQREWDRIVER REPAIR BRIEF (HIGH PRIORITY):**",
+                sqrewdriver_brief,
+                "",
+                "**END SQREWDRIVER REPAIR BRIEF**",
+            ]
+        )
+    lines.extend([
         f"**Repair Pass Index:** {payload.get('repair_pass_index')}",
         f"**Repair Reason:** {payload.get('repair_reason_summary', 'Targeted repair required.')}",
         "**Repair Constraints:**",
-    ]
+    ])
     for item in payload.get("repair_constraints", []):
         lines.append(f"- {item}")
     lines.append("**Required Actions:**")
@@ -789,9 +850,25 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
                 result['passed'] = False
         elif file_path.suffix == '.sh' and file_path.exists():
             result['files_checked'] += 1
+            shell_content = ""
+            try:
+                shell_content = file_path.read_text(encoding='utf-8')
+            except Exception as exc:
+                result['syntax_errors'].append(f"{file_name}: could not read shell script ({exc})")
+                result['passed'] = False
+                continue
+
+            shell_mode = pick_shell_mode(file_path, shell_content) if pick_shell_mode else "sh"
+            shell_bin = shutil.which(shell_mode) or shutil.which("sh")
+            if not shell_bin:
+                result['syntax_errors'].append(
+                    f"{file_name}: shell interpreter unavailable for syntax check ({shell_mode})"
+                )
+                result['passed'] = False
+                continue
 
             shell_check = subprocess.run(
-                ['sh', '-n', str(file_path)],
+                [shell_bin, '-n', str(file_path)],
                 capture_output=True,
                 text=True,
             )
@@ -801,19 +878,18 @@ def run_local_validation(written_files: list[str], qodeyard_path: Path) -> dict:
                 )
                 result['passed'] = False
 
-            if file_name == 'run.sh':
-                try:
-                    shell_content = file_path.read_text(encoding='utf-8')
-                except Exception as exc:
-                    result['constraint_errors'].append(f"{file_name}: could not read run.sh ({exc})")
-                    result['passed'] = False
-                    continue
-
+            shell_policy_map = resolve_shellscript_contract_policies(qodeyard_path.parent)
+            policy = (
+                shell_policy_map.get(file_name)
+                or shell_policy_map.get(Path(file_name).name)
+            )
+            if not policy and Path(file_name).name.lower() == "run.sh":
                 policy = resolve_run_sh_port_policy(qodeyard_path.parent)
-                run_sh_errors = validate_run_sh_constraints(shell_content, policy)
-                if run_sh_errors:
+            if policy:
+                shell_errors = validate_run_sh_constraints(shell_content, policy)
+                if shell_errors:
                     result['constraint_errors'].extend(
-                        [f"{file_name}: {msg}" for msg in run_sh_errors]
+                        [f"{file_name}: {msg}" for msg in shell_errors]
                     )
                     result['passed'] = False
         elif file_path.suffix == '.json' and file_path.exists():
@@ -882,6 +958,7 @@ def run_scoped_qualification(
         'syntax_errors': [],
         'constraint_errors': [],
         'import_warnings': [],
+        'advisory_quality_issues': [],
         'files_checked': 0,
     }
 
@@ -900,6 +977,18 @@ def run_scoped_qualification(
     # survives the trip into the qualifier's Python adapter.
     config = load_config(worqspace_root / 'config.yaml')
 
+    # v1.4.0: Task tier awareness
+    tier = "low"
+    criteria_path = worqspace_root / 'planning' / 'completion-criteria.v1.json'
+    if criteria_path.exists():
+        try:
+            import json as _json
+            with open(criteria_path, 'r', encoding='utf-8') as f:
+                _criteria_doc = _json.load(f)
+                tier = str(_criteria_doc.get('tier', 'low')).lower()
+        except Exception:
+            pass
+
     try:
         report = qualifier.run_verification(
             qodeyard_path,
@@ -907,6 +996,7 @@ def run_scoped_qualification(
             str(cycle_label),
             config,
             changed_files=written_files or None,
+            tier=tier,
         )
     except Exception as exc:
         # Never let a qualifier crash kill the briq pipeline. Surface
@@ -917,7 +1007,59 @@ def run_scoped_qualification(
         )
         return result
 
+    # v1.4.0: Interleaved integration validation
+    # Catch wiring/integration issues (missing DOM IDs, router registration, etc) early.
+    try:
+        from integration_checks import collect_scope_validation_issues
+        integration_issues = collect_scope_validation_issues(
+            worqspace_root,
+            scope_files=written_files or None,
+            qodeyard_root=qodeyard_path,
+        )
+        for issue in integration_issues:
+            # We treat integration errors as constraint errors to trigger immediate repair
+            if issue.get('severity') == 'error':
+                result['passed'] = False
+                result['constraint_errors'].append(issue.get('message') or issue.get('summary'))
+    except (ImportError, Exception) as exc:
+        # Integration checker is an upgrade, not a blocker.
+        pass
+
     result['files_checked'] = int(report.files_checked or 0)
+
+    def _is_hard_scoped_qualifier_error(check_type: str, message: str) -> bool:
+        """Classify scoped qualifier failures that should block commit.
+
+        Interleaved qualification is an early safety net before deterministic
+        contract validation. We only hard-block on parser/syntax/broken-source
+        failures here; quality/lint-style findings remain advisory so final
+        contract-driven gates decide task correctness.
+        """
+        check = (check_type or "").strip().lower()
+        msg = (message or "").strip().lower()
+
+        hard_check_types = {
+            "syntax",
+            "shell:syntax",
+            "js_ts:node-check",
+            "js_ts:tsc",
+            "html_css:html-fallback",
+            "html_css:css-fallback",
+        }
+        if check in hard_check_types or check.startswith("syntax:"):
+            return True
+
+        hard_fragments = (
+            "syntax error",
+            "could not parse",
+            "parse error",
+            "unclosed tag",
+            "unbalanced braces",
+            "unterminated",
+            "unexpected eof",
+            "invalid syntax",
+        )
+        return any(fragment in msg for fragment in hard_fragments)
 
     for r in report.results:
         # 'info' is observational only — e.g. "tsc not on PATH".
@@ -927,13 +1069,23 @@ def run_scoped_qualification(
             continue
         line_suffix = f" (line {r.line_number})" if r.line_number else ""
         rendered = f"{r.file_path}{line_suffix}: [{r.check_type}] {r.message}"
-        if getattr(r, 'severity', 'error') == 'warning':
+        severity = getattr(r, 'severity', 'error')
+        if severity == 'warning':
             # Warnings don't fail the build, but we surface them as
             # import_warnings so they get logged and retained.
             result['import_warnings'].append(rendered)
-        else:
-            result['syntax_errors'].append(rendered)
-            result['passed'] = False
+            continue
+        if severity == 'error' and not _is_hard_scoped_qualifier_error(
+            getattr(r, 'check_type', ''),
+            getattr(r, 'message', ''),
+        ):
+            # Keep non-syntax quality errors visible without blocking commit.
+            advisory = f"{rendered} [advisory_quality]"
+            result['import_warnings'].append(advisory)
+            result['advisory_quality_issues'].append(advisory)
+            continue
+        result['syntax_errors'].append(rendered)
+        result['passed'] = False
 
     # Catch semantically-invalid serialized code blobs that can slip through
     # pure syntax checks because they parse as a giant list/string literal.
@@ -946,31 +1098,36 @@ def run_scoped_qualification(
             result['syntax_errors'].append(f"{file_name}: {blob_error}")
             result['passed'] = False
 
-    # ── ConstruQtor-specific run.sh constraint layer ─────────────────
-    # These rules aren't something qualifier enforces (they're not
-    # generic syntax/lint — they're this pipeline's contract for how
-    # a uvicorn-backed app must boot). Keep them running on top of
-    # the qualifier pass.
+    # ── ConstruQtor-specific shellscript contract layer ───────────────
+    # These rules are contract-driven and run on top of qualifier results.
+    shell_policy_map = resolve_shellscript_contract_policies(worqspace_root)
     for file_name in written_files:
-        if file_name != 'run.sh':
-            continue
         file_path = qodeyard_path / file_name
+        if file_path.suffix.lower() not in {'.sh', '.bash', '.zsh', '.ksh'}:
+            continue
         if not file_path.exists():
             continue
         try:
             shell_content = file_path.read_text(encoding='utf-8')
         except Exception as exc:
             result['constraint_errors'].append(
-                f"{file_name}: could not read run.sh ({exc})"
+                f"{file_name}: could not read shell script ({exc})"
             )
             result['passed'] = False
             continue
 
-        policy = resolve_run_sh_port_policy(worqspace_root)
-        run_sh_errors = validate_run_sh_constraints(shell_content, policy)
-        if run_sh_errors:
+        policy = (
+            shell_policy_map.get(file_name)
+            or shell_policy_map.get(Path(file_name).name)
+        )
+        if not policy and Path(file_name).name.lower() == "run.sh":
+            policy = resolve_run_sh_port_policy(worqspace_root)
+        if not policy:
+            continue
+        shell_errors = validate_run_sh_constraints(shell_content, policy)
+        if shell_errors:
             result['constraint_errors'].extend(
-                [f"{file_name}: {msg}" for msg in run_sh_errors]
+                [f"{file_name}: {msg}" for msg in shell_errors]
             )
             result['passed'] = False
 
@@ -999,6 +1156,65 @@ def _resolve_repair_scope_files(
     if not scope_files:
         scope_files = sorted(set(list(primary_deliverables or []) + list(briq_targets or [])))
     return scope_files
+
+
+def _resolve_repair_edit_targets(
+    *,
+    repair_plan_payload: dict,
+    validation_scope_files: list[str] | None,
+    briq_targets: list[str] | None,
+    primary_deliverables: list[str] | None,
+    lock_scope: dict | None = None,
+) -> list[str]:
+    payload = repair_plan_payload or {}
+    locked_scope = lock_scope or {}
+
+    def _norm(values: list[str] | set[str] | None) -> list[str]:
+        return normalize_file_hints(values or [])
+
+    plan_targets = set(_norm(payload.get("target_files")))
+    plan_validation_scope = set(_norm(payload.get("validation_scope_files")))
+    local_validation_scope = set(_norm(validation_scope_files))
+    local_targets = set(_norm(list(primary_deliverables or []) + list(briq_targets or [])))
+
+    base_scope: set[str]
+    if local_validation_scope:
+        base_scope = set(local_validation_scope)
+    elif plan_validation_scope:
+        base_scope = set(plan_validation_scope)
+    elif plan_targets:
+        base_scope = set(plan_targets)
+    else:
+        base_scope = set(local_targets)
+
+    if plan_targets:
+        overlap = base_scope & plan_targets
+        if overlap:
+            base_scope = overlap
+
+    # Keep manifest-local primaries editable when they are part of the targeted repair set.
+    if plan_targets:
+        base_scope.update(path for path in local_targets if path in plan_targets)
+    else:
+        base_scope.update(local_targets)
+
+    # Locked files remain immutable unless explicitly unlocked or implicated by hard failures.
+    locked_paths = set(_norm(locked_scope.get("locked_paths")))
+    unlocked_paths = set(_norm(locked_scope.get("unlocked_paths")))
+    hard_failure_paths = set(_norm(locked_scope.get("hard_failure_paths")))
+
+    filtered_scope = [
+        rel
+        for rel in sorted(base_scope)
+        if rel
+        and not is_infra_path(rel)
+        and (
+            rel not in locked_paths
+            or rel in unlocked_paths
+            or rel in hard_failure_paths
+        )
+    ]
+    return filtered_scope
 
 
 
@@ -1080,8 +1296,39 @@ def _evaluate_repair_scope_state(
             worqspace_root,
             scope_files=validation_scope_files or repair_targets,
             target_build_groups=[build_group] if build_group else None,
+            qodeyard_root=qodeyard_path,
         )
     )
+
+    harness_result = load_optional_json(worqspace_root / "qontract.d" / "harness-result.v1.json")
+    if isinstance(harness_result, dict) and harness_result and not bool(harness_result.get("passed", False)):
+        violations = harness_result.get("violations") if isinstance(harness_result.get("violations"), list) else []
+        if violations:
+            for violation in violations:
+                if not isinstance(violation, dict):
+                    continue
+                violation_files = normalize_file_hints(violation.get("files"))
+                violation_file = normalize_file_hints(violation.get("file"))
+                merged_files = sorted(set(violation_files + violation_file))
+                deterministic_issues.append({
+                    "source": "unknown",
+                    "severity": "error",
+                    "message": str(violation.get("message") or "Harness validation failed.").strip(),
+                    "file": merged_files[0] if merged_files else None,
+                    "files": merged_files,
+                })
+        else:
+            deterministic_issues.append({
+                "source": "unknown",
+                "severity": "error",
+                "message": str(
+                    harness_result.get("repair_directive")
+                    or harness_result.get("verdict_classification")
+                    or "Harness validation failed."
+                ).strip(),
+                "files": validation_scope_files or repair_targets,
+            })
+
     qonfirmer_report = None
     if is_contract_relevant and qonfirmer and contract_data:
         try:
@@ -1139,109 +1386,143 @@ def _render_open_fingerprint_summaries(open_fingerprints: list[dict]) -> str:
 
 
 
-def _load_task_contract_blob(worqspace_root: Path) -> str:
-    parts: list[str] = []
-    task_spec = load_optional_json(worqspace_root / "task" / "task-spec.v1.json")
-    for key in ("clarified_task_body", "goal"):
-        value = task_spec.get(key)
-        if isinstance(value, str) and value.strip():
-            parts.append(value)
-    tasq_path = worqspace_root / "tasq.md"
-    if tasq_path.exists():
-        try:
-            parts.append(tasq_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return "\n".join(parts).lower()
+def resolve_shellscript_contract_policies(worqspace_root: Path) -> dict[str, dict]:
+    harness = load_optional_json(worqspace_root / "qontract.d" / "qontract-harness.v1.json")
+    if not isinstance(harness, dict):
+        return {}
+    checks = harness.get("shellscript_checks")
+    if not isinstance(checks, list):
+        return {}
+    out: dict[str, dict] = {}
+    for row in checks:
+        if not isinstance(row, dict):
+            continue
+        rel = str(row.get("path") or row.get("file") or "").strip().replace("\\", "/")
+        while rel.startswith("./"):
+            rel = rel[2:]
+        if rel.startswith("qodeyard/"):
+            rel = rel[len("qodeyard/"):]
+        if not rel:
+            continue
+        policy = row.get("command_policy")
+        if not isinstance(policy, dict):
+            # Backward compatibility for older scalar policies.
+            scalar = str(row.get("policy") or "generic").strip() or "generic"
+            policy = {"policy": scalar}
+        out[rel] = policy
+    return out
 
 
 def resolve_run_sh_port_policy(worqspace_root: Path) -> str:
-    """Resolve run.sh port policy from task contract text.
+    """Compatibility shim for legacy tests/configs that expect named run.sh policies.
 
-    Returns:
-      - "exact_literal_8000": task explicitly requires exact literal launch cmd.
-      - "port_variable": task explicitly requires $PORT-style invocation.
-      - "generic": no explicit strict port style found.
+    Newer contract generation emits structured shell policies. This helper
+    preserves older symbolic policy IDs for callers that still request them.
     """
-    blob = _load_task_contract_blob(worqspace_root)
-    if not blob:
+    task_spec = load_optional_json(worqspace_root / "task" / "task-spec.v1.json")
+    text = "\n".join(
+        [
+            str(task_spec.get("clarified_task_body") or ""),
+            str(task_spec.get("task_body") or ""),
+            str(task_spec.get("goal") or ""),
+        ]
+    ).strip()
+    if not text:
         return "generic"
 
-    exact_literal_cmd = "python -m uvicorn main:app --reload --port 8000"
-    if exact_literal_cmd in blob and "must launch exactly" in blob:
+    lower = text.lower()
+    requires_exact_launch = ("launch exactly" in lower or "must launch exactly" in lower)
+    if not requires_exact_launch:
+        return "generic"
+
+    if "$port" in lower or "${port}" in lower:
+        return "exact_variable_port"
+    if re.search(r"--port\s+\d+", lower):
         return "exact_literal_8000"
-
-    if (
-        "--port $port" in blob
-        or "--port ${port}" in blob
-        or "pass the port variable" in blob
-        or "derive port from environment" in blob
-    ):
-        return "port_variable"
-
-    return "generic"
+    return "strict"
 
 
-def validate_run_sh_constraints(shell_content: str, policy: str) -> list[str]:
+def _validate_uvicorn_variable_port_policy(shell_content: str) -> list[str]:
+    """
+    Enforce env-based uvicorn port binding while allowing command formatting variance.
+
+    Accepts `$PORT` and `${PORT}`.
+    Rejects hardcoded numeric literals (for example `--port 8000`).
+    """
     errors: list[str] = []
-    content = shell_content or ""
+    saw_uvicorn = False
+    saw_valid_port = False
 
-    has_python_uvicorn = bool(
-        re.search(r'python3?\s+-m\s+uvicorn\s+main:app\b', content, flags=re.IGNORECASE)
-    )
-    if not has_python_uvicorn:
-        errors.append("must launch `python -m uvicorn main:app`")
+    for line_no, raw_line in enumerate((shell_content or "").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "uvicorn" not in line.lower():
+            continue
 
-    if policy == "exact_literal_8000":
-        exact_cmd = bool(
-            re.search(
-                r'python3?\s+-m\s+uvicorn\s+main:app\s+--reload\s+--port\s+8000\b',
-                content,
-                flags=re.IGNORECASE,
-            )
-        )
-        if not exact_cmd:
+        saw_uvicorn = True
+        try:
+            tokens = shlex.split(line, posix=True)
+        except ValueError:
+            errors.append(f"line {line_no}: shell tokenization failed for command: {line[:200]}")
+            continue
+
+        port_value: str | None = None
+        for idx, token in enumerate(tokens):
+            if token == "--port":
+                port_value = str(tokens[idx + 1]).strip() if idx + 1 < len(tokens) else ""
+                break
+            if token.startswith("--port="):
+                port_value = str(token.split("=", 1)[1]).strip()
+                break
+
+        if port_value is None:
+            continue
+        if port_value in {"$PORT", "${PORT}"}:
+            saw_valid_port = True
+            continue
+        if re.fullmatch(r"\d+", port_value):
             errors.append(
-                "must launch exactly `python -m uvicorn main:app --reload --port 8000`"
+                f"line {line_no}: hardcoded numeric port literal `{port_value}` is forbidden; use $PORT or ${{PORT}}"
             )
-        return errors
-
-    has_port_arg = bool(
-        re.search(
-            r'--port\s+(?:["\']?\$PORT["\']?|["\']?\$\{PORT\}["\']?|\d+\b)',
-            content,
-            flags=re.IGNORECASE,
-        )
-    )
-    if not has_port_arg:
-        errors.append("uvicorn command must include a valid --port argument")
-
-    hardcoded_numeric_port = bool(
-        re.search(r"--port\s+\d+\b", content, flags=re.IGNORECASE)
-    )
-
-    if policy == "port_variable":
-        uses_port_var = bool(
-            re.search(
-                r"--port\s+[\"']?\$PORT[\"']?|--port\s+[\"']?\$\{PORT\}[\"']?",
-                content,
-                flags=re.IGNORECASE,
-            )
-        )
-        if not uses_port_var:
+        else:
             errors.append(
-                "uvicorn command must pass the PORT variable instead of a literal value"
+                f"line {line_no}: invalid --port value `{port_value}`; use $PORT or ${{PORT}}"
             )
-        if hardcoded_numeric_port:
-            errors.append("hardcoded numeric port literal found in uvicorn command")
-        if re.search(r'PORT\s*[:=+-]*\s*[\'"]?\d+[\'"]?', content, flags=re.IGNORECASE):
-            errors.append(
-                "hardcoded numeric PORT assignment found; derive PORT without duplicating the literal from main.py"
-            )
-    elif hardcoded_numeric_port:
-        errors.append("hardcoded numeric port literal found in uvicorn command")
 
-    return errors
+    if not saw_uvicorn:
+        errors.append("must launch uvicorn with --port $PORT or ${PORT}")
+    elif not saw_valid_port and not errors:
+        errors.append("required variable reference missing: PORT")
+    return sorted(set(errors))
+
+
+def validate_run_sh_constraints(shell_content: str, policy: dict | str) -> list[str]:
+    if validate_run_sh_contract is None:
+        # Fallback for stripped environments where helper import failed.
+        return ["shellscript validator unavailable; could not enforce shellscript contract policy"]
+    effective_policy: dict | str = policy
+    if isinstance(policy, str):
+        symbolic = policy.strip().lower()
+        if symbolic == "exact_variable_port":
+            return _validate_uvicorn_variable_port_policy(shell_content)
+        legacy_exact_map = {
+            "exact_literal_8000": "python -m uvicorn main:app --reload --port 8000",
+        }
+        if symbolic in legacy_exact_map:
+            effective_policy = {
+                "allow_wrapper": False,
+                "allowed_boilerplate": ["set", "export"],
+                "exact_command_required": legacy_exact_map[symbolic],
+            }
+    errors = validate_run_sh_contract(shell_content, effective_policy)
+    normalized: list[str] = []
+    for msg in errors:
+        text = str(msg or "")
+        if "must include exact command" in text:
+            text = text.replace("must include exact command", "must launch exactly")
+        normalized.append(text)
+    return normalized
 
 
 
@@ -1257,7 +1538,7 @@ CRITICAL RETRY CORRECTION:
 The previous output failed deterministic local validation. Regenerate the affected files and fix all of these issues exactly:
 {bullets}
 
-For `run.sh`, follow the task's explicit launch-command contract exactly and avoid introducing alternate port conventions not requested by the task.
+For each shellscript, follow the current contract-defined command and safety rules exactly. Do not introduce wrapper or launch behavior that violates the shell contract.
 Return only corrected file blocks.
 """
 
@@ -1287,7 +1568,10 @@ def detect_execution_backend(provider: str, model: str) -> dict:
     backend_family = provider_value or "unknown"
     engine_id = f"{provider or 'unknown'}:{model or 'unknown'}"
 
-    if provider_value == "local" and "codex" in model_value:
+    if provider_value == "codeseeq":
+        backend_kind = "codex_style_scoped_execution_engine"
+        backend_family = "codeseeq"
+    elif provider_value == "local" and "codex" in model_value:
         backend_kind = "codex_style_scoped_execution_engine"
         backend_family = "codex"
     elif "codex" in provider_value or "codex" in model_value:
@@ -1319,12 +1603,31 @@ def parse_briq_metadata(briq_content: str) -> dict:
 
 
 def extract_briq_target_files(briq_content: str) -> list[str]:
+    plausible_extensions = {
+        "py", "pyi", "js", "jsx", "ts", "tsx", "html", "htm", "css",
+        "json", "yaml", "yml", "toml", "ini", "cfg", "conf", "env",
+        "md", "markdown", "txt", "csv", "xml", "sql",
+        "sh", "bash", "zsh", "ps1", "bat",
+        "go", "rs", "java", "kt", "swift", "rb", "php", "c", "h",
+        "cc", "cpp", "cxx", "hpp", "cs", "dart", "scala", "lua", "r",
+        "ipynb",
+    }
+
     def _looks_numeric_decimal_token(text: str) -> bool:
         # Guard against decimal values from timing/ratio prose (e.g. "0.00003")
         # being misidentified as file paths.
         return bool(re.fullmatch(r"\d+(?:\.\d+)+", text))
 
-    def _looks_like_target_file(candidate: str) -> bool:
+    def _has_plausible_extension(text: str) -> bool:
+        if "." not in text:
+            return False
+        tail = text.rsplit("/", 1)[-1]
+        if "." not in tail:
+            return False
+        _, ext = tail.rsplit(".", 1)
+        return ext.lower() in plausible_extensions
+
+    def _looks_like_target_file(candidate: str, *, explicit: bool = False) -> bool:
         text = _normalize_context_target(candidate)
         if not text:
             return False
@@ -1343,20 +1646,27 @@ def extract_briq_target_files(briq_content: str) -> list[str]:
                 return False
             if all(re.match(r"^[A-Za-z0-9_.-]+$", part) for part in parts):
                 tail = parts[-1]
-                if tail in {"Dockerfile", "Makefile", "run.sh", "requirements.txt"}:
+                if tail in {"Dockerfile", "Makefile"}:
                     return True
                 if "." not in tail or _looks_numeric_decimal_token(tail):
                     return False
                 base, ext = tail.rsplit(".", 1)
+                if not explicit and ext.lower() not in plausible_extensions:
+                    return False
                 if any(ch.isalpha() for ch in (base + ext)):
                     return True
                 return False
         ext_match = re.match(r"^([A-Za-z0-9_.-]+)\.([A-Za-z0-9]{1,10})$", text)
         if ext_match and not _looks_numeric_decimal_token(text):
             base, ext = ext_match.groups()
+            if not explicit and ext.lower() not in plausible_extensions:
+                return False
+            # Guard against object property references misread as files (e.g. `state.plan`).
+            if not explicit and not _has_plausible_extension(text):
+                return False
             if any(ch.isalpha() for ch in (base + ext)):
                 return True
-        if text in {"Dockerfile", "Makefile", "run.sh", "requirements.txt"}:
+        if text in {"Dockerfile", "Makefile"}:
             return True
         return False
 
@@ -1377,7 +1687,7 @@ def extract_briq_target_files(briq_content: str) -> list[str]:
         if inline_required:
             for part in inline_required.group(1).split(","):
                 cleaned = _normalize_context_target(part.strip().strip("`\"'"))
-                if _looks_like_target_file(cleaned):
+                if _looks_like_target_file(cleaned, explicit=True):
                     targets.append(cleaned)
         if (
             re.search(r"\brequired[-_ ]files?\b", lower)
@@ -1403,12 +1713,12 @@ def extract_briq_target_files(briq_content: str) -> list[str]:
         candidate = re.sub(r"^\d+\.\s*", "", candidate).strip()
         candidate = candidate.strip("`\"'")
         cleaned = _normalize_context_target(candidate)
-        if _looks_like_target_file(cleaned):
+        if _looks_like_target_file(cleaned, explicit=True):
             targets.append(cleaned)
 
-    # Fallback extraction for plain prose ("Add script run.sh", etc.).
+    # Fallback extraction for plain prose that still names file paths.
     for match in re.finditer(
-        r"(?<![\w/])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]{1,10}|Dockerfile|Makefile|run\.sh|requirements\.txt)(?![\w/])",
+        r"(?<![\w/])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]{1,10}|Dockerfile|Makefile)(?![\w/])",
         briq_content,
     ):
         candidate = _normalize_context_target(match.group(1))
@@ -1447,6 +1757,8 @@ def _parse_metadata_file_list(value: str | None) -> list[str]:
         item = _normalize_context_target(chunk).strip()
         if not item:
             continue
+        if item.lower() in {"e.g", "i.e"}:
+            continue
         if item.startswith("../") or item.startswith("/"):
             continue
         if is_infra_path(item):
@@ -1464,6 +1776,32 @@ def _resolve_completion_required_files(completion_criteria_payload: dict | None)
         if cleaned and not is_infra_path(cleaned):
             required.append(cleaned)
     return sorted(set(required))
+
+
+def _completion_required_files_apply_to_single_briq_group(
+    planning_payload: dict | None,
+    *,
+    build_group_id: str,
+    briq_ref: str,
+) -> bool:
+    if not isinstance(planning_payload, dict):
+        return False
+    groups = [group for group in planning_payload.get("items", []) or [] if isinstance(group, dict)]
+    if len(groups) != 1:
+        return False
+    group = groups[0]
+    if build_group_id and str(group.get("build_group_id", "")).strip() != build_group_id:
+        return False
+    group_briqs = [
+        str(item).strip().lower()
+        for item in (group.get("briq_refs", []) or [])
+        if str(item).strip()
+    ]
+    if len(group_briqs) > 1:
+        return False
+    if briq_ref and group_briqs and group_briqs[0] != briq_ref:
+        return False
+    return True
 
 
 def _resolve_briq_primary_deliverables(
@@ -1506,6 +1844,12 @@ def _resolve_briq_primary_deliverables(
                 break
     if not primary and completion_required_files:
         primary.update({t for t in group_targets if t in set(completion_required_files)})
+    if completion_required_files and _completion_required_files_apply_to_single_briq_group(
+        planning_payload,
+        build_group_id=build_group_id,
+        briq_ref=briq_ref,
+    ):
+        primary.update(completion_required_files)
     return sorted(primary)
 
 
@@ -1857,6 +2201,56 @@ def _filter_extracted_files_to_allowlist(
     return filtered, sorted(set(dropped))
 
 
+def _resolve_locked_scope_from_repair_plan(repair_plan_payload: dict) -> dict:
+    payload = repair_plan_payload or {}
+    locked_paths = {
+        str(item).strip()
+        for item in (payload.get("locked_file_paths") or payload.get("locked_files") or [])
+        if str(item).strip()
+    }
+    unlocked_paths = {
+        str(item).strip()
+        for item in (payload.get("unlocked_file_paths") or [])
+        if str(item).strip()
+    }
+    hard_failure_paths = {
+        str(item).strip()
+        for item in (payload.get("hard_failure_files") or [])
+        if str(item).strip()
+    }
+    return {
+        "locked_paths": locked_paths,
+        "unlocked_paths": unlocked_paths,
+        "hard_failure_paths": hard_failure_paths,
+    }
+
+
+def _filter_locked_file_edits(
+    extracted_files: dict[str, str],
+    *,
+    lock_scope: dict,
+) -> tuple[dict[str, str], list[str]]:
+    locked_paths = set(lock_scope.get("locked_paths") or set())
+    unlocked_paths = set(lock_scope.get("unlocked_paths") or set())
+    hard_failure_paths = set(lock_scope.get("hard_failure_paths") or set())
+    if not locked_paths:
+        return dict(extracted_files or {}), []
+    filtered: dict[str, str] = {}
+    violations: list[str] = []
+    for rel_path, content in (extracted_files or {}).items():
+        rel = str(rel_path or "").strip()
+        if (
+            rel
+            and rel in locked_paths
+            and rel not in unlocked_paths
+            and rel not in hard_failure_paths
+        ):
+            violations.append(rel)
+            continue
+        filtered[rel] = content
+    return filtered, sorted(set(violations))
+
+
 def _build_hybrid_transport_decisions(
     *,
     briq_content: str,
@@ -2106,6 +2500,95 @@ def build_group_context(metadata: dict, planning_payload: dict, component_contra
         lines.append("- Component Constraints:")
         for item in component['constraints'][:6]:
             lines.append(f"  - {item}")
+    return "\n".join(lines) + "\n"
+
+
+def build_harness_prompt_context(worqspace_root: Path, target_files: list[str] | None = None) -> str:
+    """Render deterministic acceptance-harness rules into compact builder context."""
+    harness = load_optional_json(worqspace_root / "qontract.d" / "qontract-harness.v1.json")
+    if not isinstance(harness, dict) or not harness:
+        return ""
+
+    target_set = {str(path).strip().replace("\\", "/") for path in (target_files or []) if str(path).strip()}
+    lines = [
+        "",
+        "**DETERMINISTIC ACCEPTANCE HARNESS (MUST PASS):**",
+    ]
+
+    file_rules = harness.get("file_rules", {}) if isinstance(harness.get("file_rules"), dict) else {}
+    required_files = [str(path) for path in file_rules.get("required_files", []) if str(path).strip()]
+    if required_files:
+        lines.append("- Required files: " + ", ".join(required_files))
+    allowed_only = [str(path) for path in file_rules.get("allowed_only_files", []) if str(path).strip()]
+    if allowed_only:
+        lines.append("- Allowed source files only: " + ", ".join(allowed_only))
+        lines.append("- Do not create test files, README files, helper files, package manifests, or other extras unless listed above.")
+
+    dependency_rules = harness.get("dependency_rules", {}) if isinstance(harness.get("dependency_rules"), dict) else {}
+    required_deps = [str(dep) for dep in dependency_rules.get("required_dependencies", []) if str(dep).strip()]
+    if required_deps:
+        lines.append("- Required dependencies: " + ", ".join(required_deps))
+    if required_deps and not bool(dependency_rules.get("allow_unspecified_dependencies", True)):
+        lines.append("- Do not add dependencies beyond: " + ", ".join(required_deps))
+
+    shell_checks = harness.get("shellscript_checks", []) if isinstance(harness.get("shellscript_checks"), list) else []
+    for row in shell_checks:
+        if not isinstance(row, dict):
+            continue
+        rel = str(row.get("path") or row.get("file") or "").strip().replace("\\", "/")
+        if target_set and rel and rel not in target_set and "run.sh" not in target_set:
+            continue
+        policy = row.get("command_policy") if isinstance(row.get("command_policy"), dict) else {}
+        lines.append(f"- Shellscript `{rel or 'run.sh'}` must pass its command policy.")
+        exact_cmd = str(policy.get("exact_command_required") or "").strip()
+        if exact_cmd:
+            lines.append(f"  - Use this launcher command exactly: `{exact_cmd}`")
+            lines.append("  - Do not add wrapper launch behavior around the exact command.")
+        required_vars = [str(var) for var in policy.get("required_variables", []) if str(var).strip()]
+        if required_vars:
+            lines.append("  - Required shell variable references: " + ", ".join(required_vars))
+
+    runtime_checks = harness.get("runtime_checks", []) if isinstance(harness.get("runtime_checks"), list) else []
+    for row in runtime_checks:
+        if not isinstance(row, dict):
+            continue
+        if row.get("runtime_type") != "http_service":
+            continue
+        launch_command = str(row.get("launch_command") or "").strip()
+        if launch_command:
+            lines.append(f"- Runtime launch command used by harness: `{launch_command}`")
+        ready = row.get("ready_probe") if isinstance(row.get("ready_probe"), dict) else {}
+        if ready:
+            lines.append(
+                f"- Readiness probe: GET `{ready.get('path')}` must return HTTP {ready.get('expected_status')}"
+            )
+        probes = row.get("probes") if isinstance(row.get("probes"), list) else []
+        if probes:
+            lines.append("- HTTP probes:")
+            for probe in probes[:12]:
+                if not isinstance(probe, dict):
+                    continue
+                method = str(probe.get("method") or "GET").upper()
+                path = str(probe.get("path") or "").strip()
+                expected = probe.get("expected_status")
+                if not path:
+                    continue
+                lines.append(f"  - {method} `{path}` must return HTTP {expected}")
+                if method == "POST" and str(expected) == "201":
+                    lines.append("    - For FastAPI, set the POST route status_code=201 or equivalent.")
+
+    behavior = harness.get("behavior_checks", {}) if isinstance(harness.get("behavior_checks"), dict) else {}
+    exact_fields = behavior.get("exact_model_fields") if isinstance(behavior.get("exact_model_fields"), dict) else {}
+    for model, fields in exact_fields.items():
+        if isinstance(fields, list) and fields:
+            lines.append(f"- `{model}` fields must be exactly: " + ", ".join(str(field) for field in fields))
+
+    scope_rules = [str(rule).strip() for rule in harness.get("scope_rules", []) if str(rule).strip()]
+    if scope_rules:
+        lines.append("- Scope rules:")
+        for rule in scope_rules[:8]:
+            lines.append(f"  - {rule}")
+
     return "\n".join(lines) + "\n"
 
 
@@ -2655,14 +3138,20 @@ def _extract_ai_output_files(result: str, qodeyard: Path) -> dict[str, str]:
             "# ... (body stripped by Qompressor) ...",
             "// ... (body stripped by Qompressor) ...",
             "/* ... (body stripped by Qompressor) ... */",
-            "(body stripped by Qompressor)"
+            "(body stripped by Qompressor)",
+            "QONQ_FIDELITY: skeleton",
+            "QONQ_DO_NOT_WRITE_BACK: true",
         ]
-        if any(marker in code_content for marker in skeleton_markers):
+        lowered_content = code_content.lower()
+        if any(marker.lower() in lowered_content for marker in skeleton_markers):
             print(f"     [SKIP] Skeleton detected (not overwriting): {filename}", flush=True)
             continue
 
         # Sanitize filename
         raw_name = filename.strip()
+        # Keep absolute-path intent detectable. We reject these later via
+        # relative_to(qodeyard), but we must not normalize away the prefix.
+        path_was_absolute = raw_name.startswith(("/", "\\")) or bool(re.match(r"^[A-Za-z]:[\\/]", raw_name))
         if raw_name.startswith('qodeyard/'):
             raw_name = raw_name[len('qodeyard/'):]
 
@@ -2684,7 +3173,7 @@ def _extract_ai_output_files(result: str, qodeyard: Path) -> dict[str, str]:
                 project_name_candidates.append(qage_name)
         except Exception:
             pass
-        if project_name_candidates:
+        if project_name_candidates and not path_was_absolute:
             raw_name = strip_project_prefix(raw_name, project_name_candidates)
 
         # v1.3.10: Reject infrastructure paths outright. The AI has no
@@ -2698,16 +3187,19 @@ def _extract_ai_output_files(result: str, qodeyard: Path) -> dict[str, str]:
 
         filename = raw_name
 
-        qodeyard_abs = qodeyard.resolve()
-        proposed_path = qodeyard_abs.joinpath(filename.strip())
-        proposed_abs = proposed_path.resolve()
-
-        # Security check
-        if not str(proposed_abs).startswith(str(qodeyard_abs)):
+        try:
+            qodeyard_abs = qodeyard.resolve()
+            proposed_path = qodeyard_abs.joinpath(filename.strip())
+            proposed_abs = proposed_path.resolve()
+        except Exception:
             print(f"     [WARN] Skipping unsafe path: {filename}", flush=True)
             continue
 
-        safe_filename = proposed_abs.relative_to(qodeyard_abs)
+        try:
+            safe_filename = proposed_abs.relative_to(qodeyard_abs)
+        except ValueError:
+            print(f"     [WARN] Skipping unsafe path: {filename}", flush=True)
+            continue
 
         # v1.3.10: Belt-and-braces — re-check after relativisation in case
         # path traversal or symlink resolution surfaced an infra segment.
@@ -3648,7 +4140,8 @@ def _build_core_prompt(coding_mode: str, context_type: str, mode: str, mode_prom
     
     base_instructions = f"""You are the 'construQtor'.
 **OBJECTIVE:** Write the code to implement the plan defined in the 'briq'.
-**CONTEXT:** You have been provided with the {context_type} of the existing codebase. Use this structural context to ensure your generated code integrates correctly with the existing project.
+**CONTEXT:** You have been provided with the {context_type} of the existing codebase.
+Treat qodeyard full-source sections as authoritative. Treat skeleton/qontext sections as navigation-only support.
 **ABSOLUTE DIRECTIVE:** ALL code output MUST be written to the `qodeyard/` directory.
 Your output files live at repo root. Never import using qodeyard or any workspace-internal path.
 
@@ -3745,6 +4238,13 @@ def process_briq_interleaved(
     write_strategy_config: dict | None = None,
     execution_backend: dict | None = None,
     repo_config: dict | None = None,
+    bloq_path: Path | None = None,
+    qontext_path: Path | None = None,
+    qache_path: Path | None = None,
+    use_qompressor: bool = True,
+    use_qontextor: bool = True,
+    use_qontrabender: bool = True,
+    context_strategy: str | None = None,
 ) -> dict:
     """
     Process a single briq with interleaved build + review.
@@ -3771,6 +4271,10 @@ def process_briq_interleaved(
         }
     """
     briq_name = briq_file.stem
+    bloq_path = bloq_path or (worqspace_root / "bloq.d")
+    qontext_path = qontext_path or (worqspace_root / "qontext.d")
+    qache_path = qache_path or (worqspace_root / "qache.d")
+    context_strategy = (context_strategy or "hybrid_fidelity").strip().lower()
     max_attempts = retry_config['max_attempts'] if retry_config['enabled'] else 1
     retry_delay = retry_config['retry_delay']
     do_local_validation = interleaved_config['local_validation']
@@ -3812,9 +4316,18 @@ def process_briq_interleaved(
         if isinstance(repair_plan_payload.get("repair_escalation"), dict)
         else {}
     )
-    repair_plan_target_files = sorted(list(set(
-        repair_plan_payload.get("target_files") or []
-    )))
+    repair_plan_target_files = sorted(set(normalize_file_hints(repair_plan_payload.get("target_files") or [])))
+    repair_lock_scope = _resolve_locked_scope_from_repair_plan(repair_plan_payload)
+    if repair_plan_target_files and repair_lock_scope.get("locked_paths"):
+        repair_plan_target_files = [
+            rel
+            for rel in repair_plan_target_files
+            if (
+                rel not in set(repair_lock_scope.get("locked_paths") or set())
+                or rel in set(repair_lock_scope.get("unlocked_paths") or set())
+                or rel in set(repair_lock_scope.get("hard_failure_paths") or set())
+            )
+        ]
     recommended_failure_class = normalize_failure_class(
         repair_plan_escalation.get("recommended_failure_class")
     )
@@ -3868,13 +4381,18 @@ def process_briq_interleaved(
         planning_payload if isinstance(planning_payload, dict) else None,
         completion_required_files,
     )
-    if os.environ.get("QONQ_REPAIR_MODE") == "1" and repair_plan_target_files:
-        # Surgical repair: focus only on files identified by InspeQtor
-        primary_deliverables = [f for f in primary_deliverables if f in repair_plan_target_files]
+    harness_context = build_harness_prompt_context(
+        worqspace_root,
+        primary_deliverables or briq_targets,
+    )
 
     result['metadata']['target_files'] = briq_targets
     result['metadata']['primary_deliverables'] = primary_deliverables
     result['metadata']['completion_required_files'] = completion_required_files
+    result['metadata']['locked_file_paths'] = sorted(repair_lock_scope.get("locked_paths") or [])
+    result['metadata']['unlocked_file_paths'] = sorted(repair_lock_scope.get("unlocked_paths") or [])
+    result['metadata']['hard_failure_files'] = sorted(repair_lock_scope.get("hard_failure_paths") or [])
+    result['metadata']['repair_scope_violations'] = []
     validation_scope_files = _resolve_repair_scope_files(
         worqspace_root,
         repair_plan_payload=repair_plan_payload,
@@ -3882,16 +4400,111 @@ def process_briq_interleaved(
         briq_targets=briq_targets,
         primary_deliverables=primary_deliverables,
     )
-    result['metadata']['validation_scope_files'] = validation_scope_files
-    qontext_path = worqspace_root / "qontext.d"
-    filtered_context_files = _select_context_files_for_briq(
-        all_context_files,
-        briq_targets,
-        qontext_path,
-        max_files=DEFAULT_CONTEXT_FILES_PER_ATTEMPT,
+    repair_edit_targets = _resolve_repair_edit_targets(
+        repair_plan_payload=repair_plan_payload,
+        validation_scope_files=validation_scope_files,
+        briq_targets=briq_targets,
+        primary_deliverables=primary_deliverables,
+        lock_scope=repair_lock_scope,
     )
+    result['metadata']['validation_scope_files'] = validation_scope_files
+    result['metadata']['repair_edit_targets'] = repair_edit_targets
+    editable_targets = (
+        repair_edit_targets
+        if os.environ.get("QONQ_REPAIR_MODE") == "1"
+        else (primary_deliverables or briq_targets)
+    )
+    if not editable_targets:
+        editable_targets = briq_targets
+
+    repair_targets_for_invariant = []
+    if os.environ.get("QONQ_REPAIR_MODE") == "1":
+        repair_targets_for_invariant = repair_edit_targets or validation_scope_files or primary_deliverables or briq_targets
+
+    strategy_cfg = get_context_strategy_config(repo_config, os.environ.get("QONQ_REPAIR_MODE") == "1")
     
-    # Build prompt
+    max_neighbor_chars = int(
+        strategy_cfg.get(
+            "direct_dependencies_full_if_small_max_chars",
+            DEFAULT_CONTEXT_STRATEGY["direct_dependencies_full_if_small_max_chars"],
+        )
+        or DEFAULT_CONTEXT_STRATEGY["direct_dependencies_full_if_small_max_chars"]
+    )
+    max_full_neighbors = int(
+        strategy_cfg.get("max_full_neighbors", DEFAULT_CONTEXT_STRATEGY["max_full_neighbors"])
+        or DEFAULT_CONTEXT_STRATEGY["max_full_neighbors"]
+    )
+    max_indirect_neighbors = int(
+        strategy_cfg.get("max_indirect_neighbors", DEFAULT_CONTEXT_STRATEGY["max_indirect_neighbors"])
+        or DEFAULT_CONTEXT_STRATEGY["max_indirect_neighbors"]
+    )
+
+    context_bundle = build_context_bundle(
+        qodeyard_path=qodeyard_path,
+        bloq_path=bloq_path,
+        qontext_path=qontext_path,
+        editable_targets=editable_targets,
+        repair_targets=repair_targets_for_invariant,
+        use_qompressor=use_qompressor,
+        use_qontextor=use_qontextor,
+        context_strategy=context_strategy,
+        max_neighbor_full_chars=max_neighbor_chars,
+        max_full_neighbors=max_full_neighbors,
+        max_indirect=max_indirect_neighbors,
+        repair_level=initial_level if os.environ.get("QONQ_REPAIR_MODE") == "1" else None,
+    )
+    validate_bundle_invariants(
+        bundle=context_bundle,
+        qodeyard_path=qodeyard_path,
+        bloq_path=bloq_path,
+        qontext_path=qontext_path,
+        repair_targets=repair_targets_for_invariant,
+    )
+    result['metadata']['context_bundle_files'] = [
+        {
+            "path": item.rel_path,
+            "fidelity": item.fidelity,
+            "editable": bool(item.editable),
+            "reason": item.reason,
+            "source": item.source,
+        }
+        for item in context_bundle
+    ]
+    qache_valid_result = None
+    if use_qontrabender:
+        qache_valid_result = validate_qache_manifest_for_construqtor(
+            qache_dir=qache_path,
+            provider=ai_provider,
+            model=ai_model,
+            pass_kind=os.environ.get("QONQ_PASS_KIND", "build"),
+            repair_mode=os.environ.get("QONQ_REPAIR_MODE") == "1",
+            cycle_num=os.environ.get("CYCLE_NUM", ""),
+            expected_targets=editable_targets,
+            expected_repair_targets=repair_targets_for_invariant,
+            qodeyard_path=qodeyard_path,
+            build_pass_index=os.environ.get("QONQ_BUILD_PASS_INDEX"),
+            repair_pass_index=os.environ.get("QONQ_REPAIR_PASS_INDEX"),
+            require_hotset_payload=False,
+        )
+        if qache_path.exists() and not qache_valid_result.valid:
+            print("     [Context] qache payload ignored (manifest mismatch or stale source).", flush=True)
+
+    include_cached_stable = qache_valid_result is not None and qache_valid_result.cached_stable_allowed
+
+    bundle_prompt_sections = build_bundle_prompt_sections(
+        bundle=context_bundle,
+        qache_dir=qache_path,
+        max_chars_per_file=max_neighbor_chars,
+        include_cached_stable=include_cached_stable,
+    )
+    cached_sections = [s for s in bundle_prompt_sections if s.get("section_type") == "cached_stable_context"]
+    structural_sections = [s for s in bundle_prompt_sections if s.get("section_type") == "structural_context"]
+    readonly_sections = [s for s in bundle_prompt_sections if s.get("section_type") == "full_readonly_context"]
+    editable_sections = [s for s in bundle_prompt_sections if s.get("section_type") == "full_editable_context"]
+    hotset_sections = []
+    filtered_context_files: list[str] = []
+
+    # Build prompt (order is provider-cache aware and deterministic).
     core_prompt = _build_core_prompt(coding_mode, context_type, mode, mode_prompt)
     prompt_sections = [
         {
@@ -3901,15 +4514,9 @@ def process_briq_interleaved(
             'loss_policy': 'preserve',
             'section_type': 'instructions',
         },
-        {
-            'label': 'briq_plan',
-            'content': f"**Plan (from Briq):**\n{briq_content}\n",
-            'required': True,
-            'loss_policy': 'preserve',
-            'section_type': 'task',
-            'source_files': [str(briq_file)],
-        },
     ]
+    prompt_sections.extend(cached_sections)
+    contract_sections = []
     # v1.3.13: Six-Shooter Qontract selective ingestion
     six_shooter_docs = (constitutional_sections or {}).get("six_shooter_docs", {})
     if six_shooter_docs:
@@ -3938,7 +4545,7 @@ def process_briq_interleaved(
             found_name = next((n for n in six_shooter_docs if n.startswith(doc_id)), None)
             if found_name:
                 label_pretty = found_name.split('-', 1)[-1].replace('.md', '').upper().replace('-', ' ')
-                prompt_sections.append({
+                contract_sections.append({
                     'label': f'six_shooter_{doc_id}',
                     'content': f"**PROJECT CONSTITUTION ({label_pretty} — MUST OBEY):**\n{six_shooter_docs[found_name]}\n",
                     'required': True,
@@ -3947,7 +4554,7 @@ def process_briq_interleaved(
                 })
 
     if constitutional_sections.get('qontract'):
-        prompt_sections.append({
+        contract_sections.append({
             'label': 'qontract',
             'content': f"**PROJECT CONSTITUTION (QONTRACT — MUST OBEY):**\n{constitutional_sections['qontract']}\n",
             'required': True,
@@ -3955,13 +4562,35 @@ def process_briq_interleaved(
             'section_type': 'contract',
         })
     if grouped_context.strip():
-        prompt_sections.append({
+        contract_sections.append({
             'label': 'grouped_build_context',
             'content': grouped_context,
             'required': True,
             'loss_policy': 'preserve',
             'section_type': 'build_group_context',
         })
+    if harness_context.strip():
+        contract_sections.append({
+            'label': 'acceptance_harness',
+            'content': harness_context,
+            'required': True,
+            'loss_policy': 'preserve',
+            'section_type': 'contract',
+        })
+    prompt_sections.extend(contract_sections)
+    prompt_sections.extend(structural_sections)
+    prompt_sections.extend(readonly_sections)
+    prompt_sections.extend(editable_sections)
+    prompt_sections.append(
+        {
+            'label': 'briq_plan',
+            'content': f"**Plan (from Briq):**\n{briq_content}\n",
+            'required': True,
+            'loss_policy': 'preserve',
+            'section_type': 'task',
+            'source_files': [str(briq_file)],
+        }
+    )
     if repair_context.strip():
         prompt_sections.append({
             'label': 'repair_context',
@@ -3970,6 +4599,7 @@ def process_briq_interleaved(
             'loss_policy': 'chunkable',
             'section_type': 'repair_context',
         })
+    prompt_sections.extend(hotset_sections)
     if constitutional_sections.get('cycle1_tasq'):
         prompt_sections.append({
             'label': 'cycle1_tasq_anchor',
@@ -3999,19 +4629,13 @@ def process_briq_interleaved(
 
     # v1.3.13: Level 0 Verification Gate (Recheck before repair)
     if os.environ.get("QONQ_REPAIR_MODE") == "1":
-        if repair_plan_target_files:
-            repair_targets = sorted([f for f in (validation_scope_files or briq_targets or primary_deliverables) if f in repair_plan_target_files])
-            if not repair_targets:
-                 print(f"     [Level 0] No repair targets for {briq_name} in the global plan. Skipping.", flush=True)
-                 result['status'] = 'success'
-                 result['written_files'] = []
-                 result['attempts'] = 0
-                 return result
+        if repair_edit_targets:
+            repair_targets = sorted(repair_edit_targets)
         else:
-            repair_targets = sorted(primary_deliverables)
+            repair_targets = sorted(primary_deliverables or briq_targets)
             if not repair_targets:
-                 print(f"     [Level 0] No primary deliverables for {briq_name} to recheck. Proceeding.", flush=True)
-                 repair_targets = []
+                print(f"     [Level 0] No primary deliverables for {briq_name} to recheck. Proceeding.", flush=True)
+                repair_targets = []
 
         if repair_targets:
             print(f"     [Level 0] Rechecking existing state for {len(repair_targets)} target(s) in {briq_name}:", flush=True)
@@ -4164,11 +4788,11 @@ def process_briq_interleaved(
                 current_sections.append(dict(section))
 
             # v1.3.13: Surgical repair directive
-            if os.environ.get("QONQ_REPAIR_MODE") == "1" and repair_plan_target_files:
+            if os.environ.get("QONQ_REPAIR_MODE") == "1" and repair_edit_targets:
                 surgical_text = (
                     "**SURGICAL REPAIR DIRECTIVE (MUST OBEY):**\n"
                     "This is a precision repair pass. You MUST ONLY modify the following files:\n"
-                    + "\n".join(f"- {f}" for f in sorted(repair_plan_target_files)) + "\n"
+                    + "\n".join(f"- {f}" for f in sorted(repair_edit_targets)) + "\n"
                     + "Do NOT touch any other files. If a file is not in this list, it is considered already correct.\n"
                 )
                 current_sections.insert(0, {
@@ -4224,22 +4848,12 @@ def process_briq_interleaved(
             try:
                 if coding_mode == 'direct':
                     print(f"     [Mode] direct coding enabled (sandbox + repair-forward)", flush=True)
-                    # v1.3.13: Surgical repair focus. In repair mode, we anchor on 
-                    # primary_deliverables to avoid collateral damage to dependencies 
-                    # that are merely in Target-Files.
                     if os.environ.get("QONQ_REPAIR_MODE") == "1":
-                        repair_anchor = primary_deliverables if primary_deliverables else briq_targets
+                        repair_anchor = repair_edit_targets or validation_scope_files or primary_deliverables or briq_targets
                     else:
                         repair_anchor = set(primary_deliverables or []) | set(briq_targets or [])
                     
                     direct_targets_for_attempt = sorted(set(repair_anchor or []))
-                    
-                    if os.environ.get("QONQ_REPAIR_MODE") == "1" and repair_plan_target_files:
-                        # Only repair files that are actually in the repair plan's target list
-                        direct_targets_for_attempt = [
-                            f for f in direct_targets_for_attempt
-                            if f in repair_plan_target_files
-                        ]
 
                     direct_targets_for_attempt = [
                         path for path in direct_targets_for_attempt if str(path).strip() and not is_infra_path(path)
@@ -4299,20 +4913,12 @@ def process_briq_interleaved(
                 elif coding_mode == 'hybrid':
                     print(f"     [Mode] hybrid coding enabled (policy-driven transport)", flush=True)
 
-                    # v1.3.13: Surgical repair focus for heredoc mode
                     if os.environ.get("QONQ_REPAIR_MODE") == "1":
-                        repair_anchor = primary_deliverables if primary_deliverables else briq_targets
+                        repair_anchor = repair_edit_targets or validation_scope_files or primary_deliverables or briq_targets
                     else:
                         repair_anchor = set(primary_deliverables or []) | set(briq_targets or [])
                         
                     candidate_files = sorted(set(repair_anchor or []))
-                    
-                    if os.environ.get("QONQ_REPAIR_MODE") == "1" and repair_plan_target_files:
-                        # Only repair files that are actually in the repair plan's target list
-                        candidate_files = [
-                            f for f in candidate_files
-                            if f in repair_plan_target_files
-                        ]
 
                     candidate_files = [path for path in candidate_files if not is_infra_path(path)]
                     if not candidate_files:
@@ -4626,6 +5232,24 @@ def process_briq_interleaved(
                 else:
                     os.environ["QONQ_INCLUDE_PREVIOUS_LOG"] = previous_log_env
 
+            extracted_files, locked_scope_violation_paths = _filter_locked_file_edits(
+                extracted_files,
+                lock_scope=repair_lock_scope,
+            )
+            if locked_scope_violation_paths:
+                print(
+                    "     [REPAIR-SCOPE] 🚫 Locked-file edit blocked: "
+                    + ", ".join(locked_scope_violation_paths),
+                    flush=True,
+                )
+                result['metadata'].setdefault('repair_scope_violations', []).append(
+                    {
+                        "attempt": attempt,
+                        "paths": locked_scope_violation_paths,
+                        "reason": "locked_file_modified_without_explicit_unlock",
+                    }
+                )
+
             if not extracted_files and coding_mode != 'direct':
                  print(f"     [WARN] No files extracted from AI response (attempt {attempt})", flush=True)
 
@@ -4666,6 +5290,8 @@ def process_briq_interleaved(
                     if coding_mode in {'direct', 'hybrid'}
                     else "build_group"
                 ),
+                "repair_scope_violation_paths": list(locked_scope_violation_paths),
+                "repair_scope_violation": bool(locked_scope_violation_paths),
                 "transport_decisions": hybrid_transport_decisions if coding_mode == 'hybrid' else [],
                 "hybrid_fallback_events": hybrid_fallback_events if coding_mode == 'hybrid' else [],
                 "repair_level": active_repair_level,
@@ -4701,6 +5327,18 @@ def process_briq_interleaved(
                     staged_files=staged_attempt['staged_files'],
                     qodeyard_path=qodeyard_path,
                 )
+                if locked_scope_violation_paths:
+                    result['error'] = (
+                        "Repair scope violation: attempted edit to locked file(s): "
+                        + ", ".join(locked_scope_violation_paths)
+                    )
+                    attempt_failure_status = "failed_scope_violation"
+                    if attempt < max_attempts:
+                        retry_correction = (
+                            "REPAIR SCOPE VIOLATION:\n"
+                            + "\n".join(f"- {item}" for item in locked_scope_violation_paths)
+                            + "\nDo not modify locked files in this repair pass."
+                        )
                 if coding_mode in {'direct', 'hybrid'} and (briq_targets or primary_deliverables):
                     parse_failures = int(direct_loop_meta.get("parse_failures", 0))
                     apply_errors = int(direct_loop_meta.get("apply_errors", 0))
@@ -4713,7 +5351,7 @@ def process_briq_interleaved(
                         if not target_path.exists():
                             all_exist = False
                             break
-                    if all_exist and no_tool_errors and not missing_primary_outputs:
+                    if all_exist and no_tool_errors and not missing_primary_outputs and not locked_scope_violation_paths:
                         no_op_state = _evaluate_repair_scope_state(
                             worqspace_root,
                             qodeyard_path,
@@ -4805,7 +5443,7 @@ def process_briq_interleaved(
                             validation_payload=result.get('validation', {}),
                             qonfirmer_payload=result.get('qonfirmer_report'),
                             missing_primary=missing_primary_outputs,
-                            target_files=primary_deliverables or briq_targets,
+                            target_files=repair_edit_targets or primary_deliverables or briq_targets,
                             violation_rows=[],
                         )
                     current_failure_class, current_failure_reason = classify_attempt_failure(
@@ -4849,12 +5487,27 @@ def process_briq_interleaved(
             
             # STEP 2: Qualification
             build_passed = True
+            if locked_scope_violation_paths:
+                build_passed = False
+                attempt_failure_status = "failed_scope_violation"
+                result['error'] = (
+                    "Repair scope violation: attempted edit to locked file(s): "
+                    + ", ".join(locked_scope_violation_paths)
+                )
+                print(f"     [Gate] ❌ {result['error']}", flush=True)
+                if attempt < max_attempts:
+                    retry_correction = (
+                        "REPAIR SCOPE VIOLATION:\n"
+                        + "\n".join(f"- {item}" for item in locked_scope_violation_paths)
+                        + "\nThese files are locked and must not be modified in this repair pass. "
+                        + "Regenerate only the allowed target files."
+                    )
             missing_primary_outputs = _missing_required_outputs(
                 primary_deliverables,
                 staged_files=staged_attempt['staged_files'],
                 qodeyard_path=qodeyard_path,
             )
-            if missing_primary_outputs:
+            if missing_primary_outputs and build_passed:
                 if coding_mode == 'hybrid':
                     for rel_path in missing_primary_outputs:
                         rel = str(rel_path).strip()
@@ -5109,7 +5762,7 @@ def process_briq_interleaved(
                         validation_payload=result.get('validation', {}),
                         qonfirmer_payload=result.get('qonfirmer_report'),
                         missing_primary=missing_primary_outputs,
-                        target_files=primary_deliverables or briq_targets,
+                        target_files=repair_edit_targets or primary_deliverables or briq_targets,
                         violation_rows=attempt_violation_rows,
                     )
                 current_failure_class, current_failure_reason = classify_attempt_failure(
@@ -5333,17 +5986,12 @@ def main():
     agent_cfg = config.get('agents', {}).get('construqtor', {})
     ai_provider, ai_model = lib_ai.get_agent_ai_params(config, 'construqtor', 'venice', 'deepseek-v3.2')
     use_qompressor = config.get('options', {}).get('use_qompressor', True)
+    use_qontextor = config.get('options', {}).get('use_qontextor', True)
+    use_qontrabender = config.get('options', {}).get('use_qontrabender', True)
     
     is_repair_pass = os.environ.get("QONQ_REPAIR_MODE") == "1"
-    if is_repair_pass:
-        repair_plan_path = os.environ.get("QONQ_REPAIR_PLAN_PATH")
-        if repair_plan_path:
-            rp_payload = load_optional_json(Path(repair_plan_path))
-            repair_level = rp_payload.get("recommended_start_level", 4)
-            if repair_level <= 1:
-                print("    [Surgical] Level 1 repair pass: disabling Qompressor and Qontextor to reduce churn.", flush=True)
-                use_qompressor = False
-                config.get('options', {})['use_qontextor'] = False
+    strategy_cfg = get_context_strategy_config(config, is_repair_pass)
+    context_strategy = str(strategy_cfg.get("repair" if is_repair_pass else "normal")).strip().lower()
     
     # InspeQtor config for reviews
     review_provider, review_model = lib_ai.get_agent_ai_params(config, 'inspeqtor', ai_provider, ai_model)
@@ -5362,14 +6010,14 @@ def main():
         print(f"CRITICAL: No briqs found for pattern {pattern}", flush=True)
         sys.exit(1)
 
-    # Determine context source
+    # Gather all qodeyard files. Qodeyard is always authoritative.
     bloq_path = worqspace_root / "bloq.d"
-    context_source_path = bloq_path if use_qompressor and bloq_path.is_dir() else qodeyard_path
-    context_type = "code skeletons from `bloq.d/`" if use_qompressor else "full source code from `qodeyard/`"
+    qache_path = worqspace_root / "qache.d"
+    context_type = "authoritative `qodeyard/` source with structural support from `bloq.d/` and `qontext.d/`"
 
     all_context_files = []
-    if context_source_path.is_dir():
-        for root, _, files in os.walk(context_source_path):
+    if qodeyard_path.is_dir():
+        for root, _, files in os.walk(qodeyard_path):
             for file in files:
                 all_context_files.append(str(Path(root) / file))
 
@@ -5450,9 +6098,8 @@ def main():
                 tree_lines.append(f"{indent}  {f}")
         struqture_tree = "\n".join(tree_lines[:100])
 
-    # Merge all context sources for ConstruQtor
-    # Priority: qontract files + qontext.d files + bloq.d/qodeyard files
-    merged_context_files = qontext_extra_files + all_context_files
+    # Qodeyard remains source-of-truth; additional artifacts are selected per-file later.
+    merged_context_files = all_context_files
 
     # ═══════════════════════════════════════════════════════════════════════════
     # v1.3.0: CONTEXT LOGGING
@@ -5464,7 +6111,7 @@ def main():
     if not cycle1_tasq_path.exists():
         excluded_reasons.append("cyqle1_tasq.md: not found")
 
-    print(f"    Context files: {included_count} total", flush=True)
+    print(f"    Context files (authoritative qodeyard baseline): {included_count} total", flush=True)
     if included_count > 0:
         shown = min(10, included_count)
         for cf in merged_context_files[:shown]:
@@ -5497,6 +6144,13 @@ def main():
     print(f"Processing {len(briq_files)} Briqs (Interleaved)", flush=True)
     print(f"    Retry: {'enabled' if retry_config['enabled'] else 'disabled'} | Max attempts: {retry_config['max_attempts']}", flush=True)
     print(f"    Interleaved: {'enabled' if interleaved_config['enabled'] else 'disabled'} | Local validation: {interleaved_config['local_validation']} | AI review: {interleaved_config['ai_quick_review']}", flush=True)
+    print(
+        f"    Context Strategy: {context_strategy} | "
+        f"Qompressor={'on' if use_qompressor else 'off'} "
+        f"Qontextor={'on' if use_qontextor else 'off'} "
+        f"Qontrabender={'on' if use_qontrabender else 'off'}",
+        flush=True,
+    )
     print(
         "    Repair Escalation: "
         f"{'enabled' if repair_escalation_config.get('enabled', True) else 'disabled'} "
@@ -5610,6 +6264,13 @@ def main():
             write_strategy_config=write_strategy_config,
             execution_backend=execution_backend,
             repo_config=config,
+            bloq_path=bloq_path,
+            qontext_path=qontext_path,
+            qache_path=qache_path,
+            use_qompressor=use_qompressor,
+            use_qontextor=use_qontextor,
+            use_qontrabender=use_qontrabender,
+            context_strategy=context_strategy,
         )
         
         all_results.append(result)
@@ -5632,6 +6293,47 @@ def main():
             print(f"\n[STOP] stop_on_briq_fail=true, halting cycle after {briq_file.name}", flush=True)
             stopped_early = True
             break
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # NEW v1.4: HARNESS EXECUTION & HYGIENE
+    # ═══════════════════════════════════════════════════════════════════════════
+    import shutil
+    import contract_harness
+    harness = contract_harness.load_harness(worqspace_root)
+    if harness:
+        print("  📜 [HARNESS] Running acceptance harness...", flush=True)
+        harness_result = contract_harness.run_harness(qodeyard_path, harness, apply_fixes=False)
+        qontract_dir = worqspace_root / 'qontract.d'
+        with open(qontract_dir / 'harness-result.v1.json', 'w') as f:
+            import json as json_mod
+            json_mod.dump(harness_result, f, indent=2)
+        with open(qontract_dir / 'harness-result.md', 'w') as f:
+            f.write(contract_harness.render_result_markdown(harness_result))
+        if not harness_result.get("passed"):
+            print("  ❌ [HARNESS] Failed. Directives available for repair plan.", flush=True)
+            # If harness fails, force failure state to trigger repair unless we are halting
+            if failure_count == 0 and partial_count == 0:
+                failure_count += 1
+                all_results.append({
+                    'briq_file': 'harness_validation',
+                    'status': 'failure',
+                    'written_files': [],
+                    'attempts': 1,
+                    'error': 'Harness failed',
+                    'exeq_path': None
+                })
+        else:
+            print("  ✅ [HARNESS] Passed.", flush=True)
+
+        print("  🧹 [HYGIENE] Cleaning up runtime noise...", flush=True)
+        for p in [".pytest_cache", ".ruff_cache", "__pycache__"]:
+            target_dir = qodeyard_path / p
+            if target_dir.exists():
+                shutil.rmtree(target_dir, ignore_errors=True)
+        for f in [".DS_Store", ".qonqrete_fastapi_probe.py", ".test_behavior.py"]:
+            target_file = qodeyard_path / f
+            if target_file.exists():
+                target_file.unlink(missing_ok=True)
 
     # Determine overall status
     if failure_count > 0:
@@ -5912,6 +6614,11 @@ def main():
                     }),
                 }
                 for path in sorted(group_entry['written_files'])
+            ],
+            "repair_scope_violations": [
+                violation
+                for attempt_record in group_entry['attempt_records']
+                for violation in attempt_record.get('repair_scope_violation_paths', [])
             ],
             "attempt_manifest_refs": sorted(set(group_entry['attempt_manifests'])),
             "recovery_refs": sorted(set(group_entry['recovery_refs'])),

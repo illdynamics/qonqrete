@@ -76,6 +76,6 @@ export async function executeCreateTasq(): Promise<void> {
 /**
  * Register the create tasq command
  */
-export function registerCreateTasqCommand(context: vscode.ExtensionContext): vscode.Disposable {
+export function registerCreateTasqCommand(_context: vscode.ExtensionContext): vscode.Disposable {
     return vscode.commands.registerCommand('qonqrete.createTasq', executeCreateTasq);
 }

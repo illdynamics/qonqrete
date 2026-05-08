@@ -15,6 +15,15 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def canonical_run_id(workspace_root: Path) -> str:
+    for env_key in ("QONQ_RUN_ID", "QONQ_RUN_NAME", "QONSTRUCTION_NAME"):
+        raw = str(os.environ.get(env_key, "")).strip()
+        if raw:
+            return Path(raw).name
+    name = str(workspace_root.name).strip()
+    return name or "run-unknown"
+
+
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -146,7 +155,7 @@ def main() -> None:
         sys.exit(1)
 
     workspace_root = Path(os.environ.get("QONQ_WORKSPACE", output_path.resolve().parents[1] if output_path.parent.name == "qonstrictor" else output_path.parent))
-    run_id = workspace_root.name
+    run_id = canonical_run_id(workspace_root)
 
     task_spec = load_json(task_spec_path)
     result = evaluate_qonstrictor(task_spec)

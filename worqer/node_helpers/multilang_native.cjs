@@ -168,7 +168,10 @@ function callSummary(sourceFile, node) {
   const parts = [];
   if (calls.length) parts.push(`calls: ${calls.join(', ')}`);
   if (selectors.length) parts.push(`selectors: ${selectors.join(', ')}`);
-  if (events.length) parts.push(`events: ${events.join(', ')}`);
+  if (events.length) {
+    parts.push(`events: ${events.join(', ')}`);
+    parts.push(`listeners: ${events.map(event => `addEventListener("${event}")`).join(', ')}`);
+  }
   if (readsStorage) parts.push('reads storage');
   if (writesStorage) parts.push('writes storage');
   return parts.length ? parts.join('; ') : 'implementation stripped';

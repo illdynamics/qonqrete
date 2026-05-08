@@ -139,8 +139,8 @@ class PythonAdapterBindingTests(unittest.TestCase):
             )):
                 res = adapter._run_fastapi_probe(ctx, "/tmp/venv/bin/python", entrypoint, [entrypoint])
 
-            self.assertEqual(res.command, expected_command)
-            self.assertNotEqual(res.command, "python _fastapi_probe.py")
+            self.assertEqual(res[0].command, expected_command)
+            self.assertNotEqual(res[0].command, "python _fastapi_probe.py")
 
     def test_missing_module_fallback_regex_classifies_probe_errors(self):
         adapter = PythonAdapter()

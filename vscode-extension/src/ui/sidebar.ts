@@ -8,7 +8,11 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import { randomBytes } from 'crypto';
 import { getRunner, QonQreteRunConfig, RunStatus } from '../cli/qonqreteRunner';
+import { isAllowedQageArtifactPath } from './pathSafety';
 
 export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'qonqreteControlPanel';
@@ -258,12 +262,48 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private async _isAllowedWebviewFilePath(candidatePath: string): Promise<boolean> {
+        const runner = getRunner();
+        const qages = await runner.getAvailableQages();
+        for (const qageName of qages) {
+            const details = await runner.getQageDetails(qageName);
+            if (!details) continue;
+            if (isAllowedQageArtifactPath(candidatePath, details.path)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private async _openFile(filePath: string): Promise<void> {
+        if (typeof filePath !== 'string' || !filePath.trim()) {
+            vscode.window.showErrorMessage('Could not open file: invalid path');
+            return;
+        }
+        if (!path.isAbsolute(filePath)) {
+            vscode.window.showWarningMessage('Blocked file open outside qage artifacts.');
+            return;
+        }
+        const normalized = path.resolve(filePath);
+        if (!(await this._isAllowedWebviewFilePath(normalized))) {
+            vscode.window.showWarningMessage('Blocked file open outside qage artifacts.');
+            return;
+        }
         try {
-            const doc = await vscode.workspace.openTextDocument(filePath);
+            if (!fs.existsSync(normalized) || !fs.statSync(normalized).isFile()) {
+                vscode.window.showErrorMessage(`Could not open file: ${normalized}`);
+                return;
+            }
+        } catch {
+            vscode.window.showErrorMessage(`Could not open file: ${normalized}`);
+            return;
+        }
+
+        try {
+            const doc = await vscode.workspace.openTextDocument(normalized);
             await vscode.window.showTextDocument(doc);
         } catch {
-            vscode.window.showErrorMessage(`Could not open file: ${filePath}`);
+            vscode.window.showErrorMessage(`Could not open file: ${normalized}`);
         }
     }
 
@@ -403,13 +443,13 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
     <div id="blockedAlert" class="alert alert-error hidden">
         <strong>⚠️ No bash shell found</strong><br>
         QonQrete requires bash to run. On Windows, install Git Bash or use WSL.
-        <button class="btn-secondary btn-small" style="margin-top: 6px" onclick="installBash()">Install Git Bash</button>
+        <button id="installBashBtn" class="btn-secondary btn-small" style="margin-top: 6px">Install Git Bash</button>
     </div>
 
     <div id="notInstalled" class="section hidden">
         <p>QonQrete not found in workspace.</p>
-        <button class="btn-primary" onclick="deployWorkspace()">⬡ Deploy to Workspace</button>
-        <button class="btn-secondary" onclick="openSettings()">Configure Path</button>
+        <button id="deployWorkspaceBtn" class="btn-primary">⬡ Deploy to Workspace</button>
+        <button id="openSettingsBtnTop" class="btn-secondary">Configure Path</button>
     </div>
 
     <div id="mainContent">
@@ -419,7 +459,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             <div class="form-group">
                 <label>Briq Sensitivity (0-16)</label>
                 <div class="slider-row">
-                    <input type="range" id="sensitivity" min="0" max="16" value="1" oninput="updateSlider('sensitivity')">
+                    <input type="range" id="sensitivity" min="0" max="16" value="1">
                     <span id="sensitivityValue" class="slider-value">1</span>
                 </div>
             </div>
@@ -461,7 +501,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 <label for="noSync">No Sync (--no-sync)</label>
             </div>
             
-            <button class="expand-btn" onclick="toggleAdvanced()">▸ Advanced</button>
+            <button id="advancedToggleBtn" class="expand-btn">▸ Advanced</button>
             <div id="advancedOptions" class="collapsed">
                 <div class="form-group">
                     <label>Qonstruction Name</label>
@@ -483,13 +523,13 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
 
         <div class="section">
             <div class="section-title">Actions</div>
-            <button class="btn-primary" id="runBtn" onclick="runTasq()">▶ Run Tasq</button>
-            <button class="btn-secondary" onclick="deployWorkspace()">⬡ Deploy</button>
-            <button class="btn-secondary" onclick="createTasq()">+ Create Task File</button>
-            <button class="btn-secondary" onclick="setAIConfig()">🤖 AI Config</button>
-            <button class="btn-secondary" onclick="resumeRun()">⟳ Resume</button>
-            <button class="btn-secondary" onclick="initWorkspace()">⚙ Init</button>
-            <button class="btn-danger" onclick="cleanQages()">🗑 Clean</button>
+            <button class="btn-primary" id="runBtn">▶ Run Tasq</button>
+            <button id="deployBtn" class="btn-secondary">⬡ Deploy</button>
+            <button id="createTasqBtn" class="btn-secondary">+ Create Task File</button>
+            <button id="setAIConfigBtn" class="btn-secondary">🤖 AI Config</button>
+            <button id="resumeRunBtn" class="btn-secondary">⟳ Resume</button>
+            <button id="initWorkspaceBtn" class="btn-secondary">⚙ Init</button>
+            <button id="cleanQagesBtn" class="btn-danger">🗑 Clean</button>
         </div>
 
         <div class="divider"></div>
@@ -525,8 +565,8 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             </div>
         </div>
 
-        <button class="btn-secondary" onclick="openSettings()">⚙ Settings</button>
-        <button class="btn-secondary" onclick="showOutput()">📋 Log</button>
+        <button id="openSettingsBtnBottom" class="btn-secondary">⚙ Settings</button>
+        <button id="showOutputBtn" class="btn-secondary">📋 Log</button>
     </div>
 
     <script nonce="${nonce}">
@@ -535,6 +575,28 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         let expandedQage = null;
         let canExecute = true;
 
+        function byId(id) {
+            return document.getElementById(id);
+        }
+
+        function bindStaticEventHandlers() {
+            byId('runBtn').addEventListener('click', runTasq);
+            byId('resumeRunBtn').addEventListener('click', resumeRun);
+            byId('initWorkspaceBtn').addEventListener('click', initWorkspace);
+            byId('cleanQagesBtn').addEventListener('click', cleanQages);
+            byId('openSettingsBtnTop').addEventListener('click', openSettings);
+            byId('openSettingsBtnBottom').addEventListener('click', openSettings);
+            byId('showOutputBtn').addEventListener('click', showOutput);
+            byId('installBashBtn').addEventListener('click', installBash);
+            byId('deployWorkspaceBtn').addEventListener('click', deployWorkspace);
+            byId('deployBtn').addEventListener('click', deployWorkspace);
+            byId('createTasqBtn').addEventListener('click', createTasq);
+            byId('setAIConfigBtn').addEventListener('click', setAIConfig);
+            byId('advancedToggleBtn').addEventListener('click', toggleAdvanced);
+            byId('sensitivity').addEventListener('input', updateSlider);
+        }
+
+        bindStaticEventHandlers();
         vscode.postMessage({ type: 'getStatus' });
         vscode.postMessage({ type: 'getQages' });
 
@@ -640,33 +702,83 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         }
 
         function updateQageList(data) {
-            document.getElementById('qageCount').textContent = data.total;
-            const list = document.getElementById('qageList');
-            
+            byId('qageCount').textContent = String(data.total || 0);
+            const list = byId('qageList');
+            list.replaceChildren();
+
             if (!data.qages || data.qages.length === 0) {
-                list.innerHTML = '<div class="qage-item" style="color: var(--vscode-descriptionForeground)">No qages yet</div>';
+                const emptyRow = document.createElement('div');
+                emptyRow.className = 'qage-item';
+                emptyRow.style.color = 'var(--vscode-descriptionForeground)';
+                emptyRow.textContent = 'No qages yet';
+                list.appendChild(emptyRow);
                 return;
             }
-            
-            list.innerHTML = data.qages.map(q => {
-                const ts = q.timestamp ? new Date(q.timestamp).toLocaleString() : '';
-                const counts = q.counts ? Object.entries(q.counts).filter(([k,v]) => v > 0).map(([k,v]) => v + ' ' + k).join(', ') : '';
-                return \`<div class="qage-item" id="qage-\${q.name}">
-                    <div class="qage-item-header" onclick="toggleQage('\${q.name}')">
-                        <div>
-                            <span class="qage-item-expand">\${expandedQage === q.name ? '▾' : '▸'}</span>
-                            <span class="qage-item-name">\${q.name.replace('qage_', '')}</span>
-                        </div>
-                        <button class="btn-small btn-secondary" onclick="event.stopPropagation(); openQage('\${q.name}')">📂</button>
-                    </div>
-                    <div class="qage-item-meta">\${ts}</div>
-                    <div class="qage-item-meta">\${counts || 'empty'}</div>
-                    <div id="qage-details-\${q.name}" class="qage-details \${expandedQage === q.name ? '' : 'collapsed'}"></div>
-                </div>\`;
-            }).join('');
-            
-            if (data.total > data.qages.length) {
-                list.innerHTML += \`<div class="qage-item" style="color: var(--vscode-descriptionForeground); text-align: center">... +\${data.total - data.qages.length} more</div>\`;
+
+            for (const q of data.qages) {
+                const qageName = String(q.name || '');
+                const item = document.createElement('div');
+                item.className = 'qage-item';
+                item.id = 'qage-' + qageName;
+
+                const header = document.createElement('div');
+                header.className = 'qage-item-header';
+                header.addEventListener('click', () => toggleQage(qageName));
+
+                const left = document.createElement('div');
+                const expand = document.createElement('span');
+                expand.className = 'qage-item-expand';
+                expand.textContent = expandedQage === qageName ? '▾' : '▸';
+                const name = document.createElement('span');
+                name.className = 'qage-item-name';
+                name.textContent = qageName.replace(/^qage_/, '');
+                left.appendChild(expand);
+                left.appendChild(name);
+                header.appendChild(left);
+
+                const openButton = document.createElement('button');
+                openButton.className = 'btn-small btn-secondary';
+                openButton.textContent = '📂';
+                openButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    openQage(qageName);
+                });
+                header.appendChild(openButton);
+                item.appendChild(header);
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'qage-item-meta';
+                timestamp.textContent = q.timestamp ? new Date(q.timestamp).toLocaleString() : '';
+                item.appendChild(timestamp);
+
+                const counts = document.createElement('div');
+                counts.className = 'qage-item-meta';
+                if (q.counts) {
+                    const compact = Object.entries(q.counts)
+                        .filter(([, v]) => Number(v) > 0)
+                        .map(([k, v]) => String(v) + ' ' + String(k))
+                        .join(', ');
+                    counts.textContent = compact || 'empty';
+                } else {
+                    counts.textContent = 'empty';
+                }
+                item.appendChild(counts);
+
+                const details = document.createElement('div');
+                details.id = 'qage-details-' + qageName;
+                details.className = 'qage-details ' + (expandedQage === qageName ? '' : 'collapsed');
+                item.appendChild(details);
+
+                list.appendChild(item);
+            }
+
+            if (Number(data.total || 0) > data.qages.length) {
+                const moreRow = document.createElement('div');
+                moreRow.className = 'qage-item';
+                moreRow.style.color = 'var(--vscode-descriptionForeground)';
+                moreRow.style.textAlign = 'center';
+                moreRow.textContent = '... +' + String(Number(data.total || 0) - data.qages.length) + ' more';
+                list.appendChild(moreRow);
             }
         }
 
@@ -682,20 +794,53 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
 
         function updateQageDetails(data) {
             if (!data) return;
-            const el = document.getElementById('qage-details-' + data.name);
+            const el = byId('qage-details-' + data.name);
             if (!el) return;
+            el.replaceChildren();
 
-            let html = '';
-            for (const [dir, files] of Object.entries(data.artifacts)) {
-                if (files.length > 0) {
-                    html += '<div class="qage-details-row"><strong>' + dir + '/</strong> (' + files.length + ')</div>';
-                    html += files.slice(0, 5).map(f => 
-                        '<div class="qage-details-row">  <span class="qage-file-link" onclick="openFile(\\'' + (data.path + '/' + dir + '/' + f).replace(/\\\\/g, '/').replace(/'/g, "\\\\'") + '\\')">' + f + '</span></div>'
-                    ).join('');
-                    if (files.length > 5) html += '<div class="qage-details-row" style="color: var(--vscode-descriptionForeground)">  ... +' + (files.length - 5) + ' more</div>';
+            let hasArtifacts = false;
+            for (const [dir, files] of Object.entries(data.artifacts || {})) {
+                if (!Array.isArray(files) || files.length === 0) continue;
+                hasArtifacts = true;
+
+                const header = document.createElement('div');
+                header.className = 'qage-details-row';
+                const strong = document.createElement('strong');
+                strong.textContent = String(dir) + '/';
+                header.appendChild(strong);
+                header.appendChild(document.createTextNode(' (' + String(files.length) + ')'));
+                el.appendChild(header);
+
+                for (const rawFile of files.slice(0, 5)) {
+                    const fileName = String(rawFile);
+                    const row = document.createElement('div');
+                    row.className = 'qage-details-row';
+                    row.appendChild(document.createTextNode('  '));
+
+                    const link = document.createElement('span');
+                    link.className = 'qage-file-link';
+                    link.textContent = fileName;
+                    const filePath = (String(data.path || '') + '/' + String(dir) + '/' + fileName).replace(/\\\\/g, '/');
+                    link.addEventListener('click', () => openFile(filePath));
+                    row.appendChild(link);
+                    el.appendChild(row);
+                }
+
+                if (files.length > 5) {
+                    const more = document.createElement('div');
+                    more.className = 'qage-details-row';
+                    more.style.color = 'var(--vscode-descriptionForeground)';
+                    more.textContent = '  ... +' + String(files.length - 5) + ' more';
+                    el.appendChild(more);
                 }
             }
-            el.innerHTML = html || '<div class="qage-details-row">No artifacts</div>';
+
+            if (!hasArtifacts) {
+                const none = document.createElement('div');
+                none.className = 'qage-details-row';
+                none.textContent = 'No artifacts';
+                el.appendChild(none);
+            }
         }
 
         function updateRunState(status) {
@@ -741,14 +886,14 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             }
         }
 
-        function updateSlider(id) {
-            document.getElementById(id + 'Value').textContent = document.getElementById(id).value;
+        function updateSlider() {
+            byId('sensitivityValue').textContent = byId('sensitivity').value;
         }
 
         function toggleAdvanced() {
             advancedOpen = !advancedOpen;
-            document.getElementById('advancedOptions').classList.toggle('collapsed', !advancedOpen);
-            document.querySelector('.expand-btn').textContent = (advancedOpen ? '▾' : '▸') + ' Advanced';
+            byId('advancedOptions').classList.toggle('collapsed', !advancedOpen);
+            byId('advancedToggleBtn').textContent = (advancedOpen ? '▾' : '▸') + ' Advanced';
         }
 
         function getConfig() {
@@ -787,10 +932,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
     }
 
     private _getNonce(): string {
-        let text = '';
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) text += chars.charAt(Math.floor(Math.random() * chars.length));
-        return text;
+        return randomBytes(16).toString('base64');
     }
 
     public dispose(): void {

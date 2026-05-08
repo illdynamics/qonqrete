@@ -18,10 +18,13 @@ embeddings.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -41,6 +44,44 @@ from qontextor_extractors.utils import (
     resolve_relative_path,
 )
 from qontextor_extractors import python_extractor as python_extractor_module
+
+try:
+    from path_hygiene import iter_source_files
+except ImportError:
+    def iter_source_files(root: Path) -> Iterable[Path]:  # type: ignore[no-redef]
+        if not root.exists():
+            return
+        skip = {
+            ".git",
+            ".venv",
+            ".test_venv",
+            "node_modules",
+            ".gradle",
+            "__pycache__",
+            ".pytest_cache",
+            ".ruff_cache",
+            ".mypy_cache",
+            ".validation-env-cache",
+            "__MACOSX",
+        }
+        stack = [root]
+        while stack:
+            cur = stack.pop()
+            try:
+                entries = list(cur.iterdir())
+            except OSError:
+                continue
+            for entry in entries:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir():
+                    if entry.name in skip or (entry.name == "out" and entry.parent.name == "vscode-extension"):
+                        continue
+                    stack.append(entry)
+                elif entry.is_file():
+                    if entry.name == ".DS_Store" or entry.name.startswith("._") or entry.suffix == ".pyc":
+                        continue
+                    yield entry
 
 # --- AI Mode Imports (Optional) ------------------------------------------------
 try:
@@ -82,6 +123,30 @@ def should_process_file(file_path: Path) -> bool:
     return get_file_type(file_path) != 'unknown'
 
 
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode('utf-8', errors='ignore')).hexdigest()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _sha256_file(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except Exception:
+        return ""
+
+
+def _iso_utc_from_epoch(epoch_value: float | None) -> str:
+    if not epoch_value:
+        return ""
+    try:
+        return datetime.fromtimestamp(float(epoch_value), tz=timezone.utc).isoformat()
+    except Exception:
+        return ""
+
+
 def _generic_context(project_path: Path, file_path: Path) -> FileContext:
     rel = relative_display_path(project_path, file_path)
     try:
@@ -116,9 +181,7 @@ def _generic_context(project_path: Path, file_path: Path) -> FileContext:
 
 
 def _iter_processable_files(project_path: Path) -> Iterable[Path]:
-    for file_path in sorted(project_path.rglob('*')):
-        if not file_path.is_file():
-            continue
+    for file_path in sorted(iter_source_files(project_path)):
         if should_process_file(file_path):
             yield file_path
 
@@ -127,7 +190,15 @@ def _iter_processable_files(project_path: Path) -> Iterable[Path]:
 
 def build_project_graph(project_path: Path, local_mode: str = 'complex') -> ProjectGraph:
     project_path = project_path.resolve()
-    cache_key = f'{project_path}:{local_mode}'
+    signature_parts: list[str] = []
+    for file_path in _iter_processable_files(project_path):
+        try:
+            rel = file_path.relative_to(project_path).as_posix()
+        except Exception:
+            rel = file_path.name
+        signature_parts.append(f"{rel}:{_sha256_file(file_path)}")
+    project_signature = hashlib.sha256("\n".join(signature_parts).encode("utf-8")).hexdigest()
+    cache_key = f'{project_path}:{local_mode}:{project_signature}'
     if cache_key in _PROJECT_GRAPH_CACHE:
         return _PROJECT_GRAPH_CACHE[cache_key]
 
@@ -524,6 +595,79 @@ def analyze_ripple_effect(symbol_name: str, qontext_dir: Path) -> dict[str, Any]
     return result
 
 
+def _build_qontext_indices(qontext_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    by_file: dict[str, dict[str, Any]] = {}
+    module_to_file: dict[str, str] = {}
+    for data in _load_qontext_documents(qontext_dir):
+        rel = str(data.get('file_path') or '').strip().replace("\\", "/")
+        if not rel:
+            continue
+        by_file[rel] = data
+        module = str(data.get('module') or '').strip()
+        if module:
+            module_to_file[module] = rel
+    return by_file, module_to_file
+
+
+def _resolve_related_hint_to_files(hint: str, known_files: set[str], module_to_file: dict[str, str]) -> set[str]:
+    text = str(hint or '').strip()
+    if not text:
+        return set()
+    out: set[str] = set()
+    if text in known_files:
+        out.add(text)
+    if text in module_to_file:
+        out.add(module_to_file[text])
+    for module, rel in module_to_file.items():
+        if module == text or module.endswith(f'.{text}') or text.endswith(f'.{module}') or text.startswith(f'{module}.'):
+            out.add(rel)
+    if '/' not in text:
+        for rel in known_files:
+            if Path(rel).name == text:
+                out.add(rel)
+    return out
+
+
+def collect_related_files(qontext_dir: Path, files: list[str], depth: int = 2) -> dict[str, Any]:
+    by_file, module_to_file = _build_qontext_indices(qontext_dir)
+    known_files = set(by_file.keys())
+    seed_files = sorted(
+        {
+            rel
+            for file_hint in files
+            for rel in _resolve_related_hint_to_files(file_hint, known_files, module_to_file)
+        }
+    )
+    direct_dependencies: set[str] = set()
+    inbound_refs: set[str] = set()
+    for rel in seed_files:
+        data = by_file.get(rel, {})
+        for dep in data.get('dependencies', []) or []:
+            direct_dependencies.update(_resolve_related_hint_to_files(str(dep), known_files, module_to_file))
+        for dep in data.get('inbound_refs', []) or []:
+            inbound_refs.update(_resolve_related_hint_to_files(str(dep), known_files, module_to_file))
+    direct_dependencies -= set(seed_files)
+    inbound_refs -= set(seed_files)
+
+    second_order: set[str] = set()
+    if depth >= 2:
+        frontier = sorted(direct_dependencies | inbound_refs)
+        for rel in frontier:
+            data = by_file.get(rel, {})
+            for dep in (data.get('dependencies', []) or []) + (data.get('inbound_refs', []) or []):
+                second_order.update(_resolve_related_hint_to_files(str(dep), known_files, module_to_file))
+        second_order -= set(seed_files)
+        second_order -= direct_dependencies
+        second_order -= inbound_refs
+
+    return {
+        'seed_files': seed_files,
+        'direct_dependencies': sorted(direct_dependencies),
+        'inbound_refs': sorted(inbound_refs),
+        'second_order_dependencies': sorted(second_order),
+    }
+
+
 # --- Local context generation --------------------------------------------------
 
 def get_project_graph(project_path: Path, local_mode: str = 'complex') -> ProjectGraph:
@@ -589,22 +733,121 @@ Prefer explicit definitions, signatures, and statically visible relationships.
         return f"file_path: {str(file_path.as_posix())}\nerror: 'Failed to generate context due to an AI error: {exc}'"
 
 
-def write_qontext_manifest(qontext_path: Path, graph: ProjectGraph | None, config: dict[str, Any]) -> None:
-    files: list[dict[str, Any]] = []
+def _load_existing_manifest(qontext_path: Path) -> dict[str, Any]:
+    manifest_path = qontext_path / '.qontext_manifest.yaml'
+    if not manifest_path.exists():
+        return {}
+    try:
+        payload = yaml.safe_load(manifest_path.read_text(encoding='utf-8')) or {}
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _manifest_source_hash_index(manifest: dict[str, Any]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    files_payload = manifest.get('files', {}) or {}
+    if isinstance(files_payload, dict):
+        iterable = []
+        for rel, row in files_payload.items():
+            if isinstance(row, dict):
+                merged = dict(row)
+                merged.setdefault('file_path', rel)
+                iterable.append(merged)
+    else:
+        iterable = files_payload
+    for row in iterable or []:
+        if not isinstance(row, dict):
+            continue
+        rel = str(row.get('file_path') or '').strip().replace("\\", "/")
+        src_hash = str(row.get('source_hash') or '').strip()
+        if rel and src_hash:
+            out[rel] = src_hash
+    return out
+
+
+def _prune_stale_qontext_files(qodeyard_path: Path, qontext_path: Path) -> list[str]:
+    deleted: list[str] = []
+    if not qontext_path.exists():
+        return deleted
+    for qyaml in sorted(qontext_path.rglob('*.q.yaml')):
+        try:
+            rel = qyaml.relative_to(qontext_path).as_posix()
+        except Exception:
+            continue
+        source_rel = rel[:-len('.q.yaml')] if rel.endswith('.q.yaml') else rel
+        source_path = qodeyard_path / source_rel
+        if source_path.exists():
+            continue
+        try:
+            qyaml.unlink()
+            deleted.append(rel)
+        except Exception:
+            pass
+    return deleted
+
+
+def _qontext_file_metadata(qontext_file: Path) -> tuple[list[str], list[str], str]:
+    deps: list[str] = []
+    inbound: list[str] = []
+    qontext_hash = _sha256_file(qontext_file) if qontext_file.exists() else ""
+    if not qontext_file.exists():
+        return deps, inbound, qontext_hash
+    try:
+        data = yaml.safe_load(qontext_file.read_text(encoding='utf-8')) or {}
+    except Exception:
+        data = {}
+    if isinstance(data, dict):
+        raw_deps = data.get('dependencies', []) or []
+        raw_inbound = data.get('inbound_refs', []) or []
+        if isinstance(raw_deps, list):
+            deps = [str(v).strip() for v in raw_deps if str(v).strip()]
+        if isinstance(raw_inbound, list):
+            inbound = [str(v).strip() for v in raw_inbound if str(v).strip()]
+    return deps, inbound, qontext_hash
+
+
+def write_qontext_manifest(qodeyard_path: Path, qontext_path: Path, graph: ProjectGraph | None, config: dict[str, Any]) -> None:
+    files: dict[str, dict[str, Any]] = {}
     counts: dict[str, int] = defaultdict(int)
+    graph_index: dict[str, FileContext] = {}
     if graph is not None:
-        for file_path, ctx in sorted(graph.contexts.items(), key=lambda item: item[1].file_path):
+        for _, ctx in sorted(graph.contexts.items(), key=lambda item: item[1].file_path):
+            graph_index[ctx.file_path] = ctx
             counts[ctx.extractor or 'unknown'] += 1
-            files.append({
-                'file_path': ctx.file_path,
-                'language': ctx.language,
-                'extractor': ctx.extractor,
-                'processing_path': (ctx.file_metadata or {}).get('processing_path'),
-            })
+
+    for source_path in _iter_processable_files(qodeyard_path):
+        rel = source_path.relative_to(qodeyard_path).as_posix()
+        qyaml = qontext_path / f'{rel}.q.yaml'
+        ctx = graph_index.get(rel)
+        deps, inbound, qontext_hash = _qontext_file_metadata(qyaml)
+        row = {
+            'file_path': rel,
+            'source_hash': _sha256_file(source_path),
+            'source_size_bytes': source_path.stat().st_size if source_path.exists() else 0,
+            'source_mtime': _iso_utc_from_epoch(source_path.stat().st_mtime if source_path.exists() else None),
+            'qontext_hash': qontext_hash,
+            'generated_at': _iso_utc_from_epoch(qyaml.stat().st_mtime if qyaml.exists() else None),
+            'dependencies': deps,
+            'inbound_refs': inbound,
+            'schema_version': 1,
+        }
+        if ctx is not None:
+            row.update(
+                {
+                    'language': ctx.language,
+                    'extractor': ctx.extractor,
+                    'processing_path': (ctx.file_metadata or {}).get('processing_path'),
+                }
+            )
+        files[rel] = row
+
     manifest = {
         'kind': 'qontextor_run_manifest',
+        'schema_version': 3,
         'provider': config.get('provider', 'local'),
         'local_mode': config.get('local_mode', 'complex'),
+        'generated_at': _utc_now(),
         'capabilities': collect_runtime_capabilities(),
         'extractor_counts': dict(sorted(counts.items())),
         'files': files,
@@ -638,55 +881,95 @@ def process_file(qodeyard_path: Path, file_path: Path, qontext_path: Path, confi
 
 def run_initial_scan(qodeyard_path: Path, qontext_path: Path, config: dict[str, Any]) -> None:
     print(f'--- Qontextor: Starting initial scan of {qodeyard_path} ---', flush=True)
+    _PROJECT_GRAPH_CACHE.clear()
     local_mode = config.get('local_mode', 'complex')
     graph = None
     if config.get('provider', 'local') == 'local':
         graph = get_project_graph(qodeyard_path, local_mode=local_mode)
+    prior_manifest = _load_existing_manifest(qontext_path)
+    prior_hashes = _manifest_source_hash_index(prior_manifest)
+    refreshed = 0
     for file_path in _iter_processable_files(qodeyard_path):
         relative_path = file_path.relative_to(qodeyard_path)
         qontext_file = qontext_path / f'{relative_path}.q.yaml'
-        if not qontext_file.exists():
+        rel = relative_path.as_posix()
+        src_hash = _sha256_file(file_path)
+        if (not qontext_file.exists()) or prior_hashes.get(rel) != src_hash:
             process_file(qodeyard_path, file_path, qontext_path, config)
-    write_qontext_manifest(qontext_path, graph, config)
+            refreshed += 1
+    removed = _prune_stale_qontext_files(qodeyard_path, qontext_path)
+    write_qontext_manifest(qodeyard_path, qontext_path, graph, config)
+    if refreshed:
+        print(f'  - Refreshed {refreshed} qontext file(s) based on source hash changes.', flush=True)
+    if removed:
+        print(f'  - Removed {len(removed)} stale qontext file(s) for deleted sources.', flush=True)
     print('--- Qontextor: Initial scan complete ---', flush=True)
 
 
 def run_update_scan(summary_path: Path, qodeyard_path: Path, qontext_path: Path, config: dict[str, Any]) -> None:
     print(f'--- Qontextor: Starting update scan based on {summary_path.name} ---', flush=True)
+    _PROJECT_GRAPH_CACHE.clear()
     graph = None
     if not summary_path.exists():
-        print('  - Summary file not found. Nothing to update.', flush=True)
+        print('  - Summary file not found. Falling back to hash-aware refresh.', flush=True)
+        run_initial_scan(qodeyard_path, qontext_path, config)
         return
     local_mode = config.get('local_mode', 'complex')
     if config.get('provider', 'local') == 'local':
         graph = get_project_graph(qodeyard_path, local_mode=local_mode)
     with open(summary_path, 'r', encoding='utf-8') as handle:
         summary_content = handle.read()
-    changed_files = re.findall(r'`([^`]+)`', summary_content)
+    changed_files = [str(v).strip().replace("\\", "/") for v in re.findall(r'`([^`]+)`', summary_content) if str(v).strip()]
+    prior_manifest = _load_existing_manifest(qontext_path)
+    prior_hashes = _manifest_source_hash_index(prior_manifest)
+    for file_path in _iter_processable_files(qodeyard_path):
+        rel = file_path.relative_to(qodeyard_path).as_posix()
+        current_hash = _sha256_file(file_path)
+        if prior_hashes.get(rel) != current_hash:
+            changed_files.append(rel)
+    changed_files = sorted(dict.fromkeys(_normalize_rel for _normalize_rel in changed_files if str(_normalize_rel).strip()))
     if not changed_files:
-        print('  - No changed files found in summary. Nothing to update.', flush=True)
+        print('  - No changed files found in summary. Falling back to hash-aware refresh.', flush=True)
+        run_initial_scan(qodeyard_path, qontext_path, config)
         return
-    processed_files: set[Path] = set()
-    for file_str in changed_files:
-        file_path = Path(file_str)
-        if file_path.is_absolute():
-            try:
-                file_path = qodeyard_path / file_path.relative_to(qodeyard_path)
-            except ValueError:
-                print(f"  - [WARN] Changed file '{file_str}' is outside the qodeyard. Skipping.", flush=True)
-                continue
-        else:
-            file_path = qodeyard_path / file_str
-        if file_path in processed_files:
+
+    related = collect_related_files(qontext_path, changed_files, depth=2)
+    refresh_candidates = set(related.get('seed_files', []) or [])
+    refresh_candidates.update(related.get('direct_dependencies', []) or [])
+    refresh_candidates.update(related.get('inbound_refs', []) or [])
+    refresh_candidates.update(related.get('second_order_dependencies', []) or [])
+    refresh_candidates.update(changed_files)
+    normalized_rel: set[str] = set()
+    for rel in refresh_candidates:
+        value = str(rel).strip().replace("\\", "/")
+        if not value:
             continue
-        processed_files.add(file_path)
+        while value.startswith("./"):
+            value = value[2:]
+        if value.startswith("qodeyard/"):
+            value = value[len("qodeyard/"):]
+        normalized_rel.add(value)
+
+    processed = 0
+    for rel in sorted(normalized_rel):
+        file_path = qodeyard_path / rel
         if file_path.exists() and should_process_file(file_path):
             process_file(qodeyard_path, file_path, qontext_path, config)
+            processed += 1
         else:
-            print(f"  - [INFO] Changed file '{file_str}' does not exist or is not processable. Skipping.", flush=True)
+            stale_qyaml = qontext_path / f'{rel}.q.yaml'
+            if stale_qyaml.exists():
+                try:
+                    stale_qyaml.unlink()
+                except Exception:
+                    pass
+    removed = _prune_stale_qontext_files(qodeyard_path, qontext_path)
     if graph is None and config.get('provider', 'local') == 'local':
         graph = get_project_graph(qodeyard_path, local_mode=local_mode)
-    write_qontext_manifest(qontext_path, graph, config)
+    write_qontext_manifest(qodeyard_path, qontext_path, graph, config)
+    print(f'  - Refreshed {processed} file(s) including changed and related neighbors.', flush=True)
+    if removed:
+        print(f'  - Removed {len(removed)} stale qontext file(s) for deleted sources.', flush=True)
     print('--- Qontextor: Update scan complete ---', flush=True)
 
 
@@ -699,6 +982,10 @@ def main() -> None:
     parser.add_argument('--query', help='Perform a structural symbol search for a given term.')
     parser.add_argument('--verb', help='Find symbols matching a verb pattern (e.g., "get_.*").')
     parser.add_argument('--ripple', help='Analyze the ripple effect of changing a symbol.')
+    parser.add_argument('--related-files', help='Comma-separated source file hints to resolve related dependencies/inbound refs.')
+    parser.add_argument('--files', help='Comma-separated source file hints for the related subcommand.')
+    parser.add_argument('--depth', type=int, default=2, help='Depth for --related-files traversal (default: 2).')
+    parser.add_argument('--json', action='store_true', help='Emit machine-readable JSON for query-like commands.')
     parser.add_argument('--capabilities', action='store_true', help='Print current native/fallback capability report and exit.')
     parser.add_argument('--capabilities-json', action='store_true', help='Print capability report as JSON and exit.')
     args = parser.parse_args()
@@ -714,7 +1001,8 @@ def main() -> None:
     qodeyard_path = worqspace_root / 'qodeyard'
     qontext_path = worqspace_root / 'qontext.d'
 
-    print(f'  - Qontextor running in: {worqspace_root}', flush=True)
+    if not args.json:
+        print(f'  - Qontextor running in: {worqspace_root}', flush=True)
     config = get_qontextor_config()
     qontext_path.mkdir(exist_ok=True)
 
@@ -725,6 +1013,16 @@ def main() -> None:
         else:
             print('  - [ERROR] qodeyard not found. Cannot build context.', flush=True)
             sys.exit(1)
+
+    if args.input_path == 'related':
+        raw_arg = args.files or args.related_files or args.output_path or ""
+        raw_files = [part.strip() for part in str(raw_arg).split(",") if part.strip()]
+        payload = collect_related_files(qontext_path, raw_files, depth=max(1, int(args.depth or 2)))
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(yaml.dump(payload, sort_keys=False, default_flow_style=False), flush=True)
+        sys.exit(0)
 
     if args.query:
         print(f"--- Structural Search: '{args.query}' ---", flush=True)
@@ -762,7 +1060,19 @@ def main() -> None:
     if args.ripple:
         print(f"--- Ripple Effect Analysis: '{args.ripple}' ---", flush=True)
         ripple = analyze_ripple_effect(args.ripple, qontext_path)
-        print(yaml.dump(ripple, sort_keys=False, default_flow_style=False), flush=True)
+        if args.json:
+            print(json.dumps(ripple, indent=2))
+        else:
+            print(yaml.dump(ripple, sort_keys=False, default_flow_style=False), flush=True)
+        sys.exit(0)
+
+    if args.related_files:
+        raw_files = [part.strip() for part in str(args.related_files).split(",") if part.strip()]
+        payload = collect_related_files(qontext_path, raw_files, depth=max(1, int(args.depth or 2)))
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(yaml.dump(payload, sort_keys=False, default_flow_style=False), flush=True)
         sys.exit(0)
 
     if args.input_path and args.output_path:

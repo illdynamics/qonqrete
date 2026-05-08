@@ -61,6 +61,15 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def canonical_run_id(workspace_root: Path) -> str:
+    for env_key in ("QONQ_RUN_ID", "QONQ_RUN_NAME", "QONSTRUCTION_NAME"):
+        raw = str(os.environ.get(env_key, "")).strip()
+        if raw:
+            return Path(raw).name
+    name = str(workspace_root.name).strip()
+    return name or "run-unknown"
+
+
 def load_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -572,7 +581,7 @@ def main() -> None:
         sys.exit(1)
 
     workspace_root = Path(os.environ.get("QONQ_WORKSPACE", input_path.resolve().parents[1] if input_path.parent.name == "tasq.d" else input_path.parent))
-    run_id = workspace_root.name
+    run_id = canonical_run_id(workspace_root)
 
     print("[Qrystallizer] --- Clarifying task ---", flush=True)
     raw_task = load_text(input_path)

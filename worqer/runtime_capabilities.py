@@ -22,7 +22,8 @@ def _language_status(native_available: bool, native_tool: str, fallback: str | N
 def collect_runtime_capabilities() -> dict[str, Any]:
     node_caps = helper_capabilities()
     shfmt_path = shutil.which('shfmt')
-    tree_sitter_installed = tree_sitter_fallback.get_parser is not None
+    tree_sitter_installed = tree_sitter_fallback.optional_tree_sitter_loaded()
+    tree_sitter_reason = tree_sitter_fallback.optional_tree_sitter_unavailable_reason()
 
     report: dict[str, Any] = {
         'scope': 'current runtime',
@@ -68,7 +69,7 @@ def collect_runtime_capabilities() -> dict[str, Any]:
                 'available': bool(tree_sitter_installed),
                 'active_mode': 'available' if tree_sitter_installed else 'inactive',
                 'install_hint': 'pip install -r requirements-optional-tree-sitter.txt',
-                'reason': None if tree_sitter_installed else 'tree_sitter_language_pack is not installed in the current runtime',
+                'reason': None if tree_sitter_installed else (tree_sitter_reason or 'tree_sitter_language_pack is not installed in the current runtime'),
             },
         },
         'node_helper_features': {

@@ -24,6 +24,19 @@ SEVERITY_WARNING = "warning"
 SEVERITY_INFO = "info"
 
 
+def default_frontend_validation_summary() -> dict:
+    return {
+        "html_files_checked": 0,
+        "css_files_checked": 0,
+        "js_files_checked": 0,
+        "local_asset_references_checked": 0,
+        "blocking_errors": 0,
+        "warnings": 0,
+        "advisory_findings": 0,
+        "validation_coverage_summary": "no_frontend_files_checked",
+    }
+
+
 @dataclass
 class VerificationResult:
     """Result of a single verification check.
@@ -61,6 +74,14 @@ class VerificationReport:
     # Used by to_markdown() to generate an accurate per-adapter summary
     # and to surface missing-tool diagnostics. Never relied on by inspeqtor.
     adapters_triggered: list = field(default_factory=list)
+
+    # Normalized Phase 1 validation metadata. overall_status remains the
+    # backward-compatible SUCCESS/PARTIAL/FAILURE tri-state; these fields let
+    # callers distinguish verified success from degraded/static coverage.
+    frontend_validation_summary: dict = field(
+        default_factory=default_frontend_validation_summary
+    )
+    validation_outcome: str = "SUCCESS_LOW_COVERAGE"
 
     @property
     def overall_status(self) -> str:

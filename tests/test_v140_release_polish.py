@@ -73,6 +73,12 @@ class LauncherNoSyncSemanticsTests(unittest.TestCase):
         self.assertIn('prompt_save_qonstruction "$run_host_path"', block)
         self.assertNotIn("delete_qage", block)
 
+    def test_run_container_exit_status_is_preserved_after_finalize(self):
+        shell_text = (ROOT / "qonqrete.sh").read_text(encoding="utf-8")
+        self.assertIn('run_container "$RUN_HOST_PATH" || run_exit=$?', shell_text)
+        self.assertIn('finalize_run_session "$RUN_HOST_PATH"', shell_text)
+        self.assertIn('exit "$run_exit"', shell_text)
+
     def test_prepare_run_exports_records_sync_mode_lineage(self):
         block = self._prepare_run_exports_block()
         self.assertIn('export QONQ_REPO_SYNC_MODE="sync_to_repo_root"', block)
@@ -87,6 +93,32 @@ class LauncherEngineSemanticsTests(unittest.TestCase):
         self.assertIn("podman)", shell_text)
         self.assertIn("command -v docker", shell_text)
         self.assertIn("command -v podman", shell_text)
+
+    def test_explicit_container_engine_none_requires_unsafe_host_opt_in(self):
+        shell_text = (ROOT / "qonqrete.sh").read_text(encoding="utf-8")
+        start = shell_text.index("detect_engine() {")
+        end = shell_text.index("\ndetect_build_backend() {", start)
+        block = shell_text[start:end]
+        self.assertIn('none)', block)
+        self.assertIn('${QONQ_UNSAFE_HOST_MODE:-}" != "1"', block)
+        self.assertIn("CONTAINER_ENGINE=none requires explicit host execution opt-in", block)
+        self.assertIn("CONTAINER_ENGINE=none and QONQ_UNSAFE_HOST_MODE=1", block)
+
+    def test_codeseeq_host_mode_inherits_host_execution_context(self):
+        shell_text = (ROOT / "qonqrete.sh").read_text(encoding="utf-8")
+        start = shell_text.index("detect_engine() {")
+        end = shell_text.index("\ndetect_build_backend() {", start)
+        block = shell_text[start:end]
+        self.assertIn('is_truthy_env "${CODESEEQ_HOST_MODE:-}"', block)
+        self.assertIn('CONTAINER_ENGINE="none"', block)
+        self.assertIn('export QONQ_UNSAFE_HOST_MODE=1', block)
+        self.assertIn("codeseeq provider stays executable", block)
+
+    def test_parent_codeseeq_host_mode_survives_repo_env_loading(self):
+        shell_text = (ROOT / "qonqrete.sh").read_text(encoding="utf-8")
+        self.assertIn("CODESEEQ_HOST_MODE_FROM_PARENT", shell_text)
+        self.assertIn("load_repo_env", shell_text)
+        self.assertIn('export CODESEEQ_HOST_MODE="$CODESEEQ_HOST_MODE_FROM_PARENT"', shell_text)
 
 
 if __name__ == "__main__":

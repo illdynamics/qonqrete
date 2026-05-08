@@ -52,43 +52,9 @@ jobs:
 
       - name: Package runtime zip
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          STAGING="qonqrete-v${VERSION}"
-
-          mkdir -p "$STAGING"
-
-          # Runtime distribution payload (v1.4.0 MLcon Edition).
-          # IDE plugin trees (vscode-extension/, intellij-plugin/) ship via
-          # their own workflows and are intentionally excluded here.
-          cp -r \
-            qonqrete.sh \
-            VERSION \
-            Dockerfile \
-            requirements.txt \
-            requirements-optional-tree-sitter.txt \
-            package.json \
-            LICENSE \
-            COPYRIGHT \
-            README.md \
-            qonqrete.jpg \
-            tasq-small.md \
-            tasq-medium.md \
-            tasq-big.md \
-            qrane/ \
-            worqer/ \
-            worqspace/ \
-            doc/ \
-            tests/ \
-            "$STAGING/"
-
-          # Build the zip
-          zip -r "qonqrete-v${VERSION}.zip" "$STAGING/" \
-            -x "*/.DS_Store" "*/__MACOSX/*" "*/__pycache__/*" \
-               "*/.gradle/*" "*/node_modules/*"
-
-          ls -lh "qonqrete-v${VERSION}.zip"
-          sha256sum "qonqrete-v${VERSION}.zip" > "qonqrete-v${VERSION}-SHA256.txt"
-          cat "qonqrete-v${VERSION}-SHA256.txt"
+          set -euo pipefail
+          # The packaging script handles VERSION extraction and exclusions.
+          ./tools/package_runtime_release.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

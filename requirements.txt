@@ -3,6 +3,9 @@ openai==2.14.0
 anthropic==0.75.0
 google-generativeai==0.8.6
 jsonschema==4.23.0
+fastapi==0.110.0
+uvicorn==0.27.1
+httpx==0.27.0
 
 # Qualifier package — Python adapter uses Ruff for lint diagnostics.
 # Pinned to a recent stable release. Qualifier gracefully no-ops if

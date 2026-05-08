@@ -266,6 +266,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
+    "test": "npm run compile && node out/ui/pathSafety.test.js",
     "lint": "eslint src --ext ts",
     "package": "vsce package"
   },

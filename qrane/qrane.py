@@ -2,6 +2,7 @@
 # qrane/qrane.py - QonQrete Qrane orchestrator
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -33,6 +34,7 @@ from execution_model import (
     resolve_scheduled_build_pass_target,
     start_next_pass,
 )
+import sqrewdriver_controller
 
 
 class Colors:
@@ -192,6 +194,7 @@ try:
     from lib_qrane import (
         STAGE_ALIAS_MAP,
         append_audit_event,
+        canonical_run_id,
         complete_stage,
         create_manifest,
         finalize_manifest,
@@ -211,6 +214,7 @@ except ImportError:
         from manifest_bridge import (
             STAGE_ALIAS_MAP,
             append_audit_event,
+            canonical_run_id,
             complete_stage,
             create_manifest,
             finalize_manifest,
@@ -228,6 +232,7 @@ except ImportError:
     except ImportError:
         STAGE_ALIAS_MAP = {}
         append_audit_event = None
+        canonical_run_id = None
         complete_stage = None
         create_manifest = None
         finalize_manifest = None
@@ -254,6 +259,148 @@ def resolve_construqtor_provider(agent_configs: dict) -> str:
     construqtor_cfg = agent_configs.get('construqtor', {}) if isinstance(agent_configs, dict) else {}
     provider = str(construqtor_cfg.get('provider', 'venice') or 'venice').strip().lower()
     return provider or 'venice'
+
+
+def resolve_construqtor_model(agent_configs: dict) -> str:
+    construqtor_cfg = agent_configs.get('construqtor', {}) if isinstance(agent_configs, dict) else {}
+    return str(construqtor_cfg.get('model', '') or '').strip()
+
+
+def _resolve_context_tool_mode(raw_value, *, tool_name: str, task_file: str = "", qodeyard_path: str = "", repair_used: bool = False) -> bool:
+    """Resolve context tool mode: True/False from config, or auto-detect from task heuristics.
+
+    'auto' (or any truthy non-bool) triggers heuristic detection.
+    Explicit True/False always wins.
+    """
+    if isinstance(raw_value, bool):
+        return bool(raw_value)
+    val_str = str(raw_value or "").strip().lower()
+    if val_str in ("false", "0", "no", "off"):
+        return False
+    if val_str in ("true", "1", "yes", "on"):
+        return True
+    # 'auto' or any other value => heuristic detection
+    return _auto_detect_context_tool(tool_name, task_file=task_file, qodeyard_path=qodeyard_path, repair_used=repair_used)
+
+
+def _auto_detect_context_tool(tool_name: str, *, task_file: str = "", qodeyard_path: str = "", repair_used: bool = False) -> bool:
+    """Auto-detect whether a context tool should be enabled based on task heuristics."""
+    # Always enable if repair is being used (needs broader context)
+    if repair_used:
+        return True
+
+    # Check task file size
+    try:
+        task_path = Path(task_file)
+        if task_path.exists():
+            task_size = task_path.stat().st_size
+            # Medium/large tasks (>5KB) benefit from context tools
+            if task_size > 5000:
+                return True
+    except Exception:
+        pass
+
+    # Check qodeyard for multi-file / multi-language signals
+    try:
+        qp = Path(qodeyard_path)
+        if qp.exists():
+            py_count = 0
+            ext_set: set[str] = set()
+            total_files = 0
+            for f in qp.rglob("*"):
+                if f.is_file() and not f.name.startswith("."):
+                    total_files += 1
+                    ext = f.suffix.lower()
+                    if ext:
+                        ext_set.add(ext)
+                    if ext == ".py":
+                        py_count += 1
+            # Multi-file or multi-language projects benefit
+            if total_files > 10:
+                return True
+            if len(ext_set) >= 3:
+                return True
+            # Many Python files
+            if py_count > 15:
+                return True
+    except Exception:
+        pass
+
+    # Default: small tasks don't need heavy context tools
+    return False
+def _run_pre_construqtor_support_refresh(
+    *,
+    path_manager,
+    agent_module_dir,
+    prefix: str,
+    agent_colors: dict,
+    run_agent_func,
+    env: dict,
+    use_qompressor: bool,
+    use_qontextor: bool,
+    use_qontrabender: bool,
+    worqspace,
+    cycle: int,
+    record_support_service_func=None,
+) -> None:
+    """Run support services right before ConstruQtor to refresh qache payloads."""
+    qrane_prefix = f"{Colors.C}[Qrane cycle {cycle}]{Colors.R} "
+    if use_qompressor:
+        qompressor_cmd = [
+            "python3", str(agent_module_dir / "qompressor.py"),
+            str(path_manager.qodeyard_dir), str(path_manager.bloq_dir),
+        ]
+        qonsole_log_path = path_manager.get_qonsole_log_path(f"qompressor_pre_construqtor_c{cycle}")
+        if not run_agent_func("qompressor", qompressor_cmd, prefix, agent_colors.get("qompressor", Colors.B), qonsole_log_path, env):
+            print(f"{qrane_prefix}{Colors.YELLOW}Pre-construqtor Qompressor had issues (non-critical).{Colors.R}\r")
+
+    if use_qontextor:
+        qontextor_cmd = [
+            "python3", str(agent_module_dir / "qontextor.py"),
+            str(path_manager.qodeyard_dir), str(path_manager.qontext_dir),
+        ]
+        qonsole_log_path = path_manager.get_qonsole_log_path(f"qontextor_pre_construqtor_c{cycle}")
+        if not run_agent_func("qontextor", qontextor_cmd, prefix, agent_colors.get("qontextor", Colors.YELLOW), qonsole_log_path, env):
+            print(f"{qrane_prefix}{Colors.YELLOW}Pre-construqtor Qontextor had issues (non-critical).{Colors.R}\r")
+
+    if use_qontrabender:
+        qontrabender_cmd = [
+            "python3", str(agent_module_dir / "qontrabender.py"),
+            str(path_manager.bloq_dir), str(path_manager.qodeyard_dir),
+            str(path_manager.qontext_dir), str(worqspace / "qache.d"),
+        ]
+        qonsole_log_path = path_manager.get_qonsole_log_path(f"qontrabender_pre_construqtor_c{cycle}")
+        if not run_agent_func("qontrabender", qontrabender_cmd, prefix, agent_colors.get("qontrabender", Colors.MAGENTA), qonsole_log_path, env):
+            print(f"{qrane_prefix}{Colors.YELLOW}Pre-construqtor Qontrabender had issues (non-critical).{Colors.R}\r")
+    else:
+        print(f"{qrane_prefix}{Colors.YELLOW}Qontrabender DISABLED - skipping pre-construqtor cache assembly.{Colors.R}\r")
+
+
+def run_pre_construqtor_context_refresh(**kwargs) -> None:
+    """Public wrapper for the provider-aware pre-ConstruQtor support refresh."""
+    return _run_pre_construqtor_support_refresh(**kwargs)
+
+
+def should_skip_agent(
+    *,
+    name: str,
+    use_qompressor: bool,
+    use_qontextor: bool,
+    use_qontrabender: bool,
+    is_repair_pass: bool,
+    construqtor_provider: str,
+) -> bool:
+    if name == 'qompressor' and not use_qompressor:
+        return True
+    if name == 'qontextor' and not use_qontextor:
+        return True
+    if name == 'qontrabender' and not use_qontrabender:
+        return True
+    if is_repair_pass and name in {'instruqtor', 'calqulator'}:
+        return True
+    if name == 'calqulator' and construqtor_provider == 'local':
+        return True
+    return False
 
 def get_version():
     suffix = "-beta"
@@ -869,28 +1016,94 @@ def now_utc_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def can_prompt_for_clarification(is_autonomous: bool) -> bool:
-    if is_autonomous:
-        return False
-    non_interactive = str(os.environ.get("QONQ_NON_INTERACTIVE", "")).strip().lower()
-    if non_interactive in {"1", "true", "yes", "on"}:
-        return False
-    try:
-        return bool(sys.stdin.isatty() and sys.stdout.isatty())
-    except Exception:
-        return False
+TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+
+
+def _env_truthy(env: dict | None, key: str) -> bool:
+    source = os.environ if env is None else env
+    value = source.get(key, "")
+    return str(value).strip().lower() in TRUTHY_ENV_VALUES
+
+
+def resolve_clarification_prompt_mode(
+    *,
+    force_interactive: bool = False,
+    force_non_interactive: bool = False,
+    env: dict | None = None,
+    stdin_stream=None,
+    stdout_stream=None,
+) -> tuple[bool, str]:
+    if force_non_interactive:
+        return False, "forced_non_interactive"
+    stdin_obj = sys.stdin if stdin_stream is None else stdin_stream
+    stdout_obj = sys.stdout if stdout_stream is None else stdout_stream
+
+    def _isatty(stream) -> bool:
+        if stream is None or not hasattr(stream, "isatty"):
+            return False
+        try:
+            return bool(stream.isatty())
+        except Exception:
+            return False
+
+    stdin_tty = _isatty(stdin_obj)
+    stdout_tty = _isatty(stdout_obj)
+
+    if force_interactive:
+        if stdin_tty and stdout_tty:
+            return True, "forced_interactive"
+        return False, "forced_interactive_requires_tty"
+    if _env_truthy(env, "QONQ_INTERACTIVE_CLARIFICATION"):
+        if stdin_tty and stdout_tty:
+            return True, "env_forced_interactive"
+        return False, "env_forced_interactive_requires_tty"
+    if _env_truthy(env, "QONQ_NON_INTERACTIVE"):
+        return False, "env_non_interactive"
+    if _env_truthy(env, "CI"):
+        return False, "ci"
+    if stdin_obj is None or not hasattr(stdin_obj, "isatty"):
+        return False, "stdin_unavailable"
+    if not stdin_tty:
+        return False, "stdin_not_tty"
+    if stdout_obj is None or not hasattr(stdout_obj, "isatty"):
+        return False, "stdout_unavailable"
+    if not stdout_tty:
+        return False, "stdout_not_tty"
+    return True, "interactive_stdio_tty"
+
+
+def should_prompt_for_clarification(
+    force_interactive: bool = False,
+    force_non_interactive: bool = False,
+    env: dict | None = None,
+    stdin_stream=None,
+    stdout_stream=None,
+) -> bool:
+    prompt_enabled, _ = resolve_clarification_prompt_mode(
+        force_interactive=force_interactive,
+        force_non_interactive=force_non_interactive,
+        env=env,
+        stdin_stream=stdin_stream,
+        stdout_stream=stdout_stream,
+    )
+    return prompt_enabled
+
+
+def can_prompt_for_clarification(is_autonomous: bool = False) -> bool:
+    """Backward compatibility shim."""
+    return should_prompt_for_clarification()
 
 
 def resolve_clarification_round_limit(config: dict | None) -> int:
     config = config or {}
     options = (config.get("options", {}) or {})
     qrystallizer_cfg = ((config.get("agents", {}) or {}).get("qrystallizer", {}) or {})
-    value = qrystallizer_cfg.get("max_clarification_rounds", options.get("max_clarification_rounds", 2))
+    value = qrystallizer_cfg.get("max_clarification_rounds", options.get("max_clarification_rounds", 5))
     try:
         parsed = int(value)
     except Exception:
-        parsed = 2
-    return max(1, min(5, parsed))
+        parsed = 5
+    return max(1, min(10, parsed))
 
 
 def resolve_raw_task_ref(task_spec: dict, default_ref: str = "tasq.d/cyqle1_tasq.md") -> str:
@@ -904,7 +1117,7 @@ def resolve_raw_task_ref(task_spec: dict, default_ref: str = "tasq.d/cyqle1_tasq
 
 def render_clarification_questions(prefix: str, status: str | None, questions: list[dict]) -> None:
     qrane_prefix = get_agent_prefix("Qrane", Colors.WHITE, prefix)
-    print(f"{qrane_prefix}Task readiness: {status or 'UNKNOWN'}\r")
+    print(f"{qrane_prefix}Task readiness: {Colors.YELLOW}{status or 'UNKNOWN'}{Colors.R}\r")
     if not questions:
         print(f"{qrane_prefix}Task is not ready, but no bounded clarification questions were emitted.\r")
         return
@@ -912,31 +1125,77 @@ def render_clarification_questions(prefix: str, status: str | None, questions: l
     for idx, item in enumerate(questions, start=1):
         question_id = item.get("question_id", f"q-{idx}")
         question = item.get("question", "Clarification needed.")
-        print(f"{qrane_prefix}{idx}. [{question_id}] {question}\r")
+        reason = item.get("reason")
+        print(f"{qrane_prefix}{idx}. {Colors.BOLD}[{question_id}]{Colors.R} {question}\r")
+        if reason:
+            print(f"{qrane_prefix}   {Colors.D}Reason: {reason}{Colors.R}\r")
+        
+        options = item.get("options")
+        if options and isinstance(options, list):
+            print(f"{qrane_prefix}   Options:\r")
+            for opt in options:
+                print(f"{qrane_prefix}     - {opt}\r")
+
+
+class ClarificationPromptAborted(Exception):
+    def __init__(self, partial_answers: list[dict] | None = None):
+        self.partial_answers = partial_answers or []
+        super().__init__("clarification_prompt_aborted")
 
 
 def prompt_for_clarification_answers(prefix: str, questions: list[dict]) -> list[dict]:
     qrane_prefix = get_agent_prefix("Qrane", Colors.WHITE, prefix)
     answers: list[dict] = []
+    
+    print(f"\n{qrane_prefix}{Colors.C}Task needs clarification before build can continue.{Colors.R}\r")
+    print(f"{qrane_prefix}Enter your answers below. Use {Colors.BOLD}/skip{Colors.R} to skip a question or {Colors.BOLD}/abort{Colors.R} to stop the run.\r\n")
+
     for idx, item in enumerate(questions, start=1):
         question_id = item.get("question_id", f"q-{idx}")
         question = item.get("question", "Clarification needed.")
-        reason = item.get("reason")
-        if reason:
-            print(f"{qrane_prefix}[{question_id}] {reason}\r")
-        try:
-            answer = input(f"{qrane_prefix}Answer {idx}/{len(questions)} ({question}): ").strip()
-        except EOFError:
-            answer = ""
-        if not answer:
-            continue
-        answers.append(
-            {
-                "question_id": question_id,
-                "question": question,
-                "answer": answer,
-            }
-        )
+        
+        while True:
+            try:
+                prompt = f"{qrane_prefix}{Colors.BOLD}[{question_id}]{Colors.R} Answer: "
+                user_input = input(prompt).strip()
+            except (EOFError, KeyboardInterrupt):
+                print(f"\n{qrane_prefix}Clarification aborted by user.\r")
+                raise ClarificationPromptAborted(answers)
+
+            if user_input.lower() == "/abort":
+                print(f"{qrane_prefix}Aborting run as requested.\r")
+                raise ClarificationPromptAborted(answers)
+            
+            if user_input.lower() == "/skip":
+                print(f"{qrane_prefix}Question {question_id} skipped.\r")
+                answers.append(
+                    {
+                        "question_id": question_id,
+                        "question": question,
+                        "answer": "",
+                        "skipped": True,
+                        "source": "interactive-cli",
+                        "answered_at": now_utc_iso(),
+                    }
+                )
+                break
+                
+            if not user_input:
+                print(f"{qrane_prefix}{Colors.YELLOW}Answer cannot be empty. Please provide a response or use /skip.{Colors.R}\r")
+                continue
+                
+            answers.append(
+                {
+                    "question_id": question_id,
+                    "question": question,
+                    "answer": user_input,
+                    "skipped": False,
+                    "source": "interactive-cli",
+                    "answered_at": now_utc_iso(),
+                }
+            )
+            break
+            
     return answers
 
 
@@ -950,6 +1209,22 @@ def write_clarification_response_artifact(
     answers: list[dict],
 ) -> Path:
     response_path = clarification_response_path(workspace_root)
+    
+    # Preserve existing answers
+    existing_payload = load_optional_json(response_path)
+    merged_answers_map = {}
+    
+    # Ingest existing
+    if isinstance(existing_payload.get("answers"), list):
+        for a in existing_payload["answers"]:
+            if isinstance(a, dict) and a.get("question_id"):
+                merged_answers_map[a["question_id"]] = a
+    
+    # Update with new
+    for a in answers:
+        if isinstance(a, dict) and a.get("question_id"):
+            merged_answers_map[a["question_id"]] = a
+
     payload = {
         "schema_version": CLARIFICATION_RESPONSE_SCHEMA_VERSION,
         "clarification_response_id": f"{run_id}-clarification-response-r{round_num}",
@@ -959,7 +1234,7 @@ def write_clarification_response_artifact(
         "round": int(round_num),
         "source": source,
         "answered_at": now_utc_iso(),
-        "answers": answers,
+        "answers": list(merged_answers_map.values()),
     }
     response_path.parent.mkdir(parents=True, exist_ok=True)
     response_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -1019,6 +1294,8 @@ def handle_intake_clarification(
     qrystallizer_cmd: list[str],
     env: dict,
     qonsole_log_path: Path,
+    force_interactive: bool = False,
+    force_non_interactive: bool = False,
 ) -> dict:
     qrane_prefix = get_agent_prefix("Qrane", Colors.WHITE, prefix)
 
@@ -1059,11 +1336,16 @@ def handle_intake_clarification(
     existing_round = int(load_optional_json(clarification_response_path(workspace_root)).get("round", 0) or 0)
     current_round = existing_round + 1
 
-    if not can_prompt_for_clarification(is_autonomous):
-        print(f"{qrane_prefix}Run is waiting for clarification input (non-interactive mode).\r")
+    should_prompt, mode_reason = resolve_clarification_prompt_mode(
+        force_interactive=force_interactive,
+        force_non_interactive=force_non_interactive,
+        env=env,
+    )
+
+    if not should_prompt:
+        print(f"{qrane_prefix}Run is waiting for clarification input (non-interactive mode: {mode_reason}).\r")
         print(f"{qrane_prefix}Provide answers in task/clarification-response.v1.json and resume.\r")
         
-        # Emit template securely, merging past matching answers
         try:
             write_clarification_response_template(
                 workspace_root,
@@ -1082,36 +1364,81 @@ def handle_intake_clarification(
             questions,
         )
 
+    answered_ids = set()
+
     for round_num in range(current_round, existing_round + max_rounds + 1):
         print(f"{qrane_prefix}Clarification round {round_num}/{existing_round + max_rounds}.\r")
-        answers = prompt_for_clarification_answers(prefix, questions)
-        if not answers:
-            print(f"{qrane_prefix}No clarification answers provided; entering waiting-for-input state.\r")
+        
+        current_question_ids = {q.get("question_id") for q in questions if q.get("question_id")}
+        if current_question_ids and current_question_ids.issubset(answered_ids):
+            print(f"{qrane_prefix}{Colors.RED}ERROR: The same clarification questions are still blocking after being answered.{Colors.R}\r")
+            print(f"{qrane_prefix}Please provide more detailed answers or check your task requirement.{Colors.R}\r")
+            return _block(
+                "clarification_infinite_loop_detected",
+                "Task is NOT_READY; same questions remained blocking after interactive answer.",
+                questions,
+            )
+
+        try:
+            answers = prompt_for_clarification_answers(prefix, questions)
+        except ClarificationPromptAborted:
+            print(f"{qrane_prefix}Run paused; clarification prompt was aborted before completion.\r")
+            return _block(
+                "clarification_waiting_for_input",
+                "Task is NOT_READY; clarification prompt was aborted by user.",
+                questions,
+            )
+
+        substantive_answers = [a for a in answers if str(a.get("answer", "")).strip()]
+        if not substantive_answers:
+            active_run_id = canonical_run_id(workspace_root) if callable(canonical_run_id) else workspace_root.name
+            response_path = write_clarification_response_artifact(
+                workspace_root,
+                run_id=active_run_id,
+                raw_task_ref=resolve_raw_task_ref(task_spec),
+                round_num=round_num,
+                source="interactive_terminal",
+                answers=answers,
+            )
+            print(f"{qrane_prefix}Wrote clarification response: {response_path.relative_to(workspace_root)}\r")
+            print(f"{qrane_prefix}No substantive clarification answers were provided; entering waiting-for-input state.\r")
             return _block(
                 "clarification_waiting_for_input",
                 "Task is NOT_READY; no clarification answers were provided interactively.",
                 questions,
             )
+        
+        for a in substantive_answers:
+            q_id = a.get("question_id")
+            if q_id:
+                answered_ids.add(q_id)
+
+        active_run_id = canonical_run_id(workspace_root) if callable(canonical_run_id) else workspace_root.name
         response_path = write_clarification_response_artifact(
             workspace_root,
-            run_id=workspace_root.name,
+            run_id=active_run_id,
             raw_task_ref=resolve_raw_task_ref(task_spec),
             round_num=round_num,
             source="interactive_terminal",
             answers=answers,
         )
         print(f"{qrane_prefix}Wrote clarification response: {response_path.relative_to(workspace_root)}\r")
+        
         if not run_agent("qrystallizer", qrystallizer_cmd, prefix, Colors.YELLOW, qonsole_log_path, env):
             return {"outcome": "error", "reason": "clarification_rerun_failed"}
+        
         if record_agent_completion:
             record_agent_completion(workspace_root, "qrystallizer", cycle, success=True)
+            
         task_spec = load_task_spec_payload(workspace_root)
         ready = bool(task_spec.get("ready"))
         status = task_spec.get("status")
         questions = load_clarification_questions(workspace_root)
+        
         if ready:
             print(f"{qrane_prefix}Clarification accepted after round {round_num}; continuing pipeline.\r")
             return {"outcome": "ready", "status": status}
+            
         render_clarification_questions(prefix, status, questions)
 
     print(f"{qrane_prefix}Clarification round limit reached; entering waiting-for-input state.\r")
@@ -1141,7 +1468,8 @@ def continuation_metadata_path(workspace_root: Path) -> Path:
 def load_inspection_artifacts(workspace_root: Path) -> tuple[dict, dict]:
     verdict = load_optional_json(inspection_verdict_path(workspace_root))
     if not verdict:
-        verdict = load_optional_json(workspace_root / "verdict" / "inspection-verdict-bridge.v1.json")
+        # NEW v1.4: Require canonical inspection verdict. No bridge fallback allowed.
+        pass
     return (
         verdict,
         load_optional_json(repair_plan_path(workspace_root)),
@@ -1462,7 +1790,7 @@ def write_continuation_metadata(
     execution_state = (((manifest or {}).get("execution") or {}).get("state") or {})
     continuation_path = continuation_metadata_path(workspace_root)
     continuation_path.parent.mkdir(parents=True, exist_ok=True)
-    run_id = workspace_root.name
+    run_id = canonical_run_id(workspace_root) if callable(canonical_run_id) else workspace_root.name
     payload = {
         "schema_version": "continuation-metadata.v1",
         "continuation_id": f"{run_id}-continuation",
@@ -1564,6 +1892,85 @@ def handle_cheqpoint(
     except Exception as e:
         content = f"[ERROR] Could not read reQap: {e}"
 
+    sq_cfg = ((config or {}).get("sqrewdriver") or {})
+    if bool(sq_cfg.get("enabled", True)):
+        sq_decision = sqrewdriver_controller.evaluate_after_inspection(
+            path_manager.root,
+            cycle=execution_state.global_iteration_index,
+            execution_state=execution_state,
+            limits=limits,
+            config=config or {},
+        )
+        if append_audit_event:
+            append_audit_event(
+                path_manager.root,
+                "sqrewdriver_decision",
+                "REPAIR",
+                "sqrewdriver_controller",
+                sq_decision.reason,
+                {
+                    "action": sq_decision.action,
+                    "repair_prompt_path": sq_decision.repair_prompt_path,
+                    "repair_plan_path": sq_decision.repair_plan_path,
+                    "summary": sq_decision.summary,
+                },
+            )
+
+        if sq_decision.action == "REPAIR":
+            repair_plan = load_optional_json(repair_plan_path(path_manager.root))
+            should_repair_now = is_autonomous or no_midrun_questions
+            if not should_repair_now:
+                print("\n" + f"{Colors.YELLOW}=== Repair Gate {execution_state.global_iteration_index:03d} ==={Colors.R}")
+                print(content)
+                print(f"{gate_prefix}Sqrewdriver repair brief available. [R]epair now, [L]ink later, [X]Quit")
+                sys.stdout.write(f"{gate_prefix}Selection: {Colors.R}")
+                sys.stdout.flush()
+                choice = getch().lower()
+                if choice in ['\r', '\n']:
+                    choice = 'x'
+                print(choice)
+                if choice == 'r':
+                    should_repair_now = True
+                elif choice == 'l':
+                    continuation_artifact = write_continuation_metadata(
+                        path_manager.root,
+                        repair_plan,
+                        repair_plan.get("repair_reason_summary", "Deferred bounded repair continuation."),
+                    )
+                    update_manifest_for_repair_state(
+                        path_manager.root,
+                        "CONTINUABLE",
+                        "RUN_REPAIR_PENDING",
+                        "Deferred Sqrewdriver repair as explicit linked continuation.",
+                        continuation_artifact,
+                        stop_reason="repair_requires_linked_continuation",
+                    )
+                    return {"action": "STOP_PARTIAL", "reason": "repair_requires_linked_continuation"}
+                else:
+                    return {"action": "QUIT", "reason": "user_quit"}
+
+            if should_repair_now:
+                return {
+                    "action": "REPAIR",
+                    "reason": sq_decision.reason,
+                    "repair_plan": repair_plan,
+                    "repairing_build_pass_index": execution_state.build_pass_index,
+                    "repair_brief_path": sq_decision.repair_prompt_path,
+                }
+
+        if sq_decision.action == "STOP_PARTIAL":
+            update_manifest_for_repair_state(
+                path_manager.root,
+                "PARTIAL",
+                "RUN_PARTIAL",
+                sq_decision.reason,
+                stop_reason=sq_decision.reason.split(":", 1)[0],
+            )
+            return {"action": "STOP_PARTIAL", "reason": sq_decision.reason}
+
+        print(f"{gate_prefix}Inspection hard gates passed. No repair required.")
+        return {"action": "STOP", "reason": sq_decision.reason}
+
     decision = decide_post_inspection(execution_state, limits, inspection_verdict, repair_plan)
 
     if decision.action == "run_repair":
@@ -1640,6 +2047,114 @@ def getch():
         finally: termios.tcsetattr(fd, termios.TCSADRAIN, old)
     except: return sys.stdin.read(1)
 
+
+def _path_if_executable(path: Path) -> Path | None:
+    try:
+        if path.exists() and path.is_file() and os.access(path, os.X_OK):
+            return path.resolve()
+    except Exception:
+        return None
+    return None
+
+
+def _configured_codeseeq_candidates(configured_path: str) -> list[Path]:
+    raw = str(configured_path or "").strip()
+    if not raw:
+        return []
+    expanded = Path(raw).expanduser()
+    if expanded.is_absolute():
+        return [expanded]
+
+    bases = [
+        Path.cwd(),
+        get_worqspace(),
+        PROJECT_ROOT,
+        PROJECT_ROOT.parent,
+    ]
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+    for base in bases:
+        try:
+            candidate = (base / expanded).resolve()
+        except Exception:
+            candidate = base / expanded
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        candidates.append(candidate)
+    return candidates
+
+
+def resolve_codeseeq_binary_for_preflight(config: dict) -> Path | None:
+    for agent_name, agent_config in (config.get('agents', {}) or {}).items():
+        if not isinstance(agent_config, dict):
+            continue
+        if str(agent_config.get('provider') or '').strip().lower() != 'codeseeq':
+            continue
+        for key in ('codeseeq_path', 'cli_path'):
+            raw = str(agent_config.get(key) or '').strip()
+            if not raw:
+                continue
+            for candidate in _configured_codeseeq_candidates(raw):
+                resolved = _path_if_executable(candidate)
+                if resolved is not None:
+                    return resolved
+
+    env_bin = os.environ.get('QONQ_CODESEEQ_BIN', '').strip()
+    if env_bin:
+        for candidate in _configured_codeseeq_candidates(env_bin):
+            resolved = _path_if_executable(candidate)
+            if resolved is not None:
+                return resolved
+
+    path_bin = shutil.which('codeseeq')
+    if path_bin:
+        resolved = _path_if_executable(Path(path_bin))
+        if resolved is not None:
+            return resolved
+
+    for candidate in (
+        PROJECT_ROOT.parent / 'codeseeq' / 'codeseeq',
+        Path('/usr/local/bin/codeseeq'),
+    ):
+        resolved = _path_if_executable(candidate)
+        if resolved is not None:
+            return resolved
+    return None
+
+
+def running_inside_qonqrete_container() -> bool:
+    if Path('/qonqrete/worqer').exists() or Path('/qonq').exists():
+        return True
+    marker = (os.environ.get('container') or os.environ.get('CONTAINER') or '').strip().lower()
+    return marker in {'podman', 'docker', 'oci'}
+
+
+def check_codeseeq_runtime(config: dict, qrane_prefix: str):
+    uses_codeseeq = any(
+        isinstance(agent_config, dict)
+        and str(agent_config.get('provider') or '').strip().lower() == 'codeseeq'
+        for agent_config in (config.get('agents', {}) or {}).values()
+    )
+    if not uses_codeseeq:
+        return
+
+    if resolve_codeseeq_binary_for_preflight(config) is not None:
+        return
+
+    message = (
+        "provider: codeseeq requires CodeSeeq CLI to be executable from the agent runtime. "
+        "In the default QonQrete container this sibling folder is not mounted. "
+        "Use CONTAINER_ENGINE=none QONQ_UNSAFE_HOST_MODE=1 for host-mode testing, "
+        "set QONQ_CODESEEQ_BIN, or implement a supported CodeSeeq mount/image path."
+    )
+    if running_inside_qonqrete_container():
+        print(f"{qrane_prefix}[ERROR] {message}")
+    else:
+        print(f"{qrane_prefix}[ERROR] {message}")
+    sys.exit(1)
+
+
 def check_api_keys(config, qrane_prefix):
     providers = set()
     for agent_config in config.get('agents', {}).values():
@@ -1657,6 +2172,8 @@ def check_api_keys(config, qrane_prefix):
         'openrouter': 'OPENROUTER_API_KEY',
         # v1.3.12: Venice requires its own dedicated key. No fallback.
         'venice': 'VENICE_API_KEY',
+        # CodeSeeq routes through DeepSeek underneath.
+        'codeseeq': 'DEEPSEEK_API_KEY',
     }
 
     # v1.3.12: mlx and llama-cpp providers support OPTIONAL keys (MLX_API_KEY /
@@ -1693,6 +2210,8 @@ def check_api_keys(config, qrane_prefix):
         print(f"{qrane_prefix}[ERROR] API Keys missing. Ensure the following environment variables are set for the providers listed in your config.yaml: {', '.join(missing_keys)}")
         sys.exit(1)
 
+    check_codeseeq_runtime(config, qrane_prefix)
+
 
 def main():
     parser = argparse.ArgumentParser(prog="QonQrete")
@@ -1705,6 +2224,8 @@ def main():
     parser.add_argument("-c", "--cyqles", type=int, help="Max total iterations (build + repair passes). Compatibility alias for max_total_iterations.")
     parser.add_argument("--build-passes", type=int, help="Max non-repair build passes.")
     parser.add_argument("--cycle-estimate-mode", choices=[ESTIMATE_MODE_ADVISORY, ESTIMATE_MODE_SCHEDULER], help="How InstruQtor estimated build passes are used.")
+    parser.add_argument("--interactive-clarification", action="store_true", help="Force interactive clarification prompts.")
+    parser.add_argument("--non-interactive-clarification", action="store_true", help="Force file-based clarification pause mode.")
     args = parser.parse_args()
 
     if args.auto and args.user:
@@ -1798,9 +2319,25 @@ def run_orchestration(args, prefix, is_autonomous, config):
 
     qrane_prefix = get_agent_prefix("Qrane", Colors.WHITE, prefix)
 
-    use_qompressor = config.get('options', {}).get('use_qompressor', True)
-    use_qontextor = config.get('options', {}).get('use_qontextor', True)
-    use_qontrabender = config.get('options', {}).get('use_qontrabender', True)
+    raw_use_qompressor = config.get('options', {}).get('use_qompressor', 'auto')
+    raw_use_qontextor = config.get('options', {}).get('use_qontextor', 'auto')
+    raw_use_qontrabender = config.get('options', {}).get('use_qontrabender', 'auto')
+
+    task_file_path = str(path_manager.root / "tasq.d" / f"cyqle0_tasq.md")
+    qodeyard_str = str(path_manager.qodeyard_dir)
+
+    use_qompressor = _resolve_context_tool_mode(
+        raw_use_qompressor, tool_name="qompressor",
+        task_file=task_file_path, qodeyard_path=qodeyard_str,
+    )
+    use_qontextor = _resolve_context_tool_mode(
+        raw_use_qontextor, tool_name="qontextor",
+        task_file=task_file_path, qodeyard_path=qodeyard_str,
+    )
+    use_qontrabender = _resolve_context_tool_mode(
+        raw_use_qontrabender, tool_name="qontrabender",
+        task_file=task_file_path, qodeyard_path=qodeyard_str,
+    )
 
     baseline_sens = max(0, min(16, int(config_manual_sens)))
     sens_display = f"auto/{baseline_sens}" if sens_mode == "auto" else str(final_sens)
@@ -1831,6 +2368,8 @@ def run_orchestration(args, prefix, is_autonomous, config):
     if path_manager.qodeyard_dir.exists() and any(path_manager.qodeyard_dir.iterdir()):
         initial_env = os.environ.copy()
         initial_env["CYCLE_NUM"] = "0"
+        initial_env["QONQ_CONSTRUQTOR_PROVIDER"] = resolve_construqtor_provider(config.get('agents', {}))
+        initial_env["QONQ_CONSTRUQTOR_MODEL"] = resolve_construqtor_model(config.get('agents', {}))
 
         if use_qompressor:
             msg = "Seeded qodeyard detected. Warming up Qompressor (Skeleton Cache)..."
@@ -1897,7 +2436,11 @@ def run_orchestration(args, prefix, is_autonomous, config):
         if use_qontrabender:
             msg = "Running Qontrabender (Hybrid Cache Assembly)..."
             print(f"{qrane_prefix}{msg}\r")
-            qontrabender_cmd = ["python3", str(AGENT_MODULE_DIR / "qontrabender.py"), "--check"]
+            qontrabender_cmd = [
+                "python3", str(AGENT_MODULE_DIR / "qontrabender.py"),
+                str(path_manager.bloq_dir), str(path_manager.qodeyard_dir),
+                str(path_manager.qontext_dir), str(worqspace / "qache.d"),
+            ]
             qonsole_log_path = path_manager.get_qonsole_log_path("qontrabender_warmup")
             if not run_agent("qontrabender", qontrabender_cmd, prefix, AGENT_COLORS.get("qontrabender"), qonsole_log_path, initial_env):
                 print(f"{qrane_prefix}{Colors.YELLOW}Qontrabender warmup had issues (non-critical).{Colors.R}\r")
@@ -1906,8 +2449,8 @@ def run_orchestration(args, prefix, is_autonomous, config):
                         worqspace,
                         "qontrabender_warmup",
                         0,
-                        artifacts=["qache.d/manifest.json"] if (worqspace / "qache.d" / "manifest.json").exists() else [],
-                        notes=["Warmup cache check had issues."],
+                        artifacts=["qache.d/cached_payload.txt", "qache.d/hotset_payload.txt", "qache.d/context_bundle_manifest.json"] if (worqspace / "qache.d" / "context_bundle_manifest.json").exists() else [],
+                        notes=["Warmup cache assembly had issues."],
                         success=False,
                     )
             else:
@@ -1917,8 +2460,8 @@ def run_orchestration(args, prefix, is_autonomous, config):
                         worqspace,
                         "qontrabender_warmup",
                         0,
-                        artifacts=["qache.d/manifest.json"] if (worqspace / "qache.d" / "manifest.json").exists() else [],
-                        notes=["Warmup cache check completed."],
+                        artifacts=["qache.d/cached_payload.txt", "qache.d/hotset_payload.txt", "qache.d/context_bundle_manifest.json"] if (worqspace / "qache.d" / "context_bundle_manifest.json").exists() else [],
+                        notes=["Warmup cache assembly completed."],
                         success=True,
                     )
         else:
@@ -2029,10 +2572,29 @@ def run_orchestration(args, prefix, is_autonomous, config):
                 # or if all required files exist in qodeyard, we may be able to stop.
                 inspection_verdict, _ = load_inspection_artifacts(worqspace)
                 if inspection_verdict and (inspection_verdict.get("status") == "SUCCESS" or inspection_verdict.get("task_completed")):
-                    print(f"{qrane_prefix}Task already completed (SUCCESS). Stopping.\r")
-                    bounded_stop = True
-                    stop_reason = "already_completed"
-                    break
+                    if bool(((config or {}).get("sqrewdriver") or {}).get("enabled", True)):
+                        completion_criteria = load_optional_json(worqspace / "planning" / "completion-criteria.v1.json")
+                        validation_bundle = load_optional_json(worqspace / "validation" / "validation-bundle.v1.json")
+                        already_clean, already_clean_reasons = sqrewdriver_controller.is_success_verdict(
+                            inspection_verdict,
+                            validation_bundle,
+                            completion_criteria,
+                            worqspace,
+                        )
+                        if already_clean:
+                            print(f"{qrane_prefix}Task already completed with artifact gates passing. Stopping.\r")
+                            bounded_stop = True
+                            stop_reason = "already_completed"
+                            break
+                        print(
+                            f"{qrane_prefix}Existing completion verdict failed artifact gate; continuing. "
+                            f"Reasons: {', '.join(already_clean_reasons[:3])}\r"
+                        )
+                    else:
+                        print(f"{qrane_prefix}Task already completed (SUCCESS). Stopping.\r")
+                        bounded_stop = True
+                        stop_reason = "already_completed"
+                        break
 
                 # Also check required files directly for truthfulness
                 completion_criteria = load_optional_json(worqspace / "planning" / "completion-criteria.v1.json")
@@ -2105,10 +2667,16 @@ def run_orchestration(args, prefix, is_autonomous, config):
                 env["QONQ_REPAIR_MODE"] = "1"
                 env["QONQ_REPAIR_PLAN_PATH"] = str(repair_plan_path(worqspace))
                 env["QONQ_REPAIRING_BUILD_PASS_INDEX"] = str(execution_state.repairing_build_pass_index or execution_state.build_pass_index)
+                sqrewdriver_brief_path = worqspace / sqrewdriver_controller.REPAIR_BRIEF_MD
+                if sqrewdriver_brief_path.exists():
+                    env["QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH"] = str(sqrewdriver_brief_path)
+                else:
+                    env.pop("QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH", None)
             else:
                 env.pop("QONQ_REPAIR_MODE", None)
                 env.pop("QONQ_REPAIR_PLAN_PATH", None)
                 env.pop("QONQ_REPAIRING_BUILD_PASS_INDEX", None)
+                env.pop("QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH", None)
 
             try:
                 with open(path_manager.root / 'pipeline_config.yaml', 'r', encoding='utf-8') as f:
@@ -2126,6 +2694,10 @@ def run_orchestration(args, prefix, is_autonomous, config):
 
             agents_to_run = []
             agent_configs = config.get('agents', {})
+            construqtor_provider = resolve_construqtor_provider(agent_configs)
+            construqtor_model = resolve_construqtor_model(agent_configs)
+            env["QONQ_CONSTRUQTOR_PROVIDER"] = construqtor_provider
+            env["QONQ_CONSTRUQTOR_MODEL"] = construqtor_model
 
             for agent_def in pipeline_config.get('agents', []):
                 name = agent_def['name']
@@ -2134,20 +2706,14 @@ def run_orchestration(args, prefix, is_autonomous, config):
 
                 if agent_def.get('cycle_1_only', False) and not (execution_state.pass_kind == PASS_BUILD and execution_state.build_pass_index == 1):
                     continue
-                if name == 'qompressor' and not use_qompressor:
-                    continue
-                if name == 'qontextor' and not use_qontextor:
-                    continue
-                if name == 'qontrabender' and not use_qontrabender:
-                    continue
-                if is_repair_pass and name in {'instruqtor', 'calqulator'}:
-                    continue
-
-                construqtor_provider = resolve_construqtor_provider(agent_configs)
-
-                if name == 'qontrabender' and construqtor_provider != 'gemini':
-                    continue
-                if name == 'calqulator' and construqtor_provider == 'local':
+                if should_skip_agent(
+                    name=name,
+                    use_qompressor=use_qompressor,
+                    use_qontextor=use_qontextor,
+                    use_qontrabender=use_qontrabender,
+                    is_repair_pass=is_repair_pass,
+                    construqtor_provider=construqtor_provider,
+                ):
                     continue
 
                 if provider == 'local':
@@ -2193,6 +2759,21 @@ def run_orchestration(args, prefix, is_autonomous, config):
                 print(f"{inst_prefix}Ingesting cyqle{cycle}_tasq.md for build pass {execution_state.build_pass_index}...\r")
 
             previous_log_path = None
+            # Pre-construqtor support refresh: ensure fresh qache payloads before ConstruQtor
+            run_pre_construqtor_context_refresh(
+                path_manager=path_manager,
+                agent_module_dir=AGENT_MODULE_DIR,
+                prefix=prefix,
+                agent_colors=AGENT_COLORS,
+                run_agent_func=run_agent,
+                env=env,
+                use_qompressor=use_qompressor,
+                use_qontextor=use_qontextor,
+                use_qontrabender=use_qontrabender,
+                worqspace=worqspace,
+                cycle=cycle,
+            )
+
             for name, cmd in agents_to_run:
                 env["QONQ_PREVIOUS_LOG"] = str(previous_log_path) if previous_log_path else ""
                 agent_timeout = get_agent_config(agent_configs, name).get("timeout", 300)
@@ -2267,6 +2848,8 @@ def run_orchestration(args, prefix, is_autonomous, config):
                         qrystallizer_cmd=cmd,
                         env=env,
                         qonsole_log_path=qonsole_log_path,
+                        force_interactive=bool(getattr(args, 'interactive_clarification', False)),
+                        force_non_interactive=bool(getattr(args, 'non_interactive_clarification', False)),
                     )
                     if clarification_result.get("outcome") == "ready":
                         status = clarification_result.get("status")
@@ -2507,6 +3090,16 @@ def run_orchestration(args, prefix, is_autonomous, config):
             finalize_manifest(worqspace, "completed", f"Run completed. Stop reason: {stop_reason or 'completed'}.")
         else:
             finalize_manifest(worqspace, "completed", f"Run finished without runtime errors. Stop reason: {stop_reason or 'completed'}.")
+
+    final_exit_code = 0
+    if session_failed or partial_stop:
+        final_exit_code = 1
+    elif blocked_stop:
+        final_exit_code = 2
+    elif user_quit:
+        final_exit_code = 130
+    if final_exit_code:
+        sys.exit(final_exit_code)
 
 
 if __name__ == "__main__":

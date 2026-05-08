@@ -277,6 +277,6 @@ export async function executeSetAIConfig(): Promise<void> {
     }
 }
 
-export function registerAIConfigCommand(context: vscode.ExtensionContext): vscode.Disposable {
+export function registerAIConfigCommand(_context: vscode.ExtensionContext): vscode.Disposable {
     return vscode.commands.registerCommand('qonqrete.setAIConfig', executeSetAIConfig);
 }
