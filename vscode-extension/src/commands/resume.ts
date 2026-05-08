@@ -192,7 +192,7 @@ export async function executeClean(): Promise<void> {
  * Register the resume and clean commands
  * NOTE: showStatus is registered in extension.ts to avoid duplicate registration
  */
-export function registerResumeCommands(context: vscode.ExtensionContext): vscode.Disposable[] {
+export function registerResumeCommands(_context: vscode.ExtensionContext): vscode.Disposable[] {
     return [
         vscode.commands.registerCommand('qonqrete.resumeRun', executeResume),
         vscode.commands.registerCommand('qonqrete.cleanQages', executeClean),

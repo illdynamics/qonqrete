@@ -31,6 +31,7 @@ import os
 import sys
 import json
 import yaml
+import ast
 import sqlite3
 import hashlib
 import argparse
@@ -41,6 +42,58 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any, Tuple, Set
+
+try:
+    from path_hygiene import INFRA_DIR_NAMES, is_generated_output_dir, is_source_junk_file
+except ImportError:
+    INFRA_DIR_NAMES = frozenset({
+        ".git",
+        ".venv",
+        ".test_venv",
+        "node_modules",
+        ".gradle",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        ".validation-env-cache",
+        "__MACOSX",
+    })
+
+    def is_generated_output_dir(path: Path) -> bool:
+        return path.name == "out" and path.parent.name == "vscode-extension"
+
+    def is_source_junk_file(path: Path) -> bool:
+        return path.name == ".DS_Store" or path.name.startswith("._") or path.suffix == ".pyc"
+
+try:
+    from worqer.context_bundle import (
+        FULL_HOTSET,
+        FULL_NEIGHBOR,
+        MISSING_NEW_FILE_TARGET,
+        QONTEXT,
+        SKELETON,
+        ContextBundleItem,
+        build_context_bundle,
+        resolve_qontrabender_cache_backend,
+        validate_bundle_invariants,
+        write_context_bundle_manifest,
+        get_context_strategy_config,
+    )
+except ImportError:
+    from context_bundle import (  # type: ignore
+        FULL_HOTSET,
+        FULL_NEIGHBOR,
+        MISSING_NEW_FILE_TARGET,
+        QONTEXT,
+        SKELETON,
+        ContextBundleItem,
+        build_context_bundle,
+        resolve_qontrabender_cache_backend,
+        validate_bundle_invariants,
+        write_context_bundle_manifest,
+        get_context_strategy_config,
+    )
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SCHEMA VALIDATION
@@ -933,6 +986,7 @@ class Qontrabender:
         qontext_schema = self.policy.get('qontext_schema', {})
         symbols_key = qontext_schema.get('symbols_key', 'symbols')
         deps_key = qontext_schema.get('deps_key', 'dependencies')
+        inbound_refs_key = qontext_schema.get('inbound_refs_key', 'inbound_refs')
         
         possible_names = [
             self.qontext_path / f"{rel_path}.q.yaml",
@@ -946,17 +1000,37 @@ class Qontrabender:
                         data = yaml.safe_load(f) or {}
                     
                     symbols = data.get(symbols_key, [])
-                    total_deps = sum(len(s.get(deps_key, [])) for s in symbols)
-                    
+                    if not isinstance(symbols, list):
+                        symbols = []
+
+                    total_deps = 0
+                    for symbol in symbols:
+                        if not isinstance(symbol, dict):
+                            continue
+                        deps = symbol.get(deps_key, [])
+                        if isinstance(deps, list):
+                            total_deps += len(deps)
+                    top_level_deps = data.get(deps_key, [])
+                    if isinstance(top_level_deps, list):
+                        total_deps += len(top_level_deps)
+
+                    inbound_refs_raw = data.get(inbound_refs_key, [])
+                    inbound_refs_count = 0
+                    if isinstance(inbound_refs_raw, list):
+                        inbound_refs_count = len([item for item in inbound_refs_raw if str(item).strip()])
+                    elif isinstance(inbound_refs_raw, (int, float)):
+                        inbound_refs_count = max(0, int(inbound_refs_raw))
+
                     return {
                         'dependency_count': total_deps,
                         'symbol_count': len(symbols),
+                        'inbound_refs': inbound_refs_count,
                         'has_qontext': True
                     }
                 except Exception:
                     pass
         
-        return {'dependency_count': 0, 'symbol_count': 0, 'has_qontext': False}
+        return {'dependency_count': 0, 'symbol_count': 0, 'inbound_refs': 0, 'has_qontext': False}
     
     def _calculate_core_score(self, file_info: dict) -> float:
         """Calculate core utility score for a file"""
@@ -979,6 +1053,10 @@ class Qontrabender:
     
     def _should_include_file(self, file_path: Path) -> bool:
         """Check if a file should be considered for caching"""
+        if is_source_junk_file(file_path):
+            return False
+        if any(part in INFRA_DIR_NAMES for part in file_path.parts):
+            return False
         if any(part.startswith('.') for part in file_path.parts):
             return False
         
@@ -1000,7 +1078,11 @@ class Qontrabender:
         
         print(f"  - Analyzing files (mode: {self.mode})...", flush=True)
         
-        for root, _, files in os.walk(self.qodeyard_path):
+        for root, dirs, files in os.walk(self.qodeyard_path):
+            dirs[:] = [
+                d for d in dirs
+                if d not in INFRA_DIR_NAMES and not is_generated_output_dir(Path(root) / d)
+            ]
             for file in files:
                 file_path = Path(root) / file
                 
@@ -1017,6 +1099,34 @@ class Qontrabender:
         
         return decisions
     
+    def _has_docstrings(self, content: str, suffix: str) -> bool:
+        """Detect doc presence conservatively; never assume unknown content is documented."""
+        if not content:
+            return False
+        
+        if suffix == '.py':
+            try:
+                tree = ast.parse(content)
+            except Exception:
+                return False
+
+            if ast.get_docstring(tree):
+                return True
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    if ast.get_docstring(node):
+                        return True
+            return False
+        
+        if suffix in {'.js', '.ts', '.java', '.c', '.cpp', '.cs'}:
+            return bool(re.search(r'/\*\*[\s\S]*?\*/', content))
+        
+        if suffix in {'.md', '.rst', '.txt'}:
+            # Documentation files count only when they contain meaningful prose.
+            return bool(re.search(r'[A-Za-z]{4,}', content))
+            
+        return False
+
     def _decide_fidelity(self, file_path: Path, rel_path: str) -> FileDecision:
         """Decide fidelity for a single file using the rules engine"""
         # Get file metadata
@@ -1026,10 +1136,12 @@ class Qontrabender:
                 content = f.read()
             file_chars = len(content)
             token_est = self._estimate_tokens(content)
+            has_docstrings = self._has_docstrings(content, file_path.suffix.lower())
         except Exception:
             mtime = 0.0
             file_chars = 0
             token_est = 0
+            has_docstrings = False
         
         # Check volatility
         is_volatile, volatile_reason = self.volatile_detector.is_volatile(file_path, rel_path)
@@ -1038,13 +1150,14 @@ class Qontrabender:
         intel = self._load_qontext_intelligence(rel_path)
         dep_count = intel['dependency_count']
         sym_count = intel['symbol_count']
+        inbound_refs = intel.get('inbound_refs', 0)
         
         # Calculate core score
         file_info = {
             'dependency_count': dep_count,
             'symbol_count': sym_count,
-            'inbound_refs': 0,  # TODO: Calculate from qontext
-            'has_docstrings': True,  # Assume true for now
+            'inbound_refs': inbound_refs,
+            'has_docstrings': has_docstrings,
         }
         core_score = self._calculate_core_score(file_info)
         
@@ -1572,6 +1685,327 @@ def print_modes(policy: dict):
     print("\n" + "═" * 75 + "\n")
 
 
+def _is_truthy(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_rel_path(value: str | None) -> str:
+    text = str(value or "").strip().replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    if text.startswith("qodeyard/"):
+        text = text[len("qodeyard/"):]
+    return text
+
+
+def _safe_read_text(path: Path, max_chars: int = 120000) -> str:
+    try:
+        text = path.read_text(encoding='utf-8', errors='ignore')
+    except Exception:
+        return ""
+    if len(text) > max_chars:
+        return text[:max_chars] + "\n... [truncated]"
+    return text
+
+
+def _extract_repair_targets_from_plan(repair_plan_path: str | None) -> list[str]:
+    if not repair_plan_path:
+        return []
+    try:
+        payload = json.loads(Path(repair_plan_path).read_text(encoding='utf-8'))
+    except Exception:
+        return []
+    targets: set[str] = set()
+    if isinstance(payload, dict):
+        for key in ("target_files", "validation_scope_files", "allowed_edit_paths"):
+            for value in payload.get(key, []) or []:
+                rel = _normalize_rel_path(str(value))
+                if rel:
+                    targets.add(rel)
+        escalation = payload.get("repair_escalation")
+        if isinstance(escalation, dict):
+            for value in escalation.get("target_files", []) or []:
+                rel = _normalize_rel_path(str(value))
+                if rel:
+                    targets.add(rel)
+    return sorted(targets)
+
+
+def _extract_briq_targets_from_cycle(worqspace: Path, cycle_num: str) -> list[str]:
+    briq_dir = worqspace / "briq.d"
+    if not briq_dir.exists():
+        return []
+    targets: set[str] = set()
+    pattern = f"cyqle{cycle_num}_*.md" if str(cycle_num or "").strip() else "*.md"
+    for briq in sorted(briq_dir.glob(pattern)):
+        text = _safe_read_text(briq, max_chars=250000)
+        for token in re.findall(r'`([^`]+)`', text):
+            rel = _normalize_rel_path(token)
+            if not rel:
+                continue
+            if rel.startswith("/") or rel.startswith("../"):
+                continue
+            if "/" in rel or "." in Path(rel).name:
+                targets.add(rel)
+    return sorted(targets)
+
+
+def _read_support_artifact(path: Path, heading: str, max_chars: int = 60000) -> str:
+    if not path.exists():
+        return ""
+    content = _safe_read_text(path, max_chars=max_chars).strip()
+    if not content:
+        return ""
+    return f"{heading}\nFILE: {path.name}\n```\n{content}\n```\n"
+
+
+def _render_provider_aware_payloads(
+    *,
+    worqspace: Path,
+    qodeyard_path: Path,
+    bundle: list[ContextBundleItem],
+    provider: str,
+    model: str,
+    cache_backend: str,
+    pass_kind: str,
+    repair_mode: bool,
+    repair_plan_path: str | None,
+) -> tuple[str, str]:
+    stable_lines: list[str] = [
+        "CACHED STABLE CONTEXT",
+        f"PROVIDER: {provider}",
+        f"MODEL: {model or '(unset)'}",
+        f"CACHE_BACKEND: {cache_backend}",
+        "BACKGROUND ONLY. If this conflicts with full hotset context, hotset wins.",
+        "",
+        "STRUCTURAL CONTEXT",
+        "Skeletons/qontexts are navigation-only and not enough to edit from.",
+        "",
+    ]
+    hotset_lines: list[str] = [
+        "HOTSET CONTEXT",
+        f"PASS_KIND: {pass_kind}",
+        f"REPAIR_MODE: {'1' if repair_mode else '0'}",
+        "Includes authoritative editable targets and volatile execution evidence.",
+        "",
+    ]
+
+    sorted_bundle = sorted(bundle, key=lambda item: (item.fidelity, item.rel_path, item.source))
+    for item in sorted_bundle:
+        path_obj = Path(item.actual_path) if item.actual_path else None
+        if item.fidelity in {SKELETON, QONTEXT}:
+            if path_obj and path_obj.exists():
+                stable_text = _safe_read_text(path_obj, max_chars=90000)
+            else:
+                stable_text = ""
+            stable_lines.append(
+                f"FILE: {item.rel_path}\nSOURCE: {item.source}\nFIDELITY: {item.fidelity}\nREASON: {item.reason}"
+            )
+            if stable_text:
+                stable_lines.append("```")
+                stable_lines.append(stable_text)
+                stable_lines.append("```")
+            stable_lines.append("")
+            continue
+
+        if item.fidelity in {FULL_HOTSET, FULL_NEIGHBOR, MISSING_NEW_FILE_TARGET}:
+            hotset_lines.append(
+                f"FILE: {item.rel_path}\nSOURCE: qodeyard\nFIDELITY: {item.fidelity}\nREASON: {item.reason}\nEDITABLE: {str(item.editable).lower()}"
+            )
+            if path_obj and path_obj.exists():
+                hotset_lines.append("```")
+                hotset_lines.append(_safe_read_text(path_obj, max_chars=120000))
+                hotset_lines.append("```")
+            else:
+                hotset_lines.append("MISSING: true")
+            hotset_lines.append("")
+
+    if repair_plan_path:
+        plan_block = _read_support_artifact(Path(repair_plan_path), "REPAIR PLAN", max_chars=120000)
+        if plan_block:
+            hotset_lines.append(plan_block)
+
+    for artifact in (
+        worqspace / "exeq.d" / "latest_validation.md",
+        worqspace / "exeq.d" / "latest_changed.md",
+    ):
+        block = _read_support_artifact(artifact, "RECENT EXECUTION EVIDENCE", max_chars=60000)
+        if block:
+            hotset_lines.append(block)
+
+    changed_candidates = sorted((worqspace / "exeq.d").glob("cyqle*_changed.md")) if (worqspace / "exeq.d").exists() else []
+    summary_candidates = sorted((worqspace / "exeq.d").glob("cyqle*_summary.md")) if (worqspace / "exeq.d").exists() else []
+    if changed_candidates:
+        hotset_lines.append(_read_support_artifact(changed_candidates[-1], "CHANGED DIFF SUMMARY", max_chars=80000))
+    if summary_candidates:
+        hotset_lines.append(_read_support_artifact(summary_candidates[-1], "LATEST BUILD SUMMARY", max_chars=80000))
+
+    # Deterministic project map in stable payload.
+    project_map: list[str] = ["PROJECT MAP (qodeyard)"]
+    for file_path in sorted(qodeyard_path.rglob("*")):
+        if file_path.is_file():
+            project_map.append(str(file_path.relative_to(qodeyard_path).as_posix()))
+        if len(project_map) >= 600:
+            project_map.append("... [truncated]")
+            break
+    stable_lines.extend(project_map)
+    stable_lines.append("")
+
+    return "\n".join(stable_lines).strip() + "\n", "\n".join(hotset_lines).strip() + "\n"
+
+
+def _run_provider_aware_pipeline_bundle(qb: Qontrabender) -> tuple[bool, str]:
+    provider = str(os.environ.get("QONQ_CONSTRUQTOR_PROVIDER", "") or "").strip().lower()
+    model = str(os.environ.get("QONQ_CONSTRUQTOR_MODEL", "") or "").strip()
+    pass_kind = str(os.environ.get("QONQ_PASS_KIND", "build") or "build").strip().lower()
+    repair_mode = _is_truthy(os.environ.get("QONQ_REPAIR_MODE"))
+    repair_plan_path = os.environ.get("QONQ_REPAIR_PLAN_PATH")
+    cycle_num = str(os.environ.get("CYCLE_NUM", "") or "").strip()
+
+    try:
+        with open(qb.worqspace / "config.yaml", "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception:
+        cfg = {}
+    options = cfg.get("options", {}) if isinstance(cfg, dict) else {}
+    strategy_cfg = cfg.get("context_strategy", {}) if isinstance(cfg, dict) else {}
+    if not isinstance(strategy_cfg, dict):
+        strategy_cfg = {}
+    if not provider:
+        provider = str((cfg.get("agents", {}).get("construqtor", {}) or {}).get("provider", "local")).strip().lower()
+    if not model:
+        model = str((cfg.get("agents", {}).get("construqtor", {}) or {}).get("model", "")).strip()
+
+    policy_provider_cache = (((qb.policy or {}).get("defaults") or {}).get("provider_cache") or {})
+    cfg_provider_cache = (((cfg.get("agents", {}) or {}).get("qontrabender", {}) or {}).get("provider_cache") or {})
+    provider_cache_cfg = dict(policy_provider_cache) if isinstance(policy_provider_cache, dict) else {}
+    if isinstance(cfg_provider_cache, dict):
+        provider_cache_cfg.update(cfg_provider_cache)
+
+    cache_backend = resolve_qontrabender_cache_backend(
+        provider=provider,
+        provider_cache_cfg=provider_cache_cfg,
+    )
+    cache_backend_reason = "provider mapping"
+    if provider in {"gemini", "google"} and cache_backend == "stable_prefix_auto":
+        cache_backend_reason = "Gemini explicit cache is disabled because no real SDK-backed CachedContent path is implemented/enabled."
+    elif cache_backend == "stable_prefix_auto":
+        cache_backend_reason = "Provider uses stable-prefix automatic cache behavior."
+    elif cache_backend == "anthropic_cache_control":
+        cache_backend_reason = "Anthropic cache_control enabled for stable prefix only."
+    elif cache_backend == "local_only":
+        cache_backend_reason = "Provider is local or explicit provider caching is not harmless."
+
+    repair_targets = _extract_repair_targets_from_plan(repair_plan_path) if repair_mode else []
+    editable_targets = list(repair_targets)
+    if not editable_targets:
+        editable_targets = _extract_briq_targets_from_cycle(qb.worqspace, cycle_num)
+
+    context_strategy = str(
+        strategy_cfg.get("repair" if repair_mode else "normal", "repair_truth" if repair_mode else "hybrid_fidelity")
+    ).strip().lower()
+    max_neighbor_chars = int(strategy_cfg.get("direct_dependencies_full_if_small_max_chars", 90000) or 90000)
+    max_full_neighbors = int(strategy_cfg.get("max_full_neighbors", 24) or 24)
+    max_indirect_neighbors = int(strategy_cfg.get("max_indirect_neighbors", 40) or 40)
+    try:
+        repair_level = int(os.environ.get("QONQ_REPAIR_LEVEL") or 1) if repair_mode else None
+    except Exception:
+        repair_level = 1 if repair_mode else None
+
+    bundle = build_context_bundle(
+        qodeyard_path=qb.qodeyard_path,
+        bloq_path=qb.bloq_path,
+        qontext_path=qb.qontext_path,
+        editable_targets=editable_targets,
+        repair_targets=repair_targets,
+        use_qompressor=bool(options.get("use_qompressor", True)),
+        use_qontextor=bool(options.get("use_qontextor", True)),
+        context_strategy=context_strategy,
+        max_neighbor_full_chars=max_neighbor_chars,
+        max_full_neighbors=max_full_neighbors,
+        max_indirect=max_indirect_neighbors,
+        repair_level=repair_level,
+    )
+    validate_bundle_invariants(
+        bundle=bundle,
+        qodeyard_path=qb.qodeyard_path,
+        repair_targets=repair_targets,
+    )
+    if repair_targets:
+        hotset_files = {
+            item.rel_path
+            for item in bundle
+            if item.fidelity == FULL_HOTSET
+        }
+        missing_from_hotset = sorted(
+            rel
+            for rel in repair_targets
+            if rel not in hotset_files and not any(
+                item.rel_path == rel and item.reason == "new_file_target" for item in bundle
+            )
+        )
+        if missing_from_hotset:
+            return False, (
+                "repair targets missing from hotset bundle: " + ", ".join(missing_from_hotset)
+            )
+
+    qb.qache_path.mkdir(parents=True, exist_ok=True)
+    cached_payload, hotset_payload = _render_provider_aware_payloads(
+        worqspace=qb.worqspace,
+        qodeyard_path=qb.qodeyard_path,
+        bundle=bundle,
+        provider=provider,
+        model=model,
+        cache_backend=cache_backend,
+        pass_kind=pass_kind,
+        repair_mode=repair_mode,
+        repair_plan_path=repair_plan_path,
+    )
+    (qb.qache_path / "cached_payload.txt").write_text(cached_payload, encoding="utf-8")
+    (qb.qache_path / "hotset_payload.txt").write_text(hotset_payload, encoding="utf-8")
+    write_context_bundle_manifest(
+        qache_dir=qb.qache_path,
+        provider=provider,
+        model=model,
+        cache_backend=cache_backend,
+        cache_backend_reason=cache_backend_reason,
+        pass_kind=pass_kind,
+        repair_mode=repair_mode,
+        bundle=bundle,
+        cycle_num=cycle_num,
+        build_pass_index=int(os.environ.get("QONQ_BUILD_PASS_INDEX") or 0),
+        repair_pass_index=int(os.environ.get("QONQ_REPAIR_PASS_INDEX") or 0),
+        target_files=editable_targets,
+        repair_targets=repair_targets,
+        qodeyard_path=qb.qodeyard_path,
+    )
+
+    # provider_cache.json is only emitted when we actually have a provider cache id/object.
+    provider_cache_path = qb.qache_path / "provider_cache.json"
+    active_cache_id = qb.get_active_cache_id()
+    if cache_backend == "gemini_explicit" and active_cache_id:
+        provider_cache_path.write_text(
+            json.dumps(
+                {
+                    "provider": provider,
+                    "backend": cache_backend,
+                    "cache_id": active_cache_id,
+                    "qache_id": qb.get_qache_id(),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    elif provider_cache_path.exists():
+        try:
+            provider_cache_path.unlink()
+        except Exception:
+            pass
+
+    return True, cache_backend
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Qontrabender - The Cache Bender 🌀 (Enhanced v0.8.0)",
@@ -1722,33 +2156,46 @@ Pipeline Usage (called by qrane.py):
     if args.sync:
         print(qb.generate_sync_instructions())
         return
+
+    if args.check:
+        # --check now runs provider-aware pipeline when in pipeline/worqspace mode
+        if args.inputs and len(args.inputs) >= 4:
+            print(f"\n  Running --check in pipeline mode...", flush=True)
+            ok, backend_or_error = _run_provider_aware_pipeline_bundle(qb)
+            if not ok:
+                print(f"  [ERROR] Provider-aware bundle assembly failed: {backend_or_error}", flush=True)
+                sys.exit(1)
+            print(f"  Cache backend: {backend_or_error}", flush=True)
+            print(f"  Wrote: qache.d/cached_payload.txt", flush=True)
+            print(f"  Wrote: qache.d/hotset_payload.txt", flush=True)
+            print(f"  Wrote: qache.d/context_bundle_manifest.json", flush=True)
+            print("\n--- Qontrabender: Complete ---", flush=True)
+            return
+        else:
+            # Legacy --check: run sync-need check
+            needs_sync, reason, payload_hash = qb.check_sync_needed()
+            print(f"\n  Qache: {qb.manifest.qache_id}")
+            print(f"  Mode: {qb.mode}")
+            print(f"  Sync needed: {'YES' if needs_sync else 'NO'}")
+            print(f"  Reason: {reason}")
+            if needs_sync:
+                print(f"\n  Run 'python qontrabender.py --sync' for instructions")
+                print(f"  Run 'python qontrabender.py --analyze' for decisions")
+            print("\n--- Qontrabender: Complete ---", flush=True)
+            return
     
     # Default behavior depends on mode
     if args.inputs and len(args.inputs) >= 4:
-        # Pipeline mode: always assemble and save payload
+        # Pipeline mode: provider-aware context bundle assembly for ConstruQtor.
         print(f"\n  Running in pipeline mode...", flush=True)
-        
-        # Assemble payload
-        payload_content, payload_hash, token_count, fidelity_mix = qb.assemble_payload()
-        
-        if payload_hash:
-            # Check if we need to save
-            existing = qb.ledger.get_by_hash(payload_hash)
-            if existing:
-                print(f"  Payload unchanged (v{existing.version}, hash={payload_hash[:12]}...)", flush=True)
-                print(f"  Qache: {existing.qache_id or qb.manifest.qache_id}", flush=True)
-            else:
-                # Save new payload
-                version = qb.save_payload(payload_content, payload_hash, token_count, fidelity_mix)
-                print(f"  Payload assembled and saved: v{version}", flush=True)
-                print(f"  Qache: {qb.generate_versioned_qache_id(version)}", flush=True)
-            
-            # Show fidelity stats
-            print(f"  Fidelity: 🥩 {fidelity_mix.get('full', 0)} full, 🦴 {fidelity_mix.get('skeleton', 0)} skeleton", flush=True)
-            print(f"  Tokens: ~{token_count:,}", flush=True)
-        else:
-            print(f"  [WARN] No content to cache", flush=True)
-        
+        ok, backend_or_error = _run_provider_aware_pipeline_bundle(qb)
+        if not ok:
+            print(f"  [ERROR] Provider-aware bundle assembly failed: {backend_or_error}", flush=True)
+            sys.exit(1)
+        print(f"  Cache backend: {backend_or_error}", flush=True)
+        print(f"  Wrote: qache.d/cached_payload.txt", flush=True)
+        print(f"  Wrote: qache.d/hotset_payload.txt", flush=True)
+        print(f"  Wrote: qache.d/context_bundle_manifest.json", flush=True)
         print("\n--- Qontrabender: Complete ---", flush=True)
         return
     

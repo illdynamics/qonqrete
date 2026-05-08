@@ -115,7 +115,59 @@ class TruthAndWiringRegressionTests(unittest.TestCase):
         observed_ids = {item["behavior_id"] for item in bundle["behavioral_reality"]["observed_behaviors"]}
         self.assertIn("smoketest:html_css:html:http_probe", observed_ids)
 
-    def test_inspection_verdict_downgrades_success_when_explicit_evidence_partial(self):
+    def test_realization_bundle_allows_warnings_only_validation_to_complete(self):
+        self._write_common_planning()
+        validation_bundle = {
+            "status": "PARTIAL",
+            "validation_execution_mode": "MIXED",
+            "coverage": {"python_files": ["main.py"], "non_python_files": []},
+            "checks": [{"check_id": "qualification", "status": "PARTIAL"}],
+            "issues": [
+                {
+                    "severity": "warning",
+                    "message": "shfmt suggests formatting changes",
+                }
+            ],
+        }
+        grouped = {
+            "group_summaries": [
+                {
+                    "build_group_id": "bg-web",
+                    "scope_id": "scope-web",
+                    "changed_files": ["index.html", "styles.css", "app.js"],
+                    "reported_files": ["index.html", "styles.css", "app.js"],
+                    "write_strategy": "staged_atomic_per_attempt",
+                }
+            ],
+            "undeclared_changed_files": [],
+            "touched_scope_ids": ["scope-web"],
+        }
+        smoke_report = {
+            "enabled": True,
+            "overall_status": "PASS",
+            "results": [
+                {
+                    "adapter": "python",
+                    "name": "python:fastapi_boot",
+                    "status": "PASS",
+                    "executed": True,
+                    "execution_kind": "process_boot",
+                    "related_files": ["main.py"],
+                }
+            ],
+        }
+        bundle = inspeqtor.build_realization_bundle(
+            self.workspace,
+            "1",
+            validation_bundle,
+            smoke_report,
+            grouped,
+            ["index.html", "styles.css", "app.js"],
+            [],
+        )
+        self.assertEqual(bundle["evidence_status"], "EVIDENCE_COMPLETE")
+
+    def test_inspection_verdict_marks_success_with_limited_coverage_when_hard_gates_pass(self):
         self._write_common_planning()
         verdict = inspeqtor.build_inspection_verdict(
             worqspace_root=self.workspace,
@@ -132,9 +184,12 @@ class TruthAndWiringRegressionTests(unittest.TestCase):
             cross_briq_warnings=[],
             failed_briq_suggestions=[],
         )
-        self.assertEqual(verdict["status"], "PARTIAL")
-        self.assertFalse(verdict["task_completed"])
-        self.assertIn("EVIDENCE_PARTIAL", " ".join(verdict["unresolved_issues"]))
+        self.assertEqual(verdict["status"], "SUCCESS")
+        self.assertTrue(verdict["task_completed"])
+        self.assertEqual(verdict["task_outcome"], "PASS")
+        self.assertEqual(verdict["hard_gate_status"], "PASS")
+        self.assertEqual(verdict["validation_coverage"], "LIMITED")
+        self.assertFalse(verdict["repair_required"])
 
     def test_audit_payload_records_resolved_provider_and_model(self):
         old_workspace = os.environ.get("QONQ_WORKSPACE")

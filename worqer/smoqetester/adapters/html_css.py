@@ -14,7 +14,15 @@ from ..base import (
     result_skip,
     run_command,
 )
-from ..models import EXECUTION_KIND_EXECUTED, EXECUTION_KIND_STATIC, EXECUTION_KIND_HTTP, EXECUTION_KIND_BROWSER, SmoketestResult
+from ..models import (
+    EXECUTION_KIND_EXECUTED,
+    EXECUTION_KIND_STATIC,
+    EXECUTION_KIND_HTTP,
+    EXECUTION_KIND_BROWSER,
+    STATUS_SKIP,
+    SEVERITY_INFO,
+    SmoketestResult
+)
 
 
 _HTML_REF_PATTERN = re.compile(r"""(?:src|href)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
@@ -54,19 +62,38 @@ class HtmlCssAdapter(Adapter):
             scope="preflight",
         )]
 
-    def _run_browser_or_http_probe(self, ctx: SmoketestContext, html_file: Path, scope_files: list[Path]) -> SmoketestResult:
+    def _run_browser_or_http_probe(self, ctx: SmoketestContext, html_file: Path, scope_files: list[Path]) -> list[SmoketestResult]:
         rel = rel_name(html_file, ctx.qodeyard_path)
+        results: list[SmoketestResult] = []
+
+        # v1.4.0: Honest browser evidence reporting.
+        # Most environments lack browser automation; record the absence explicitly.
+        # This prevents medium/high tasks from falsely succeeding on static-only evidence.
+        results.append(SmoketestResult(
+            adapter=self.name,
+            name="html:browser_runtime",
+            status=STATUS_SKIP,
+            executed=False,
+            message="No browser automation (Playwright/Puppeteer) available to verify JS runtime execution.",
+            execution_kind=EXECUTION_KIND_BROWSER,
+            severity=SEVERITY_INFO,
+            scope="project",
+            file=rel,
+            related_files=[rel],
+        ))
+
         import shutil
         python_bin = shutil.which("python3") or shutil.which("python")
         if not python_bin:
-            return result_skip(
+            results.append(result_skip(
                 self.name,
                 "html:http_probe",
                 "Python not available to run local HTTP server probe.",
                 execution_kind=EXECUTION_KIND_HTTP,
                 scope="project",
                 file=rel,
-            )
+            ))
+            return results
 
         probe_script = f"""import http.server
 import socketserver
@@ -90,7 +117,6 @@ with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
         req = urllib.request.urlopen(url, timeout=5)
         if req.status == 200:
             print("HTTP probe successful: able to serve and fetch the file locally.")
-            print("Note: degraded runtime validation. No browser automation available to prove JS execution.")
             sys.exit(0)
         else:
             print(f"HTTP probe failed: HTTP {{req.status}}")
@@ -113,13 +139,14 @@ with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
                 target_file=html_file,
             )
             res.command = "python _http_probe.py"
-            return res
+            results.append(res)
         finally:
             if probe_path.exists():
                 try:
                     probe_path.unlink()
                 except OSError:
                     pass
+        return results
 
     def project_smoketest(self, ctx: SmoketestContext, scope_files: list[Path]) -> list[SmoketestResult]:
         append_changed_files = bool(ctx.adapter_config.get("append_changed_files", False))
@@ -149,7 +176,7 @@ with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
             
             if html_candidates:
                 html_candidates.sort(key=lambda p: len(p.parts))
-                results.append(self._run_browser_or_http_probe(ctx, html_candidates[0], scope_files))
+                results.extend(self._run_browser_or_http_probe(ctx, html_candidates[0], scope_files))
 
         return results
 

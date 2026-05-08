@@ -92,6 +92,6 @@ export async function executeInit(): Promise<void> {
 /**
  * Register the init command
  */
-export function registerInitCommand(context: vscode.ExtensionContext): vscode.Disposable {
+export function registerInitCommand(_context: vscode.ExtensionContext): vscode.Disposable {
     return vscode.commands.registerCommand('qonqrete.initWorkspace', executeInit);
 }

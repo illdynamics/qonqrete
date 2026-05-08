@@ -23,6 +23,7 @@ first-class languages.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -51,6 +52,29 @@ from qompressor_extractors.common import (
 from qompressor_extractors.registry import get_compressor_for_file
 from qompressor_extractors.tree_sitter_fallback import TreeSitterFallback, fallback_compress
 from runtime_capabilities import capability_report_json, collect_runtime_capabilities, format_capability_report
+
+try:
+    from path_hygiene import INFRA_DIR_NAMES, is_generated_output_dir, is_source_junk_file
+except ImportError:
+    INFRA_DIR_NAMES = frozenset({
+        ".git",
+        ".venv",
+        ".test_venv",
+        "node_modules",
+        ".gradle",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        ".validation-env-cache",
+        "__MACOSX",
+    })
+
+    def is_generated_output_dir(path: Path) -> bool:
+        return path.name == "out" and path.parent.name == "vscode-extension"
+
+    def is_source_junk_file(path: Path) -> bool:
+        return path.name == ".DS_Store" or path.name.startswith("._") or path.suffix == ".pyc"
 
 
 def compress_generic(content: str, file_path: str | Path | None = None) -> str:
@@ -106,27 +130,67 @@ def compress_file_content_with_metadata(file_path: str, content: str) -> tuple[s
                 metadata = dict(metadata)
                 metadata.setdefault('mode', metadata.get('mode') or compressor.name)
                 metadata.setdefault('strategy', metadata.get('strategy') or 'native')
+                metadata.setdefault('fidelity', 'skeleton')
+                metadata.setdefault('compressor_status', 'ok')
                 return result, metadata
         except Exception as exc:
-            metadata = {'mode': 'compressor_error', 'strategy': 'fallback', 'tooling': getattr(compressor, 'name', 'unknown'), 'note': str(exc)}
+            return content, {
+                'mode': 'full_due_parse_error',
+                'strategy': 'copy',
+                'tooling': getattr(compressor, 'name', 'unknown'),
+                'note': str(exc),
+                'fidelity': 'full_due_parse_error',
+                'compressor_status': 'parse_failed_passthrough',
+            }
         else:
-            metadata = {'mode': 'compressor_empty', 'strategy': 'fallback', 'tooling': getattr(compressor, 'name', 'unknown'), 'note': 'compressor returned empty output'}
+            metadata = {
+                'mode': 'compressor_empty',
+                'strategy': 'fallback',
+                'tooling': getattr(compressor, 'name', 'unknown'),
+                'note': 'compressor returned empty output',
+                'fidelity': 'skeleton',
+                'compressor_status': 'ok',
+            }
     else:
-        metadata = {'mode': 'no_registered_compressor', 'strategy': 'fallback', 'tooling': 'none'}
+        metadata = {
+            'mode': 'no_registered_compressor',
+            'strategy': 'fallback',
+            'tooling': 'none',
+            'fidelity': 'skeleton',
+            'compressor_status': 'ok',
+        }
 
     ts_availability = TreeSitterFallback().availability(path)
     ts_result = fallback_compress(path, content)
     if ts_result and ts_result.strip():
-        metadata = {'mode': 'tree_sitter_fallback', 'strategy': 'fallback', 'tooling': 'Tree-sitter fallback'}
+        metadata = {
+            'mode': 'tree_sitter_fallback',
+            'strategy': 'fallback',
+            'tooling': 'Tree-sitter fallback',
+            'fidelity': 'skeleton',
+            'compressor_status': 'ok',
+        }
         return ts_result, metadata
 
     if path.suffix.lower() in CODE_EXTENSIONS:
         note = ts_availability.reason if not ts_availability.available else None
-        metadata = {'mode': 'generic_fallback', 'strategy': 'fallback', 'tooling': 'generic structural stripper'}
+        metadata = {
+            'mode': 'generic_fallback',
+            'strategy': 'fallback',
+            'tooling': 'generic structural stripper',
+            'fidelity': 'skeleton',
+            'compressor_status': 'ok',
+        }
         if note:
             metadata['note'] = note
         return compress_generic(content, path), metadata
-    return content, {'mode': 'copied_passthrough', 'strategy': 'copy', 'tooling': 'raw copy'}
+    return content, {
+        'mode': 'copied_passthrough',
+        'strategy': 'copy',
+        'tooling': 'raw copy',
+        'fidelity': 'full',
+        'compressor_status': 'copy_passthrough',
+    }
 
 
 
@@ -134,29 +198,125 @@ def compress_file_content(file_path: str, content: str) -> str:
     return compress_file_content_with_metadata(file_path, content)[0]
 
 
+def _source_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode('utf-8', errors='ignore')).hexdigest()
 
-def process_file(source_path: Path, dest_path: Path) -> dict[str, Any]:
+
+def _skeleton_header_lines(path: Path, rel: str) -> list[str]:
+    suffix = path.suffix.lower()
+    rel = str(rel).replace("\\", "/")
+    while rel.startswith("./"):
+        rel = rel[2:]
+    if rel.startswith("qodeyard/"):
+        rel = rel[len("qodeyard/"):]
+    if suffix in {'.html', '.htm', '.xml'}:
+        return [
+            "<!-- QONQ_FIDELITY: skeleton -->",
+            f"<!-- QONQ_SOURCE: qodeyard/{rel} -->",
+            "<!-- QONQ_DO_NOT_WRITE_BACK: true -->",
+        ]
+    marker = "#" if suffix in {'.py', '.sh', '.bash', '.zsh', '.ksh', '.rb', '.pl'} else "//"
+    return [
+        f"{marker} QONQ_FIDELITY: skeleton",
+        f"{marker} QONQ_SOURCE: qodeyard/{rel}",
+        f"{marker} QONQ_DO_NOT_WRITE_BACK: true",
+    ]
+
+
+def _prepend_skeleton_header(path: Path, rel: str, text: str) -> str:
+    lowered = text.lower()
+    if "qonq_fidelity: skeleton" in lowered and "qonq_do_not_write_back: true" in lowered:
+        return text
+    header = "\n".join(_skeleton_header_lines(path, rel))
+    return f"{header}\n\n{text}"
+
+
+
+def process_file(
+    source_path: Path,
+    dest_path: Path,
+    *,
+    source_root: Path | None = None,
+    rel_path: str | None = None,
+) -> dict[str, Any]:
     """Reads source, compresses if needed, writes to dest."""
     print(f"     - Processing: {source_path.name}")
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    rel = source_path.as_posix()
+    if rel_path is not None:
+        rel = str(rel_path).replace("\\", "/")
+    elif source_root is not None:
+        try:
+            rel = source_path.relative_to(source_root).as_posix()
+        except Exception:
+            rel = source_path.name
+    else:
+        rel = source_path.name
+    source_text = source_path.read_text(encoding='utf-8', errors='ignore')
+    source_size_bytes = len(source_text.encode('utf-8', errors='ignore'))
+    source_sha = _source_sha256(source_text)
 
     if should_copy(source_path):
         shutil.copy2(source_path, dest_path)
-        return {'file': rel, 'mode': 'copied_passthrough', 'strategy': 'copy', 'tooling': 'raw copy'}
+        compressed_size_bytes = dest_path.stat().st_size if dest_path.exists() else source_size_bytes
+        return {
+            'file': rel,
+            'mode': 'copied_passthrough',
+            'strategy': 'copy',
+            'tooling': 'raw copy',
+            'fidelity': 'full',
+            'compressor_status': 'copy_passthrough',
+            'source_size_bytes': source_size_bytes,
+            'compressed_size_bytes': compressed_size_bytes,
+            'source_hash': source_sha,
+            'source_sha256': source_sha,
+        }
 
     if should_compress(source_path):
         try:
-            content = source_path.read_text(encoding='utf-8', errors='ignore')
-            compressed, metadata = compress_file_content_with_metadata(str(source_path), content)
+            compressed, metadata = compress_file_content_with_metadata(str(source_path), source_text)
+            if str(metadata.get('fidelity') or '') == 'skeleton' and str(metadata.get('compressor_status') or '') != 'parse_failed_passthrough':
+                compressed = _prepend_skeleton_header(source_path, rel, compressed)
             dest_path.write_text(compressed, encoding='utf-8')
-            return {'file': rel, **metadata}
+            compressed_size_bytes = len(compressed.encode('utf-8', errors='ignore'))
+            return {
+                'file': rel,
+                **metadata,
+                'source_size_bytes': source_size_bytes,
+                'compressed_size_bytes': compressed_size_bytes,
+                'source_hash': source_sha,
+                'source_sha256': source_sha,
+            }
         except Exception as e:
             print(f"  [Error] Could not compress {source_path.name}: {e}")
             shutil.copy2(source_path, dest_path)
-            return {'file': rel, 'mode': 'copy_after_error', 'strategy': 'copy', 'tooling': 'raw copy', 'note': str(e)}
+            compressed_size_bytes = dest_path.stat().st_size if dest_path.exists() else source_size_bytes
+            return {
+                'file': rel,
+                'mode': 'full_due_parse_error',
+                'strategy': 'copy',
+                'tooling': 'raw copy',
+                'note': str(e),
+                'fidelity': 'full_due_parse_error',
+                'compressor_status': 'parse_failed_passthrough',
+                'source_size_bytes': source_size_bytes,
+                'compressed_size_bytes': compressed_size_bytes,
+                'source_hash': source_sha,
+                'source_sha256': source_sha,
+            }
     shutil.copy2(source_path, dest_path)
-    return {'file': rel, 'mode': 'copied_passthrough', 'strategy': 'copy', 'tooling': 'raw copy'}
+    compressed_size_bytes = dest_path.stat().st_size if dest_path.exists() else source_size_bytes
+    return {
+        'file': rel,
+        'mode': 'copied_passthrough',
+        'strategy': 'copy',
+        'tooling': 'raw copy',
+        'fidelity': 'full',
+        'compressor_status': 'copy_passthrough',
+        'source_size_bytes': source_size_bytes,
+        'compressed_size_bytes': compressed_size_bytes,
+        'source_hash': source_sha,
+        'source_sha256': source_sha,
+    }
 
 
 
@@ -216,14 +376,18 @@ def main() -> None:
 
     file_count = 0
     records: list[dict[str, Any]] = []
-    for root, _, files in os.walk(source_dir):
+    for root, dirs, files in os.walk(source_dir):
+        dirs[:] = [
+            d for d in dirs
+            if d not in INFRA_DIR_NAMES and not is_generated_output_dir(Path(root) / d)
+        ]
         for file in files:
             source_file = Path(root) / file
-            if '.git' in source_file.parts or file.startswith('.'):
+            if is_source_junk_file(source_file) or file.startswith('.'):
                 continue
             rel_path = source_file.relative_to(source_dir)
             dest_file = dest_dir / rel_path
-            record = process_file(source_file, dest_file)
+            record = process_file(source_file, dest_file, source_root=source_dir, rel_path=str(rel_path.as_posix()))
             records.append(record)
             file_count += 1
 

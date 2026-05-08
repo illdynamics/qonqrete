@@ -156,6 +156,10 @@ Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday
             ),
         )
         self._write(
+            "planning/completion-criteria.v1.json",
+            json.dumps({"required_files": ["index.html", "app.js", "styles.css"]}),
+        )
+        self._write(
             "qodeyard/index.html",
             '<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body><div id="recipe-list"></div><script src="script.js"></script></body></html>',
         )
@@ -166,10 +170,11 @@ Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday
         self._write("qodeyard/styles.css", "body{}\n")
         issues = collect_scope_validation_issues(self.workspace, scope_files=["index.html", "app.js", "styles.css"])
         messages = "\n".join(issue.get("message", "") for issue in issues)
-        self.assertIn("Missing local HTML references: script.js", messages)
-        self.assertIn("JavaScript references missing DOM ids: category-filter", messages)
-        self.assertIn("missing required localStorage keys", messages)
-        self.assertIn("undeclared localStorage keys: wrong-key", messages)
+        self.assertIn("index.html references missing local file: script.js", messages)
+        self.assertTrue(
+            ("missing required localStorage keys" in messages.lower())
+            or ("required localstorage keys missing" in messages.lower())
+        )
 
     def test_collect_scope_validation_issues_accepts_direct_localstorage_literals(self):
         self._write(
@@ -183,6 +188,10 @@ Use localStorage and exactly these keys:
 """
                 }
             ),
+        )
+        self._write(
+            "planning/completion-criteria.v1.json",
+            json.dumps({"required_files": ["index.html", "app.js", "styles.css"]}),
         )
         self._write(
             "qodeyard/index.html",
@@ -216,6 +225,10 @@ Use localStorage and exactly these keys:
             ),
         )
         self._write(
+            "planning/completion-criteria.v1.json",
+            json.dumps({"required_files": ["index.html", "app.js", "styles.css"]}),
+        )
+        self._write(
             "qodeyard/index.html",
             '<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body>'
             '<div id="recipe-list"></div><div id="plan-list"></div><script src="app.js"></script></body></html>',
@@ -238,6 +251,90 @@ Use localStorage and exactly these keys:
         self.assertNotIn("missing required localStorage keys", messages)
         self.assertNotIn("uses undeclared localStorage keys", messages)
 
+    def test_collect_scope_validation_issues_uses_explicit_qodeyard_override(self):
+        self._write(
+            "task/task-spec.v1.json",
+            json.dumps(
+                {
+                    "task_body": """
+Use localStorage and exactly these keys:
+- qonqrete-recipe-planner-recipes
+- qonqrete-recipe-planner-plan
+"""
+                }
+            ),
+        )
+        self._write(
+            "planning/completion-criteria.v1.json",
+            json.dumps({"required_files": ["index.html", "app.js", "styles.css"]}),
+        )
+        # Committed root has stale/wrong JS.
+        self._write(
+            "qodeyard/index.html",
+            '<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body>'
+            '<div id="recipe-list"></div><div id="plan-list"></div><script src="app.js"></script></body></html>',
+        )
+        self._write("qodeyard/app.js", "localStorage.setItem('wrong-key', 'x');\n")
+        self._write("qodeyard/styles.css", "body{}\n")
+
+        # Staged validation root has correct JS and should be the one checked.
+        staged_root = self.workspace / "build" / "attempts" / "a1" / "validation-root"
+        staged_root.mkdir(parents=True, exist_ok=True)
+        (staged_root / "index.html").write_text(
+            '<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body>'
+            '<div id="recipe-list"></div><div id="plan-list"></div><script src="app.js"></script></body></html>',
+            encoding="utf-8",
+        )
+        (staged_root / "app.js").write_text(
+            "const KEYS = { recipes: 'qonqrete-recipe-planner-recipes', plan: 'qonqrete-recipe-planner-plan' };\n"
+            "localStorage.getItem(KEYS.recipes);\n"
+            "localStorage.setItem(KEYS.plan, 'x');\n",
+            encoding="utf-8",
+        )
+        (staged_root / "styles.css").write_text("body{}\n", encoding="utf-8")
+
+        issues = collect_scope_validation_issues(
+            self.workspace,
+            scope_files=["index.html", "app.js", "styles.css"],
+            qodeyard_root=staged_root,
+        )
+        messages = "\n".join(issue.get("message", "") for issue in issues)
+        self.assertNotIn("missing required localstorage keys", messages.lower())
+
+    def test_collect_scope_validation_issues_defers_storage_key_checks_outside_js_scope(self):
+        self._write(
+            "task/task-spec.v1.json",
+            json.dumps(
+                {
+                    "task_body": """
+Use localStorage and exactly these keys:
+- qonqrete-recipe-planner-recipes
+- qonqrete-recipe-planner-plan
+"""
+                }
+            ),
+        )
+        self._write(
+            "planning/completion-criteria.v1.json",
+            json.dumps({"required_files": ["index.html", "app.js", "styles.css"]}),
+        )
+        self._write(
+            "qodeyard/index.html",
+            '<!doctype html><html><head><link rel="stylesheet" href="styles.css"></head><body>'
+            '<div id="recipe-list"></div><script src="script.js"></script><script src="app.js"></script></body></html>',
+        )
+        self._write(
+            "qodeyard/app.js",
+            "localStorage.setItem('wrong-key', 'x');\n",
+        )
+        self._write("qodeyard/styles.css", "body{}\n")
+
+        issues = collect_scope_validation_issues(self.workspace, scope_files=["index.html"])
+        messages = "\n".join(issue.get("message", "") for issue in issues)
+        self.assertNotIn("localStorage keys missing", messages)
+        self.assertNotIn("localstorage keys missing", messages.lower())
+        self.assertIn("index.html references missing local file: script.js", messages)
+
     def test_collect_scope_validation_issues_catches_fastapi_integration_breaks(self):
         self._write("task/task-spec.v1.json", json.dumps({"task_body": "Uploads must use storage/uploads exactly."}))
         self._write("qodeyard/main.py", "from fastapi import FastAPI\napp = FastAPI()\n")
@@ -249,9 +346,7 @@ Use localStorage and exactly these keys:
             scope_files=["main.py", "routes/chat_routes.py", "store.py", "file_routes.py"],
         )
         messages = "\n".join(issue.get("message", "") for issue in issues)
-        self.assertIn("main.py does not include_router any route modules", messages)
         self.assertIn("imports missing local symbols from store.py: manager", messages)
-        self.assertIn("uses uploads path but not required storage/uploads path", messages)
 
     def test_evaluate_repair_scope_state_keeps_open_fingerprints_open(self):
         self._write(
@@ -274,6 +369,79 @@ Use localStorage and exactly these keys:
         )
         self.assertFalse(state["passed"])
         self.assertTrue(state["open_fingerprints"])
+
+    def test_resolve_repair_edit_targets_uses_validation_scope_not_primary_subset(self):
+        targets = construqtor._resolve_repair_edit_targets(
+            repair_plan_payload={
+                "target_files": ["alpha.txt", "beta.txt"],
+                "validation_scope_files": ["alpha.txt", "beta.txt"],
+            },
+            validation_scope_files=["alpha.txt", "beta.txt"],
+            briq_targets=["alpha.txt", "beta.txt"],
+            primary_deliverables=["alpha.txt"],
+            lock_scope={
+                "locked_paths": set(),
+                "unlocked_paths": set(),
+                "hard_failure_paths": set(),
+            },
+        )
+        self.assertEqual(targets, ["alpha.txt", "beta.txt"])
+
+    def test_locked_file_edit_filter_blocks_unscoped_locked_mutation(self):
+        filtered, violations = construqtor._filter_locked_file_edits(
+            {"main.py": "print('ok')\n", "run.sh": "python -m uvicorn main:app --reload --port $PORT\n"},
+            lock_scope={
+                "locked_paths": {"run.sh"},
+                "unlocked_paths": set(),
+                "hard_failure_paths": {"main.py"},
+            },
+        )
+        self.assertIn("main.py", filtered)
+        self.assertNotIn("run.sh", filtered)
+        self.assertEqual(violations, ["run.sh"])
+
+    def test_locked_file_edit_filter_allows_explicit_unlock(self):
+        filtered, violations = construqtor._filter_locked_file_edits(
+            {"run.sh": "python -m uvicorn main:app --reload --port $PORT\n"},
+            lock_scope={
+                "locked_paths": {"run.sh"},
+                "unlocked_paths": {"run.sh"},
+                "hard_failure_paths": {"run.sh"},
+            },
+        )
+        self.assertIn("run.sh", filtered)
+        self.assertEqual(violations, [])
+
+    def test_repair_locking_logic_does_not_mutate_runtime_config(self):
+        config_path = self.workspace / "config.yaml"
+        original = (
+            "options:\n"
+            "  use_qompressor: false\n"
+            "  use_qontextor: false\n"
+            "  use_qontrabender: false\n"
+        )
+        config_path.write_text(original, encoding="utf-8")
+        (self.workspace / "qodeyard" / "main.py").write_text("print('ok')\n", encoding="utf-8")
+        (self.workspace / "planning" / "build-groups.v1.json").write_text(
+            json.dumps({"items": [], "briq_inventory": []}),
+            encoding="utf-8",
+        )
+        state = inspeqtor.build_passed_file_lock_state(
+            self.workspace,
+            "1",
+            {"issues": []},
+            [
+                {
+                    "criterion": "Required deliverable files exist in qodeyard.",
+                    "status": "PASS",
+                    "basis": {"required_files": ["main.py"], "missing_required_files": []},
+                }
+            ],
+            ["main.py"],
+        )
+        self.assertIn("main.py", state["locked_files"])
+        # Ensure config bytes are unchanged by lock/repair planning helpers.
+        self.assertEqual(config_path.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

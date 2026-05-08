@@ -178,8 +178,8 @@ export async function showFullConfigWizard(): Promise<QonQreteRunConfig | undefi
         },
     ];
 
-    let config: QonQreteRunConfig = { ...defaults };
-    let continueEditing = true;
+    const config: QonQreteRunConfig = { ...defaults };
+    const continueEditing = true;
 
     while (continueEditing) {
         // Update labels with current values

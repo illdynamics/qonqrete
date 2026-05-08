@@ -12,6 +12,14 @@ version: 1
 
 defaults:
   qache_dir: "qache.d"
+  provider_cache:
+    enabled: true
+    gemini_explicit_enabled: true
+    anthropic_cache_control_enabled: true
+    openai_stable_prefix_enabled: true
+    deepseek_stable_prefix_enabled: true
+    cache_ttl_minutes: 60
+    prompt_cache_key_template: "qonqrete:{qage_id}:{context_hash}"
 
   volatile_detection:
     use_changed_files_manifest: false

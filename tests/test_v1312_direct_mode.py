@@ -85,6 +85,32 @@ class TestV1312DirectMode(unittest.TestCase):
         )
         self.assertEqual(resolved, ["index.html"])
 
+    def test_single_briq_group_inherits_completion_required_files(self):
+        metadata = {
+            "briq-ref": "briq-001",
+            "build-group": "bg-single",
+            "target-files": "index.html, e.g",
+        }
+        planning = {
+            "items": [
+                {
+                    "build_group_id": "bg-single",
+                    "briq_refs": ["briq-001"],
+                    "primary_files": ["index.html"],
+                }
+            ],
+            "briq_inventory": [
+                {"briq_ref": "briq-001", "primary_files": ["index.html"]},
+            ],
+        }
+        resolved = construqtor._resolve_briq_primary_deliverables(
+            metadata,
+            ["index.html"],
+            planning,
+            ["app.js", "index.html", "styles.css"],
+        )
+        self.assertEqual(resolved, ["app.js", "index.html", "styles.css"])
+
     def test_choose_repair_level_uses_failure_class_and_repeat_bump(self):
         cfg = {
             "repair": {
@@ -175,7 +201,7 @@ class TestV1312DirectMode(unittest.TestCase):
         # But the tool ensures os.walk is sorted.
         self.assertEqual(list(changes.keys()), sorted(files))
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_success(self, mock_val, mock_ai):
         mock_val.return_value = {'passed': True}
@@ -203,7 +229,7 @@ class TestV1312DirectMode(unittest.TestCase):
         self.assertEqual(res["test.py"], "print(1)")
         self.assertTrue((validation_root / "test.py").exists())
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_direct_coding_loop_fallback(self, mock_ai):
         # Mock AI returning fenced blocks instead of tools
         mock_ai.return_value = "Here is the code:\n```python:qodeyard/fallback.py\nprint(2)\n```"
@@ -219,7 +245,7 @@ class TestV1312DirectMode(unittest.TestCase):
         self.assertEqual(res["fallback.py"], "print(2)")
         self.assertTrue((validation_root / "fallback.py").exists())
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_jail(self, mock_val, mock_ai):
         mock_val.return_value = {'passed': True}
@@ -245,7 +271,7 @@ class TestV1312DirectMode(unittest.TestCase):
                 validation_root, self.qodeyard, self.worqspace_root, {}
             )
         
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_direct_coding_loop_fallback_dict_text(self, mock_ai):
         # Mock AI returning dict with text but no tool calls
         mock_ai.return_value = {
@@ -262,7 +288,7 @@ class TestV1312DirectMode(unittest.TestCase):
         self.assertIn("fallback_dict.py", res)
         self.assertEqual(res["fallback_dict.py"], "print(3)")
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_stops_on_first_success(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -304,7 +330,7 @@ class TestV1312DirectMode(unittest.TestCase):
         self.assertIn("winner.py", res)
         self.assertEqual((validation_root / "winner.py").read_text(encoding="utf-8"), "print('winner')\n")
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_autofix_avoids_extra_iteration(self, mock_val, mock_ai):
         def _validate_side_effect(written_files, qodeyard_path, worqspace_root, cycle_label):
@@ -432,7 +458,7 @@ Primary-Deliverables: index.html
         )
         self.assertEqual(set(parsed), {"index.html", "app.js"})
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_process_briq_uses_section_only_prompt_and_bounded_context(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -488,7 +514,7 @@ Primary-Deliverables: index.html
         self.assertLessEqual(len(kwargs.get("context_files") or []), construqtor.DEFAULT_CONTEXT_FILES_PER_ATTEMPT)
 
     @patch('construqtor.finalize_attempt_manifest')
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_direct_coding_noop_success(self, mock_ai, mock_finalize):
         # Mock AI returning nothing
         mock_ai.return_value = {"text": "No code needed"}
@@ -517,7 +543,7 @@ Primary-Deliverables: index.html
         self.assertEqual(res['status'], 'success')
         self.assertEqual(res['attempt_records'][-1]['status'], 'committed')
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_parses_single_quote_arguments(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -546,7 +572,7 @@ Primary-Deliverables: index.html
         self.assertIn("styles.css", res)
         self.assertTrue((validation_root / "styles.css").exists())
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_retries_after_parse_failure(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -588,7 +614,7 @@ Primary-Deliverables: index.html
         self.assertIn("app.js", res)
         self.assertEqual((validation_root / "app.js").read_text(encoding="utf-8"), "console.log('ok');\n")
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_escalates_output_tokens_after_truncated_parse_failure(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -635,7 +661,7 @@ Primary-Deliverables: index.html
         self.assertEqual(first_tokens, 1000)
         self.assertGreater(second_tokens, first_tokens)
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_direct_coding_loop_uses_markdown_fallback_after_persistent_tool_failures(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -674,7 +700,7 @@ Primary-Deliverables: index.html
             "console.log('fallback');",
         )
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_direct_noop_not_accepted_after_tool_parse_failure(self, mock_ai):
         mock_ai.return_value = {
             "tool_calls": [
@@ -717,7 +743,7 @@ Primary-Deliverables: index.html
         # the strings "coding_mode" in the file logic.
         pass
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_direct_noop_fails_when_primary_deliverable_missing(self, mock_ai):
         mock_ai.return_value = {"text": "No code needed"}
 
@@ -761,7 +787,7 @@ Primary-Deliverables: index.html
     @patch('construqtor._stage_extracted_files')
     @patch('construqtor.commit_staged_attempt')
     @patch('construqtor.run_scoped_qualification')
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_content_length_gate_rejects_tiny_primary_deliverable(self, mock_ai, mock_val, mock_commit, mock_stage):
         prior = self.qodeyard / "app.js"
         prior.write_text("console.log('existing content is definitely long enough');\n" * 8, encoding="utf-8")
@@ -829,7 +855,7 @@ Primary-Deliverables: index.html
         self.assertEqual(res['attempt_records'][-1]['status'], 'failed_trivial')
         mock_commit.assert_not_called()
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_hybrid_new_file_uses_heredoc_transport(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -882,7 +908,7 @@ Primary-Deliverables: index.html
         self.assertEqual(decision.get('chosen_transport'), 'heredoc')
         self.assertIn('new_file_default_heredoc', decision.get('decision_reason_codes', []))
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_hybrid_existing_file_uses_direct_transport(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -945,7 +971,7 @@ Primary-Deliverables: index.html
         self.assertEqual(decision.get('chosen_transport'), 'direct')
         self.assertFalse(bool(decision.get('fallback_occurred')))
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_hybrid_records_fallback_after_direct_transport_fragility(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -1056,7 +1082,7 @@ Primary-Deliverables: index.html
             decisions[0]["decision_reason_codes"],
         )
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_hybrid_process_recovers_missing_new_file_with_direct_after_heredoc_misses(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -1129,7 +1155,7 @@ Primary-Deliverables: index.html
             second_decisions[0].get('decision_reason_codes', []),
         )
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_direct_no_tool_fallback_respects_allowed_paths(self, mock_ai):
         mock_ai.return_value = (
             "```python:qodeyard/allowed.py\nprint('ok')\n```\n"
@@ -1155,7 +1181,7 @@ Primary-Deliverables: index.html
         self.assertFalse((validation_root / "blocked.py").exists())
         self.assertGreaterEqual(int(meta.get("disallowed_path_calls", 0) or 0), 1)
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_direct_loop_stops_early_on_repeated_disallowed_paths(self, mock_ai):
         mock_ai.side_effect = [
             {
@@ -1206,7 +1232,7 @@ Primary-Deliverables: index.html
         self.assertLessEqual(mock_ai.call_count, 2)
         self.assertGreaterEqual(int(meta.get("no_progress_iterations", 0) or 0), 1)
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     @patch('construqtor.run_scoped_qualification')
     def test_hybrid_heredoc_calls_keep_streaming_enabled_by_default(self, mock_val, mock_ai):
         mock_val.return_value = {
@@ -1258,7 +1284,7 @@ Primary-Deliverables: index.html
         for call in mock_ai.call_args_list:
             self.assertNotEqual(call.kwargs.get("stream_callback"), False)
 
-    @patch('lib_ai.run_ai_completion')
+    @patch('construqtor.lib_ai.run_ai_completion')
     def test_streaming_fallback_retries_once_with_non_streaming(self, mock_ai):
         mock_ai.side_effect = [
             RuntimeError("event stream parser failed"),

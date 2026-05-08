@@ -28,15 +28,26 @@ repair:
     start_policy: failure_class
     bump_policy: on_same_class_repeat
 
+sqrewdriver:
+  enabled: true
+  mode: inspection_repair_loop
+  max_repair_loops_per_build_pass: null
+  success_policy: hard_gate_success
+  write_repair_brief: true
+  include_reqap_excerpt_chars: 12000
+  include_validation_issue_limit: 50
+  include_prior_attempts: true
+  generic_validation_only: true
+
 # AI budgeting configuration
 ai_budgeting:
   dry_run_provider: deepseek
   enable_no_loss_chunking: true
   summarize_optional_sections: true
-  include_previous_log: true
-  previous_log_max_chars: 6000
-  max_preload_chunks_per_request: 24
-  chunk_target_input_tokens: 12000
+  include_previous_log: false
+  previous_log_max_chars: 12000
+  max_preload_chunks_per_request: 48
+  chunk_target_input_tokens: 24000
   audit_dir: audit/ai_payloads
 
   # General token configuration
@@ -54,19 +65,29 @@ ai_budgeting:
 
     deepseek:
       defaults:
-        safe_input_tokens: 32000
-        safe_output_tokens: 8000
-        total_context_window: 48000
-        chars_per_token: 4.0
+        safe_input_tokens: 616000
+        safe_output_tokens: 384000
+        total_context_window: 1000000
+        chars_per_token: 3.33
         supports_multi_message_history: true
         supports_chunk_preload: true
         supports_system_messages: true
 
+    codeseeq:
+      defaults:
+        safe_input_tokens: 616000
+        safe_output_tokens: 384000
+        total_context_window: 1000000
+        chars_per_token: 3.33
+        supports_multi_message_history: true
+        supports_chunk_preload: false
+        supports_system_messages: true
+
     openai:
       defaults:
-        safe_input_tokens: 80000
-        safe_output_tokens: 8192
-        total_context_window: 100000
+        safe_input_tokens: 922000
+        safe_output_tokens: 128000
+        total_context_window: 1050000
         chars_per_token: 4.0
         supports_multi_message_history: true
         supports_chunk_preload: true
@@ -74,9 +95,9 @@ ai_budgeting:
 
     gemini:
       defaults:
-        safe_input_tokens: 80000
-        safe_output_tokens: 8192
-        total_context_window: 100000
+        safe_input_tokens: 983040
+        safe_output_tokens: 65536
+        total_context_window: 1048576
         chars_per_token: 4.0
         supports_multi_message_history: true
         supports_chunk_preload: true
@@ -84,10 +105,10 @@ ai_budgeting:
 
     anthropic:
       defaults:
-        safe_input_tokens: 80000
-        safe_output_tokens: 8192
-        total_context_window: 100000
-        chars_per_token: 3.5
+        safe_input_tokens: 872000
+        safe_output_tokens: 128000
+        total_context_window: 1000000
+        chars_per_token: 4.0
         supports_multi_message_history: true
         supports_chunk_preload: true
         supports_system_messages: true
@@ -122,7 +143,7 @@ ai_budgeting:
         safe_input_tokens: 80000
         safe_output_tokens: 8192
         total_context_window: 100000
-        chars_per_token: 4.0
+        chars_per_token: 3.33
         supports_multi_message_history: true
         supports_chunk_preload: true
         supports_system_messages: true
@@ -146,8 +167,8 @@ verification:
 agents:
 
   qrystallizer:
-    provider: venice
-    model: deepseek-v3.2
+    provider: deepseek
+    model: deepseek-v4-flash
     timeout: 600
     enabled: true
     min_complexity_score: 200  # Below this score, don't enhance
@@ -159,6 +180,15 @@ agents:
     #   context_window: override total context window (input + output) for this agent.
     #   provider: mlx | llama-cpp | venice
     #   model: "real-model-id" (for venice)
+    # CodeSeeq provider: routes through sibling ./codeseeq CLI.
+    # Requires DEEPSEEK_API_KEY and CodeSeeq executable from the QonQrete runtime.
+    # In default container mode, use host mode or configure QONQ_CODESEEQ_BIN/mounting.
+    # provider: codeseeq
+    # model: deepseek-v4-flash
+    # model: deepseek-v4-flash-thinking
+    # model: deepseek-v4-pro
+    # model: deepseek-v4-pro-thinking
+    # codeseeq_path: "../codeseeq/codeseeq"
 
   qonstrictor:
     provider: local
@@ -173,8 +203,8 @@ agents:
     #   model: "real-model-id" (for venice)
 
   instruqtor:
-    provider: venice
-    model: deepseek-v3.2
+    provider: deepseek
+    model: deepseek-v4-pro
     timeout: 600
 
     # v1.3.12: Per-agent capability overrides (apply to ANY provider).
@@ -183,10 +213,19 @@ agents:
     #   context_window: override total context window (input + output) for this agent.
     #   provider: mlx | llama-cpp | venice
     #   model: "real-model-id" (for venice)
+    # CodeSeeq provider: routes through sibling ./codeseeq CLI.
+    # Requires DEEPSEEK_API_KEY and CodeSeeq executable from the QonQrete runtime.
+    # In default container mode, use host mode or configure QONQ_CODESEEQ_BIN/mounting.
+    # provider: codeseeq
+    # model: deepseek-v4-flash
+    # model: deepseek-v4-flash-thinking
+    # model: deepseek-v4-pro
+    # model: deepseek-v4-pro-thinking
+    # codeseeq_path: "../codeseeq/codeseeq"
 
   calqulator:
-    provider: gemini
-    model: gemini-2.5-flash-lite
+    provider: local
+    model: calqulator
 
     # v1.3.12: Per-agent capability overrides (apply to ANY provider).
     #   api_base_url:   override the API base URL (REQUIRED for mlx/llama-cpp).
@@ -196,8 +235,8 @@ agents:
     #   model: "real-model-id" (for venice)
 
   construqtor:
-    provider: venice
-    model: deepseek-v3.2
+    provider: codeseeq
+    model: deepseek-v4-flash
     timeout: 600
     # coding_mode: heredoc | direct | hybrid
     coding_mode: hybrid
@@ -237,9 +276,19 @@ agents:
     #     include_venice_system_prompt: false
     #   # VENICE_API_KEY is REQUIRED and does NOT fall back to OPENAI_API_KEY.
 
+    # CodeSeeq provider: routes through sibling ./codeseeq CLI.
+    # Requires DEEPSEEK_API_KEY and CodeSeeq executable from the QonQrete runtime.
+    # In default container mode, use host mode or configure QONQ_CODESEEQ_BIN/mounting.
+    # provider: codeseeq
+    # model: deepseek-v4-flash
+    # model: deepseek-v4-flash-thinking
+    # model: deepseek-v4-pro
+    # model: deepseek-v4-pro-thinking
+    # codeseeq_path: "../codeseeq/codeseeq"
+
   inspeqtor:
-    provider: venice
-    model: deepseek-v3.2
+    provider: deepseek
+    model: deepseek-v4-pro
     timeout: 600
 
     # v1.3.12: Per-agent capability overrides (apply to ANY provider).
@@ -248,15 +297,24 @@ agents:
     #   context_window: override total context window (input + output) for this agent.
     #   provider: mlx | llama-cpp | venice
     #   model: "real-model-id" (for venice)
+    # CodeSeeq provider: routes through sibling ./codeseeq CLI.
+    # Requires DEEPSEEK_API_KEY and CodeSeeq executable from the QonQrete runtime.
+    # In default container mode, use host mode or configure QONQ_CODESEEQ_BIN/mounting.
+    # provider: codeseeq
+    # model: deepseek-v4-flash
+    # model: deepseek-v4-flash-thinking
+    # model: deepseek-v4-pro
+    # model: deepseek-v4-pro-thinking
+    # codeseeq_path: "../codeseeq/codeseeq"
 
     batch_mode: true
-    batch_token_roof: 60000
-    batch_max_briqs: 12
+    batch_token_roof: 120000
+    batch_max_briqs: 24
 
     # Per briQ limits when batch mode is turned off
-    max_prompt_chars_per_briq: 500000
-    max_context_files_per_briq: 40
-    max_chars_per_context_file: 80000
+    max_prompt_chars_per_briq: 1000000
+    max_context_files_per_briq: 80
+    max_chars_per_context_file: 160000
 
     # Context filtering
     use_filtered_context: true
@@ -292,8 +350,8 @@ agents:
       enabled: true
       # scoped = only touched files/ecosystems, full = whole repository inventory
       mode: scoped
-      timeout_seconds: 45
-      max_output_chars: 800
+      timeout_seconds: 300
+      max_output_chars: 9600
       adapters:
         python:
           enabled: true
@@ -348,13 +406,23 @@ agents:
     #   - paranoid_mincloud: Minimal cloud exposure, skeletons only
     #   - debug_repro:       Maximum audit logging for debugging
     mode: local_smart
+    provider_cache:
+      enabled: true
+      gemini_explicit_enabled: true
+      anthropic_cache_control_enabled: true
+      openai_stable_prefix_enabled: true
+      deepseek_stable_prefix_enabled: true
+      cache_ttl_minutes: 60
+      # Optional; only used on providers/client paths that support it.
+      prompt_cache_key_template: "qonqrete:{qage_id}:{context_hash}"
 
 # General agent and run configuration
 options:
   # Enable/disable token optimization agents in general
-  use_qompressor: false
-  use_qontextor: false
-  use_qontrabender: false
+  use_qompressor: auto
+  use_qontextor: auto
+  use_qontrabender: auto
+  context_strategy: hybrid_fidelity
 
   # User approval gate per global iteration/pass boundary
   cheqpoint: false
@@ -396,3 +464,16 @@ options:
 
   # Run Mode: program (functional), innovative (always suggest improvements), enterprise (include monitoring, logging and more)
   mode: program
+
+context_strategy:
+  normal: hybrid_fidelity
+  repair: repair_truth
+  editable_files: full
+  repair_targets: full
+  direct_dependencies: full_if_small
+  direct_dependencies_full_if_small_max_chars: 90000
+  indirect_dependencies: skeleton_plus_qontext
+  distant_files: skeleton
+  stable_prefix_cache: true
+  max_full_neighbors: 24
+  max_indirect_neighbors: 40

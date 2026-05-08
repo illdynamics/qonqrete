@@ -81,10 +81,16 @@ except ImportError:
 # v1.3.10: Path hygiene — cwd-drift guard so reqaps never get written
 # inside qodeyard/<sub>/ when cwd has drifted.
 try:
-    from path_hygiene import assert_cwd_outside_qodeyard
+    from path_hygiene import assert_cwd_outside_qodeyard, is_infra_path, is_source_junk_file
 except ImportError:
     def assert_cwd_outside_qodeyard(agent_name="agent"):  # type: ignore
         pass
+    def is_infra_path(rel):  # type: ignore
+        parts = Path(str(rel).replace("\\", "/")).parts
+        return "__pycache__" in parts
+    def is_source_junk_file(path):  # type: ignore
+        path = Path(path)
+        return path.name == ".DS_Store" or path.name.startswith("._") or path.suffix == ".pyc"
     def calculate_cost(tokens, model, is_input=True): return (tokens / 1_000_000) * (2.0 if is_input else 8.0)
     def format_cost(cost): return f"${cost:.5f}" if cost < 0.01 else f"${cost:.2f}"
 
@@ -93,6 +99,7 @@ try:
         build_issue_fingerprint_entries,
         collect_scope_validation_issues,
         derive_group_scope_files,
+        fingerprint_issue,
         normalize_file_hints,
     )
 except ImportError:
@@ -104,6 +111,9 @@ except ImportError:
 
     def derive_group_scope_files(*args, **kwargs):  # type: ignore
         return []
+
+    def fingerprint_issue(*args, **kwargs):  # type: ignore
+        return ""
 
     def normalize_file_hints(values):  # type: ignore
         return []
@@ -164,12 +174,18 @@ DEFAULT_SMOKETEST_CONFIG = {
     },
 }
 
+LOCK_STATE_FILENAME = "verdict/passed-file-locks.v1.json"
+
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def canonical_run_id(worqspace_root: Path) -> str:
+    for env_key in ("QONQ_RUN_ID", "QONQ_RUN_NAME", "QONSTRUCTION_NAME"):
+        raw = str(os.environ.get(env_key, "")).strip()
+        if raw:
+            return Path(raw).name
     return worqspace_root.name
 
 
@@ -181,6 +197,13 @@ def load_optional_json(path: Path) -> dict:
             return json.load(f)
     except Exception:
         return {}
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding='utf-8')
+    except Exception:
+        return ""
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -210,6 +233,123 @@ def normalize_smoketest_status(value: str | None) -> str:
     if raw in {"FAIL", "FAILURE", "ERROR"}:
         return "FAIL"
     return "PARTIAL"
+
+
+def _collect_harness_result_stale_issues(
+    worqspace_root: Path,
+    harness_result_payload: dict,
+) -> list[dict]:
+    if not isinstance(harness_result_payload, dict):
+        return []
+
+    qage_id = canonical_run_id(worqspace_root)
+    harness_path = worqspace_root / "qontract.d" / "qontract-harness.v1.json"
+    result_path = worqspace_root / "qontract.d" / "harness-result.v1.json"
+    harness_payload = load_optional_json(harness_path)
+
+    harness_identity = harness_payload.get("task_identity", {}) if isinstance(harness_payload.get("task_identity"), dict) else {}
+    result_identity = harness_result_payload.get("artifact_identity", {}) if isinstance(harness_result_payload.get("artifact_identity"), dict) else {}
+
+    expected_tasq_hash = str(harness_identity.get("source_tasq_hash") or "")
+    expected_contract_hash = str(harness_identity.get("contract_hash") or "")
+    actual_qage_id = str(result_identity.get("qage_id") or "")
+    actual_tasq_hash = str(result_identity.get("source_tasq_hash") or "")
+    actual_contract_hash = str(result_identity.get("contract_hash") or "")
+
+    stale_issues: list[dict] = []
+
+    def _emit(code: str, message: str, expected: str = "", actual: str = "") -> None:
+        stale_issues.append(
+            {
+                "source": "contract_harness",
+                "severity": "error",
+                "file": "qontract.d/harness-result.v1.json",
+                "line": None,
+                "message": message,
+                "check_type": code,
+                "failure_kind": code.lower(),
+                "file_hash": sha256_file(result_path),
+                "evidence_freshness": now_utc(),
+                "qage_id": qage_id,
+                "tasq_hash": actual_tasq_hash or expected_tasq_hash,
+                "contract_hash": actual_contract_hash or expected_contract_hash,
+                "stale": True,
+                "expected": expected,
+                "actual": actual,
+            }
+        )
+
+    schema_version = str(harness_result_payload.get("schema_version") or "")
+    if schema_version and schema_version != "harness-result.v2":
+        _emit(
+            "HARNESS_RESULT_STALE",
+            "Harness result schema is unsupported for current deterministic gate.",
+            expected="harness-result.v2",
+            actual=schema_version,
+        )
+
+    if actual_qage_id and actual_qage_id != qage_id:
+        _emit(
+            "CONTRACT_QAGE_ID_MISMATCH",
+            "Harness result qage id does not match current run.",
+            expected=qage_id,
+            actual=actual_qage_id,
+        )
+
+    if expected_tasq_hash and actual_tasq_hash and expected_tasq_hash != actual_tasq_hash:
+        _emit(
+            "CONTRACT_TASK_HASH_MISMATCH",
+            "Harness result tasq hash does not match current contract task hash.",
+            expected=expected_tasq_hash,
+            actual=actual_tasq_hash,
+        )
+
+    if expected_contract_hash and actual_contract_hash and expected_contract_hash != actual_contract_hash:
+        _emit(
+            "HARNESS_RESULT_STALE",
+            "Harness result contract hash does not match current harness contract hash.",
+            expected=expected_contract_hash,
+            actual=actual_contract_hash,
+        )
+
+    try:
+        if harness_path.exists() and result_path.exists() and result_path.stat().st_mtime < harness_path.stat().st_mtime:
+            _emit(
+                "HARNESS_RESULT_STALE",
+                "Harness result predates the current harness contract artifact.",
+            )
+    except Exception:
+        pass
+
+    return stale_issues
+
+
+def normalize_failure_kind(value: str | None, *, environment_blocked: bool = False) -> str:
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "blocking_code_failures": "code_behavior_mismatch",
+        "dependency_declaration_failures": "dependency_not_declared",
+        "environment_dependency_missing": "package_registry_unavailable",
+        "tooling_missing": "unavailable_external_tool",
+        "validator_degraded": "validator_degraded",
+        "shellscript_contract_mismatch": "shellscript_contract_mismatch",
+        "shellscript_syntax_error": "shellscript_syntax_error",
+        "shellscript_runtime_error": "shellscript_runtime_error",
+        "dependency_not_declared": "dependency_not_declared",
+        "dependency_resolution_failed": "dependency_resolution_failed",
+        "package_registry_unavailable": "package_registry_unavailable",
+        "unavailable_external_tool": "unavailable_external_tool",
+        "skipped_unsafe_command": "skipped_unsafe_command",
+        "code_behavior_mismatch": "code_behavior_mismatch",
+        "runtime_launch_failed": "code_behavior_mismatch",
+        "runtime_entrypoint_missing": "code_behavior_mismatch",
+        "runtime_probe_failed": "code_behavior_mismatch",
+    }
+    if raw in mapping:
+        return mapping[raw]
+    if environment_blocked:
+        return "environment_blocked"
+    return raw or "code_behavior_mismatch"
 
 
 def is_success_assessment(value: str | None) -> bool:
@@ -272,6 +412,94 @@ def normalize_file_hints(values) -> list[str]:
             deduped.append(normalized)
         return deduped
     return []
+
+
+def _is_lock_relevant_qodeyard_path(path_hint: str | None) -> bool:
+    """Return true for user-source files that should participate in file locks."""
+    normalized = normalize_file_hint(path_hint)
+    if not normalized:
+        return False
+    if is_infra_path(normalized):
+        return False
+    if is_source_junk_file(Path(normalized)):
+        return False
+    return True
+
+
+def infer_runtime_source_files_from_launcher(
+    worqspace_root: Path,
+    launcher_file_hints: list[str],
+    candidate_runtime_files: list[str] | None = None,
+) -> list[str]:
+    """
+    Infer runtime source files from launcher scripts.
+
+    This keeps repair targeting generic when runtime probes attribute failures
+    to a launcher command while the behavioral defect lives in app source.
+    """
+    qodeyard_root = worqspace_root / "qodeyard"
+    candidate_set = set(normalize_file_hints(candidate_runtime_files))
+    inferred: set[str] = set()
+
+    def _collect_candidate(module_hint: str) -> None:
+        module_hint = str(module_hint or "").strip()
+        if not module_hint:
+            return
+        path_hint = f"{module_hint.replace('.', '/')}.py"
+        normalized = normalize_file_hint(path_hint)
+        if not normalized:
+            return
+        qodeyard_candidate = qodeyard_root / normalized
+        if qodeyard_candidate.exists():
+            inferred.add(normalized)
+            return
+        basename = Path(normalized).name
+        basename_path = qodeyard_root / basename
+        if basename_path.exists():
+            inferred.add(basename)
+
+    launcher_refs = normalize_file_hints(launcher_file_hints)
+    for launcher in launcher_refs:
+        launcher_path = qodeyard_root / launcher
+        if not launcher_path.exists():
+            continue
+        try:
+            content = launcher_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        # Generic python module launcher (e.g. python -m package.module)
+        for module_name in re.findall(r"\bpython(?:3)?\s+-m\s+([A-Za-z_][A-Za-z0-9_\.]*)\b", content):
+            _collect_candidate(module_name)
+
+        # Generic module entrypoint token (e.g. package.module:app or main:run).
+        for module_name in re.findall(r"\b([A-Za-z_][A-Za-z0-9_\.]*)\s*:\s*[A-Za-z_][A-Za-z0-9_]*\b", content):
+            _collect_candidate(module_name)
+
+        # Direct python file invocation (e.g. python app.py)
+        for py_target in re.findall(r"\bpython(?:3)?\s+([A-Za-z0-9_./-]+\.py)\b", content):
+            normalized = normalize_file_hint(py_target)
+            if not normalized:
+                continue
+            qodeyard_candidate = qodeyard_root / normalized
+            if qodeyard_candidate.exists():
+                inferred.add(normalized)
+                continue
+            basename = Path(normalized).name
+            if (qodeyard_root / basename).exists():
+                inferred.add(basename)
+
+    # Generic fallback: use declared candidate runtime files when available.
+    if not inferred and candidate_set:
+        present = [path for path in candidate_set if (qodeyard_root / path).exists()]
+        if len(present) == 1:
+            inferred.add(present[0])
+
+    if candidate_set:
+        narrowed = [path for path in inferred if path in candidate_set or Path(path).name in {Path(c).name for c in candidate_set}]
+        if narrowed:
+            return sorted(set(narrowed))
+    return sorted(inferred)
 
 
 def smoketest_report_to_dict(smoketest_report) -> dict | None:
@@ -358,16 +586,17 @@ def summarize_smoketest_counts(smoke_payload: dict | None) -> dict:
             derived_executed += 1
 
     # Aggregate executed-ish kinds for high-level flags
+    # v1.4.0: use explicit None checks to avoid explicit 0 being falsy
     total_executed = (
-        (executed_count or derived_executed) + 
-        (boot_count or derived_boot) + 
-        (http_count or derived_http) + 
-        (ws_count or derived_ws) + 
-        (browser_count or derived_browser)
+        (executed_count if executed_count is not None else derived_executed) + 
+        (boot_count if boot_count is not None else derived_boot) + 
+        (http_count if http_count is not None else derived_http) + 
+        (ws_count if ws_count is not None else derived_ws) + 
+        (browser_count if browser_count is not None else derived_browser)
     )
     total_static = (
-        (static_count or derived_static) + 
-        (syntax_count or derived_syntax)
+        (static_count if static_count is not None else derived_static) + 
+        (syntax_count if syntax_count is not None else derived_syntax)
     )
 
     return {
@@ -376,13 +605,13 @@ def summarize_smoketest_counts(smoke_payload: dict | None) -> dict:
         "has_executed_evidence": total_executed > 0,
         "has_static_evidence": total_static > 0,
         "granular": {
-            "static": static_count or derived_static,
-            "syntax": syntax_count or derived_syntax,
-            "boot": boot_count or derived_boot,
-            "http": http_count or derived_http,
-            "ws": ws_count or derived_ws,
-            "browser": browser_count or derived_browser,
-            "executed": executed_count or derived_executed,
+            "static": static_count if static_count is not None else derived_static,
+            "syntax": syntax_count if syntax_count is not None else derived_syntax,
+            "boot": boot_count if boot_count is not None else derived_boot,
+            "http": http_count if http_count is not None else derived_http,
+            "ws": ws_count if ws_count is not None else derived_ws,
+            "browser": browser_count if browser_count is not None else derived_browser,
+            "executed": executed_count if executed_count is not None else derived_executed,
         },
         "commands_executed": _int_or_zero(payload.get("commands_executed")),
         "commands_skipped": _int_or_zero(payload.get("commands_skipped")),
@@ -494,7 +723,7 @@ def extract_briq_file_targets(briq_content: str, required_files: list[str] | Non
                 return True
         if re.match(r"^[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,10}$", text):
             return True
-        if text in {"Dockerfile", "Makefile", "run.sh", "requirements.txt"}:
+        if text in {"Dockerfile", "Makefile"}:
             return True
         return False
 
@@ -663,6 +892,16 @@ def default_validation_bundle(
     changed_manifest_files: list[str],
 ) -> dict:
     execution_meta = resolve_execution_metadata(cycle_num)
+    frontend_validation_summary = {
+        "html_files_checked": 0,
+        "css_files_checked": 0,
+        "js_files_checked": 0,
+        "local_asset_references_checked": 0,
+        "blocking_errors": 0,
+        "warnings": 0,
+        "advisory_findings": 0,
+        "validation_coverage_summary": "validation_infra_failure",
+    }
     return {
         "schema_version": "validation-bundle.v1",
         "validation_bundle_id": f"{canonical_run_id(worqspace_root)}-validation-cyqle{cycle_num}",
@@ -678,6 +917,8 @@ def default_validation_bundle(
         "scheduled_build_pass_target": execution_meta["scheduled_build_pass_target"],
         "stage": "VALIDATION",
         "status": "FAIL",
+        "validation_outcome": "FAILED_VALIDATION_INFRA",
+        "frontend_validation_summary": frontend_validation_summary,
         "capability_mode": "MIXED_REASONING_EXECUTION",
         "validation_execution_mode": "NONE",
         "coverage": {
@@ -820,6 +1061,11 @@ def default_inspection_verdict(
         "stage": "INSPECTION",
         "status": status,
         "deterministic_gate": "FAIL" if validation_status == "FAIL" else "PASS",
+        "task_outcome": "FAIL" if repair_required else "PASS",
+        "hard_gate_status": "FAIL" if repair_required else "PASS",
+        "validation_coverage": "LIMITED",
+        "soft_warnings_present": True,
+        "repair_needed": repair_required,
         "completion_criteria_results": [
             {
                 "criterion": "Inspection produced a bounded degraded verdict after substep failure.",
@@ -848,6 +1094,11 @@ def default_inspection_verdict(
         "unresolved_issues": [issue_message],
         "inspection_integrity": "DEGRADED",
         "inspection_substep_failures": failures,
+        "file_lock_state_ref": LOCK_STATE_FILENAME,
+        "locked_files": [],
+        "hard_failure_files": [],
+        "unlocked_files": [],
+        "repair_scope_violations": [],
         "evidence_refs": [
             "validation/validation-bundle.v1.json",
             "realization/realization-bundle.v1.json",
@@ -875,16 +1126,24 @@ def classify_repair_failure_for_plan(inspection_verdict: dict, validation_bundle
     issues = inspection_verdict.get("issues", []) if isinstance(inspection_verdict, dict) else []
     summaries = " ".join(str(item.get("summary", "")) for item in issues).lower()
     validation_issues = validation_bundle.get("issues", []) if isinstance(validation_bundle, dict) else []
-    failure_kinds = {str(item.get("failure_kind", "")).strip() for item in validation_issues}
+    failure_kinds = {
+        normalize_failure_kind(
+            str(item.get("failure_kind", "")).strip(),
+            environment_blocked=bool(item.get("environment_blocked", False)),
+        )
+        for item in validation_issues
+    }
 
     if "required deliverable files exist in qodeyard" in summaries and "missing" in summaries:
         return "required_output_missing", "required deliverables are missing from qodeyard"
     if "collateral churn" in summaries or "suspiciously tiny" in summaries or "overrewrite" in summaries:
         return "collateral_churn_overrewrite", "suspected collateral churn or excessive rewrite detected"
-    if any(kind in {"blocking_code_failures", "dependency_declaration_failures"} for kind in failure_kinds):
+    if any(kind in {"code_behavior_mismatch", "dependency_not_declared", "dependency_resolution_failed", "shellscript_contract_mismatch", "shellscript_syntax_error", "shellscript_runtime_error"} for kind in failure_kinds):
         return "exact_validator_violation", "deterministic validation violations were reported"
-    if any(kind in {"environment_dependency_missing", "tooling_missing"} for kind in failure_kinds):
+    if any(kind in {"package_registry_unavailable", "unavailable_external_tool", "validator_degraded"} for kind in failure_kinds):
         return "runtime_syntax_launch_failure", "runtime/tooling checks were blocked or failed"
+    if "skipped_unsafe_command" in failure_kinds:
+        return "runtime_syntax_launch_failure", "unsafe command policy blocked execution"
     if "qonfirmer" in summaries or "deterministic issue" in summaries:
         return "exact_validator_violation", "inspection reported deterministic contract violations"
     if "scope" in summaries or "briq" in summaries:
@@ -926,6 +1185,15 @@ def default_repair_plan(
         "target_build_groups": [],
         "target_briq_refs": [],
         "target_briq_files": target_names,
+        "target_files": [],
+        "validation_scope_files": [],
+        "allowed_edit_paths": [],
+        "locked_file_paths": [],
+        "locked_files_excluded": [],
+        "unlocked_file_paths": [],
+        "hard_failure_files": [],
+        "locked_file_state_ref": LOCK_STATE_FILENAME,
+        "repair_scope_violations": [],
         "required_actions": [
             "repair deterministic validation and inspection-runtime failures in the targeted scope",
             "re-run validation, realization, and inspection after the targeted repair pass",
@@ -971,8 +1239,34 @@ def mark_substep_failure(failures: list[dict], substep: str, error: Exception | 
 def detect_validation_execution_mode(qonfirmer_report, verification_results, smoketest_report=None) -> str:
     smoke_payload = smoketest_report_to_dict(smoketest_report) or {}
     smoke_counts = summarize_smoketest_counts(smoke_payload)
-    has_static = bool(qonfirmer_report or verification_results) or smoke_counts["static_count"] > 0
+    
+    # v1.4.0: Hardened non-vacuous static detection
+    # Qonfirmer: must have actually checked rules or be explicitly OK (from tests)
+    has_qonfirmer = False
+    if qonfirmer_report:
+        if isinstance(qonfirmer_report, dict):
+            has_qonfirmer = bool(qonfirmer_report.get("ok") or qonfirmer_report.get("rules_checked", 0) > 0)
+        else:
+            has_qonfirmer = bool(getattr(qonfirmer_report, "passed", False) or getattr(qonfirmer_report, "rules_checked", 0) > 0)
+    
+    # Verification results: exclude purely informational/diagnostic rows (e.g. "tool not found")
+    real_static_check_count = 0
+    if isinstance(verification_results, list):
+        for res in verification_results:
+            if not isinstance(res, dict):
+                continue
+            # Skip informational noise and explicitly skipped checks
+            if res.get("severity") == "info" or res.get("status") == "SKIP" or res.get("passed") is None:
+                continue
+            real_static_check_count += 1
+    elif isinstance(verification_results, dict):
+        # Some tests pass a single dict
+        if verification_results.get("passed") or verification_results.get("errors", 0) > 0:
+            real_static_check_count = 1
+
+    has_static = has_qonfirmer or real_static_check_count > 0 or smoke_counts["static_count"] > 0
     has_executed = smoke_counts["executed_count"] > 0
+    
     if has_static and has_executed:
         return "MIXED"
     if has_executed:
@@ -984,12 +1278,20 @@ def detect_validation_execution_mode(qonfirmer_report, verification_results, smo
 
 def detect_repo_languages(qodeyard_path: Path) -> dict:
     python_files = []
+    js_ts_files = []
+    shell_files = []
+    other_code_files = []
     non_python_files = []
     
     known_extensionless = {
         'dockerfile', 'makefile', 'gnumakefile', 'jenkinsfile', 
         'gemfile', 'rakefile', 'procfile', 'vagrantfile', 
         'justfile', 'capfile', 'podfile', 'cmakelists.txt',
+    }
+    code_extensions = {
+        '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+        '.sh', '.bash', '.zsh',
+        '.rb', '.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.cs', '.php', '.py', '.pyi'
     }
 
     for file_path in qodeyard_path.rglob("*"):
@@ -999,18 +1301,36 @@ def detect_repo_languages(qodeyard_path: Path) -> dict:
         # Skip common non-source directories if they happen to be in qodeyard
         if '.git' in file_path.parts or '__pycache__' in file_path.parts:
             continue
+        if '.venv' in file_path.parts or 'node_modules' in file_path.parts:
+            continue
 
-        if file_path.suffix == ".py":
-            python_files.append(str(file_path.relative_to(qodeyard_path)))
-        elif file_path.suffix:
-            non_python_files.append(str(file_path.relative_to(qodeyard_path)))
+        rel_path = str(file_path.relative_to(qodeyard_path))
+        suffix = file_path.suffix.lower()
+
+        if suffix in {".py", ".pyi"}:
+            python_files.append(rel_path)
+        elif suffix in {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}:
+            js_ts_files.append(rel_path)
+            non_python_files.append(rel_path)
+        elif suffix in {".sh", ".bash", ".zsh"}:
+            shell_files.append(rel_path)
+            non_python_files.append(rel_path)
+        elif suffix in code_extensions:
+            other_code_files.append(rel_path)
+            non_python_files.append(rel_path)
+        elif suffix:
+            non_python_files.append(rel_path)
         else:
             name_lower = file_path.name.lower()
             if name_lower in known_extensionless or os.access(file_path, os.X_OK):
-                non_python_files.append(str(file_path.relative_to(qodeyard_path)))
+                other_code_files.append(rel_path)
+                non_python_files.append(rel_path)
 
     return {
         "python_files": sorted(python_files),
+        "js_ts_files": sorted(js_ts_files),
+        "shell_files": sorted(shell_files),
+        "other_code_files": sorted(other_code_files),
         "non_python_files": sorted(non_python_files),
     }
 
@@ -1253,28 +1573,48 @@ def _collect_frontend_handler_markers(worqspace_root: Path) -> list[str]:
 
 def evaluate_frontend_contracts(worqspace_root: Path) -> list[dict]:
     qodeyard = worqspace_root / "qodeyard"
-    index_path = qodeyard / "index.html"
-    js_path = qodeyard / "app.js"
     issues: list[dict] = []
-    if not index_path.exists() or not js_path.exists():
+    completion = load_optional_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    required_files = [
+        normalize_file_hint(item)
+        for item in completion.get("required_files", [])
+        if normalize_file_hint(item)
+    ] if isinstance(completion.get("required_files"), list) else []
+    frontend_scope_files = [
+        rel for rel in required_files
+        if Path(rel).suffix.lower() in {".html", ".htm", ".js", ".css"}
+    ]
+    if not frontend_scope_files:
+        # Fallback for sparse planning artifacts: derive a minimal frontend
+        # scope from current qodeyard files so task-driven checks (like
+        # required handler markers) still execute.
+        discovered: list[str] = []
+        for path in sorted(qodeyard.rglob("*")):
+            if not path.is_file():
+                continue
+            rel = normalize_file_hint(path.relative_to(qodeyard))
+            if Path(rel).suffix.lower() in {".html", ".htm", ".js", ".css"}:
+                discovered.append(rel)
+        frontend_scope_files = discovered
+    if not frontend_scope_files:
         return issues
 
-    issues.extend(collect_scope_validation_issues(worqspace_root, scope_files=["index.html", "app.js", "styles.css"]))
-
-    try:
-        js = js_path.read_text(encoding="utf-8")
-    except Exception:
-        return issues
+    issues.extend(collect_scope_validation_issues(worqspace_root, scope_files=frontend_scope_files))
 
     required_handler_markers = _collect_frontend_handler_markers(worqspace_root)
-    if required_handler_markers:
-        missing_handlers = [marker for marker in required_handler_markers if marker not in js]
+    js_bundle = "\n".join(
+        _read_text(qodeyard / rel)
+        for rel in frontend_scope_files
+        if rel.endswith(".js") and (qodeyard / rel).exists()
+    )
+    if required_handler_markers and js_bundle:
+        missing_handlers = [marker for marker in required_handler_markers if marker not in js_bundle]
         if missing_handlers:
             issues.append({
                 "severity": "error",
                 "scope": "frontend_contract",
-                "message": f"Task-declared UI handlers are missing from app.js: {', '.join(missing_handlers)}",
-                "files": ["app.js"],
+                "message": f"Task-declared UI handlers are missing from JavaScript sources: {', '.join(missing_handlers)}",
+                "files": [rel for rel in frontend_scope_files if rel.endswith(".js")] or frontend_scope_files[:1],
             })
 
     deduped: list[dict] = []
@@ -1337,12 +1677,72 @@ def build_validation_bundle(
                 "evidence_freshness": now_utc(),
             })
 
+    harness_result_payload = load_optional_json(worqspace_root / "qontract.d" / "harness-result.v1.json")
+    if harness_result_payload:
+        harness_status = normalize_tri_state_status(harness_result_payload.get("status"), default="FAIL")
+        checks.append({
+            "check_id": "contract_harness",
+            "level": "project_specific_checks",
+            "status": harness_status,
+            "executed": True,
+            "schema_version": harness_result_payload.get("schema_version"),
+            "harness_id": harness_result_payload.get("harness_id"),
+            "issue_count": len(harness_result_payload.get("violations", []) or []),
+        })
+        identity = harness_result_payload.get("artifact_identity", {}) if isinstance(harness_result_payload.get("artifact_identity"), dict) else {}
+        qage_id = str(identity.get("qage_id") or worqspace_root.name)
+        tasq_hash = str(identity.get("source_tasq_hash") or "")
+        contract_hash = str(identity.get("contract_hash") or "")
+        issues.extend(_collect_harness_result_stale_issues(worqspace_root, harness_result_payload))
+        for violation in harness_result_payload.get("violations", []) or []:
+            if not isinstance(violation, dict):
+                continue
+            rel_file = normalize_file_hint(violation.get("file"))
+            file_hash = sha256_file(worqspace_root / "qodeyard" / rel_file) if rel_file else None
+            severity = str(violation.get("severity", "error")).lower()
+            if severity not in {"info", "warning", "error"}:
+                severity = "error"
+            issues.append({
+                "source": "contract_harness",
+                "severity": severity,
+                "file": rel_file,
+                "line": None,
+                "message": str(violation.get("message") or "Contract harness validation failure."),
+                "check_type": str(violation.get("code") or violation.get("rule_id") or "contract_harness"),
+                "failure_kind": str(violation.get("code") or violation.get("rule_id") or "contract_harness").lower(),
+                "file_hash": file_hash,
+                "evidence_freshness": now_utc(),
+                "qage_id": qage_id,
+                "tasq_hash": tasq_hash,
+                "contract_hash": contract_hash,
+                "stale": bool(
+                    str(violation.get("code") or violation.get("rule_id") or "").upper()
+                    in {
+                        "CONTRACT_TASK_HASH_MISMATCH",
+                        "CONTRACT_QAGE_ID_MISMATCH",
+                        "CONTRACT_STALE_ARTIFACT",
+                        "VALIDATION_PLAN_STALE",
+                        "HARNESS_RESULT_STALE",
+                        "REPAIR_HISTORY_STALE",
+                        "STALE_ARTIFACT_INVALIDATED",
+                    }
+                ),
+            })
+
     if verification_results:
         verification_status = normalize_tri_state_status(getattr(verification_results, "overall_status", None), default="PASS")
+        verification_outcome = getattr(verification_results, "validation_outcome", None)
+        frontend_validation_summary = getattr(
+            verification_results,
+            "frontend_validation_summary",
+            {},
+        ) or {}
         checks.append({
             "check_id": "qualification",
             "level": "language_specific_checks",
             "status": verification_status,
+            "validation_outcome": verification_outcome,
+            "frontend_validation_summary": frontend_validation_summary,
             "executed": True,
             "files_checked": verification_results.files_checked,
             "passed": verification_results.passed,
@@ -1451,8 +1851,22 @@ def build_validation_bundle(
         }
         for issue in grouped_coherence["issues"]
     ])
-    integration_scope_files = changed_manifest_files or ["index.html", "styles.css", "app.js"]
-    integration_issues = collect_scope_validation_issues(worqspace_root, scope_files=integration_scope_files)
+    completion_doc = load_optional_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    completion_required_files = [
+        normalize_file_hint(item)
+        for item in completion_doc.get("required_files", [])
+        if normalize_file_hint(item)
+    ] if isinstance(completion_doc.get("required_files"), list) else []
+    derived_frontend_scope = [
+        rel for rel in completion_required_files
+        if Path(rel).suffix.lower() in {".html", ".htm", ".js", ".css"}
+    ]
+    integration_scope_files = changed_manifest_files or derived_frontend_scope
+    integration_issues = (
+        collect_scope_validation_issues(worqspace_root, scope_files=integration_scope_files)
+        if integration_scope_files
+        else []
+    )
     issues.extend([
         {
             "source": str(issue.get("source") or "frontend_contract"),
@@ -1493,6 +1907,31 @@ def build_validation_bundle(
     if smoke_payload and smoke_executed == 0 and smoke_static == 0:
         unknowns.append("Smoketest was configured but neither static nor executed checks ran for the active scope.")
 
+    validation_outcome = getattr(verification_results, "validation_outcome", None)
+    frontend_validation_summary = getattr(
+        verification_results,
+        "frontend_validation_summary",
+        None,
+    )
+    if frontend_validation_summary is None:
+        frontend_validation_summary = {
+            "html_files_checked": 0,
+            "css_files_checked": 0,
+            "js_files_checked": 0,
+            "local_asset_references_checked": 0,
+            "blocking_errors": 0,
+            "warnings": 0,
+            "advisory_findings": 0,
+            "validation_coverage_summary": "no_qualification_report",
+        }
+    if not validation_outcome:
+        if validation_status == "FAIL":
+            validation_outcome = "FAILED_BLOCKING_VALIDATION"
+        elif validation_status == "PARTIAL":
+            validation_outcome = "PARTIAL_VALIDATION_DEGRADED"
+        else:
+            validation_outcome = "SUCCESS_VERIFIED"
+
     return {
         "schema_version": "validation-bundle.v1",
         "validation_bundle_id": f"{canonical_run_id(worqspace_root)}-validation-cyqle{cycle_num}",
@@ -1508,6 +1947,8 @@ def build_validation_bundle(
         "scheduled_build_pass_target": execution_meta["scheduled_build_pass_target"],
         "stage": "VALIDATION",
         "status": validation_status,
+        "validation_outcome": validation_outcome,
+        "frontend_validation_summary": frontend_validation_summary,
         "capability_mode": "MIXED_REASONING_EXECUTION",
         "validation_execution_mode": detect_validation_execution_mode(qonfirmer_report, verification_results, smoke_payload),
         "evidence_freshness": now_utc(),
@@ -1562,10 +2003,29 @@ def build_realization_bundle(
     changed_path = worqspace_root / "exeq.d" / f"cyqle{cycle_num}_changed.md"
 
     changed_file_records = []
+    repair_scope_violations = []
     for group in grouped_coherence["group_summaries"]:
+        group_id = group["build_group_id"]
         changed_manifest = load_optional_json(
-            worqspace_root / "build" / "groups" / group["build_group_id"] / "changed-files.v1.json"
+            worqspace_root / "build" / "groups" / group_id / "changed-files.v1.json"
         )
+        # Collect violations from manifest or build report
+        group_violations = changed_manifest.get("repair_scope_violations")
+        if group_violations is None:
+            build_report = load_optional_json(
+                worqspace_root / "build" / "groups" / group_id / "build-report.v1.json"
+            )
+            group_violations = build_report.get("repair_scope_violations")
+        
+        if group_violations:
+            for v_path in group_violations:
+                repair_scope_violations.append({
+                    "path": v_path,
+                    "build_group_id": group_id,
+                    "violation_type": "locked_file_modified_without_explicit_unlock",
+                    "detected_at": now_utc(),
+                })
+
         manifest_changed_files = changed_manifest.get("changed_files", [])
         if manifest_changed_files:
             for entry in manifest_changed_files:
@@ -1630,8 +2090,8 @@ def build_realization_bundle(
     smoke_static = smoke_counts["static_count"]
     smoke_results = smoke_payload.get("results") if isinstance(smoke_payload.get("results"), list) else []
     executed_behavior_rows = 0
+    executed_kinds = {"executed", "process_boot", "http_probe", "ws_probe", "browser_probe"}
     if smoke_executed > 0:
-        executed_kinds = {"executed", "process_boot", "http_probe", "ws_probe", "browser_probe"}
         for item in smoke_results:
             if not isinstance(item, dict):
                 continue
@@ -1662,20 +2122,58 @@ def build_realization_bundle(
             "behavior_id": "smoketest_execution",
             "reason": "Smoketest checks were not executed for this cycle.",
         })
-    if validation_bundle.get("coverage", {}).get("non_python_files"):
+    non_python_files = validation_bundle.get("coverage", {}).get("non_python_files")
+    has_non_python_execution_evidence = False
+    for item in smoke_results:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status", "")).upper() == "SKIP":
+            continue
+        adapter_name = str(item.get("adapter", "")).strip().lower()
+        if adapter_name in {"", "python"}:
+            continue
+        kind = normalize_smoketest_execution_kind(item.get("execution_kind"), bool(item.get("executed", False)))
+        if kind in executed_kinds:
+            has_non_python_execution_evidence = True
+            break
+    if non_python_files and not has_non_python_execution_evidence:
         unverified_behaviors.append({
             "behavior_id": "non_python_deterministic_validation_depth",
             "reason": "Non-Python ecosystems currently rely on weaker deterministic coverage than Python.",
         })
 
+    validation_issues = validation_bundle.get("issues")
+    if not isinstance(validation_issues, list):
+        validation_issues = []
+    blocking_issue_rows = [
+        issue
+        for issue in validation_issues
+        if isinstance(issue, dict) and str(issue.get("severity", "warning")).lower() == "error"
+    ]
+    validation_checks = validation_bundle.get("checks")
+    if not isinstance(validation_checks, list):
+        validation_checks = []
+    blocking_check_rows = [
+        check
+        for check in validation_checks
+        if isinstance(check, dict) and str(check.get("status", "")).upper() in {"FAIL", "ERROR"}
+    ]
+    smoke_blocking_rows = [
+        item
+        for item in smoke_results
+        if isinstance(item, dict) and str(item.get("status", "")).upper() in {"FAIL", "ERROR"}
+    ]
+
     evidence_status = "EVIDENCE_PARTIAL"
     if not changed_file_records:
         evidence_status = "EVIDENCE_MISSING"
     elif (
-        validation_bundle.get("status") == "PASS"
-        and validation_bundle.get("validation_execution_mode") in {"EXECUTED", "MIXED"}
+        validation_bundle.get("validation_execution_mode") in {"EXECUTED", "MIXED"}
         and not grouped_coherence["undeclared_changed_files"]
         and not unverified_behaviors
+        and not blocking_issue_rows
+        and not blocking_check_rows
+        and not smoke_blocking_rows
     ):
         evidence_status = "EVIDENCE_COMPLETE"
 
@@ -1735,6 +2233,7 @@ def build_realization_bundle(
             "undeclared_touched_scopes": [
                 f"file:{path}" for path in grouped_coherence["undeclared_changed_files"]
             ],
+            "repair_scope_violations": repair_scope_violations,
         },
         "structural_reality": {
             "changed_files": changed_file_records,
@@ -1910,12 +2409,298 @@ def list_qodeyard_files_for_completion_check(worqspace_root: Path) -> list[str]:
         rel_path = str(path.relative_to(qodeyard)).replace("\\", "/")
         if not rel_path:
             continue
+        if not _is_lock_relevant_qodeyard_path(rel_path):
+            continue
         if any(part.startswith(".") for part in Path(rel_path).parts):
             continue
         if Path(rel_path).name.lower() == ".ds_store":
             continue
         discovered.append(rel_path)
     return discovered
+
+
+def lock_state_path(worqspace_root: Path) -> Path:
+    return worqspace_root / LOCK_STATE_FILENAME
+
+
+def _extract_required_files_from_completion_criteria(completion_criteria: dict) -> list[str]:
+    return sorted(
+        {
+            str(item).strip().replace("\\", "/")
+            for item in (completion_criteria or {}).get("required_files", [])
+            if str(item).strip()
+        }
+    )
+
+
+def _collect_hard_failure_file_map(
+    validation_bundle: dict,
+    criteria_results: list[dict],
+    verdict_issues: list[dict] | None = None,
+    worqspace_root: Path | None = None,
+) -> dict[str, list[str]]:
+    file_failures: dict[str, set[str]] = {}
+
+    def _record(path_hint: str, reason: str) -> None:
+        normalized = str(path_hint or "").strip().replace("\\", "/")
+        if not normalized:
+            return
+        if not _is_lock_relevant_qodeyard_path(normalized):
+            return
+        file_failures.setdefault(normalized, set()).add(str(reason or "hard_failure").strip())
+
+    def _is_runtime_launcher_issue(issue: dict) -> bool:
+        if str(issue.get("severity", "")).lower() not in {"", "error"}:
+            return False
+        status = str(issue.get("status", "")).upper()
+        if status and status not in {"FAIL", "ERROR"}:
+            return False
+        source = str(issue.get("source") or issue.get("adapter") or "").strip().lower()
+        check_type = str(issue.get("check_type") or issue.get("name") or issue.get("code") or "").strip().lower()
+        execution_kind = str(issue.get("execution_kind") or "").strip().lower()
+        failure_kind = str(issue.get("failure_kind") or "").strip().lower()
+        if source != "smoketest" and source != "shell":
+            return False
+        if "run_sh_behavior" in check_type or "shell:" in check_type:
+            return True
+        if execution_kind == "http_probe" and failure_kind in {"code_behavior_mismatch", "runtime_contract_mismatch"}:
+            return True
+        return False
+
+    runtime_launcher_hints: list[str] = []
+
+    def _collect_runtime_launcher_hints(issue: dict) -> None:
+        if not _is_runtime_launcher_issue(issue):
+            return
+        runtime_launcher_hints.extend(normalize_file_hints(issue.get("file")))
+        runtime_launcher_hints.extend(normalize_file_hints(issue.get("files")))
+        runtime_launcher_hints.extend(normalize_file_hints(issue.get("related_files")))
+        command = str(issue.get("command") or "")
+        for token in re.findall(r"\b[A-Za-z0-9_./-]+\.(?:sh|bash)\b", command):
+            runtime_launcher_hints.extend(normalize_file_hints(token))
+
+    for issue in (validation_bundle or {}).get("issues", []) or []:
+        if str(issue.get("severity", "")).lower() != "error":
+            continue
+        if issue.get("status") == "INVALIDATED" or bool(issue.get("stale", False)):
+            continue
+        _collect_runtime_launcher_hints(issue)
+        reason = issue.get("failure_kind") or issue.get("check_type") or issue.get("source") or "validation_error"
+        for rel in normalize_file_hints(issue.get("file")):
+            _record(rel, reason)
+        for rel in normalize_file_hints(issue.get("files")):
+            _record(rel, reason)
+        for rel in normalize_file_hints(issue.get("related_files")):
+            _record(rel, reason)
+
+    smoke_results = ((validation_bundle or {}).get("smoketest") or {}).get("results")
+    if isinstance(smoke_results, list):
+        for item in smoke_results:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status", "")).upper() not in {"FAIL", "ERROR"}:
+                continue
+            pseudo_issue = {
+                "source": "smoketest",
+                "severity": item.get("severity") or "error",
+                "status": item.get("status"),
+                "file": item.get("file"),
+                "files": item.get("files"),
+                "related_files": item.get("related_files"),
+                "command": item.get("command"),
+                "check_type": item.get("name"),
+                "execution_kind": item.get("execution_kind"),
+                "failure_kind": item.get("failure_kind"),
+            }
+            _collect_runtime_launcher_hints(pseudo_issue)
+            reason = item.get("failure_kind") or item.get("name") or "smoketest"
+            for rel in normalize_file_hints(item.get("file")):
+                _record(rel, reason)
+            for rel in normalize_file_hints(item.get("files")):
+                _record(rel, reason)
+            for rel in normalize_file_hints(item.get("related_files")):
+                _record(rel, reason)
+
+    for item in criteria_results or []:
+        if str(item.get("status", "")).upper() != "FAIL":
+            continue
+        criterion = str(item.get("criterion") or item.get("criterion_id") or "completion_criterion").strip()
+        basis = item.get("basis") if isinstance(item.get("basis"), dict) else {}
+        for rel in basis.get("missing_required_files", []) or []:
+            _record(str(rel), criterion)
+        for rel in basis.get("extra_files", []) or []:
+            _record(str(rel), criterion)
+        for rel in basis.get("files", []) or []:
+            _record(str(rel), criterion)
+        for rel in normalize_file_hints(basis.get("file")):
+            _record(rel, criterion)
+
+    # Collect from verdict issues (consolidated issues including harness results)
+    for issue in verdict_issues or []:
+        if str(issue.get("severity", "")).lower() != "error":
+            continue
+        if issue.get("status") == "INVALIDATED" or bool(issue.get("stale", False)):
+            continue
+        _collect_runtime_launcher_hints(issue)
+        reason = issue.get("failure_kind") or issue.get("source") or "verdict_error"
+        for rel in normalize_file_hints(issue.get("file")):
+            _record(rel, reason)
+        for rel in normalize_file_hints(issue.get("files")):
+            _record(rel, reason)
+        for rel in normalize_file_hints(issue.get("related_files")):
+            _record(rel, reason)
+
+    if worqspace_root is not None and runtime_launcher_hints:
+        for rel in infer_runtime_source_files_from_launcher(worqspace_root, runtime_launcher_hints):
+            _record(rel, "runtime_source_inferred_from_launcher_failure")
+
+    return {path: sorted(list(reasons)) for path, reasons in file_failures.items()}
+
+
+
+def build_passed_file_lock_state(
+    worqspace_root: Path,
+    cycle_num: str,
+    validation_bundle: dict,
+    criteria_results: list[dict],
+    required_files: list[str],
+    realization_bundle: dict | None = None,
+    verdict_issues: list[dict] | None = None,
+) -> dict:
+    prior_payload = load_optional_json(lock_state_path(worqspace_root))
+    prior_entries = {
+        str(item.get("path") or "").strip(): item
+        for item in prior_payload.get("files", [])
+        if (
+            isinstance(item, dict)
+            and str(item.get("path") or "").strip()
+            and _is_lock_relevant_qodeyard_path(str(item.get("path") or "").strip())
+        )
+    }
+    hard_failure_map = _collect_hard_failure_file_map(
+        validation_bundle,
+        criteria_results,
+        verdict_issues=verdict_issues,
+        worqspace_root=worqspace_root,
+    )
+    hard_failure_files = sorted(hard_failure_map.keys())
+
+    qodeyard_files = []
+    if (worqspace_root / "qodeyard").exists():
+        for p in (worqspace_root / "qodeyard").rglob("*"):
+            if p.is_file():
+                rel = str(p.relative_to(worqspace_root / "qodeyard")).replace("\\", "/")
+                if _is_lock_relevant_qodeyard_path(rel):
+                    qodeyard_files.append(rel)
+
+    candidate_files = sorted(
+        set(required_files or [])
+        | set(hard_failure_files)
+        | set(prior_entries.keys())
+        | set(qodeyard_files)
+    )
+
+    entries: list[dict] = []
+    locked_files: list[str] = []
+    unlocked_files: list[dict] = []
+    scope_violations: list[dict] = []
+    
+    if realization_bundle:
+        scope_violations.extend(realization_bundle.get("scope_summary", {}).get("repair_scope_violations", []))
+    
+    validation_ts = now_utc()
+    execution_meta = resolve_execution_metadata(cycle_num)
+    validation_marker = (
+        f"cycle={cycle_num};iter={execution_meta.get('global_iteration_index')};"
+        f"pass={execution_meta.get('pass_kind')};repair={execution_meta.get('repair_pass_index')}"
+    )
+
+    for rel_path in candidate_files:
+        file_path = worqspace_root / "qodeyard" / rel_path
+        exists = file_path.exists() and file_path.is_file()
+        prior = prior_entries.get(rel_path, {})
+        fail_reasons = hard_failure_map.get(rel_path, [])
+        passed_checks: list[str] = []
+        status = "UNKNOWN"
+        lock_reason = "file_not_applicable_to_current_hard_checks"
+
+        if fail_reasons:
+            status = "FAIL"
+            lock_reason = "hard_check_failed_for_file"
+        elif exists:
+            status = "PASS"
+            if rel_path in (required_files or []):
+                passed_checks = [
+                    "required_deliverable_present",
+                    "no_hard_failures_for_file",
+                ]
+                lock_reason = "required_deliverable_passed_hard_checks"
+            else:
+                passed_checks = [
+                    "no_hard_failures_for_file",
+                ]
+                lock_reason = "file_exists_and_passed_all_applicable_hard_checks"
+        elif rel_path in (required_files or []):
+            status = "FAIL"
+            fail_reasons = ["required_deliverable_missing"]
+            lock_reason = "required_deliverable_missing"
+        else:
+            status = "UNKNOWN"
+            lock_reason = "file_missing_and_not_required"
+
+        content_hash = sha256_file(file_path) if exists else ""
+        locked = status == "PASS"
+        prior_locked = bool(prior.get("locked", False))
+        prior_hash = str(prior.get("content_sha256") or "").strip()
+
+        if prior_locked and status == "FAIL":
+            unlocked_files.append(
+                {
+                    "path": rel_path,
+                    "reason": "hard_failure_now_implicates_file",
+                    "hard_failure_reasons": fail_reasons,
+                    "prior_hash": prior_hash or None,
+                    "unlocked_at": validation_ts,
+                }
+            )
+        elif prior_locked and locked and prior_hash and content_hash and prior_hash != content_hash:
+            scope_violations.append(
+                {
+                    "path": rel_path,
+                    "violation_type": "locked_file_modified_without_new_hard_failure",
+                    "prior_hash": prior_hash,
+                    "current_hash": content_hash,
+                    "detected_at": validation_ts,
+                }
+            )
+
+        entry = {
+            "path": rel_path,
+            "status": status,
+            "locked": locked,
+            "content_sha256": content_hash or None,
+            "hard_checks_passed": passed_checks,
+            "hard_fail_reasons": fail_reasons,
+            "validation_timestamp": validation_ts,
+            "validation_marker": validation_marker,
+            "validation_cycle": int(cycle_num),
+            "lock_reason": lock_reason,
+        }
+        entries.append(entry)
+        if locked:
+            locked_files.append(rel_path)
+
+    return {
+        "schema_version": "passed-file-locks.v1",
+        "run_id": canonical_run_id(worqspace_root),
+        "cycle": int(cycle_num),
+        "generated_at": validation_ts,
+        "hard_failure_files": hard_failure_files,
+        "locked_files": sorted(locked_files),
+        "unlocked_files": unlocked_files,
+        "repair_scope_violations": scope_violations,
+        "files": sorted(entries, key=lambda item: item.get("path", "")),
+    }
 
 
 def build_inspection_verdict(
@@ -1983,6 +2768,36 @@ def build_inspection_verdict(
         "basis": inspection_input.get("required_inputs", {}),
     })
 
+    # v1.4.0: Hardened tier-aware evidence gate
+    tier = str(completion_criteria.get("tier", "low")).lower()
+    val_mode = validation_bundle.get("validation_execution_mode", "NONE")
+    smoke_counts = validation_bundle.get("smoketest_counts", {})
+    has_real_executed = smoke_counts.get("executed_count", 0) > 0
+
+    if tier in {"medium", "high"}:
+        # Medium/High tasks MUST have real execution evidence if the project contains code.
+        repo_langs = detect_repo_languages(worqspace_root / "qodeyard")
+        code_bearing_files = (
+            repo_langs.get("python_files", []) or 
+            repo_langs.get("js_ts_files", []) or 
+            repo_langs.get("shell_files", []) or 
+            repo_langs.get("other_code_files", [])
+        )
+        
+        if code_bearing_files:
+            evidence_ok = has_real_executed and val_mode in {"EXECUTED", "MIXED"}
+            criteria_results.append({
+                "criterion": f"Tier-appropriate execution evidence present (tier={tier}).",
+                "status": "PASS" if evidence_ok else "PARTIAL",
+                "basis": {
+                    "tier": tier,
+                    "validation_execution_mode": val_mode,
+                    "executed_count": smoke_counts.get("executed_count", 0),
+                    "has_real_executed_evidence": has_real_executed,
+                    "code_bearing_files_detected": len(code_bearing_files),
+                }
+            })
+
     required_files = [
         str(item).strip().replace("\\", "/")
         for item in completion_criteria.get("required_files", [])
@@ -2038,56 +2853,163 @@ def build_inspection_verdict(
         issue for issue in valid_issues
         if issue.get("severity") == "error"
     ]
-    
-    # v1.3.9: Distinguish code defects from validator-environment defects
-    blocking_code_failures = [
+
+    for issue in deterministic_failures:
+        issue["normalized_failure_kind"] = normalize_failure_kind(
+            issue.get("failure_kind"),
+            environment_blocked=bool(issue.get("environment_blocked", False)),
+        )
+
+    shellscript_contract_failures = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") in {"blocking_code_failures", None} 
-        and not issue.get("environment_blocked", False)
+        if issue.get("normalized_failure_kind") == "shellscript_contract_mismatch"
+    ]
+    shellscript_syntax_failures = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "shellscript_syntax_error"
+    ]
+    shellscript_runtime_failures = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "shellscript_runtime_error"
     ]
     dependency_declaration_failures = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") == "dependency_declaration_failures"
+        if issue.get("normalized_failure_kind") == "dependency_not_declared"
     ]
-    environment_blockers = [
+    dependency_resolution_failures = [
         issue for issue in deterministic_failures
-        if issue.get("environment_blocked", True) or issue.get("failure_kind") == "environment_dependency_missing"
+        if issue.get("normalized_failure_kind") == "dependency_resolution_failed"
+    ]
+    unsafe_command_skips = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "skipped_unsafe_command"
     ]
     tooling_missing = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") == "tooling_missing"
+        if issue.get("normalized_failure_kind") == "unavailable_external_tool"
+    ]
+    registry_blockers = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") == "package_registry_unavailable"
     ]
     validator_degraded = [
         issue for issue in deterministic_failures
-        if issue.get("failure_kind") == "validator_degraded"
+        if issue.get("normalized_failure_kind") == "validator_degraded"
     ]
-    
+    blocking_code_failures = [
+        issue for issue in deterministic_failures
+        if issue.get("normalized_failure_kind") in {"code_behavior_mismatch", "environment_blocked", "contract_harness"}
+        and not issue.get("environment_blocked", False)
+    ]
+    environment_blockers = [
+        issue for issue in deterministic_failures
+        if issue.get("environment_blocked", False)
+        or issue.get("normalized_failure_kind") in {"package_registry_unavailable", "unavailable_external_tool"}
+    ]
+    stale_artifact_failures = [
+        issue for issue in deterministic_failures
+        if str(issue.get("check_type") or issue.get("failure_kind") or "").upper() in {
+            "CONTRACT_TASK_HASH_MISMATCH",
+            "CONTRACT_QAGE_ID_MISMATCH",
+            "CONTRACT_STALE_ARTIFACT",
+            "VALIDATION_PLAN_STALE",
+            "HARNESS_RESULT_STALE",
+            "REPAIR_HISTORY_STALE",
+            "STALE_ARTIFACT_INVALIDATED",
+            "CONTRACT_UNRELATED_DEFAULTS_DETECTED",
+        }
+        or str(issue.get("source") or "").lower() == "contract_harness"
+        and str(issue.get("message") or "").lower().find("stale") != -1
+    ]
+    blocked_required_failures = [
+        issue for issue in deterministic_failures
+        if str(issue.get("check_type") or issue.get("failure_kind") or "").upper() in {
+            "RUNTIME_TYPE_UNSUPPORTED",
+            "RUNTIME_ENVIRONMENT_BLOCKED",
+            "RUNTIME_ENTRYPOINT_AMBIGUOUS",
+            "RUNTIME_ENTRYPOINT_MISSING",
+        }
+    ]
+
     validation_status = normalize_tri_state_status(validation_bundle.get("status"), default="FAIL")
     explicit_evidence_status = str(realization_bundle.get("evidence_status") or "").strip().upper()
+    final_evidence_status = explicit_evidence_status or "EVIDENCE_PARTIAL"
     criteria_failures = any(item["status"] == "FAIL" for item in criteria_results)
+    verdict_classification = "PASS"
 
-    if blocking_code_failures or validation_status == "FAIL":
+    # v1.4.0: Refined verdict logic for "finish-when-hard-gates-pass" rule.
+    # Hard gate failures: any deterministic error means completion is blocked.
+    hard_failures_present = bool(deterministic_failures) or criteria_failures
+
+    if stale_artifact_failures:
         verdict = "FAILURE"
+        verdict_classification = "CONTRACT_STALE_ARTIFACT"
+    elif unsafe_command_skips:
+        verdict = "FAILURE"
+        verdict_classification = "SKIPPED_UNSAFE_COMMAND"
+    elif shellscript_syntax_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: shellscript syntax error"
+    elif shellscript_contract_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: shellscript contract mismatch"
+    elif shellscript_runtime_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: shellscript runtime error"
     elif dependency_declaration_failures:
-        verdict = "FAILURE" # Dependency declaration is still a project defect
-    elif environment_blockers or tooling_missing or validator_degraded:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: dependency not declared"
+    elif dependency_resolution_failures:
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: dependency resolution failed"
+    elif blocking_code_failures or (validation_status == "FAIL" and deterministic_failures and not environment_blockers):
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: code behavior mismatch"
+    elif blocked_required_failures:
         verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: required runtime validation unsupported or blocked"
+    elif registry_blockers:
+        verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: package registry unavailable"
+    elif tooling_missing:
+        verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: unavailable external tool"
+    elif validator_degraded:
+        verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: validator degraded"
+    elif environment_blockers:
+        verdict = "ENVIRONMENT_BLOCKED"
+        verdict_classification = "ENVIRONMENT_BLOCKED: runtime environment failure"
     elif criteria_failures:
-        verdict = "PARTIAL"
-    elif explicit_evidence_status and explicit_evidence_status != "EVIDENCE_COMPLETE":
-        verdict = "PARTIAL"
+        verdict = "FAILURE"
+        verdict_classification = "FAIL: completion criteria unresolved"
     else:
-        # Deterministic validation + completion criteria are the authoritative
-        # gate for completion. AI tactical/meta review remains advisory.
         verdict = "SUCCESS"
+        verdict_classification = "PASS"
+
+    hard_gate_status = "FAIL" if hard_failures_present else "PASS"
+    task_outcome = "PASS" if hard_gate_status == "PASS" else "FAIL"
+    validation_coverage = "FULL" if final_evidence_status == "EVIDENCE_COMPLETE" else "LIMITED"
+    
+    # Repair is only needed if hard gates (deliverable essentials) failed.
+    repair_needed = hard_gate_status != "PASS"
+
+    # Harness results are consumed as deterministic validation evidence.
+    # They must not override any current deterministic failure.
+    hard_gate_status = "FAIL" if hard_failures_present or verdict == "FAILURE" else "PASS"
+    task_outcome = "PASS" if hard_gate_status == "PASS" else "FAIL"
+    validation_coverage = "FULL" if final_evidence_status == "EVIDENCE_COMPLETE" else "LIMITED"
+    
+    # Repair is only needed if hard gates (deliverable essentials) failed.
+    repair_needed = hard_gate_status != "PASS"
 
     confidence = realization_bundle.get("confidence", "CONFIDENCE_LOW")
     unresolved_issues = []
     unresolved_issues.extend([issue.get("message") for issue in deterministic_failures])
     unresolved_issues.extend(realization_bundle.get("unknowns", []))
-    if explicit_evidence_status and explicit_evidence_status != "EVIDENCE_COMPLETE":
+    if validation_coverage == "LIMITED":
         unresolved_issues.append(
-            f"Evidence status remains {explicit_evidence_status}; success cannot be treated as fully verified yet."
+            f"Validation coverage is limited ({final_evidence_status}); hard gates passed but optional/non-critical evidence is incomplete."
         )
     if verdict != "SUCCESS":
         unresolved_issues.extend(cross_briq_warnings)
@@ -2098,16 +3020,26 @@ def build_inspection_verdict(
 
     structured_issues = []
     for index, issue in enumerate(deterministic_failures, start=1):
+        recurrence_fp = fingerprint_issue(issue) if callable(fingerprint_issue) else ""
         structured_issues.append({
             "issue_id": f"deterministic-{index:03d}",
             "summary": issue.get("message", "Deterministic validation failure."),
             "severity": issue.get("severity", "error"),
             "source": issue.get("source"),
             "file": issue.get("file"),
+            "files": issue.get("files"),
             "line": issue.get("line"),
-            "failure_kind": issue.get("failure_kind"),
+            "code": issue.get("check_type") or issue.get("failure_kind"),
+            "failure_kind": issue.get("normalized_failure_kind") or issue.get("failure_kind"),
             "missing_module": issue.get("missing_module"),
             "environment_blocked": bool(issue.get("environment_blocked", False)),
+            "expected": issue.get("expected"),
+            "actual": issue.get("actual"),
+            "qage_id": issue.get("qage_id") or canonical_run_id(worqspace_root),
+            "tasq_hash": issue.get("tasq_hash"),
+            "contract_hash": issue.get("contract_hash"),
+            "stale": bool(issue.get("stale", False)),
+            "recurrence_fingerprint": recurrence_fp,
         })
     for index, warning in enumerate(cross_briq_warnings, start=1):
         structured_issues.append({
@@ -2134,14 +3066,48 @@ def build_inspection_verdict(
             "recoverable": bool(failure.get("recoverable", True)),
         })
 
-    if verdict == "SUCCESS":
-        completion_assessment = "Observed build, validation, and realization evidence satisfy the current completion criteria."
+    soft_warnings_present = any(
+        str(item.get("severity", "")).lower() in {"warning", "info"}
+        for item in structured_issues
+    )
+
+    if verdict == "SUCCESS" or (verdict == "ENVIRONMENT_BLOCKED" and not hard_failures_present):
+        completion_assessment = (
+            "All hard gates passed and required deterministic/runtime checks are satisfied. "
+            "Finishing run without additional repair."
+        )
+        if verdict == "ENVIRONMENT_BLOCKED":
+            completion_assessment = (
+                "Essential hard gates passed, but validation was partially blocked by environment limitations. "
+                "Finalizing as task objectives are satisfied."
+            )
         next_transition = "COMPLETED"
+    elif stale_artifact_failures:
+        completion_assessment = "Stale or mismatched contract/validation artifacts were detected; regenerate current-task artifacts before completion."
+        next_transition = "REPAIRING"
+    elif blocked_required_failures:
+        completion_assessment = "Required runtime validation is unsupported or blocked; deterministic completion is not allowed."
+        next_transition = "REPAIRING"
+    elif unsafe_command_skips:
+        completion_assessment = "Execution was intentionally blocked due to unsafe shellscript commands; manual intervention is required."
+        next_transition = "REPAIRING"
+    elif shellscript_syntax_failures:
+        completion_assessment = "Shellscript syntax failures block completion."
+        next_transition = "REPAIRING"
+    elif shellscript_contract_failures:
+        completion_assessment = "Shellscript contract mismatches block completion."
+        next_transition = "REPAIRING"
+    elif shellscript_runtime_failures:
+        completion_assessment = "Shellscript runtime failures block completion."
+        next_transition = "REPAIRING"
     elif blocking_code_failures:
         completion_assessment = "Deterministic code defects block completion and require bounded repair."
         next_transition = "REPAIRING"
     elif dependency_declaration_failures:
         completion_assessment = "Missing or incorrect dependency declarations block completion; project manifests require repair."
+        next_transition = "REPAIRING"
+    elif dependency_resolution_failures:
+        completion_assessment = "Dependency resolution failed with declared manifests; repair dependency constraints before retry."
         next_transition = "REPAIRING"
     elif environment_blockers or tooling_missing or validator_degraded:
         completion_assessment = "Validation is blocked by environment or missing tooling; validator state is DEGRADED/BLOCKED."
@@ -2167,16 +3133,22 @@ def build_inspection_verdict(
         "cycle": int(cycle_num),
         "stage": "INSPECTION",
         "status": verdict,
+        "verdict_classification": verdict_classification,
         "deterministic_gate": "FAIL" if deterministic_failures else "PASS",
+        "task_outcome": task_outcome,
+        "hard_gate_status": hard_gate_status,
+        "validation_coverage": validation_coverage,
+        "soft_warnings_present": soft_warnings_present,
+        "repair_needed": repair_needed,
         "completion_criteria_results": criteria_results,
         "completion_criteria_summary": completion_criteria.get("summary"),
         "confidence": confidence,
-        "evidence_status": realization_bundle.get("evidence_status", "EVIDENCE_PARTIAL"),
+        "evidence_status": final_evidence_status,
         "validation_execution_mode": validation_bundle.get("validation_execution_mode", "NONE"),
         "capability_mode": realization_bundle.get("capability_mode", "MIXED_REASONING_EXECUTION"),
         "issues": structured_issues,
-        "repair_required": verdict != "SUCCESS",
-        "task_completed": verdict == "SUCCESS",
+        "repair_required": repair_needed,
+        "task_completed": not repair_needed,
         "completion_assessment": completion_assessment,
         "next_lifecycle_transition": next_transition,
         "repair_plan_ref": None,
@@ -2204,10 +3176,28 @@ def build_repair_plan(
     realization_bundle: dict,
     grouped_coherence: dict,
     failed_briq_suggestions: list[dict],
+    file_lock_state: dict | None = None,
 ) -> dict:
     build_groups_doc = load_optional_json(worqspace_root / "planning" / "build-groups.v1.json")
     failure_class, failure_reason = classify_repair_failure_for_plan(inspection_verdict, validation_bundle)
     recommended_start_level = recommend_repair_start_level_for_failure_class(failure_class)
+    lock_payload = file_lock_state if isinstance(file_lock_state, dict) else load_optional_json(lock_state_path(worqspace_root))
+    locked_entries = {
+        str(item.get("path") or "").strip(): item
+        for item in (lock_payload.get("files", []) if isinstance(lock_payload, dict) else [])
+        if isinstance(item, dict) and str(item.get("path") or "").strip()
+    }
+    locked_paths = {
+        path
+        for path, item in locked_entries.items()
+        if bool(item.get("locked", False))
+    }
+    hard_failure_paths_from_lock = set(normalize_file_hints((lock_payload or {}).get("hard_failure_files")))
+    unlocked_paths = {
+        str(item.get("path") or "").strip()
+        for item in ((lock_payload or {}).get("unlocked_files") or [])
+        if isinstance(item, dict) and str(item.get("path") or "").strip()
+    }
 
     def _is_deterministic_issue(issue: dict) -> bool:
         issue_id = str(issue.get("issue_id", "") or "")
@@ -2242,6 +3232,8 @@ def build_repair_plan(
             if isinstance(basis, dict):
                 missing = basis.get("missing_required_files", [])
                 target_files_set.update(missing)
+                target_files_set.update(basis.get("extra_files", []) or [])
+                target_files_set.update(basis.get("files", []) or [])
             target_criteria_ids.append(item.get("criterion_id", item.get("criterion")))
 
     # Extract targets from verdict issues
@@ -2266,10 +3258,14 @@ def build_repair_plan(
 
     deterministic_repair_issues: list[dict] = []
     for issue in inspection_verdict.get("issues", []):
+        if issue.get("status") == "INVALIDATED" or bool(issue.get("stale", False)):
+            continue
         if _is_deterministic_issue(issue) and str(issue.get("severity", "")).lower() == "error":
             deterministic_repair_issues.append(issue)
     for issue in validation_bundle.get("issues", []):
         if str(issue.get("severity", "")).lower() != "error":
+            continue
+        if issue.get("status") == "INVALIDATED" or bool(issue.get("stale", False)):
             continue
         deterministic_repair_issues.append({
             "source": issue.get("source") or "validation",
@@ -2281,7 +3277,39 @@ def build_repair_plan(
             "scope": issue.get("scope"),
             "build_group_id": issue.get("build_group_id"),
             "check_type": issue.get("check_type") or issue.get("issue_id"),
+            "expected": issue.get("expected"),
+            "actual": issue.get("actual"),
+            "qage_id": issue.get("qage_id"),
+            "tasq_hash": issue.get("tasq_hash"),
+            "contract_hash": issue.get("contract_hash"),
+            "stale": bool(issue.get("stale", False)),
         })
+
+    # Runtime probe failures can be attached to launcher scripts (run.sh) while
+    # the behavioral defect lives in app source. Infer entrypoint sources from
+    # launcher commands to keep repairs manifest-linked but behavior-focused.
+    launcher_hints: list[str] = []
+    for issue in deterministic_repair_issues:
+        if str(issue.get("severity", "")).lower() != "error":
+            continue
+        source = str(issue.get("source", "")).strip().lower()
+        check_type = str(issue.get("check_type", "")).strip().lower()
+        if source != "smoketest":
+            continue
+        if "run_sh_behavior" not in check_type and "shell:" not in check_type:
+            continue
+        launcher_hints.extend(normalize_file_hints(issue.get("file")))
+        launcher_hints.extend(normalize_file_hints(issue.get("files")))
+        launcher_hints.extend(normalize_file_hints(issue.get("related_files")))
+        command = str(issue.get("command", "") or "")
+        for token in re.findall(r"\b[A-Za-z0-9_./-]+\.(?:sh|bash)\b", command):
+            launcher_hints.extend(normalize_file_hints(token))
+    inferred_runtime_targets = infer_runtime_source_files_from_launcher(
+        worqspace_root,
+        launcher_hints,
+    )
+    if inferred_runtime_targets:
+        target_files = sorted(set(target_files) | set(inferred_runtime_targets))
 
     # v1.3.13: Determine repair_scope_mode
     repair_scope_mode = "broad"
@@ -2321,6 +3349,12 @@ def build_repair_plan(
         group_to_components[group_id] = sorted(item.get("component_refs", []))
         for briq_ref in item.get("briq_refs", []):
             briq_to_group[briq_ref] = group_id
+        # Map planned file ownership up front so deterministic runtime failures
+        # can resolve back to the owning build-group even when the latest
+        # grouped-coherence delta does not list that file.
+        for planned_path in normalize_file_hints(item.get("primary_files")) + normalize_file_hints(item.get("target_files")):
+            file_to_groups.setdefault(planned_path, set()).add(group_id)
+            basename_to_groups.setdefault(Path(planned_path).name, set()).add(group_id)
 
     for group in grouped_coherence.get("group_summaries", []):
         group_id = group.get("build_group_id")
@@ -2420,6 +3454,12 @@ def build_repair_plan(
             elif briq_ref in inventory_refs:
                 target_groups.add(briq_to_group.get(briq_ref))
 
+    # Ensure deterministic target files influence repair scope directly even
+    # when issue metadata points at launcher files (e.g. run.sh) rather than
+    # the owning application source file.
+    for target_file in target_files:
+        target_groups.update(_target_groups_for_path(target_file))
+
     target_groups = sorted(group_id for group_id in target_groups if group_id)
     target_briqs = sorted({
         briq_ref
@@ -2439,6 +3479,27 @@ def build_repair_plan(
     )
     if fallback_scope_files:
         target_files = sorted(set(target_files) | set(fallback_scope_files))
+
+    locked_files_excluded: list[dict] = []
+    scoped_target_files: list[str] = []
+    for rel_path in target_files:
+        rel_norm = str(rel_path or "").strip()
+        if (
+            rel_norm
+            and rel_norm in locked_paths
+            and rel_norm not in hard_failure_paths_from_lock
+            and rel_norm not in unlocked_paths
+        ):
+            locked_files_excluded.append(
+                {
+                    "path": rel_norm,
+                    "reason": "locked_file_not_implicated_by_new_hard_failure",
+                }
+            )
+            continue
+        if rel_norm:
+            scoped_target_files.append(rel_norm)
+    target_files = sorted(set(scoped_target_files))
     target_scopes = sorted({
         group_to_scope.get(group_id)
         for group_id in target_groups
@@ -2450,9 +3511,34 @@ def build_repair_plan(
         for component_id in group_to_components.get(group_id, [])
     })
     issue_fingerprints = build_issue_fingerprint_entries(deterministic_repair_issues)
-    validation_scope_files = sorted(set(target_files or fallback_scope_files))
+    validation_scope_candidates = sorted(set(target_files or fallback_scope_files))
+    validation_scope_files = [
+        rel
+        for rel in validation_scope_candidates
+        if (
+            rel not in locked_paths
+            or rel in hard_failure_paths_from_lock
+            or rel in unlocked_paths
+        )
+    ]
+    if not validation_scope_files:
+        validation_scope_files = sorted(set(target_files))
 
-    same_run_eligible = bool(target_groups and target_briq_files)
+    all_cycle_briq_files = sorted(
+        path.name for path in (worqspace_root / "briq.d").glob(f"cyqle{cycle_num}_*.md")
+    )
+    # Deterministic file-level failures can occasionally lack build-group linkage
+    # (for example, runtime probe failures attributed to run.sh/main.py). Keep
+    # bounded same-run repair available by falling back to current-cycle briqs.
+    if not target_briq_files and target_files and all_cycle_briq_files:
+        target_briq_files = list(all_cycle_briq_files)
+        if not target_briqs:
+            target_briqs = sorted(
+                briq_ref for briq_ref, briq_file in briq_ref_to_file.items()
+                if briq_file in target_briq_files
+            )
+
+    same_run_eligible = bool(target_briq_files)
     continuation_strategy = "same_run" if same_run_eligible else "linked_continuation"
     next_transition = "REPAIRING" if same_run_eligible else "CONTINUABLE"
 
@@ -2483,6 +3569,8 @@ def build_repair_plan(
 
     # v1.3.13: Persist repair escalation history
     prior_attempt_records = []
+    prev_rp = {}
+    stale_repair_history_detected = False
     # Collect from previous build reports in this cycle
     build_groups_dir = worqspace_root / "build" / "groups"
     if build_groups_dir.exists():
@@ -2503,13 +3591,46 @@ def build_repair_plan(
     if prev_repair_plan_path.exists():
         try:
             prev_rp = json.loads(prev_repair_plan_path.read_text(encoding="utf-8"))
-            prev_records = prev_rp.get("repair_escalation", {}).get("prior_attempt_records", [])
-            if isinstance(prev_records, list):
-                for rec in prev_records:
-                    if rec not in prior_attempt_records:
-                        prior_attempt_records.append(rec)
+            if str(prev_rp.get("source_run_id") or "").strip() != canonical_run_id(worqspace_root):
+                stale_repair_history_detected = True
+            else:
+                prev_records = prev_rp.get("repair_escalation", {}).get("prior_attempt_records", [])
+                if isinstance(prev_records, list):
+                    for rec in prev_records:
+                        if rec not in prior_attempt_records:
+                            prior_attempt_records.append(rec)
         except Exception:
             pass
+
+    normalized_target_briq_files = sorted(
+        re.sub(r"^cyqle\d+_", "cyqleN_", str(name or "").strip())
+        for name in target_briq_files
+        if str(name or "").strip()
+    )
+    repair_signature_payload = {
+        "failure_class": failure_class,
+        "issue_fingerprints": sorted(
+            str(item.get("fingerprint", "")).strip()
+            for item in issue_fingerprints
+            if isinstance(item, dict) and str(item.get("fingerprint", "")).strip()
+        ),
+        "target_files": sorted(target_files),
+        "target_briq_files": normalized_target_briq_files,
+        "target_build_groups": sorted(target_groups),
+        "required_actions": sorted(required_actions),
+    }
+    repair_signature = sha256_text(json.dumps(repair_signature_payload, sort_keys=True))
+    same_fix_repeat_limit = 3
+    try:
+        prev_repeat_count = int(prev_rp.get("same_fix_repeat_count", 0)) if isinstance(prev_rp, dict) else 0
+    except Exception:
+        prev_repeat_count = 0
+    prev_signature = str(prev_rp.get("repair_signature", "")).strip() if isinstance(prev_rp, dict) else ""
+    if prev_signature and prev_signature == repair_signature:
+        same_fix_repeat_count = max(1, prev_repeat_count) + 1
+    else:
+        same_fix_repeat_count = 1
+    same_fix_repeated = same_fix_repeat_count >= same_fix_repeat_limit
 
     return {
         "schema_version": "repair-plan.v1",
@@ -2535,6 +3656,12 @@ def build_repair_plan(
         "target_files": target_files,
         "validation_scope_files": validation_scope_files,
         "allowed_edit_paths": target_files,
+        "locked_file_paths": sorted(locked_paths),
+        "locked_files_excluded": locked_files_excluded,
+        "unlocked_file_paths": sorted(unlocked_paths),
+        "hard_failure_files": sorted(hard_failure_paths_from_lock),
+        "locked_file_state_ref": LOCK_STATE_FILENAME if lock_payload else None,
+        "repair_scope_violations": list((lock_payload or {}).get("repair_scope_violations", []) or []),
         "issue_fingerprints": issue_fingerprints,
         "target_criteria_ids": target_criteria_ids,
         "recommended_start_level": recommended_start_level,
@@ -2559,12 +3686,17 @@ def build_repair_plan(
             "verdict/inspection-verdict.v1.json",
         ],
         "repair_required_semantics": "explicit_bounded_manifest_linked",
+        "repair_signature": repair_signature,
+        "same_fix_repeat_count": same_fix_repeat_count,
+        "same_fix_repeat_limit": same_fix_repeat_limit,
+        "same_fix_repeated": same_fix_repeated,
         "repair_escalation": {
             "enabled": True,
             "recommended_failure_class": failure_class,
             "recommended_start_level": recommended_start_level,
             "reason": failure_reason,
             "prior_attempt_records": prior_attempt_records,
+            "stale_repair_history_detected": stale_repair_history_detected,
         },
         "created_at": now_utc(),
     }
@@ -2593,11 +3725,23 @@ def render_repair_plan_summary(repair_plan: dict) -> str:
         f"- Briqs: {', '.join(repair_plan.get('target_briq_files', [])) or 'None'}",
         f"- Target Files: {', '.join(repair_plan.get('target_files', [])) or 'None'}",
         f"- Validation Scope Files: {', '.join(repair_plan.get('validation_scope_files', [])) or 'None'}",
+        f"- Locked Files (immutable): {', '.join(repair_plan.get('locked_file_paths', [])) or 'None'}",
+        f"- Hard Failure Files: {', '.join(repair_plan.get('hard_failure_files', [])) or 'None'}",
         "",
         "## Required Actions",
     ]
     for item in repair_plan.get("required_actions", []):
         lines.append(f"- {item}")
+    excluded_locked = repair_plan.get("locked_files_excluded", [])
+    if excluded_locked:
+        lines.extend(["", "## Locked Files Excluded From Repair Scope"])
+        for item in excluded_locked:
+            lines.append(f"- {item.get('path')}: {item.get('reason', 'locked')}")
+    unlocked_files = repair_plan.get("unlocked_file_paths", [])
+    if unlocked_files:
+        lines.extend(["", "## Explicitly Unlocked Files"])
+        for path in unlocked_files:
+            lines.append(f"- {path}")
     issue_fingerprints = repair_plan.get("issue_fingerprints", [])
     if issue_fingerprints:
         lines.extend(["", "## Issue Fingerprints"])
@@ -2700,6 +3844,11 @@ def render_inspection_verdict_summary(verdict: dict) -> str:
         f"- Estimated Build Passes: {verdict.get('estimated_build_passes')}",
         f"- Scheduled Build Target: {verdict.get('scheduled_build_pass_target')}",
         f"- Deterministic Gate: {verdict['deterministic_gate']}",
+        f"- Task Outcome: {verdict.get('task_outcome', 'n/a')}",
+        f"- Hard Gate Status: {verdict.get('hard_gate_status', 'n/a')}",
+        f"- Validation Coverage: {verdict.get('validation_coverage', 'n/a')}",
+        f"- Soft Warnings Present: {bool(verdict.get('soft_warnings_present', False))}",
+        f"- Repair Needed: {bool(verdict.get('repair_needed', verdict.get('repair_required', False)))}",
         f"- Confidence: {verdict['confidence']}",
         f"- Evidence Status: {verdict['evidence_status']}",
         "",
@@ -2711,6 +3860,18 @@ def render_inspection_verdict_summary(verdict: dict) -> str:
         lines.extend(["", "## Unresolved Issues"])
         for item in verdict["unresolved_issues"][:20]:
             lines.append(f"- {item}")
+    locked_files = verdict.get("locked_files") or []
+    if locked_files:
+        lines.extend(["", "## Locked Files"])
+        for path in locked_files:
+            lines.append(f"- {path}")
+    unlocked_files = verdict.get("unlocked_files") or []
+    if unlocked_files:
+        lines.extend(["", "## Unlocked Files"])
+        for item in unlocked_files:
+            lines.append(
+                f"- {item.get('path')}: {item.get('reason', 'hard failure')}"
+            )
     lines.append("")
     return "\n".join(lines)
 
@@ -2860,15 +4021,6 @@ def normalize_review_result(
     if not evidence_files:
         return assessment, summary, issues
 
-    run_sh_content = content_by_file.get("run.sh", "")
-    run_sh_lower = run_sh_content.lower()
-    run_sh_uses_port_var = bool(re.search(r'(\$port|\$\{port[:}]|"\$port"|\'\$PORT\')', run_sh_lower))
-    run_sh_exports_port = "export port" in run_sh_lower or ": \"${port:=" in run_sh_lower
-    run_sh_has_hardcoded_port = bool(
-        re.search(r'--port\s+[0-9]+', run_sh_lower)
-        or re.search(r'port\s*=\s*[0-9]+', run_sh_lower)
-    )
-
     truncation_terms = (
         "truncat",
         "incomplete",
@@ -2900,32 +4052,6 @@ def normalize_review_result(
 
     for line in raw_issue_lines:
         lower_line = line.lower()
-        contradicted_port_claim = False
-
-        if "run.sh" in evidence_files and "run.sh" in lower_line:
-            if (
-                ("port variable" in lower_line or "uses the port variable" in lower_line)
-                and ("no assurance" in lower_line or "no evidence" in lower_line or "not" in lower_line)
-                and run_sh_uses_port_var
-            ):
-                contradicted_port_claim = True
-            if ("source" in lower_line or "export" in lower_line) and run_sh_exports_port:
-                contradicted_port_claim = True
-            if "hardcod" in lower_line and run_sh_uses_port_var and not run_sh_has_hardcoded_port:
-                contradicted_port_claim = True
-
-        if (
-            "run.sh" in evidence_files
-            and "hardcod" in lower_line
-            and "main.py" in lower_line
-            and run_sh_uses_port_var
-            and not run_sh_has_hardcoded_port
-        ):
-            contradicted_port_claim = True
-
-        if contradicted_port_claim:
-            contradicted_files.add("run.sh")
-            continue
 
         contradicted_truncation = [
             filename
@@ -3984,6 +5110,10 @@ def main() -> None:
     verification_enabled = full_config_with_smoketest.get('verification', {}).get('enabled', True)
     verification_results = None
 
+    # v1.4.0: Task tier awareness
+    completion_criteria = load_optional_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    tier = str(completion_criteria.get("tier", "low")).lower()
+
     if verification_enabled:
         try:
             import qualifier
@@ -3994,6 +5124,7 @@ def main() -> None:
                 cycle_num,
                 full_config_with_smoketest,
                 changed_files=scoped_changed_files or None,
+                tier=tier,
             )
 
             verification_output = reqap_dir / f"cyqle{cycle_num}" / f"cyqle{cycle_num}_verification.md"
@@ -4433,8 +5564,88 @@ def main() -> None:
     if inspection_substep_failures and inspection_verdict.get("inspection_integrity") != "DEGRADED":
         inspection_verdict["inspection_integrity"] = "DEGRADED"
 
+    completion_criteria_payload = load_optional_json(worqspace_root / "planning" / "completion-criteria.v1.json")
+    required_files_for_locks = _extract_required_files_from_completion_criteria(completion_criteria_payload)
+    lock_payload = build_passed_file_lock_state(
+        worqspace_root,
+        cycle_num,
+        validation_bundle,
+        inspection_verdict.get("completion_criteria_results", []),
+        required_files_for_locks,
+        realization_bundle=realization_bundle,
+        verdict_issues=inspection_verdict.get("issues", []),
+    )
+    lock_file_path = lock_state_path(worqspace_root)
+    write_json(lock_file_path, lock_payload)
+    inspection_verdict["file_lock_state_ref"] = LOCK_STATE_FILENAME
+    inspection_verdict["locked_files"] = lock_payload.get("locked_files", [])
+    inspection_verdict["hard_failure_files"] = lock_payload.get("hard_failure_files", [])
+    inspection_verdict["unlocked_files"] = lock_payload.get("unlocked_files", [])
+    inspection_verdict["repair_scope_violations"] = lock_payload.get("repair_scope_violations", [])
+
+    if inspection_verdict.get("repair_scope_violations"):
+        has_real_regression = False
+        for row in inspection_verdict.get("repair_scope_violations", []):
+            v_type = row.get("violation_type", "unknown")
+            if v_type == "locked_file_modified_without_new_hard_failure":
+                has_real_regression = True
+            
+            inspection_verdict.setdefault("issues", []).append(
+                {
+                    "issue_id": f"repair-scope-{row.get('path', 'unknown')}",
+                    "summary": f"Locked file modification violation: {row.get('path')} ({v_type})",
+                    "severity": "error",
+                    "source": "repair_scope",
+                    "file": row.get("path"),
+                }
+            )
+        
+        if has_real_regression:
+            inspection_verdict["status"] = "FAILURE"
+            inspection_verdict["verdict_classification"] = "FAIL: repair scope violation (regression)"
+            inspection_verdict["repair_required"] = True
+            inspection_verdict["task_completed"] = False
+            inspection_verdict["repair_needed"] = True
+            inspection_verdict["task_outcome"] = "FAIL"
+            inspection_verdict["hard_gate_status"] = "FAIL"
+            inspection_verdict["soft_warnings_present"] = True
+            inspection_verdict["completion_assessment"] = (
+                "Repair scope violation detected: a previously locked file was modified on disk without a new file-specific hard failure."
+            )
+            inspection_verdict["next_lifecycle_transition"] = "REPAIRING"
+        else:
+            # Blocked attempts should not force a failure loop if the task otherwise passed.
+            print(f"  [LOCK] Blocked repair-scope violations detected; permitting completion as files were preserved.", flush=True)
+            inspection_verdict["soft_warnings_present"] = True
+
+        print(
+            f"  [LOCK] Repair-scope violations detected on locked files: "
+            + ", ".join(item.get("path", "?") for item in inspection_verdict.get("repair_scope_violations", [])),
+            flush=True,
+        )
+
+    locked_paths = inspection_verdict.get("locked_files", []) or []
+    if locked_paths:
+        print(f"  [LOCK] Locked files: {', '.join(locked_paths)}", flush=True)
+    for unlocked in inspection_verdict.get("unlocked_files", []) or []:
+        print(
+            f"  [LOCK] Unlocked {unlocked.get('path')}: {unlocked.get('reason')} "
+            f"({', '.join(unlocked.get('hard_failure_reasons', []) or [])})",
+            flush=True,
+        )
+
     repair_label = "YES" if inspection_verdict.get("repair_required") else "NO"
     print(f"Inspection verdict: {inspection_verdict['status']} | Repair required: {repair_label}", flush=True)
+    if inspection_verdict.get("repair_required"):
+        print(
+            "  [FINALIZE GATE] Entering repair because hard gates are not fully satisfied.",
+            flush=True,
+        )
+    else:
+        print(
+            "  [FINALIZE GATE] Hard gates passed; finalizing without additional repair.",
+            flush=True,
+        )
     repair_plan_path = worqspace_root / "verdict" / "repair-plan.v1.json"
     repair_plan_summary_path = worqspace_root / "verdict" / "repair-plan.md"
     if inspection_verdict.get("repair_required"):
@@ -4448,6 +5659,7 @@ def main() -> None:
                 realization_bundle,
                 grouped_coherence,
                 enforced_failed_briq_suggestions,
+                file_lock_state=lock_payload,
             )
         except Exception as e:
             message = f"Repair plan generation failed: {e}"
@@ -4553,16 +5765,29 @@ Aggregate the individual briq reviews into a single, coherent cycle-level assess
         # v1.3.9: Ground meta-review in deterministic root causes
         deterministic_root_causes = []
         for issue in deterministic_failures:
-            f_kind = issue.get("failure_kind")
-            if f_kind == "environment_dependency_missing":
-                deterministic_root_causes.append(f"ENVIRONMENT BLOCKER: Declared dependency '{issue.get('missing_module')}' is missing from validator.")
-            elif f_kind == "dependency_declaration_failures":
-                deterministic_root_causes.append(f"DEPENDENCY DECLARATION DEFECT: Dependency '{issue.get('missing_module')}' is imported but NOT declared in project manifests.")
-            elif f_kind == "tooling_missing":
-                deterministic_root_causes.append(f"ENVIRONMENT BLOCKER: Required tooling is missing from validator.")
+            f_kind = normalize_failure_kind(
+                issue.get("failure_kind"),
+                environment_blocked=bool(issue.get("environment_blocked", False)),
+            )
+            if f_kind == "package_registry_unavailable":
+                deterministic_root_causes.append("ENVIRONMENT BLOCKER: Package registry/network is unavailable in validator environment.")
+            elif f_kind == "dependency_not_declared":
+                deterministic_root_causes.append(f"DEPENDENCY DECLARATION DEFECT: Dependency '{issue.get('missing_module')}' is imported but NOT declared in manifests.")
+            elif f_kind == "dependency_resolution_failed":
+                deterministic_root_causes.append("DEPENDENCY RESOLUTION FAILURE: Declared dependency constraints could not be resolved.")
+            elif f_kind == "unavailable_external_tool":
+                deterministic_root_causes.append("ENVIRONMENT BLOCKER: Required external tool is unavailable in validator.")
             elif f_kind == "validator_degraded":
                 deterministic_root_causes.append(f"VALIDATOR DEGRADED: {issue.get('message')}")
-            elif f_kind == "blocking_code_failures" or not issue.get("environment_blocked", False):
+            elif f_kind == "shellscript_contract_mismatch":
+                deterministic_root_causes.append(f"SHELLSCRIPT CONTRACT FAILURE: {issue.get('message')}")
+            elif f_kind == "shellscript_syntax_error":
+                deterministic_root_causes.append(f"SHELLSCRIPT SYNTAX FAILURE: {issue.get('message')}")
+            elif f_kind == "shellscript_runtime_error":
+                deterministic_root_causes.append(f"SHELLSCRIPT RUNTIME FAILURE: {issue.get('message')}")
+            elif f_kind == "skipped_unsafe_command":
+                deterministic_root_causes.append(f"SAFETY BLOCK: {issue.get('message')}")
+            elif f_kind == "code_behavior_mismatch" or not issue.get("environment_blocked", False):
                 deterministic_root_causes.append(f"CODE DEFECT: {issue.get('message')}")
             else:
                 deterministic_root_causes.append(f"DETERMINISTIC FAILURE: {issue.get('message')}")

@@ -91,13 +91,19 @@ class TestV138IssueFixes(unittest.TestCase):
     def test_uvicorn_regex_relaxation(self):
         # We'll test the regex directly by mocking Path.read_text
         from construqtor import run_scoped_qualification
-        
+
         with tempfile.TemporaryDirectory() as td:
             qodeyard = Path(td) / "qodeyard"
             qodeyard.mkdir()
-            
-            run_sh = qodeyard / "run.sh"
-            
+
+            task_dir = Path(td) / "task"
+            task_dir.mkdir()
+            (task_dir / "task-spec.v1.json").write_text(
+                json.dumps({"goal": "launch exactly with $PORT"}),
+                encoding="utf-8"
+            )
+
+            run_sh = qodeyard / "run.sh"            
             # Test valid variant 1
             run_sh.write_text("python3 -m uvicorn main:app --host 0.0.0.0 --port $PORT")
             res = run_scoped_qualification(["run.sh"], qodeyard, Path(td), "1")
@@ -149,7 +155,7 @@ class TestV138IssueFixes(unittest.TestCase):
 
                 with mock.patch("construqtor.stage_attempt_files", return_value=staged):
                     with mock.patch("construqtor.run_scoped_qualification", return_value={"passed": True, "syntax_errors": [], "constraint_errors": [], "import_warnings": []}):
-                        with mock.patch("lib_ai.run_ai_completion", return_value="```python:main.py\nprint('hi')\n```"):
+                        with mock.patch("construqtor.lib_ai.run_ai_completion", return_value="```python:main.py\nprint('hi')\n```"):
                             # Case 1: contract_data is present but qonfirmer is missing
                             result = construqtor.process_briq_interleaved(
                                 briq_file, qodeyard, worqspace, exeq, [], "file", "build", "", "openai", "gpt-4",
@@ -199,7 +205,7 @@ class TestV138IssueFixes(unittest.TestCase):
 
                 with mock.patch("construqtor.stage_attempt_files", return_value=staged):
                     with mock.patch("construqtor.run_scoped_qualification", return_value={"passed": True, "syntax_errors": [], "constraint_errors": [], "import_warnings": []}):
-                        with mock.patch("lib_ai.run_ai_completion", return_value="```python:main.py\nprint('hi')\n```"):
+                        with mock.patch("construqtor.lib_ai.run_ai_completion", return_value="```python:main.py\nprint('hi')\n```"):
                             result = construqtor.process_briq_interleaved(
                                 briq_file, qodeyard, worqspace, exeq, [], "file", "build", "", "openai", "gpt-4",
                                 {"enabled": False, "max_attempts": 1, "stop_on_briq_fail": True, "retry_delay": 0},
@@ -276,16 +282,54 @@ class TestV138IssueFixes(unittest.TestCase):
             # Mock _detect_safe_fastapi_entrypoint to return our file
             with mock.patch.object(PythonAdapter, "_detect_safe_fastapi_entrypoint", return_value=qodeyard / "main.py"):
                 # Mock _run_fastapi_probe to avoid real execution
-                with mock.patch.object(PythonAdapter, "_run_fastapi_probe", return_value=SmoketestResult(
+                with mock.patch.object(PythonAdapter, "_run_fastapi_probe", return_value=[SmoketestResult(
                     adapter="python", name="python:fastapi_probe", status="PASS",
                     executed=True, execution_kind="process_boot", message="ok"
-                )):
+                )]):
                     results = adapter.project_smoketest(ctx, [qodeyard / "main.py"])
                     
                     names = {r.name for r in results}
                     # Both configured command and auto-probe should be present
                     self.assertIn("python:command", names)
                     self.assertIn("python:fastapi_probe", names)
+
+    def test_python_fastapi_probe_single_result_is_normalized(self):
+        from smoqetester.adapters.python import PythonAdapter
+        from smoqetester.base import SmoketestContext
+        from smoqetester.models import SmoketestResult
+
+        adapter = PythonAdapter()
+        with tempfile.TemporaryDirectory() as td:
+            qodeyard = Path(td)
+            (qodeyard / "main.py").write_text("from fastapi import FastAPI\napp = FastAPI()")
+
+            ctx = SmoketestContext(
+                qodeyard_path=qodeyard,
+                cycle_num="1",
+                adapter_config={
+                    "command": "python -m py_compile",
+                    "auto_fastapi_probe": True,
+                    "auto_unittest_discover": False,
+                    "auto_cli_help": False,
+                },
+                timeout_seconds=5,
+                max_output_chars=100
+            )
+
+            single_probe = SmoketestResult(
+                adapter="python",
+                name="python:fastapi_probe",
+                status="PASS",
+                executed=True,
+                execution_kind="process_boot",
+                message="ok",
+            )
+            with mock.patch.object(PythonAdapter, "_detect_safe_fastapi_entrypoint", return_value=qodeyard / "main.py"):
+                with mock.patch.object(PythonAdapter, "_run_fastapi_probe", return_value=single_probe):
+                    results = adapter.project_smoketest(ctx, [qodeyard / "main.py"])
+            names = {r.name for r in results}
+            self.assertIn("python:command", names)
+            self.assertIn("python:fastapi_probe", names)
 
     def test_inspeqtor_granular_evidence_counts(self):
         smoke_payload = {
@@ -298,8 +342,8 @@ class TestV138IssueFixes(unittest.TestCase):
                 {"status": "PASS", "execution_kind": "static_probe", "executed": False},
                 {"status": "SKIP", "execution_kind": "executed", "executed": False},
             ],
-            "executed_count": 0, # Should be derived
-            "static_count": 0,   # Should be derived
+            "executed_count": None, # Should be derived
+            "static_count": None,   # Should be derived
         }
         
         counts = inspeqtor.summarize_smoketest_counts(smoke_payload)

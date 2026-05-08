@@ -583,7 +583,11 @@ def run_qonfirmer(contract: dict, code_dir: Path, file_patterns: list[str] = Non
     else:
         py_files = list(code_dir.rglob('*.py'))
 
-    report = _run_checks_on_files(py_files, code_dir, invariants, report)
+    if not py_files:
+        print("[Qonfirmer] No Python files found to check", flush=True)
+        return report
+
+    report = _run_checks_on_files(py_files, code_dir, invariants, report, is_scoped_check=False)
 
     status = "PASS ✅" if report.passed else "FAIL ❌"
     print(f"[Qonfirmer] {status} — {len(report.violations)} violations in {report.files_checked} files", flush=True)
@@ -630,11 +634,11 @@ def run_qonfirmer_for_files(contract: dict, code_dir: Path, file_list: list[str]
     if not py_files:
         return report
 
-    report = _run_checks_on_files(py_files, code_dir, invariants, report)
+    report = _run_checks_on_files(py_files, code_dir, invariants, report, is_scoped_check=True)
     return report
 
 
-def _run_checks_on_files(py_files: list, code_dir: Path, invariants: dict, report: QonfirmerReport) -> QonfirmerReport:
+def _run_checks_on_files(py_files: list, code_dir: Path, invariants: dict, report: QonfirmerReport, is_scoped_check: bool = False) -> QonfirmerReport:
     """Internal: Run all invariant checks on a list of Python files."""
     forbidden_imports = invariants.get('forbidden_imports', [])
     schemas = invariants.get('schemas', {})
@@ -704,29 +708,28 @@ def _run_checks_on_files(py_files: list, code_dir: Path, invariants: dict, repor
 
     if required_endpoints:
         if not route_union:
-            # Scoped per-briq checks may not include routing files; defer endpoint
-            # enforcement there, but keep a hard fail for broad/full scans.
-            if len(py_files) >= 4:
-                report.add_violation(Violation(
-                    rule='required_endpoint',
-                    file_path='routing_scope',
-                    line_number=None,
-                    message="No routing scope files detected while required_endpoints are declared"
-                ))
-            return report
-        endpoint_scope_label = ", ".join(endpoint_scan_files[:3]) if endpoint_scan_files else "routing_scope"
-        for ep in required_endpoints:
-            method = str(ep.get('method', '')).lower()
-            path = str(ep.get('path', ''))
-            if not method or not path:
-                continue
-            if (method, path) not in route_union:
-                report.add_violation(Violation(
-                    rule='required_endpoint',
-                    file_path=endpoint_scope_label,
-                    line_number=None,
-                    message=f"Required endpoint '{method.upper()} {path}' not found in routing scope"
-                ))
+            if is_scoped_check:
+                return report
+            report.add_violation(Violation(
+                rule='required_endpoint',
+                file_path='routing_scope',
+                line_number=None,
+                message="No routing scope files detected while required_endpoints are declared"
+            ))
+        else:
+            endpoint_scope_label = ", ".join(endpoint_scan_files[:3]) if endpoint_scan_files else "routing_scope"
+            for ep in required_endpoints:
+                method = str(ep.get('method', '')).lower()
+                path = str(ep.get('path', ''))
+                if not method or not path:
+                    continue
+                if (method, path) not in route_union:
+                    report.add_violation(Violation(
+                        rule='required_endpoint',
+                        file_path=endpoint_scope_label,
+                        line_number=None,
+                        message=f"Missing required endpoint: {method.upper()} {path}"
+                    ))
 
     return report
 

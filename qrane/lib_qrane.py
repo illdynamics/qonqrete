@@ -134,6 +134,15 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def canonical_run_id(workspace_root: Path) -> str:
+    for env_key in ("QONQ_RUN_ID", "QONQ_RUN_NAME", "QONSTRUCTION_NAME"):
+        raw = str(os.environ.get(env_key, "")).strip()
+        if raw:
+            return Path(raw).name
+    name = str(workspace_root.name).strip()
+    return name or "run-unknown"
+
+
 def rel_path(root: Path, path: str | Path | None) -> str | None:
     if path is None:
         return None
@@ -637,7 +646,7 @@ def record_pass_state(
 
 
 def base_manifest(workspace_root: Path, prior_manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-    run_id = workspace_root.name
+    run_id = canonical_run_id(workspace_root)
     resumed_from_qage = os.environ.get("QONQ_RESUMED_FROM_QAGE")
     run_kind = os.environ.get("QONQ_RUN_KIND", "run")
     repo_sync_mode = resolve_repo_sync_mode()
@@ -920,7 +929,7 @@ def write_task_intake_bridge(workspace_root: Path) -> str:
         "schema_version": "task-intake-bridge.v1",
         "generated_at": now_utc(),
         "input_path": rel_path(workspace_root, raw_task),
-        "run_id": workspace_root.name,
+        "run_id": canonical_run_id(workspace_root),
         "run_kind": os.environ.get("QONQ_RUN_KIND", "run"),
         "resumed_from_qage": os.environ.get("QONQ_RESUMED_FROM_QAGE"),
         "repo_sync_mode": resolve_repo_sync_mode(),

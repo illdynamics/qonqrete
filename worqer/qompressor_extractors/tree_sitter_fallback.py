@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,10 +8,61 @@ from typing import Any
 
 from .common import comment_marker_for_suffix, normalize_blank_lines, safe_trim, signature_until_block
 
-try:
-    from tree_sitter_language_pack import get_parser  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
+# Test hook and runtime cache. Keep `get_parser` as a module global so existing
+# tests can patch it directly without importing the optional package.
+get_parser = None
+_get_parser_load_attempted = False
+_get_parser_load_error: str | None = None
+
+
+def _load_get_parser():
+    """Lazily load the optional tree-sitter parser factory once."""
+    global get_parser, _get_parser_load_attempted, _get_parser_load_error
+
+    if get_parser is not None:
+        return get_parser
+    if _get_parser_load_attempted:
+        return None
+
+    _get_parser_load_attempted = True
+    try:
+        module = importlib.import_module('tree_sitter_language_pack')
+        loaded = getattr(module, 'get_parser', None)
+        if loaded is None:
+            _get_parser_load_error = 'tree_sitter_language_pack missing get_parser'
+            return None
+        get_parser = loaded
+        _get_parser_load_error = None
+        return get_parser
+    except Exception as exc:  # pragma: no cover - exercised via regression tests
+        _get_parser_load_error = str(exc) or exc.__class__.__name__
+        return None
+
+
+def _tree_sitter_unavailable_reason() -> str:
+    if _get_parser_load_error:
+        return f"tree_sitter_language_pack unavailable: {_get_parser_load_error}"
+    return 'tree_sitter_language_pack unavailable; install requirements-optional-tree-sitter.txt to enable fallback'
+
+
+def optional_tree_sitter_loaded() -> bool:
+    """Return True when the optional tree-sitter parser factory can be loaded."""
+    return _load_get_parser() is not None
+
+
+def optional_tree_sitter_unavailable_reason() -> str | None:
+    """Return the current unavailability reason, loading lazily if needed."""
+    if _load_get_parser() is not None:
+        return None
+    return _tree_sitter_unavailable_reason()
+
+
+def _reset_loader_cache_for_tests() -> None:
+    """Test helper to reset lazy-loader cache state."""
+    global get_parser, _get_parser_load_attempted, _get_parser_load_error
     get_parser = None
+    _get_parser_load_attempted = False
+    _get_parser_load_error = None
 
 
 LANGUAGE_MAP = {
@@ -48,25 +100,27 @@ class TreeSitterAvailability:
 
 class TreeSitterFallback:
     def availability(self, file_path: Path) -> TreeSitterAvailability:
-        if get_parser is None:
-            return TreeSitterAvailability(False, 'tree_sitter_language_pack unavailable; install requirements-optional-tree-sitter.txt to enable fallback')
+        parser_factory = _load_get_parser()
+        if parser_factory is None:
+            return TreeSitterAvailability(False, _tree_sitter_unavailable_reason())
         language = LANGUAGE_MAP.get(file_path.suffix.lower())
         if not language:
             return TreeSitterAvailability(False, 'no mapped tree-sitter language')
         try:
-            get_parser(language)
+            parser_factory(language)
         except Exception as exc:
-            return TreeSitterAvailability(False, str(exc))
+            return TreeSitterAvailability(False, f"tree_sitter_language_pack unavailable: {str(exc) or exc.__class__.__name__}")
         return TreeSitterAvailability(True, None)
 
     def compress(self, file_path: Path, content: str) -> str | None:
-        if get_parser is None:
+        parser_factory = _load_get_parser()
+        if parser_factory is None:
             return None
         language = LANGUAGE_MAP.get(file_path.suffix.lower())
         if not language:
             return None
         try:
-            parser = get_parser(language)
+            parser = parser_factory(language)
         except Exception:
             return None
         try:

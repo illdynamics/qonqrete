@@ -57,6 +57,7 @@ It also provides flags for:
 ### `qrane/`
 Main files:
 - `qrane.py` — orchestrator main loop
+- `sqrewdriver_controller.py` — artifact-driven inspection-to-repair stop gate and repair brief builder
 - `loader.py` — CLI/UI helper behavior
 - `paths.py` — path manager
 - `lib_funqtions.py` — pricing helpers
@@ -69,6 +70,7 @@ Qrane:
 - runs the configured pipeline in canonical stage order
 - maintains the run manifest and audit trail
 - performs bounded repair and continuation routing
+- delegates post-inspection stop-or-repair decisions to the native Sqrewdriver controller when enabled
 - distinguishes queued-next-pass resume from interrupted-active-pass resume to preserve truthful pass lineage
 - derives validation execution mode from explicit validation/smoketest evidence so markdown presence alone does not overclaim executed coverage
 
@@ -157,7 +159,7 @@ run-manifest.v1.json
 - `build/` — build-group reports and per-attempt staged/recovery evidence
 - `validation/` — validation bundles
 - `realization/` — observed-outcome bundles
-- `verdict/` — inspection verdicts and repair plans
+- `verdict/` — inspection verdicts, repair plans, and Sqrewdriver repair briefs
 - `continuation/` — continuation metadata
 - `reqap.d/` — review and iteration recap output
 - `qontext.d/` — deterministic structural context output
@@ -168,6 +170,19 @@ run-manifest.v1.json
 ## QONTRACT enforcement model
 
 The repository uses a contract-first model for later build passes and repair passes.
+
+## Native Sqrewdriver Controller
+
+QonQrete ports the useful control idea from the sibling `sqrewdriver/` project into `qrane/sqrewdriver_controller.py`. The desktop app and its Bun/Electrobun runtime are not part of the QonQrete execution path.
+
+The controller consumes InspeQtor artifacts:
+- `verdict/inspection-verdict.v1.json`
+- `verdict/repair-plan.v1.json`
+- `validation/validation-bundle.v1.json`
+- `realization/realization-bundle.v1.json`
+- `planning/completion-criteria.v1.json`
+
+Clean completion requires InspeQtor hard gates to pass, repair flags to be false, required files to exist under `qodeyard/`, and no current hard validation or stale artifact failures. If that gate fails and repair caps allow another pass, the controller writes `verdict/sqrewdriver-repair-brief.v1.md` and `.json`, augments `repair-plan.v1.json`, and Qrane launches the existing same-run repair pass. ConstruQtor receives the brief via `QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH`, while the repair plan remains authoritative for edit scope and locked files.
 
 ### Generation
 On the first build pass, InstruQtor generates:
@@ -241,7 +256,7 @@ It includes:
 
 ## Current repo-local model
 
-This repository snapshot does **not** yet implement a fully centralized shared engine architecture. The active model is still:
+This repository snapshot implements a centralized bootstrap model (`qonqrete-bootstrap.sh` for git-clone users, `qonqrete-install.sh` for curl-bash) as well as per-project `.qonqrete/` deployments. The active model is:
 
 ```text
 project contains qonqrete.sh + worqspace

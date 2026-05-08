@@ -39,6 +39,8 @@ worqspace/qonstructions/*
 # venv
 **.venv**
 **/**.venv**
+**.test_venv**
+**/**.test_venv**
 
 # asdf
 **.tool-versions**
@@ -49,3 +51,47 @@ intellij-plugin/build
 intellij-plugin/node_modules
 vscode-extension/build
 vscode-extension/node_modules
+
+# Packaging / generated junk
+__MACOSX/
+**/__MACOSX/
+.DS_Store
+**/.DS_Store
+._*
+**/._*
+*.pyc
+**/*.pyc
+__pycache__/
+**/__pycache__/
+.gradle/
+**/.gradle/
+node_modules/
+**/node_modules/
+
+# Additional cache/validation artifacts
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/
+.mypy_cache/
+**/.mypy_cache/
+.validation-env-cache/
+**/.validation-env-cache/
+.test_venv/
+**/.test_venv/
+vscode-extension/out/
+**/vscode-extension/out/
+intellij-plugin/out/
+**/intellij-plugin/out/
+_cache/
+**/_cache/
+
+# Qontrabender / Qontextor runtime artifacts
+qache.d/
+**/qache.d/
+qontext.d/
+**/qontext.d/
+
+# Test runtime artifacts
+_test_runtime/
+**/_test_runtime/

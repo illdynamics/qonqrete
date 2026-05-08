@@ -30,6 +30,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Iterable, Optional, Union
 
@@ -43,9 +44,19 @@ try:
     import sys as _sys
     import os as _os
     _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-    from path_hygiene import INFRA_DIR_NAMES as _SHARED_INFRA_NAMES
+    from path_hygiene import (
+        INFRA_DIR_NAMES as _SHARED_INFRA_NAMES,
+        is_generated_output_dir as _is_generated_output_dir,
+        is_source_junk_file as _is_source_junk_file,
+    )
 except ImportError:
     _SHARED_INFRA_NAMES = frozenset()
+
+    def _is_generated_output_dir(path: Path) -> bool:
+        return path.name == "out" and path.parent.name == "vscode-extension"
+
+    def _is_source_junk_file(path: Path) -> bool:
+        return path.name == ".DS_Store" or path.name.startswith("._") or path.suffix == ".pyc"
 
 
 # Paths inside qodeyard that we skip during file discovery. Generated /
@@ -96,6 +107,29 @@ _SKIP_DIR_NAMES = _SHARED_INFRA_NAMES | {
     "sqrapyard",
 }
 
+_HTML_EXTS = {".html", ".htm"}
+_CSS_EXTS = {".css"}
+_JS_EXTS = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
+_FRONTEND_EXTS = _HTML_EXTS | _CSS_EXTS | _JS_EXTS
+_HTML_REF_PATTERN = re.compile(
+    r"""(?:src|href)\s*=\s*["']([^"']+)["']""",
+    re.IGNORECASE,
+)
+_CSS_URL_PATTERN = re.compile(r"""url\(([^)]+)\)""", re.IGNORECASE)
+_JS_IMPORT_REF_PATTERN = re.compile(
+    r"""
+    ^\s*import\s+(?:[^'"]*?\s+from\s*)?["'](?P<import>[^"']+)["']
+    |
+    ^\s*export\s+[^'"]*?\s+from\s*["'](?P<export>[^"']+)["']
+    |
+    \brequire\s*\(\s*["'](?P<require>[^"']+)["']\s*\)
+    |
+    \bimport\s*\(\s*["'](?P<dynamic>[^"']+)["']\s*\)
+    """,
+    re.MULTILINE | re.VERBOSE,
+)
+_REMOTE_REF_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
 
 def _iter_source_files(root: Path) -> Iterable[Path]:
     """Yield source files under root, skipping known noise dirs."""
@@ -117,8 +151,12 @@ def _iter_source_files(root: Path) -> Iterable[Path]:
             if entry.is_dir():
                 if entry.name in _SKIP_DIR_NAMES:
                     continue
+                if _is_generated_output_dir(entry):
+                    continue
                 stack.append(entry)
             elif entry.is_file():
+                if _is_source_junk_file(entry):
+                    continue
                 yield entry
 
 
@@ -234,12 +272,191 @@ def _group_scoped_files_by_adapter(
     return buckets
 
 
+def _clean_ref(raw: str) -> str:
+    value = str(raw or "").strip().strip("\"'")
+    value = value.split("#", 1)[0]
+    value = value.split("?", 1)[0]
+    return value
+
+
+def _is_local_ref(ref: str) -> bool:
+    if not ref:
+        return False
+    if ref.startswith("#") or ref.startswith("//"):
+        return False
+    if _REMOTE_REF_PATTERN.match(ref):
+        return False
+    return True
+
+
+def _frontend_files_from_buckets(buckets: dict[str, list[Path]]) -> list[Path]:
+    files: list[Path] = []
+    for bucket_files in buckets.values():
+        for file_path in bucket_files:
+            if file_path.suffix.lower() in _FRONTEND_EXTS:
+                files.append(file_path)
+    return files
+
+
+def _count_local_asset_references(frontend_files: Iterable[Path]) -> int:
+    count = 0
+    for file_path in frontend_files:
+        ext = file_path.suffix.lower()
+        try:
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        refs: list[str] = []
+        if ext in _HTML_EXTS:
+            refs.extend(match.group(1) for match in _HTML_REF_PATTERN.finditer(text))
+        elif ext in _CSS_EXTS:
+            refs.extend(match.group(1) for match in _CSS_URL_PATTERN.finditer(text))
+        elif ext in _JS_EXTS:
+            for match in _JS_IMPORT_REF_PATTERN.finditer(text):
+                spec = next((v for v in match.groupdict().values() if v), "")
+                if spec.startswith("./") or spec.startswith("../"):
+                    refs.append(spec)
+        count += sum(1 for ref in refs if _is_local_ref(_clean_ref(ref)))
+    return count
+
+
+def _expand_scoped_frontend_references(
+    qodeyard_path: Path,
+    scoped_files: list[Path],
+) -> list[Path]:
+    """Include local JS/CSS files referenced by scoped HTML files.
+
+    A frontend repair often touches only index.html while the behavioral
+    surface lives in linked browser JS/CSS. Keeping this expansion scoped
+    preserves fast validation while avoiding an HTML-only coverage blind spot.
+    """
+    try:
+        qodeyard_resolved = qodeyard_path.resolve()
+    except OSError:
+        qodeyard_resolved = qodeyard_path
+
+    expanded = list(scoped_files)
+    seen = {p.resolve() for p in expanded}
+    for html_file in scoped_files:
+        if html_file.suffix.lower() not in _HTML_EXTS:
+            continue
+        try:
+            text = html_file.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        for match in _HTML_REF_PATTERN.finditer(text):
+            cleaned = _clean_ref(match.group(1))
+            if not _is_local_ref(cleaned):
+                continue
+            candidate = (html_file.parent / cleaned).resolve()
+            if candidate.suffix.lower() not in (_CSS_EXTS | _JS_EXTS):
+                continue
+            try:
+                rel = candidate.relative_to(qodeyard_resolved)
+            except ValueError:
+                continue
+            if _path_has_skip_segment(rel) or not candidate.is_file():
+                continue
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            expanded.append(candidate)
+    expanded.sort()
+    return expanded
+
+
+def _has_validation_infra_failure(report: VerificationReport) -> bool:
+    infra_markers = (":loader", ":preflight", ":crash")
+    return any(
+        (not result.passed)
+        and result.severity == "error"
+        and any(marker in result.check_type for marker in infra_markers)
+        for result in report.results
+    )
+
+
+def _has_low_coverage_frontend_results(report: VerificationReport) -> bool:
+    weak_markers = (
+        "html_css:html-fallback",
+        "html_css:css-fallback",
+        "js_ts:node-check",
+    )
+    for result in report.results:
+        if result.check_type.startswith(("html_css:", "js_ts:")):
+            message = str(result.message or "").lower()
+            if result.check_type in weak_markers or "degraded" in message:
+                return True
+            if result.severity == "info" and (
+                "not found" in message or "skipped" in message
+            ):
+                return True
+    return False
+
+
+def _finalize_report_metadata(
+    report: VerificationReport,
+    buckets: dict[str, list[Path]],
+) -> None:
+    frontend_files = _frontend_files_from_buckets(buckets)
+    frontend_results = [
+        result for result in report.results
+        if result.check_type.startswith(("html_css:", "js_ts:"))
+    ]
+    blocking_errors = sum(
+        1 for result in frontend_results
+        if (not result.passed) and result.severity == "error"
+    )
+    warnings = sum(
+        1 for result in frontend_results
+        if (not result.passed) and result.severity == "warning"
+    )
+    advisory = sum(
+        1 for result in frontend_results
+        if result.severity == "info"
+    )
+    low_frontend_coverage = _has_low_coverage_frontend_results(report)
+
+    if not frontend_files:
+        coverage_summary = "no_frontend_files_checked"
+    elif blocking_errors:
+        coverage_summary = "frontend_blocking_errors_detected"
+    elif low_frontend_coverage:
+        coverage_summary = "frontend_static_low_coverage"
+    else:
+        coverage_summary = "frontend_required_validation_passed"
+
+    report.frontend_validation_summary = {
+        "html_files_checked": sum(1 for p in frontend_files if p.suffix.lower() in _HTML_EXTS),
+        "css_files_checked": sum(1 for p in frontend_files if p.suffix.lower() in _CSS_EXTS),
+        "js_files_checked": sum(1 for p in frontend_files if p.suffix.lower() in _JS_EXTS),
+        "local_asset_references_checked": _count_local_asset_references(frontend_files),
+        "blocking_errors": blocking_errors,
+        "warnings": warnings,
+        "advisory_findings": advisory,
+        "validation_coverage_summary": coverage_summary,
+    }
+
+    if _has_validation_infra_failure(report):
+        report.validation_outcome = "FAILED_VALIDATION_INFRA"
+    elif report.errors > 0:
+        report.validation_outcome = "FAILED_BLOCKING_VALIDATION"
+    elif report.warnings > 0:
+        report.validation_outcome = "PARTIAL_VALIDATION_DEGRADED"
+    elif frontend_files and low_frontend_coverage:
+        report.validation_outcome = "SUCCESS_LOW_COVERAGE"
+    elif report.files_checked == 0:
+        report.validation_outcome = "SUCCESS_LOW_COVERAGE"
+    else:
+        report.validation_outcome = "SUCCESS_VERIFIED"
+
+
 def run_verification(
     qodeyard_path: Path,
     qontext_path: Optional[Path],
     cycle_num: str,
     config: dict,
     changed_files: Optional[Iterable[Union[str, Path]]] = None,
+    tier: str = "low",
 ) -> VerificationReport:
     """Run all verification checks on the qodeyard.
 
@@ -263,6 +480,7 @@ def run_verification(
                      runner operates in SCOPED mode: only those files
                      are qualified, and only adapters that actually
                      match at least one scoped file are loaded.
+      tier:          Task tier (low, medium, high) for severity gating.
     """
     qodeyard_path = Path(qodeyard_path)
     if qontext_path is not None:
@@ -277,10 +495,13 @@ def run_verification(
         qontext_path=qontext_path,
         config=config or {},
         python_checks=dict(checks_config),
+        tier=str(tier).lower(),
     )
 
     # ── Phase 1: decide scoped vs full, then scan ───────────────────────
     scoped = normalize_scoped_files(qodeyard_path, changed_files)
+    if scoped:
+        scoped = _expand_scoped_frontend_references(qodeyard_path, scoped)
     scoped_mode = bool(scoped)
 
     if scoped_mode:
@@ -300,6 +521,7 @@ def run_verification(
 
     if not buckets:
         mode_label = "scoped" if scoped_mode else "full"
+        _finalize_report_metadata(report, buckets)
         print(
             f"[Qualifier] No handled source files found "
             f"({mode_label} scan).",
@@ -395,6 +617,7 @@ def run_verification(
             for r in results:
                 report.add_result(r)
 
+    _finalize_report_metadata(report, buckets)
     print(
         f"[Qualifier] Verification complete: {report.overall_status}",
         flush=True,

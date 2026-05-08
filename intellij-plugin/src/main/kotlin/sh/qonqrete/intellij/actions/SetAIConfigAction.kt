@@ -45,7 +45,7 @@ class SetAIConfigAction : AnAction() {
         private val PROVIDERS = mapOf(
             "openai" to ProviderInfo("OpenAI", "OPENAI_API_KEY",
                 listOf("gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini", "o3-mini", "o4-mini")),
-            "gemini" to ProviderInfo("Google Gemini", "GOOGLE_API_KEY",
+            "gemini" to ProviderInfo("Google Gemini (API)", "GOOGLE_API_KEY",
                 listOf("gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite")),
             "anthropic" to ProviderInfo("Anthropic", "ANTHROPIC_API_KEY",
                 listOf("claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-20250514")),

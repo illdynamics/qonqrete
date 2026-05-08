@@ -11,6 +11,8 @@ from ..base import (
     SmoketestContext,
     collect_commands,
     rel_name,
+    result_error,
+    result_fail,
     result_pass,
     result_skip,
     run_command,
@@ -20,9 +22,12 @@ from ..models import (
     EXECUTION_KIND_EXECUTED,
     EXECUTION_KIND_STATIC,
     EXECUTION_KIND_PROCESS_BOOT,
+    EXECUTION_KIND_HTTP,
     EXECUTION_KIND_SYNTAX,
     STATUS_ERROR,
     STATUS_FAIL,
+    STATUS_PASS,
+    STATUS_SKIP,
     SmoketestResult
 )
 from ..python_bootstrap import provision_validation_env
@@ -43,7 +48,6 @@ class PythonAdapter(Adapter):
             return cached_bin, cached_err
 
         # Try to provision
-        # We need worqspace_root. Usually it is parent of qodeyard_path or env QONQ_WORKSPACE
         env_root = os.environ.get("QONQ_WORKSPACE")
         worqspace_root = Path(env_root) if env_root else ctx.qodeyard_path.parent
         
@@ -78,6 +82,8 @@ class PythonAdapter(Adapter):
     def _classify_failure(self, res: SmoketestResult, ctx: SmoketestContext):
         """Enhances SmoketestResult with structured failure classification."""
         if res.status not in {STATUS_FAIL, STATUS_ERROR}:
+            return
+        if res.failure_kind:
             return
 
         stderr = res.stderr or ""
@@ -153,7 +159,6 @@ class PythonAdapter(Adapter):
                     rel = str(candidate.relative_to(qodeyard)).lower()
                 except ValueError:
                     rel = str(candidate).lower()
-                # Ignore obvious manual helper scripts to avoid noisy false positives.
                 if "manual" in rel:
                     continue
                 return True
@@ -204,53 +209,178 @@ class PythonAdapter(Adapter):
                 return candidate
         return None
 
-    def _run_fastapi_probe(self, ctx: SmoketestContext, python_bin: str, entrypoint: Path, scope_files: list[Path]) -> SmoketestResult:
-        module_name = entrypoint.stem
-        probe_script = f"""import sys
-try:
-    import {module_name}
-except Exception as e:
-    print("Failed to import FastAPI app:", e)
+    def _run_fastapi_probe(self, ctx: SmoketestContext, python_bin: str, entrypoint: Path, scope_files: list[Path]) -> list[SmoketestResult]:
+        # v1.4.0: Hardened truthful FastAPI probe.
+        # Splits BOOT from HTTP probe, avoids unsafe imports, and respects exit codes.
+        module_path = str(entrypoint.resolve())
+        module_stem = entrypoint.stem.replace("-", "_").replace(".", "_")
+        if not module_stem or not (module_stem[0].isalpha() or module_stem[0] == "_"):
+            module_stem = f"mod_{module_stem}"
+
+        probe_script = f"""
+import sys
+import importlib.util
+import json
+from pathlib import Path
+
+def load_module(file_path, module_name):
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        if not spec or not spec.loader:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+    except Exception as e:
+        print(f"BOOT_FAIL: {{e}}")
+        return None
+
+module = load_module(r"{module_path}", "{module_stem}")
+if not module:
     sys.exit(1)
 
-app = getattr({module_name}, "app", getattr({module_name}, "api", getattr({module_name}, "server", None)))
+# App discovery
+app = getattr(module, "app", getattr(module, "api", getattr(module, "server", None)))
 if not app:
-    print("Could not locate FastAPI app object, but module imported cleanly.")
+    print("BOOT_PASS: Module imported, but no 'app'/'api'/'server' object found.")
     sys.exit(0)
+
+print("BOOT_PASS: FastAPI app object located.")
 
 try:
     from fastapi.testclient import TestClient
     client = TestClient(app)
-    response = client.get("/health")
-    print(f"FastAPI app booted and responded to /health: {{response.status_code}}")
-    try:
-        with client.websocket_connect("/ws") as websocket:
-            print("Websocket probe connected.")
-    except Exception as e:
-        print("Websocket probe failed or not configured:", e)
-    sys.exit(0)
+    
+    # 1. Health Probe
+    has_health = any(getattr(r, "path", None) == "/health" for r in getattr(app, "routes", []))
+    if has_health:
+        try:
+            resp = client.get("/health", timeout=5)
+            if resp.status_code == 200:
+                print(f"HTTP_PASS: /health returned 200")
+            else:
+                print(f"HTTP_FAIL: /health returned {{resp.status_code}}")
+                sys.exit(2)
+        except Exception as e:
+            print(f"HTTP_FAIL: /health request failed: {{e}}")
+            sys.exit(2)
+    else:
+        print("HTTP_SKIP: No /health route defined.")
+
+    # 2. Websocket Probe (Optional)
+    has_ws = any(getattr(r, "path", None) == "/ws" for r in getattr(app, "routes", []))
+    if has_ws:
+        try:
+            with client.websocket_connect("/ws") as ws:
+                print("WS_PASS: Websocket connected.")
+        except Exception as e:
+            print(f"WS_FAIL: Websocket connection failed: {{e}}")
+    
 except ImportError:
-    print("FastAPI or TestClient not available, but app imported successfully.")
-    sys.exit(0)
+    print("PROBE_SKIP: fastapi.testclient not available.")
 except Exception as e:
-    print("Runtime probe encountered an error, but app boot was verified:", e)
-    sys.exit(0)
+    msg = str(e)
+    if "requires the httpx package" in msg.lower():
+        print(f"PROBE_SKIP: {{msg}}")
+        sys.exit(0)
+    print(f"PROBE_ERROR: {{msg}}")
+    sys.exit(3)
+
+sys.exit(0)
 """
         probe_path = ctx.qodeyard_path / ".qonqrete_fastapi_probe.py"
         try:
-            probe_path.write_text(probe_script)
+            probe_path.write_text(probe_script, encoding="utf-8")
             res = run_command(
                 self.name,
                 "python:fastapi_probe",
                 [python_bin, ".qonqrete_fastapi_probe.py"],
                 ctx,
                 scope_files,
-                execution_kind=EXECUTION_KIND_PROCESS_BOOT,
+                execution_kind=EXECUTION_KIND_HTTP,
                 scope="project",
                 target_file=entrypoint,
             )
-            self._classify_failure(res, ctx)
-            return res
+            
+            stdout = res.stdout or ""
+            results: list[SmoketestResult] = []
+            
+            # Extract Boot evidence
+            boot_res = SmoketestResult(
+                adapter=self.name,
+                name="python:fastapi_boot",
+                status=STATUS_PASS if "BOOT_PASS" in stdout else (STATUS_FAIL if "BOOT_FAIL" in stdout else STATUS_SKIP),
+                executed="BOOT_PASS" in stdout or "BOOT_FAIL" in stdout,
+                message="FastAPI app boot/import check.",
+                execution_kind=EXECUTION_KIND_PROCESS_BOOT,
+                scope="project",
+                related_files=res.related_files,
+                file=res.file,
+                stdout=res.stdout if "BOOT_FAIL" in stdout else None,
+                stderr=res.stderr if "BOOT_FAIL" in stdout else None,
+                command=res.command,
+            )
+            if "BOOT_FAIL" in stdout:
+                boot_res.message = f"FastAPI app failed to boot: {stdout.split('BOOT_FAIL:')[1].splitlines()[0].strip()}"
+            results.append(boot_res)
+
+            # Extract HTTP evidence
+            if "HTTP_PASS" in stdout:
+                results.append(result_pass(
+                    res.file, "python:fastapi_http", "/health responded 200",
+                    execution_kind=EXECUTION_KIND_HTTP, related_files=res.related_files, scope="project"
+                ))
+            elif "HTTP_FAIL" in stdout:
+                fail_msg = stdout.split("HTTP_FAIL:")[1].splitlines()[0].strip()
+                results.append(result_fail(
+                    res.file, "python:fastapi_http", f"/health probe failed: {fail_msg}",
+                    execution_kind=EXECUTION_KIND_HTTP, related_files=res.related_files, scope="project"
+                ))
+            elif "HTTP_SKIP" in stdout:
+                results.append(result_skip(
+                    self.name, "python:fastapi_http", "No /health route defined; skipping HTTP probe.",
+                    execution_kind=EXECUTION_KIND_HTTP, related_files=res.related_files, scope="project"
+                ))
+            
+            if "PROBE_SKIP" in stdout:
+                results.append(result_skip(
+                    self.name, "python:fastapi_http", "fastapi.testclient unavailable; HTTP probe skipped.",
+                    execution_kind=EXECUTION_KIND_HTTP, related_files=res.related_files, scope="project"
+                ))
+            elif "PROBE_ERROR" in stdout:
+                probe_error_line = next(
+                    (line.split("PROBE_ERROR:", 1)[1].strip() for line in stdout.splitlines() if "PROBE_ERROR:" in line),
+                    "unspecified error",
+                )
+                if "HTTP_PASS" in stdout:
+                    # Do not fail healthy apps because of late probe harness glitches.
+                    results.append(result_skip(
+                        self.name,
+                        "python:fastapi_probe_error",
+                        f"FastAPI probe degraded after successful /health probe: {probe_error_line}",
+                        execution_kind=EXECUTION_KIND_HTTP,
+                        related_files=res.related_files,
+                        scope="project",
+                    ))
+                else:
+                    probe_error_result = result_error(
+                        self.name,
+                        "python:fastapi_probe_error",
+                        f"FastAPI probe harness encountered an error: {probe_error_line}",
+                        execution_kind=EXECUTION_KIND_HTTP,
+                        related_files=res.related_files,
+                        scope="project",
+                    )
+                    probe_error_result.failure_kind = "validator_degraded"
+                    probe_error_result.environment_blocked = True
+                    probe_error_result.stdout = (res.stdout or "")[:1200]
+                    probe_error_result.stderr = (res.stderr or "")[:1200]
+                    results.append(probe_error_result)
+
+            for r in results:
+                self._classify_failure(r, ctx)
+            return results
         finally:
             if probe_path.exists():
                 try:
@@ -386,7 +516,14 @@ except Exception as e:
         if bool(ctx.adapter_config.get("auto_fastapi_probe", True)):
             fastapi_entrypoint = self._detect_safe_fastapi_entrypoint(ctx, scope_files)
             if fastapi_entrypoint is not None:
-                results.append(self._run_fastapi_probe(ctx, python_bin, fastapi_entrypoint, scope_files))
+                probe_result = self._run_fastapi_probe(ctx, python_bin, fastapi_entrypoint, scope_files)
+                if probe_result is None:
+                    pass
+                elif isinstance(probe_result, (list, tuple)):
+                    results.extend(probe_result)
+                else:
+                    # Defensive normalization for tests/mocks that return one result.
+                    results.append(probe_result)
 
         return results or [result_skip(
             self.name,
@@ -405,7 +542,7 @@ except Exception as e:
                 self.name,
                 "python:py_compile",
                 "Python runtime unavailable; per-file syntax smoke skipped.",
-                execution_kind=EXECUTION_KIND_STATIC,
+                execution_kind=EXECUTION_KIND_SYNTAX,
                 file=rel_file,
                 files=[rel_file],
                 related_files=[rel_name(item, ctx.qodeyard_path) for item in scope_files],
@@ -415,9 +552,10 @@ except Exception as e:
         res = run_command(
             self.name,
             "python:py_compile",
-            [python_bin, "-m", "py_compile", rel_file],
+            [python_bin, "-m", "py_compile"],
             ctx,
-            scope_files,
+            [file_path], # Only check THIS file
+            append_changed_files=True,
             execution_kind=EXECUTION_KIND_SYNTAX,
             scope="file",
             target_file=file_path,

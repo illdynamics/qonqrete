@@ -107,22 +107,26 @@ def _node_env(extra: Optional[dict[str, str]] = None) -> dict[str, str]:
 
 
 
-def run_node_helper(command: str, *, stdin_text: Optional[str] = None, args: Optional[list[str]] = None, timeout: int = 60) -> dict[str, Any]:
+def run_node_helper(command: str, *, stdin_text: Optional[str] = None, args: Optional[list[str]] = None, timeout: int = 15) -> dict[str, Any]:
     node = find_node()
     script = helper_script()
     if not node:
         raise RuntimeError('node executable not found')
     if not script.exists():
         raise RuntimeError(f'node helper script not found: {script}')
-    proc = subprocess.run(
-        [node, str(script), command] + (args or []),
-        input=stdin_text,
-        text=True,
-        capture_output=True,
-        env=_node_env(),
-        timeout=timeout,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            [node, str(script), command] + (args or []),
+            input=stdin_text,
+            text=True,
+            capture_output=True,
+            env=_node_env(),
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f'node helper timed out after {timeout} seconds') from exc
+
     if proc.returncode != 0:
         stderr = (proc.stderr or proc.stdout or '').strip()
         raise RuntimeError(stderr or f'node helper failed with exit code {proc.returncode}')

@@ -537,7 +537,9 @@ class PythonAdapterRuffTests(unittest.TestCase):
                 "qualifier.adapters.python.subprocess.run",
                 return_value=fake_completed,
             ):
-                results = pymod._run_ruff(fpath, "m.py", "/usr/bin/ruff")
+                ctx = mock.MagicMock()
+                ctx.config = {}
+                results = pymod._run_ruff(fpath, "m.py", "/usr/bin/ruff", ctx)
 
         self.assertEqual(len(results), 1)
         self.assertFalse(results[0].passed)
@@ -557,7 +559,9 @@ class PythonAdapterRuffTests(unittest.TestCase):
                 "qualifier.adapters.python.subprocess.run",
                 return_value=fake_completed,
             ):
-                results = pymod._run_ruff(fpath, "m.py", "/usr/bin/ruff")
+                ctx = mock.MagicMock()
+                ctx.config = {}
+                results = pymod._run_ruff(fpath, "m.py", "/usr/bin/ruff", ctx)
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].passed)
 
@@ -714,7 +718,9 @@ class JsTsAdapterTests(unittest.TestCase):
                 "qualifier.adapters.js_ts.subprocess.run",
                 return_value=fake,
             ):
-                results = _run_biome(f, "a.js", "/usr/bin/biome")
+                ctx = mock.MagicMock()
+                ctx.config = {}
+                results = _run_biome(f, "a.js", "/usr/bin/biome", ctx)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].severity, SEVERITY_WARNING)
         self.assertIn("lint/correctness", results[0].message)
@@ -752,7 +758,9 @@ class JsTsAdapterTests(unittest.TestCase):
                 "qualifier.adapters.js_ts.subprocess.run",
                 return_value=fake,
             ):
-                results = _run_biome(f, "a.js", "/usr/bin/biome")
+                ctx = mock.MagicMock()
+                ctx.config = {}
+                results = _run_biome(f, "a.js", "/usr/bin/biome", ctx)
         self.assertEqual(len(results), 3)
         self.assertTrue(all(r.severity == SEVERITY_WARNING for r in results))
 
@@ -775,7 +783,9 @@ class JsTsAdapterTests(unittest.TestCase):
                 "qualifier.adapters.js_ts.subprocess.run",
                 return_value=fake,
             ):
-                results = _run_biome(f, "a.js", "/usr/bin/biome")
+                ctx = mock.MagicMock()
+                ctx.config = {}
+                results = _run_biome(f, "a.js", "/usr/bin/biome", ctx)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].severity, SEVERITY_ERROR)
         self.assertIn("lint/suspicious/noPrototypeBuiltins", results[0].message)
@@ -806,7 +816,10 @@ class SummaryConsistencyTests(unittest.TestCase):
         self.assertEqual(rep.total_files, 4)
         for rel in ["pkg/mod.py", "scripts/run.sh", "web/app.js", "web/index.html"]:
             self.assertIn(f"`{rel}`", md)
-        self.assertIn("js_ts:summary", md)
+        self.assertTrue(any(
+            r.file_path == "web/app.js" and r.check_type == "js_ts:static"
+            for r in rep.results
+        ))
         self.assertIn("html_css:html-validate", md)
 
 

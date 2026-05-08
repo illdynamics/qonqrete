@@ -1,7 +1,19 @@
+import sys
+from pathlib import Path
+
 import pytest
-from worqer.instruqtor import extract_required_files_from_task
-from worqer.inspeqtor import extract_briq_file_targets
-from worqer.construqtor import extract_briq_target_files
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "worqer"))
+
+try:
+    from instruqtor import extract_required_files_from_task
+    from inspeqtor import extract_briq_file_targets
+    from construqtor import extract_briq_target_files
+except ModuleNotFoundError:
+    from worqer.instruqtor import extract_required_files_from_task
+    from worqer.inspeqtor import extract_briq_file_targets
+    from worqer.construqtor import extract_briq_target_files
 
 def test_instruqtor_rejects_numeric_decimals():
     # It should extract valid files but ignore the numeric 0.00002
@@ -24,3 +36,18 @@ def test_construqtor_rejects_numeric_decimals():
     assert "src/main.js" in targets
     assert "Makefile" in targets
     assert "0.00002" not in targets
+
+
+def test_construqtor_does_not_treat_object_properties_as_files():
+    briq_content = """
+Required files:
+- app.js
+
+Implementation detail:
+- set `state.plan[day] = recipeId`
+- read `state.recipes.length` when updating stats
+"""
+    targets = extract_briq_target_files(briq_content)
+    assert "app.js" in targets
+    assert "state.plan" not in targets
+    assert "state.recipes" not in targets

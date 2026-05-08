@@ -694,6 +694,10 @@ def extract_required_files_from_task(task_content: str) -> list[str]:
 
     def _normalize(candidate: str) -> str:
         text = str(candidate or "").strip().replace("\\", "/")
+        while text.startswith("./"):
+            text = text[2:]
+        if text.startswith("/qodeyard/"):
+            text = text[len("/qodeyard/"):]
         if text.startswith("qodeyard/"):
             text = text[len("qodeyard/"):]
         return text.strip()
@@ -716,16 +720,35 @@ def extract_required_files_from_task(task_content: str) -> list[str]:
                 return True
         if re.match(r"^[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,10}$", text):
             return True
-        if text in {"Dockerfile", "Makefile", "run.sh", "requirements.txt"}:
+        if text in {"Dockerfile", "Makefile"}:
             return True
         return False
 
     required: list[str] = []
+    forbidden_line_markers = (
+        "do not add",
+        "don't add",
+        "do not include",
+        "don't include",
+        "forbidden",
+        "must not include",
+        "must not add",
+        "unexpected",
+        "extra file",
+        "no extra file",
+    )
 
-    for candidate in re.findall(r'`([^`]+)`', task_content):
-        cleaned = _normalize(candidate)
-        if _looks_like_file(cleaned):
-            required.append(cleaned)
+    for raw_line in task_content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if any(marker in lower for marker in forbidden_line_markers):
+            continue
+        for candidate in re.findall(r'`([^`]+)`', line):
+            cleaned = _normalize(candidate)
+            if _looks_like_file(cleaned):
+                required.append(cleaned)
 
     in_required_block = False
     for raw_line in task_content.splitlines():
@@ -762,13 +785,20 @@ def extract_required_files_from_task(task_content: str) -> list[str]:
         if _looks_like_file(cleaned):
             required.append(cleaned)
 
-    for match in re.finditer(
-        r"(?<![\w/])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]{1,10}|Dockerfile|Makefile|run\.sh|requirements\.txt)(?![\w/])",
-        task_content,
-    ):
-        cleaned = _normalize(match.group(1))
-        if _looks_like_file(cleaned):
-            required.append(cleaned)
+    file_token_re = re.compile(
+        r"(?<![\w])(?:/?qodeyard/)?([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]{1,10}|Dockerfile|Makefile)(?![\w/])"
+    )
+    for raw_line in task_content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if any(marker in lower for marker in forbidden_line_markers):
+            continue
+        for match in file_token_re.finditer(line):
+            cleaned = _normalize(match.group(1))
+            if _looks_like_file(cleaned):
+                required.append(cleaned)
 
     seen: set[str] = set()
     ordered: list[str] = []
@@ -885,7 +915,7 @@ def compute_auto_repair_budget(
     # Small stays cheap, medium gets room, big gets full bounded room.
     if tier == "low":
         retry_rec = 2
-        repair_rec = 1
+        repair_rec = 2
     elif tier == "medium":
         retry_rec = 3
         repair_rec = 2
@@ -1779,12 +1809,18 @@ def write_planning_artifacts(
         for item in (plan_payload.get('completion_criteria', {}).get('required_files', []) or [])
         if str(item).strip()
     ]
-    merged_required_files = sorted(set((required_files or []) + payload_required_files))
+    if required_files:
+        # Contract/harness-required files are authoritative for this qage.
+        # Do not let planner-proposed extras mutate deterministic deliverables.
+        merged_required_files = sorted(set(required_files))
+    else:
+        merged_required_files = sorted(set(payload_required_files))
 
     completion_criteria = {
         'schema_version': 'completion-criteria.v1',
         'run_id': run_id,
         'cycle': int(cycle_num),
+        'tier': plan_payload.get('estimation_basis', {}).get('auto_repair_budget', {}).get('tier', 'low'),
         **plan_payload.get('completion_criteria', {}),
         'required_files': merged_required_files,
     }
@@ -2243,6 +2279,7 @@ def main() -> None:
     with open(input_file, 'r', encoding='utf-8') as f: task_content = clean_input_content(f.read())
     planning_task_content = build_planning_task_input(task_content, task_spec, qonstrictor_result)
     task_required_files = extract_required_files_from_task(planning_task_content)
+    harness_required_files: list[str] = []
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -2444,6 +2481,7 @@ You are the **Principal Software Architect** and your only purpose is to break d
 4.  **ADD MISSING PIECES:** Create briqs for genuinely missing functionality.
 5.  **LOGICAL ORDERING:** Order briqs logically - foundations before features that depend on them.
 6.  **MINIMIZE SAME-FILE CHURN:** For large files, assign one primary briq owner and avoid repeated full-file rewrites across many briqs.
+7.  **FASTAPI MODELS & IDs:** For POST/PUT endpoints, you MUST use a separate Pydantic model (e.g. `UserCreate`) that DOES NOT include the `id` field. The `id` field MUST be auto-assigned by the server (e.g. using a global counter or `len(users)+1`). Absolutely NEVER require the client to send an `id` in a creation request, as this will cause validation failures (422) during automated probing.
 
 **OUTPUT FORMAT (STRICT XML):**
 You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` tags. The title should be short and descriptive. Do not include any other text or formatting outside of the `<briq>` tags.
@@ -2458,6 +2496,41 @@ You must wrap each task in `<briq title="A_Short_And_Clear_Title">...</briq>` ta
 
 **BEGIN ATOMIC BREAKDOWN (Count your briqs to ensure compliance!):**
 """
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # NEW v1.4: HARNESS GENERATION (Before briqs)
+    # ═══════════════════════════════════════════════════════════════════════════
+    import contract_harness
+    harness_class = contract_harness.detect_harness_class(planning_task_content)
+    if harness_class:
+        print(f"  📜 [HARNESS] Detected authoritative harness: {harness_class}", flush=True)
+        harness = contract_harness.build_harness(
+            planning_task_content,
+            worqspace_root=worqspace_root,
+        )
+        contract_harness.write_harness(worqspace_root, harness)
+        harness_required_files = [
+            str(item).strip()
+            for item in (
+                (harness.get("file_rules", {}) or {}).get("required_files", [])
+                if isinstance(harness.get("file_rules", {}), dict)
+                else []
+            )
+            if str(item).strip()
+        ]
+        if harness_required_files:
+            # Contract-derived required files are authoritative for this qage.
+            # This prevents legacy/fallback mention parsing from leaking unrelated
+            # files into completion criteria or repair targeting.
+            task_required_files = sorted(set(harness_required_files))
+        # Add compact harness summary to planner_prompt
+        if harness_required_files:
+            planner_prompt += (
+                "\n\n**AUTHORITATIVE HARNESS:**\n"
+                "You MUST ensure these required files are built: "
+                + ", ".join(harness_required_files)
+                + "\n"
+            )
 
     print("Splitting briqs", flush=True)
     # v1.0.3: Generate briqs using single-shot enforcement

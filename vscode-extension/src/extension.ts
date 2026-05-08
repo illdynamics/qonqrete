@@ -17,6 +17,8 @@ import { registerCreateTasqCommand } from './commands/createTasq';
 import { registerAIConfigCommand } from './commands/aiConfig';
 import { initSecrets, migrateFromSettings } from './secrets';
 import { QonQreteSidebarProvider } from './ui/sidebar';
+import { showFirstLaunchWizard } from './ui/firstLaunchWizard';
+import { applySetup } from './setup/applySetup';
 
 let statusBarItem: vscode.StatusBarItem;
 let sidebarProvider: QonQreteSidebarProvider;
@@ -177,6 +179,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (!hasShownWelcome) {
         showWelcomeMessage();
         context.globalState.update('qonqrete.welcomeShown', true);
+    }
+
+    // First-launch provider wizard: check if setup is needed
+    const hasCompletedSetup = context.globalState.get<boolean>('qonqrete.setupComplete', false);
+    const isQonqreteDeployed = await runner.isDeployed();
+    
+    if (!hasCompletedSetup || !isQonqreteDeployed) {
+        // Delay slightly to let the UI settle, then show the wizard
+        setTimeout(async () => {
+            const setup = await showFirstLaunchWizard();
+            if (setup) {
+                const success = await applySetup(setup, context);
+                if (success) {
+                    await context.globalState.update('qonqrete.setupComplete', true);
+                    // Refresh UI
+                    updateStatusBar();
+                    sidebarProvider.refresh();
+                }
+            }
+        }, 1500);
     }
 
     console.log('QonQrete extension activated');

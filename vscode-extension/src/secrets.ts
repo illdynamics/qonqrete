@@ -17,11 +17,15 @@ import * as vscode from 'vscode';
 /** Centralized provider → env var mapping (single source of truth) */
 export const PROVIDER_ENV_MAP: Record<string, string> = {
     openai: 'OPENAI_API_KEY',
+    codex: 'OPENAI_API_KEY',
     anthropic: 'ANTHROPIC_API_KEY',
+    'claude-code': 'ANTHROPIC_API_KEY',
     openrouter: 'OPENROUTER_API_KEY',
     google: 'GOOGLE_API_KEY',
     gemini: 'GOOGLE_API_KEY',
+    'gemini-cli': 'GOOGLE_API_KEY',
     deepseek: 'DEEPSEEK_API_KEY',
+    codeseeq: 'DEEPSEEK_API_KEY',
     qwen: 'QWEN_API_KEY',
     // v1.3.12: Venice requires its own dedicated key; no fallback.
     venice: 'VENICE_API_KEY',
@@ -48,38 +52,61 @@ export const ALL_API_KEYS = [
 /** Provider metadata */
 export const PROVIDERS: Record<string, { label: string; envKey: string; models: string[]; optionalAuth?: boolean; notes?: string; uiSelectable?: boolean }> = {
     openai: {
-        label: 'OpenAI',
+        label: 'OpenAI (API)',
         envKey: 'OPENAI_API_KEY',
         models: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o4-mini'],
     },
+    codex: {
+        label: 'OpenAI Codex (CLI)',
+        envKey: 'OPENAI_API_KEY',
+        models: ['gpt-5-codex', 'gpt-5.5-codex-mini'],
+        notes: 'Requires the official Codex CLI installed.',
+    },
     gemini: {
-        label: 'Google Gemini',
+        label: 'Google Gemini (API)',
         envKey: 'GOOGLE_API_KEY',
         models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
     },
+    'gemini-cli': {
+        label: 'Gemini CLI',
+        envKey: 'GOOGLE_API_KEY',
+        models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+        notes: 'Requires Gemini CLI installed.',
+    },
     anthropic: {
-        label: 'Anthropic',
+        label: 'Anthropic (API)',
         envKey: 'ANTHROPIC_API_KEY',
         models: ['claude-sonnet-4-20250514', 'claude-haiku-4-5-20251001', 'claude-opus-4-20250514'],
     },
+    'claude-code': {
+        label: 'Claude Code (CLI)',
+        envKey: 'ANTHROPIC_API_KEY',
+        models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514'],
+        notes: 'Requires Claude Code CLI installed.',
+    },
     deepseek: {
-        label: 'DeepSeek',
+        label: 'DeepSeek (API)',
         envKey: 'DEEPSEEK_API_KEY',
         models: ['deepseek-chat', 'deepseek-reasoner'],
     },
+    codeseeq: {
+        label: 'CodeSeeq (Codex CLI on DeepSeek)',
+        envKey: 'DEEPSEEK_API_KEY',
+        models: ['deepseek-v4-flash', 'deepseek-v4-flash-thinking', 'deepseek-v4-pro', 'deepseek-v4-pro-thinking'],
+        notes: 'Requires CodeSeeq CLI + DEEPSEEK_API_KEY.',
+    },
     qwen: {
-        label: 'Qwen',
+        label: 'Qwen (API)',
         envKey: 'QWEN_API_KEY',
         models: ['qwen-plus', 'qwen-turbo', 'qwen-max'],
     },
     openrouter: {
-        label: 'OpenRouter',
+        label: 'OpenRouter (API)',
         envKey: 'OPENROUTER_API_KEY',
         models: ['anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'deepseek/deepseek-chat-v3'],
     },
-    // v1.3.12: Venice API (OpenAI-compatible). VENICE_API_KEY required.
     venice: {
-        label: 'Venice',
+        label: 'Venice (API)',
         envKey: 'VENICE_API_KEY',
         models: [
             'deepseek-v3.2',
@@ -110,8 +137,6 @@ export const PROVIDERS: Record<string, { label: string; envKey: string; models: 
         ],
         notes: 'VENICE_API_KEY required. Model list is a snapshot — Venice may add more; use the Custom model option for any valid Venice model ID.',
     },
-    // v1.3.12: MLX provider for local/LAN OpenAI-compatible runtimes.
-    // API key is OPTIONAL; api_base_url must be set in the per-agent config.
     mlx: {
         label: 'MLX (local/LAN)',
         envKey: 'MLX_API_KEY',
@@ -120,8 +145,6 @@ export const PROVIDERS: Record<string, { label: string; envKey: string; models: 
         notes: 'Local MLX runtime. Set api_base_url per-agent in config.yaml. MLX_API_KEY is optional.',
         uiSelectable: false,
     },
-    // v1.3.12: Llama-cpp provider for local/LAN OpenAI-compatible runtimes.
-    // API key is OPTIONAL; api_base_url must be set in the per-agent config.
     'llama-cpp': {
         label: 'Llama-cpp (local/LAN)',
         envKey: 'LLAMA_CPP_API_KEY',

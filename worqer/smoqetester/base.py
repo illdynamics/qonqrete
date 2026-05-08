@@ -633,6 +633,41 @@ def result_fail(
     )
 
 
+def result_error(
+    adapter: str,
+    name: str,
+    message: str,
+    *,
+    execution_kind: str = EXECUTION_KIND_STATIC,
+    command: str = "",
+    file: str | None = None,
+    files: Optional[Iterable[str]] = None,
+    related_files: Optional[Iterable[str]] = None,
+    scope: str | None = None,
+) -> SmoketestResult:
+    is_executed = execution_kind in {
+        EXECUTION_KIND_EXECUTED,
+        EXECUTION_KIND_PROCESS_BOOT,
+        EXECUTION_KIND_HTTP,
+        EXECUTION_KIND_WS,
+        EXECUTION_KIND_BROWSER,
+    }
+    return SmoketestResult(
+        adapter=adapter,
+        name=name,
+        status=STATUS_ERROR,
+        executed=is_executed,
+        execution_kind=execution_kind,
+        message=message,
+        file=file,
+        files=sorted(set(files or [])),
+        related_files=sorted(set(related_files or [])),
+        scope=scope,
+        command=command,
+        severity=SEVERITY_ERROR,
+    )
+
+
 __all__ = [
     "Adapter",
     "SmoketestContext",
@@ -642,6 +677,7 @@ __all__ = [
     "normalize_command",
     "normalize_execution_kind_value",
     "rel_name",
+    "result_error",
     "result_fail",
     "result_pass",
     "result_skip",

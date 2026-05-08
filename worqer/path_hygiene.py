@@ -75,13 +75,16 @@ INFRA_DIR_NAMES: frozenset[str] = frozenset({
     ".hg",
     ".svn",
     ".venv",
+    ".test_venv",
     "venv",
     "env",
     "node_modules",
+    ".gradle",
     ".tox",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
+    ".validation-env-cache",
     "dist",
     ".next",
     ".cache",
@@ -89,6 +92,13 @@ INFRA_DIR_NAMES: frozenset[str] = frozenset({
     "coverage",
     "__MACOSX",
 })
+
+
+SOURCE_JUNK_FILE_NAMES: frozenset[str] = frozenset({
+    ".DS_Store",
+})
+SOURCE_JUNK_FILE_PREFIXES: tuple[str, ...] = ("._",)
+SOURCE_JUNK_FILE_SUFFIXES: tuple[str, ...] = (".pyc",)
 
 
 # Filename / path-fragment markers that identify qonqrete artifact files.
@@ -149,6 +159,23 @@ def is_infra_path(rel: Path | str) -> bool:
     Use this when deciding whether to reject an AI-emitted filename, skip a
     file during validation discovery, or exclude a path from a copy."""
     return has_infra_segment(rel) or has_infra_marker(rel)
+
+
+def is_source_junk_file(path: Path) -> bool:
+    """True for source-tree noise files that scanners and packages must ignore."""
+    name = path.name
+    if name in SOURCE_JUNK_FILE_NAMES:
+        return True
+    if any(name.startswith(prefix) for prefix in SOURCE_JUNK_FILE_PREFIXES):
+        return True
+    if any(name.endswith(suffix) for suffix in SOURCE_JUNK_FILE_SUFFIXES):
+        return True
+    return False
+
+
+def is_generated_output_dir(path: Path) -> bool:
+    """True for generated extension build output that is not source context."""
+    return path.name == "out" and path.parent.name == "vscode-extension"
 
 
 def strip_project_prefix(rel: str, project_names: Iterable[str]) -> str:
@@ -220,10 +247,14 @@ def iter_source_files(root: Path, extra_skip: Iterable[str] = ()) -> Iterable[Pa
             if entry.is_dir():
                 if name in skip:
                     continue
+                if is_generated_output_dir(entry):
+                    continue
                 if any(name.startswith(pref) for pref in _TRANSIENT_PREFIXES):
                     continue
                 stack.append(entry)
             elif entry.is_file():
+                if is_source_junk_file(entry):
+                    continue
                 yield entry
 
 
