@@ -15,7 +15,8 @@ This document is the synced technical reference for the current `v1.4.0` reposit
   - `TAB` => raw stream view
   - `Shift+TAB` => concise view
 - Launcher now supports `-N/--no-sync` to skip repo-root sync-back and keep run output in Qage/Qonstruction paths.
-- Primary agent defaults are aligned to `venice / deepseek-v3.2`, and ConstruQtor default coding mode is `hybrid`.
+- Primary agents remain per-agent configurable; this workspace's live-test config uses DeepSeek for intake/planning/inspection and CodeSeeq only for ConstruQtor.
+- Sqrewdriver is now a QonQrete-native inspection-to-repair controller that writes scoped repair briefs from InspeQtor artifacts.
 
 ## Table of contents
 - [1. What QonQrete is](#1-what-qonqrete-is)
@@ -34,6 +35,8 @@ This document is the synced technical reference for the current `v1.4.0` reposit
 - [14. OpenRouter Provider Support](#14-openrouter-provider-support)
 - [15. Venice Provider Support *(v1.3.12)*](#15-venice-provider-support-v1312)
 - [16. MLX and Llama-cpp Provider Support *(v1.3.12)*](#16-mlx-and-llama-cpp-provider-support-v1312)
+- [17. CodeSeeq Provider Support](#17-codeseeq-provider-support)
+- [18. Sqrewdriver Repair Controller](#18-sqrewdriver-repair-controller)
 
 ## 1. What QonQrete is
 
@@ -176,6 +179,7 @@ Responsibilities:
 - write or update files in `qodeyard/`
 - emit execution summaries to `exeq.d/`
 - use contract-aware and validation-aware build retries
+- on repair passes, ingest `QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH` as high-priority context while keeping `repair-plan.v1.json` as the structured scope authority
 
 ## 4.6 `inspeqtor.py`
 Review agent.
@@ -186,6 +190,7 @@ Responsibilities:
 - emit final recap material to `reqap.d/`
 - drive success / partial / failure assessment logic
 - classify validation execution mode as `NONE`, `STATIC_ONLY`, `EXECUTED`, or `MIXED` using explicit evidence (not markdown presence alone)
+- remain the authority for `inspection-verdict.v1.json` and `repair-plan.v1.json`; Sqrewdriver consumes these artifacts rather than bypassing them
 
 ## 4.7 `qontextor.py`
 Context indexing helper.
@@ -231,6 +236,7 @@ Current provider support in the repo:
 - Gemini
 - Anthropic
 - DeepSeek
+- CodeSeeq *(CLI-backed provider through sibling `./codeseeq`)*
 - Qwen
 - OpenRouter
 - Venice *(v1.3.12 — Venice API, OpenAI-compatible)*
@@ -358,6 +364,17 @@ Smoketest output semantics:
 - `max_attempts_per_build_pass` (legacy alias: `max_attempts`)
 - same-run repairs consume `max_total_iterations` budget but do not increment `max_build_passes`
 
+#### sqrewdriver
+- `enabled`: enables the native inspection-to-repair controller
+- `mode`: currently `inspection_repair_loop`
+- `max_repair_loops_per_build_pass`: optional override; `null` uses `repair.max_attempts_per_build_pass`
+- `success_policy`: default `hard_gate_success`
+- `write_repair_brief`: writes `verdict/sqrewdriver-repair-brief.v1.md` and `.json`
+- `include_reqap_excerpt_chars`: caps recap text included in repair briefs
+- `include_validation_issue_limit`: caps validation issue rows included in repair briefs
+- `include_prior_attempts`: includes prior repair attempt metadata when present
+- `generic_validation_only`: documents that the controller must stay task-agnostic
+
 ### Important reality check about defaults
 The committed repo config is a **working example config**, not a universal recommendation. CLI overrides and per-project tuning are expected.
 
@@ -372,6 +389,7 @@ GOOGLE_API_KEY
 GEMINI_API_KEY
 ANTHROPIC_API_KEY
 DEEPSEEK_API_KEY
+QONQ_CODESEEQ_BIN       # optional — path for provider: codeseeq
 QWEN_API_KEY
 OPENROUTER_API_KEY
 VENICE_API_KEY          # v1.3.12 — required when provider: venice
@@ -382,6 +400,7 @@ LLAMA_CPP_API_KEY       # v1.3.12 — optional, used when provider: llama-cpp
 ### Current provider notes
 - Gemini can use `GOOGLE_API_KEY` or `GEMINI_API_KEY`
 - DeepSeek support is built through an OpenAI-compatible adapter inside `lib_ai.py`
+- CodeSeeq support is CLI-backed; QonQrete remains non-Responses-native while CodeSeeq owns the Responses-to-DeepSeek bridge
 - Venice support is built through an OpenAI-compatible adapter; it requires a dedicated `VENICE_API_KEY` and does **not** fall back to `OPENAI_API_KEY`
 - mlx and llama-cpp support are built through an OpenAI-compatible adapter; they require `api_base_url` in the per-agent config block and work with or without an API key
 - `local` is used for non-remote helper agents
@@ -667,3 +686,63 @@ Both are **optional**. If present, the matching key is sent as Bearer auth. If a
 | `llama-cpp`  |  8192 | 4096 |
 
 Per-agent `context_window` / `max_tokens` overrides take priority over these defaults.
+
+## 17. CodeSeeq Provider Support
+
+`provider: codeseeq` is a CLI-backed provider. QonQrete does not become a Responses API client; it keeps routing through `worqer/lib_ai.py`, flattens the agent messages into one prompt, and invokes CodeSeeq. CodeSeeq is responsible for the Codex Responses flow and its Responses-to-DeepSeek bridge.
+
+QonQrete-level tool calls are intentionally not translated in this provider. ConstruQtor forces `codeseeq` runs onto heredoc/fenced-block transport even when `coding_mode: hybrid` is configured.
+
+### Configuration
+
+```yaml
+agents:
+  construqtor:
+    provider: codeseeq
+    model: deepseek-v4-flash
+    # codeseeq_path: "../codeseeq/codeseeq"
+```
+
+### Supported models
+
+- `deepseek-v4-flash`
+- `deepseek-v4-flash-thinking`
+- `deepseek-v4-pro`
+- `deepseek-v4-pro-thinking`
+
+### Runtime requirements
+
+`DEEPSEEK_API_KEY` is required because CodeSeeq uses DeepSeek underneath. The default QonQrete container does not mount sibling `./codeseeq` and does not include local Codex/CodeSeeq tooling, so `qrane` fails early if the CLI is not executable from the active runtime.
+
+For host-mode testing:
+
+```bash
+export CONTAINER_ENGINE=none
+export QONQ_UNSAFE_HOST_MODE=1
+export QONQ_CODESEEQ_BIN="$PWD/codeseeq/codeseeq"
+```
+
+## 18. Sqrewdriver Repair Controller
+
+The root-level `sqrewdriver/` project is a CodeSeeq hook controller and desktop app. QonQrete uses it as design inspiration only. The runtime controller lives at `qrane/sqrewdriver_controller.py` and has no Bun/Electrobun dependency.
+
+After InspeQtor writes `verdict/inspection-verdict.v1.json`, `validation/validation-bundle.v1.json`, `realization/realization-bundle.v1.json`, and optionally `verdict/repair-plan.v1.json`, Qrane asks the controller whether the run can stop. Clean stop requires hard gates to pass, repair flags to be false, required files from completion criteria to exist under `qodeyard/`, and no current hard validation or stale artifact failures.
+
+When repair is required and caps are still available, Sqrewdriver writes:
+
+```text
+verdict/sqrewdriver-repair-brief.v1.md
+verdict/sqrewdriver-repair-brief.v1.json
+```
+
+It also augments `verdict/repair-plan.v1.json` with references to the brief. Qrane then launches the existing same-run repair flow, including:
+
+```text
+QONQ_REPAIR_MODE=1
+QONQ_REPAIR_PLAN_PATH=<workspace>/verdict/repair-plan.v1.json
+QONQ_REPAIRING_BUILD_PASS_INDEX=<index>
+QONQ_REPAIR_PASS_INDEX=<index>
+QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH=<workspace>/verdict/sqrewdriver-repair-brief.v1.md
+```
+
+ConstruQtor treats the brief as high-priority context, but locked files, allowed edit paths, target files, and validation scope still come from the structured repair plan. Repair caps produce `STOP_PARTIAL`; they never mark the task successful.

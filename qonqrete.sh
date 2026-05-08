@@ -61,6 +61,13 @@ else
     RUNTIME_DEPLOYED_IN_REPO=false
 fi
 
+CODESEEQ_HOST_MODE_WAS_SET=0
+CODESEEQ_HOST_MODE_FROM_PARENT=""
+if [ "${CODESEEQ_HOST_MODE+x}" = "x" ]; then
+    CODESEEQ_HOST_MODE_WAS_SET=1
+    CODESEEQ_HOST_MODE_FROM_PARENT="$CODESEEQ_HOST_MODE"
+fi
+
 load_repo_env() {
     local env_file
     for env_file in "${PROJECT_ROOT}/.env" "${SCRIPT_DIR}/.env"; do
@@ -74,6 +81,9 @@ load_repo_env() {
 }
 
 load_repo_env
+if [ "$CODESEEQ_HOST_MODE_WAS_SET" = "1" ]; then
+    export CODESEEQ_HOST_MODE="$CODESEEQ_HOST_MODE_FROM_PARENT"
+fi
 
 # ============================================================================
 # Colors / logging
@@ -138,6 +148,13 @@ if [ -n "$_CONTAINER_ENGINE_FROM_ENV" ]; then
     CONTAINER_ENGINE="$(printf '%s' "$_CONTAINER_ENGINE_FROM_ENV" | tr '[:upper:]' '[:lower:]')"
 fi
 
+is_truthy_env() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 detect_os() {
     local uname_s
     uname_s="$(uname -s 2>/dev/null || echo "Unknown")"
@@ -178,6 +195,13 @@ detect_engine() {
             CONTAINER_ENGINE=""
             ;;
         none)
+            if [ "${QONQ_UNSAFE_HOST_MODE:-}" != "1" ]; then
+                log_qrane "${R}[ERROR]${R} CONTAINER_ENGINE=none requires explicit host execution opt-in.${R}"
+                log_qrane "${R}[ERROR]${R} Set QONQ_UNSAFE_HOST_MODE=1 to run without a container sandbox.${R}"
+                exit 1
+            fi
+            log_qrane "${Y}[WARN]${R} ⚠️  CONTAINER_ENGINE=none and QONQ_UNSAFE_HOST_MODE=1 — running WITHOUT container sandbox.${R}"
+            log_qrane "${Y}[WARN]${R}    Host execution may expose the host filesystem.${R}"
             return 0
             ;;
         "")
@@ -188,12 +212,30 @@ detect_engine() {
             ;;
     esac
 
-    # Default behavior: prefer Podman; otherwise use repo-native host mode.
+    # When QonQrete is launched by `codeseeq -y`, the parent Codex process is
+    # already running in CodeSeeq host mode. Keeping QonQrete in a nested
+    # container hides the CodeSeeq CLI from the codeseeq provider, so inherit
+    # that host-mode execution context unless the caller explicitly selected an
+    # engine.
+    if [ -z "$CONTAINER_ENGINE" ] && is_truthy_env "${CODESEEQ_HOST_MODE:-}" ]; then
+        CONTAINER_ENGINE="none"
+        export QONQ_UNSAFE_HOST_MODE=1
+        log_qrane "${Y}[WARN]${R} CodeSeeq host mode detected — running QonQrete without a container sandbox so the codeseeq provider stays executable.${R}"
+        return 0
+    fi
+
+    # Default behavior: prefer Podman. Host-mode execution is opt-in only.
     if command -v podman >/dev/null 2>&1; then
         CONTAINER_ENGINE="podman"
-    else
+    elif [ "${QONQ_UNSAFE_HOST_MODE:-}" = "1" ]; then
         CONTAINER_ENGINE="none"
-        log_qrane "${Y}[WARN]${R} Podman not found. Falling back to repo-native host execution."
+        log_qrane "${Y}[WARN]${R} ⚠️  QONQ_UNSAFE_HOST_MODE=1 — running WITHOUT container sandbox.${R}"
+        log_qrane "${Y}[WARN]${R}    Host execution is opt-in and may expose the host filesystem.${R}"
+    else
+        log_qrane "${R}[ERROR]${R} Podman not found and QONQ_UNSAFE_HOST_MODE is not set to 1.${R}"
+        log_qrane "${R}[ERROR]${R} Host-mode execution requires explicit opt-in: export QONQ_UNSAFE_HOST_MODE=1${R}"
+        log_qrane "${R}[ERROR]${R} Install podman or set QONQ_UNSAFE_HOST_MODE=1 to bypass the container sandbox.${R}"
+        exit 1
     fi
 }
 
@@ -1143,7 +1185,12 @@ build_api_env_args() {
     local key
     for key in OPENAI_API_KEY GOOGLE_API_KEY GEMINI_API_KEY \
                ANTHROPIC_API_KEY DEEPSEEK_API_KEY QWEN_API_KEY OPENROUTER_API_KEY \
-               VENICE_API_KEY MLX_API_KEY LLAMA_CPP_API_KEY; do
+               VENICE_API_KEY MLX_API_KEY LLAMA_CPP_API_KEY \
+               QONQ_CODESEEQ_BIN QONQ_CODESEEQ_INLINE_MAX_CHARS \
+               CODESEEQ_MODEL CODESEEQ_THINKING CODESEEQ_OPENRESPONSES_PORT \
+               CODESEEQ_CONTEXT_WINDOW CODESEEQ_MAX_OUTPUT_TOKENS \
+               CODESEEQ_STREAM_IDLE_TIMEOUT_MS CODESEEQ_WORKSPACE_BANNER \
+               CODESEEQ_BRIDGE_TOOL_STEERING; do
         if [ -n "${!key:-}" ]; then
             API_ENV_ARGS+=(-e "$key")
         fi
@@ -1164,11 +1211,13 @@ run_container() {
         QONQ_WORKSPACE="$run_host_path" \
         QONQ_VERSION="$QONQ_VERSION" \
         QONQ_RUN_KIND="$QONQ_RUN_KIND" \
+        QONQ_RUN_ID="${QONQ_RUN_ID:-}" \
+        QONQ_RUN_NAME="${QONQ_RUN_NAME:-}" \
         QONQ_RESUMED_FROM_QAGE="$QONQ_RESUMED_FROM_QAGE" \
         QONQ_REPO_SYNC_MODE="$QONQ_REPO_SYNC_MODE" \
         QONQ_TASK_SOURCE_PATH="${QONQ_TASK_SOURCE_PATH:-}" \
         QONQ_TASK_SOURCE_LABEL="${QONQ_TASK_SOURCE_LABEL:-}" \
-        python3 qrane/qrane.py "${PY_ARGS[@]}"
+        python3 qrane/qrane.py ${PY_ARGS[@]+"${PY_ARGS[@]}"}
         return $?
     fi
 
@@ -1210,6 +1259,8 @@ run_container() {
         -e QONQ_WORKSPACE="$CONTAINER_WORKSPACE"
         -e QONQ_VERSION
         -e QONQ_RUN_KIND
+        -e QONQ_RUN_ID
+        -e QONQ_RUN_NAME
         -e QONQ_RESUMED_FROM_QAGE
         -e QONQ_REPO_SYNC_MODE
         -e QONQ_TASK_SOURCE_PATH
@@ -1226,6 +1277,8 @@ run_container() {
 prepare_run_exports() {
     local run_dir_name="$1" run_kind="$2"
     export QONQ_RUN_KIND="$run_kind"
+    export QONQ_RUN_ID="$run_dir_name"
+    export QONQ_RUN_NAME="$run_dir_name"
     if [ "$SYNC_TO_REPO" = true ]; then
         export QONQ_REPO_SYNC_MODE="sync_to_repo_root"
     else
@@ -1324,6 +1377,7 @@ show_help() {
 $VERSION_DISPLAY
 
 Usage:
+  (no args)                        Interactive task paste mode — paste your task and press Ctrl+D.
   ./qonqrete.sh [COMMAND] [OPTIONS]
   ./qonqrete.sh <task-file.md> [OPTIONS]
 
@@ -1347,10 +1401,12 @@ Run Options:
   -m, --mode <name>                Set operational mode.
   -b, --briq-sensitivity <N>       Set granularity (0-16).
   -B, --auto-briq-sensitivity      Force automatic briq sensitivity detection.
-  -c, --cyqles <N>                 Set max total iterations (sum of all build + repair passes).
+  -c|--cyqles <N>                 Set max total iterations (sum of all build + repair passes).
                                      Matches options.max_total_iterations in config.
                                      Build-pass and repair caps remain controlled by options.max_build_passes and repair.max_attempts_per_build_pass.
-  -n, --qonstruction-name <name>   Auto-save as qonstruction.
+  --interactive-clarification      Force interactive clarification prompts.
+  --non-interactive-clarification  Force file-based clarification pause mode.
+  -n|--qonstruction-name <name>   Auto-save as qonstruction.
   --seed-repo, --continue-from-repo  Seed current repository into qodeyard before run.
   -s, --sqrapyard                    Legacy alias for --seed-repo (kept for compatibility).
   -N, --no-sync                    Skip sync-back into repo root; keep results in worqspace/qonstructions/qage flows.
@@ -1369,6 +1425,8 @@ Clean Options:
 Environment Overrides:
   CONTAINER_ENGINE=docker|podman   Override engine auto-detection (default: podman if available).
   BUILD_BACKEND=buildx|plain       Override build backend auto-detection (buildx is Docker-only).
+  QONQ_NON_INTERACTIVE=1           Force non-interactive clarification/file-pause mode.
+  QONQ_INTERACTIVE_CLARIFICATION=1 Force interactive clarification prompts when stdin is a TTY.
 
 Examples:
   ./qonqrete.sh tasq.md
@@ -1411,8 +1469,40 @@ TASK_SOURCE_PATH=""
 detect_os
 
 if [[ $# -eq 0 ]]; then
-    show_help
-    exit 0
+    # Interactive mode: no args → offer to paste a task
+    echo ""
+    echo "🧱 QonQrete — Interactive Task Mode"
+    echo ""
+    echo "  Paste your task below. Press Ctrl+D when done."
+    echo "  (Or press Ctrl+C to cancel, or type :e to open editor)"
+    echo ""
+    
+    # Read task from stdin
+    TASK_CONTENT=""
+    while IFS= read -r line; do
+        TASK_CONTENT+="$line"$'
+'
+    done
+    
+    # Trim trailing newlines for comparison
+    TASK_TRIMMED="${TASK_CONTENT%"${TASK_CONTENT##*[![:space:]]}"}"
+    # Check if user wants editor instead
+    if [ "$TASK_TRIMMED" = ":e" ]; then
+        # Fall through to editor path
+        COMMAND="run"
+    elif [ -z "${TASK_TRIMMED}" ]; then
+        # Empty input: open editor
+        log_qrane "Empty task. Opening editor..."
+        COMMAND="run"
+    else
+        # User pasted a task — write it to a temp task file and run
+        INTERACTIVE_TASK="${WORKSPACE_DIR}/tasq-interactive.md"
+        printf '%s
+' "$TASK_CONTENT" > "$INTERACTIVE_TASK"
+        log_qrane "Task received ($(wc -l < "$INTERACTIVE_TASK" | tr -d ' ') lines)."
+        COMMAND="run"
+        TASK_SOURCE_PATH="$INTERACTIVE_TASK"
+    fi
 fi
 
 while [[ $# -gt 0 ]]; do
@@ -1434,6 +1524,10 @@ while [[ $# -gt 0 ]]; do
         -B|--auto-briq-sensitivity)      PY_ARGS+=(--auto-briq-sensitivity); shift ;;
         -c|--cyqles)
             need_value "$1" "${2-}"; PY_ARGS+=(--cyqles "$2"); shift 2 ;;
+        --interactive-clarification)
+                                           PY_ARGS+=(--interactive-clarification); shift ;;
+        --non-interactive-clarification)
+                                           PY_ARGS+=(--non-interactive-clarification); shift ;;
         --seed-repo|--continue-from-repo|--sync-repo)
                                            USE_REPO_SEED=true; shift ;;
         -s|--sqrapyard)                  USE_SQRAPYARD=true; USE_REPO_SEED=true; shift ;;
@@ -1599,8 +1693,10 @@ case "$COMMAND" in
 
         prepare_run_exports "$RUN_DIR_NAME" "resume"
         export QONQ_RESUMED_FROM_QAGE="$QAGE_NAME"
-        run_container "$RUN_HOST_PATH"
+        run_exit=0
+        run_container "$RUN_HOST_PATH" || run_exit=$?
         finalize_run_session "$RUN_HOST_PATH"
+        exit "$run_exit"
         ;;
 
     run)
@@ -1631,7 +1727,9 @@ case "$COMMAND" in
             record_pre_run_visible_snapshot "$RUN_HOST_PATH" "${QONQ_TASK_SOURCE_PATH:-}"
         fi
         cp "${WORKSPACE_DIR}/tasq.md" "$RUN_HOST_PATH/tasq.d/cyqle1_tasq.md"
-        run_container "$RUN_HOST_PATH"
+        run_exit=0
+        run_container "$RUN_HOST_PATH" || run_exit=$?
         finalize_run_session "$RUN_HOST_PATH"
+        exit "$run_exit"
         ;;
 esac

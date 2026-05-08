@@ -55,9 +55,16 @@ class QonQreteStartupActivity : ProjectActivity {
             }
         }
 
-        // 3. Show welcome notification on first run
+        // 3. Show first-launch wizard if .qonqrete/ is missing or setup incomplete
         val settings = QonQreteSettingsState.getInstance()
-        if (!settings.welcomeShown && service.getQonQretePath() != null) {
+        if (!service.isDeployed()) {
+            ApplicationManager.getApplication().invokeLater {
+                val dialog = sh.qonqrete.intellij.ui.QonQreteFirstLaunchDialog(project)
+                if (dialog.showAndGet()) {
+                    settings.welcomeShown = true
+                }
+            }
+        } else if (!settings.welcomeShown && service.getQonQretePath() != null) {
             ApplicationManager.getApplication().invokeLater {
                 val version = service.getVersion() ?: "unknown"
                 service.notify(

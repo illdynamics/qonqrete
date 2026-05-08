@@ -33,6 +33,11 @@ The IDE integrations let you trigger the existing CLI workflow from inside the I
 
 This release focuses on three coordinated fixes:
 
+- **QonQrete-native Sqrewdriver repair controller**
+  - `qrane/sqrewdriver_controller.py` now owns the artifact-driven stop-or-repair decision after InspeQtor.
+  - QonQrete does not run the root-level `sqrewdriver/` desktop app and does not add Bun/Electrobun to the runtime.
+  - Repairs are driven by InspeQtor verdicts, `repair-plan.v1.json`, validation bundles, and a generated `verdict/sqrewdriver-repair-brief.v1.md`.
+
 - **Inspection truthfulness hardening**
   - Final artifact evidence from `qodeyard/` is now explicitly authoritative in review prompts.
   - Review snippets now carry deterministic metadata (`file_bytes`, `snippet_chars`, `snippet_truncated`) so prompt clipping is never mistaken for file truncation.
@@ -55,7 +60,7 @@ This release focuses on three coordinated fixes:
   - Mode hints are edge-triggered (single status messages), never prefixed per streamed line.
 
 - **Execution wiring defaults**
-  - Primary agent defaults are aligned to `venice / deepseek-v3.2`.
+  - Primary agents remain per-agent configurable; this workspace's live-test config uses DeepSeek for intake/planning/inspection and CodeSeeq only for ConstruQtor.
   - ConstruQtor default coding mode is now `hybrid`.
   - New launcher switch `-N/--no-sync` keeps outputs in qage/qonstruction paths and skips repo-root sync-back.
 
@@ -91,27 +96,43 @@ my-project/
 
 ## Quick Start (CLI)
 
+### Option 1: curl-bash install (recommended)
+
 ```bash
-# Prerequisites: Podman or Docker + API keys for your configured providers.
-# Default config expects Venice for primary agents and Gemini for CalQulator:
-export VENICE_API_KEY='...'
-export GOOGLE_API_KEY='...'      # or GEMINI_API_KEY
-
-# Build the runtime once
-chmod +x qonqrete.sh
-./qonqrete.sh init
-
-# Point QonQrete at any task file
-vim tasq.md
-
-# Run
-./qonqrete.sh tasq.md
-./qonqrete.sh run -f tasq.md
-./qonqrete.sh run --auto --mode security -b 6 -c 3
-./qonqrete.sh status
+curl -fsSL https://qonqrete.sh/install.sh | bash
 ```
 
-Task files are now the canonical front door for the CLI. `tasq.md` remains the default starter for compatibility, but the primary demo path is `qonqrete.sh <task-file>`.
+This downloads the latest release, then walks you through an interactive setup:
+1. Choose your AI provider (OpenAI, DeepSeek, Gemini, Anthropic, Venice, CodeSeeq, and more)
+2. Select a model from that provider's supported list
+3. Enter your API key (auto-detected if already set in your environment)
+
+After setup, QonQrete automatically configures all agents, runs `init`, and creates a starter `tasq.md`. You're ready to build.
+
+For a specific version:
+```bash
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.0
+```
+
+For CI/non-interactive use:
+```bash
+QONQRETE_AUTO=1 QONQRETE_PROVIDER=deepseek QONQRETE_MODEL=deepseek-chat \
+  curl -fsSL https://qonqrete.sh/install.sh | bash
+```
+
+### Option 2: Git clone + bootstrap
+
+```bash
+git clone https://github.com/illdynamics/qonqrete.git
+cd qonqrete
+./qonqrete-bootstrap.sh /path/to/your-project
+```
+
+Same interactive setup as the curl-bash install.
+
+### Option 3: IDE Extensions
+
+Install **QonQrete** from the VS Code or JetBrains marketplace. On first launch, a setup wizard guides you through provider selection, model choice, and API key entry — then auto-configures everything. One click and you're ready.
 
 ## How It Works
 
@@ -124,11 +145,20 @@ User defines a task file
   → InstruQtor decomposes into briqs + generates QONTRACT
   → CalQulator estimates cost
   → ConstruQtor generates/modifies code in qodeyard/
-  → InspeQtor reviews and produces reqap
+  → InspeQtor reviews and produces verdict/repair artifacts
+  → Sqrewdriver controller stops only when hard gates pass, otherwise writes a repair brief
   → Qontextor indexes deterministic multi-language structural context (Python, shell, JS/TS, HTML/CSS)
   → Qompressor creates deterministic multi-language structural skeletons (Python, shell, JS/TS, HTML/CSS)
-  → Repeat for N iterations when scheduler/repair continuation requires it
+  → Qrane launches a bounded repair pass when required
   ```
+
+### Sqrewdriver Repair Controller
+
+QonQrete includes a native Sqrewdriver-inspired controller in `qrane/sqrewdriver_controller.py`. It uses the control pattern from the sibling `sqrewdriver/` project as inspiration only; the desktop app, Bun runtime, and Electrobun packaging are not runtime dependencies.
+
+The controller runs after InspeQtor. A run stops cleanly only when InspeQtor hard gates pass, repair is not requested, required completion files exist in `qodeyard/`, and no current hard validation or stale artifact failures remain. When that gate fails and repair caps allow another pass, it writes `verdict/sqrewdriver-repair-brief.v1.md` plus `.json`, augments `verdict/repair-plan.v1.json`, and Qrane starts a same-run repair pass. ConstruQtor receives the brief through `QONQ_SQREWDRIVER_REPAIR_BRIEF_PATH`, while `repair-plan.v1.json` remains the structured source for target files, allowed edit paths, and locked files.
+
+Success is therefore artifact-gated: an AI statement that the task is done is not enough without InspeQtor hard-gate evidence.
 
   ### Coding Modes
 
@@ -190,6 +220,7 @@ qonqrete/
 | Google Gemini | `GOOGLE_API_KEY` / `GEMINI_API_KEY` |
 | Anthropic | `ANTHROPIC_API_KEY` |
 | DeepSeek | `DEEPSEEK_API_KEY` |
+| CodeSeeq | `DEEPSEEK_API_KEY` + executable `codeseeq` CLI |
 | Qwen | `QWEN_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Venice | `VENICE_API_KEY` *(required, no fallback)* |
@@ -257,9 +288,11 @@ The shipped container installs the default Node-based helper stack for JS/TS and
 
 ```bash
 cd .qonqrete
-npm install
+npm ci
 npm run qonq-native-capabilities
 ```
+
+`npm ci` is the supported reproducible workflow here; `package-lock.json` is the install authority for exact versions.
 
 Runtime discovery prefers repo-local `node_modules` first, then global Node modules. Reduced local environments may still run, but Qontextor/Qompressor will honestly report and artifact any fallback path they had to use.
 
@@ -342,7 +375,7 @@ This is useful for preventing accidental expensive runs with high sensitivity or
 - **Truthful inspection + deterministic evidence upgrades** in final review paths
 - **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles
 - **Launcher `-N/--no-sync`** run control to keep output in qage/qonstruction paths
-- **Primary AI default alignment** to `venice / deepseek-v3.2` and ConstruQtor `hybrid` default mode
+- **Primary AI provider wiring** remains per-agent configurable; ConstruQtor supports `hybrid` by default and can be routed through CodeSeeq.
 - **Versioned container images** (`qonqrete-qage:<version>`; Linux/WSL builds include a host-UID suffix)
 - **Aligned IDE behavior** in VS Code and IntelliJ around the same runtime and task-file model
 
@@ -406,6 +439,7 @@ The current repo supports these providers through `worqer/lib_ai.py` and config:
 - Gemini
 - Anthropic
 - DeepSeek
+- CodeSeeq *(CLI-backed provider through sibling `./codeseeq`; uses DeepSeek underneath)*
 - Qwen
 - OpenRouter
 - Venice *(Venice API, OpenAI-compatible, requires `VENICE_API_KEY`)*
@@ -422,11 +456,35 @@ export OPENAI_API_KEY='...'
 export GOOGLE_API_KEY='...'        # or GEMINI_API_KEY
 export ANTHROPIC_API_KEY='...'
 export DEEPSEEK_API_KEY='...'
+# provider: codeseeq also requires DEEPSEEK_API_KEY and the CodeSeeq CLI
 export QWEN_API_KEY='...'
 export OPENROUTER_API_KEY='...'
 export VENICE_API_KEY='...'        # required for provider: venice
 export MLX_API_KEY='...'           # optional, used when provider: mlx
 export LLAMA_CPP_API_KEY='...'     # optional, used when provider: llama-cpp
+```
+
+### CodeSeeq provider
+
+`provider: codeseeq` keeps QonQrete on its existing `worqer/lib_ai.py` abstraction. QonQrete flattens the agent request and invokes the CodeSeeq CLI; CodeSeeq owns the Responses-to-DeepSeek bridge.
+
+QonQrete-level tool calls are not passed through this provider. ConstruQtor uses heredoc/fenced-block transport for `codeseeq` even if the default coding mode is `hybrid`.
+
+The Sqrewdriver repair controller is independent of CodeSeeq hooks. CodeSeeq can be used for ConstruQtor, but the inspection-to-repair loop remains QonQrete-native and artifact-driven.
+
+Supported CodeSeeq models:
+
+- `deepseek-v4-flash`
+- `deepseek-v4-flash-thinking`
+- `deepseek-v4-pro`
+- `deepseek-v4-pro-thinking`
+
+The default QonQrete container does not mount sibling `./codeseeq` or include local Codex/CodeSeeq tooling. For host-mode testing:
+
+```bash
+export CONTAINER_ENGINE=none
+export QONQ_UNSAFE_HOST_MODE=1
+export QONQ_CODESEEQ_BIN="$PWD/codeseeq/codeseeq"
 ```
 
 ## System requirements
@@ -594,7 +652,7 @@ Run options:
 ## Current limitations / honesty section
 
 - The bundled IDE integrations are present and usable, but official store publishing is a separate distribution step.
-- The repo snapshot does **not** implement a central per-user QonQrete engine installer / bootstrap flow.
+- The repo snapshot now includes `qonqrete-bootstrap.sh` (git-clone users) and `qonqrete-install.sh` (website curl-bash) for central per-user engine installation.
 - The committed `worqspace/config.yaml` is a working configuration example, not a promise that every default value is ideal for every task.
 - The active runtime surface is the standard CLI plus IDE wrappers.
 - Qontrabender only becomes relevant when the active ConstruQtor provider is Gemini.

@@ -180,31 +180,33 @@ class DeployToWorkspaceAction : AnAction() {
                     ApplicationManager.getApplication().invokeLater {
                         service.notify("QonQrete", "Runtime deployed successfully to .qonqrete/", NotificationType.INFORMATION)
 
-                        // Offer to create tasq.md
-                        val rootTasq = File(basePath, "tasq.md")
-                        if (!rootTasq.exists()) {
-                            val create = Messages.showYesNoDialog(
-                                project,
-                                "QonQrete deployed! Create a tasq.md to get started?",
-                                "QonQrete: Deploy",
-                                Messages.getQuestionIcon()
-                            )
-                            if (create == Messages.YES) {
-                                com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                                    .getAction("QonQrete.CreateTasq")?.actionPerformed(e)
+                        // Show first-launch provider wizard
+                        val dialog = sh.qonqrete.intellij.ui.QonQreteFirstLaunchDialog(project)
+                        if (dialog.showAndGet()) {
+                            val (_providerId, _model, _apiKey) = dialog.getSetupResult()
+                            
+                            // Create starter tasq.md if needed
+                            val rootTasq = File(basePath, "tasq.md")
+                            if (!rootTasq.exists()) {
+                                rootTasq.writeText("""
+                                    |# QonQrete Starter Tasq
+                                    |
+                                    |> Welcome to QonQrete! Replace this with your own task.
+                                    |
+                                    |## Goal
+                                    |Describe what you want to build or fix.
+                                    |
+                                    |## Context
+                                    |Any relevant background, constraints, or preferences.
+                                    |
+                                    |## Acceptance
+                                    |- [ ] Criterion 1
+                                    |- [ ] Criterion 2
+                                    |
+                                    |## Notes
+                                    |Add any additional guidance for the AI agents.
+                                """.trimMargin())
                             }
-                        }
-
-                        // Prompt for AI configuration
-                        val configAI = Messages.showYesNoDialog(
-                            project,
-                            "Set up AI providers and API keys now?",
-                            "QonQrete: AI Configuration",
-                            Messages.getQuestionIcon()
-                        )
-                        if (configAI == Messages.YES) {
-                            com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                                .getAction("QonQrete.SetAIConfig")?.actionPerformed(e)
                         }
                     }
 
