@@ -11,8 +11,8 @@ QonQrete is a **local-first, file-based AI software construction system** that r
 
 ## Version
 
-**Current repository version:** `v1.4.0`  
-**Release context:** `v1.4.0 - MLcon Edition`  
+**Current repository version:** `v1.4.0`
+**Release context:** `v1.4.0 - MLcon Edition`
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
