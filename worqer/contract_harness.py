@@ -452,7 +452,7 @@ def _extract_runtime_rules(task_text: str, required_files: list[str]) -> tuple[l
             m = method.upper()
             p = path.strip()
             
-            # v1.4.1: Replace common placeholders in path for probing
+            # v1.4.2: Replace common placeholders in path for probing
             if "{user_id}" in p:
                 p = p.replace("{user_id}", "1")
             

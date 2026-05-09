@@ -91,7 +91,7 @@ Deterministic validation in the current bridge is strongest for Python. Other ec
 
 ## License
 
-AGPL-3.0 - Same as QonQrete core
+Apache-2.0 - Same as QonQrete core
 
 ## Author
 

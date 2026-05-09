@@ -7,7 +7,7 @@
  *
  * @author WoNQ
  * @version VERSION
- * @license AGPL-3.0
+ * @license Apache-2.0
  */
 
 import * as vscode from 'vscode';

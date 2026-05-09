@@ -4,7 +4,7 @@
  *
  * @author QonQrete
  * @version v1.4.0
- * @license AGPL-3.0
+ * @license Apache-2.0
  */
 
 plugins {

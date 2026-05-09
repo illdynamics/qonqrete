@@ -1,5 +1,5 @@
 # QonQrete VS Code Extension
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Splash](assets/qonqrete-icon.png)
 
 > Run QonQrete directly from VS Code
@@ -221,7 +221,7 @@ Press `F5` in VS Code to launch extension host.
 
 ## License
 
-QonQrete is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+QonQrete is licensed under the Apache License, Version 2.0.
 See the [LICENSE](LICENSE) file for full text.
 
 Copyright (c) 2026 | QonQrete | Built by Ill Dynamics (Ricky van Poppel)

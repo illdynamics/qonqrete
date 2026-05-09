@@ -4,12 +4,12 @@
 
   @author QonQrete
   @version v1.4.0
-  @license AGPL-3.0
+  @license Apache-2.0
 -->
 <idea-plugin>
     <id>sh.qonqrete</id>
     <name>QonQrete</name>
-    <version>1.4.1</version>
+    <version>1.4.2</version>
     <idea-version since-build="233"/>
     <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
 

@@ -1,3 +1,35 @@
+## v1.4.2 — Apache License Migration & JetBrains API Compatibility
+
+This release changes the project license from **AGPL-3.0** to **Apache-2.0** for broader permissive use and resolves remaining IntelliJ Platform API compatibility warnings flagged by the Marketplace Verifier.
+
+### License Change: AGPL-3.0 → Apache-2.0
+
+- **LICENSE file replaced** with the Apache License, Version 2.0
+- **COPYRIGHT file updated** to reflect Apache-2.0 licensing
+- **README.md** license badge, description, and footer updated
+- **All source file `@license` tags** updated to `Apache-2.0`
+- **IntelliJ plugin.xml** license metadata updated
+- **VS Code package.json** (license field) and README updated
+- The QonQrete branding, logos, and trademarks remain All Rights Reserved as noted in COPYRIGHT
+
+### JetBrains Compatibility (Final Pass)
+
+- **`TextFieldWithBrowseButton.addBrowseFolderListener()`** (4-param overload) replaced with `addBrowseFolderListener(TextBrowseFolderListener)` using the non-deprecated `TextBrowseFolderListener` API
+- **`CredentialAttributes(String)` constructor** usages annotated with `@Suppress("DEPRECATION")` — the modern `CredentialAttributes.Builder` is not available in the minimum-supported SDK (2023.3)
+
+### Version Bump
+
+- Repository version: `1.4.1` → `1.4.2`
+- IntelliJ plugin version: `1.4.1` → `1.4.2`
+- VS Code extension version: `1.4.1` → `1.4.2`
+- All documentation and version strings synchronized
+
+### Upgrade Notes
+
+- No changes to the core runtime (`qonqrete.sh` or `qrane/`). Runtime remains at `1.4.0`.
+- License change is forward-looking: existing users should review the new LICENSE file.
+- IDE plugins rebuilt and republished.
+
 ## v1.4.1 — JetBrains Compatibility & Auto Briq Sense Default-On
 
 This release resolves the IntelliJ Platform compatibility warnings flagged by the JetBrains Marketplace Verifier for 2026.2 EAP and restores clean startup behavior across all supported IDE versions. It also makes **Auto Briq Sensitivity** the default for both IDE plugins — matching the expected user experience.
