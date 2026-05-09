@@ -3,7 +3,7 @@
  * Build configuration - Production Ready
  *
  * @author QonQrete
- * @version v1.4.0
+ * @version v1.4.4
  * @license Apache-2.0
  */
 
@@ -56,13 +56,13 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
-            <h2>${runtimeVersion} - Runtime Truth/Streaming Alignment</h2>
+            <h2>${runtimeVersion} - Plugin API Cleanup & Release Fixes</h2>
             <ul>
-                <li><b>Changed:</b> AI config UI targets primary runtime agents only (qrystallizer, instruqtor, construqtor, inspeqtor)</li>
-                <li><b>Changed:</b> Default AI binding aligned to venice / deepseek-v3.2</li>
-                <li><b>Changed:</b> Local-only providers (mlx, llama-cpp) hidden from shared provider picker</li>
-                <li><b>Added:</b> Run-level no-sync control wired to launcher (--no-sync)</li>
-                <li><b>Aligned:</b> Plugin docs/UI defaults match runtime-backed values (sensitivity=1, cycles=1, autonomous=true)</li>
+                <li><b>Fixed:</b> 10 deprecated API usages eliminated (8 ActionUtil.invokeAction, 2 CredentialAttributes)</li>
+                <li><b>Fixed:</b> Verified compatible 2023.3.8–2026.2 EAP with zero warnings</li>
+                <li><b>Added:</b> First-launch wizard auto-creates starter tasq.md</li>
+                <li><b>Fixed:</b> Deploy action resolves runtime version from plugin version</li>
+                <li><b>Cleanup:</b> All stale task files removed, only worqspace/tasq.md kept</li>
             </ul>
         """.trimIndent())
     }

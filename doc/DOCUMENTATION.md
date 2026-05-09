@@ -1,11 +1,11 @@
 # QonQrete Documentation
 
-**Version:** `v1.4.0`
-**Release context:** `v1.4.0 - MLcon Edition`
+**Version:** `v1.4.4`
+**Release context:** `v1.4.4 - MLcon Edition`
 
-This document is the synced technical reference for the current `v1.4.0` repository snapshot.
+This document is the synced technical reference for the current `v1.4.4` repository snapshot.
 
-## Current release deltas (`v1.4.0 - MLcon Edition`)
+## Current release deltas (`v1.4.4 - MLcon Edition`)
 
 - Final inspection paths now treat final `qodeyard/` files as authoritative evidence over relay/log snippets.
 - Frontend localStorage deterministic validation now supports compact constant/alias/object key indirection.
@@ -488,7 +488,7 @@ Implemented helper concepts include:
 
 ## 11. Current limitations
 
-These limitations should be documented honestly for `v1.4.0`:
+These limitations should be documented honestly for `v1.4.4`:
 
 1. **Repo-local workflow remains the active implementation model.**
    The central engine / per-project metadata architecture is a future/product direction, not the current repo behavior.
@@ -534,8 +534,8 @@ Install extension/plugin
 
 ### Image versioning
 Container images are now tagged with the version:
-- `qonqrete-qage:1.4.0` on macOS/Windows (example current version)
-- `qonqrete-qage:1.4.0-u<host_uid>` on Linux/WSL
+- `qonqrete-qage:1.4.4` on macOS/Windows (example current version)
+- `qonqrete-qage:1.4.4-u<host_uid>` on Linux/WSL
 - `qonqrete-qage:latest` (convenience alias)
 
 ## 13. Cost Confirmation Gate (GateQeeper)

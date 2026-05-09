@@ -224,7 +224,7 @@ def extract_qontract_from_tasq(tasq_content: str, source_file: str) -> dict:
 
     # Build contract
     contract = {
-        'version': '1.4.0',
+        'version': '1.4.4',
         'meta': {
             'source_cycle': 1,
             'source_file': source_file,

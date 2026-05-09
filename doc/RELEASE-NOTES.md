@@ -1,3 +1,32 @@
+## v1.4.4 — Plugin API Cleanup & Release Fixes
+
+### Summary
+Zero-deprecation IntelliJ plugin, bootstrap/hygiene fixes, and streamlined task layout.
+
+### Changes
+- **IntelliJ plugin (v1.4.3→v1.4.4):** Replaced 8 `ActionUtil.invokeAction()` calls with modern `AnActionEvent.createFromDataContext()` pattern.
+  Replaced 2 deprecated `CredentialAttributes()` constructors with `CredentialAttributes.Builder()`.
+  Compatibility warnings eliminated across all verified IDE versions (2023.3.8–2026.2 EAP).
+- **Repository version:** `1.4.3` → `1.4.4`
+- **IntelliJ plugin version:** `1.4.3` → `1.4.4`
+- **VS Code extension version:** `1.4.3` → `1.4.4`
+- **Runtime version:** `1.4.3` → `1.4.4`
+- **Fixed:** `qonqrete-bootstrap.sh` is now executable (`chmod +x`).
+- **Fixed:** `package_runtime_release.sh` now includes `.env.example` in the runtime zip.
+- **Fixed:** `package_source_snapshot.sh` no longer wrongly excludes `*.gradle.kts` files.
+- **Fixed:** `verify_zip_hygiene.py` is now called automatically in the runtime-release CI workflow.
+- **Fixed:** Release hygiene test layout assumptions updated for the new task layout.
+- **Fixed:** Both `run_baseline.sh` scripts reference `worqspace/tasq.md` instead of the removed `tasq-small.md`.
+- **Added:** `tests/test_install_smoke.py` with 9 smoke tests for install/bootstrap scripts.
+- **Cleanup:** All stale tasq files removed from repo root; only `worqspace/tasq.md` (REST API) is kept.
+- **No breaking changes** to the runtime core (`qrane/`, `worqer/`) or existing workflows.
+
+### Upgrade notes
+- The IntelliJ plugin auto-updates in-IDE. Existing `1.4.3` installations will be offered `1.4.4`.
+- The runtime zip (`qonqrete-v1.4.4.zip`) can be downloaded from GitHub Releases or deployed via the plugin.
+
+---
+
 ## v1.4.3 — Final API Compatibility & Marketplace Cleanup
 
 This release resolves the remaining IntelliJ Platform API deprecation warnings flagged by the Marketplace Verifier across all supported IDE versions (2023.3 through 2026.2 EAP).

@@ -1,6 +1,6 @@
 # QonQrete VS Code Extension - Changelog
 
-## 1.4.0 - Runtime Truth/Streaming Alignment
+## 1.4.4 - Plugin API Cleanup & Release Fixes
 
 ### Changed
 - AI config UI now targets the four primary runtime agents only:

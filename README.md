@@ -1,4 +1,4 @@
-# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.3)
+# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.4)
 ![Release](https://img.shields.io/github/v/release/illdynamics/qonqrete)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
@@ -11,8 +11,8 @@ QonQrete is a **local-first, file-based AI software construction system** that r
 
 ## Version
 
-**Current repository version:** `v1.4.3`
-**Release context:** `v1.4.3`
+**Current repository version:** `v1.4.4`
+**Release context:** `v1.4.4`
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
@@ -29,7 +29,7 @@ This repository currently ships three things:
 
 The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-> **v1.4.3** — Final API Compatibility & Marketplace Cleanup
+> **v1.4.4** — Plugin API Cleanup & Release Hygiene
 
 This release focuses on three coordinated fixes:
 
@@ -111,13 +111,13 @@ After setup, QonQrete automatically configures all agents, runs `init`, and crea
 
 For a specific version:
 ```bash
-curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.3
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.4
 ```
 
 ### Version-specific install
 
 ```bash
-curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.3
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.4
 ```
 
 For CI/non-interactive use:
@@ -260,7 +260,7 @@ python worqer/qompressor.py --capabilities   # Current compressor capability rep
 python -m worqer.smoqetester qodeyard --cycle 1 --config worqspace/config.yaml --json
 ```
 
-## IDE Commands (v1.4.3)
+## IDE Commands (v1.4.4)
 
 Both VS Code and IntelliJ support identical commands:
 
@@ -376,7 +376,7 @@ You must answer `y` or `yes` to continue. Any other answer cancels the run.
 
 This is useful for preventing accidental expensive runs with high sensitivity or many iterations.
 
-## v1.4.3 - Final API Compatibility & Marketplace Cleanup
+## v1.4.4 - Plugin API Cleanup & Release Hygiene
 
 - **License changed from AGPL-3.0 to Apache-2.0** for broader adoption and permissive use
 - **All JetBrains compatibility warnings resolved** — zero scheduled-for-removal, zero override-only, ~1 deprecated API

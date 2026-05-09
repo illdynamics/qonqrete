@@ -1,6 +1,13 @@
 # QonQrete IntelliJ Plugin - Changelog
 
-## 1.4.0 - Runtime Truth/Streaming Alignment
+## 1.4.4 - Plugin API Cleanup & Release Fixes
+
+### Changes
+- Replaced 8 deprecated ActionUtil.invokeAction() calls with modern AnActionEvent pattern.
+- Replaced 2 deprecated CredentialAttributes() constructors with Builder pattern.
+- Zero compatibility warnings across all verified IDE versions (2023.3.8–2026.2 EAP).
+- Verified marketplace compatibility: Success on all 4 tiers.
+
 
 ### Changed
 - AI config UI now targets the four primary runtime agents only:

@@ -2,7 +2,7 @@
 
 IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first multi-agent AI orchestration system for autonomous code generation.
 
-## AI Configuration (v1.4.0)
+## AI Configuration (v1.4.4)
 
 - The shared AI configuration dialog now targets the four primary runtime agents:
   - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
@@ -33,7 +33,7 @@ IntelliJ IDEA integration for [QonQrete](https://qonqrete.sh) - the local-first 
 ### From ZIP
 1. Build: `./gradlew buildPlugin`
 2. Install: Settings → Plugins → ⚙️ → Install Plugin from Disk
-3. Select `build/distributions/qonqrete-intellij-1.4.0.zip`
+3. Select `build/distributions/qonqrete-intellij-1.4.4.zip`
 
 ### From Source
 ```bash

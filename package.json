@@ -1,6 +1,6 @@
 {
   "name": "qonqrete-qualifier-tools",
-  "version": "1.4.0",
+  "version": "1.4.4",
   "private": true,
   "description": "Repo-local and container-shipped Node tooling used by Qontextor, Qompressor, and the worqer/qualifier package for deterministic structural parsing and validation.",
   "license": "SEE LICENSE FILE",
