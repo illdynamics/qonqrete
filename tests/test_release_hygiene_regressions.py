@@ -21,7 +21,7 @@ def test_run_baseline_uses_safe_repo_relative_task_resolution() -> None:
     assert root_script.startswith("#!/usr/bin/env bash\n")
     assert "set -euo pipefail" in root_script
     assert 'ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' in root_script
-    assert '.qonqrete/tasq-small.md' in root_script
+    assert '.qonqrete/worqspace/tasq.md' in root_script
     assert '.qonqrete/qonqrete.sh' in root_script
     assert "-f ./tasq-small.md" not in root_script
 
@@ -29,7 +29,7 @@ def test_run_baseline_uses_safe_repo_relative_task_resolution() -> None:
     assert script.startswith("#!/usr/bin/env bash\n")
     assert "set -euo pipefail" in script
     assert 'ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"' in script
-    assert '.qonqrete/tasq-small.md' in script
+    assert '.qonqrete/worqspace/tasq.md' in script
     assert '.qonqrete/qonqrete.sh' in script
     assert "-f ./tasq-small.md" not in script
 
@@ -158,7 +158,7 @@ def test_source_snapshot_generated_zip_has_no_forbidden_entries(tmp_path: Path) 
     assert not offenders, f"forbidden source snapshot entries found: {offenders[:20]}"
     assert f"qonqrete-source-v{version}/qonqrete.sh" in names
     assert f"qonqrete-source-v{version}/tools/package_source_snapshot.sh" in names
-    assert not any(".gradle" in name for name in names)
+    assert not any("/.gradle/" in name for name in names)
     assert not any(name.startswith(f"qonqrete-source-v{version}/vscode-extension/out/") for name in names)
 
 

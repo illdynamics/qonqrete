@@ -7,7 +7,7 @@
 #   - Sandboxfile  REMOVED
 #   - package.json ADDED (root-level qualifier/qontextor/qompressor Node tooling)
 #   - requirements-optional-tree-sitter.txt ADDED (opt-in fallback)
-#   - tasq-small.md / tasq-medium.md / tasq-big.md ADDED (starter task files)
+#   - worqspace/tasq.md ADDED (canonical task file)
 #   - tests/ ADDED (shipped MLcon-edition test suite)
 
 name: Build Runtime Release
@@ -56,6 +56,8 @@ jobs:
           # The packaging script handles VERSION extraction and exclusions.
           ./tools/package_runtime_release.sh
 
+      - name: Verify zip hygiene
+        run: python3 tools/verify_zip_hygiene.py qonqrete-v*.zip
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

@@ -56,7 +56,7 @@ FORBIDDEN_DIR_NAMES = {
 }
 FORBIDDEN_FILE_NAMES = {".DS_Store"}
 FORBIDDEN_FILE_PREFIXES = ("._",)
-FORBIDDEN_FILE_SUFFIXES = (".pyc", ".gradle.kts")
+FORBIDDEN_FILE_SUFFIXES = (".pyc",)
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:

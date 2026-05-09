@@ -17,7 +17,7 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorNotificationPanel
-import com.intellij.openapi.actionSystem.ex.ActionUtil
+import sh.qonqrete.intellij.util.ActionInvoker
 import com.intellij.ui.EditorNotificationProvider
 import sh.qonqrete.intellij.services.*
 import java.io.File
@@ -74,20 +74,12 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
             isRunning -> panel.text = "QonQrete: Running..."
             canRun -> {
                 panel.createActionLabel("Run Tasq") {
-                    val runAction = com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                        .getAction("QonQrete.RunTasq")
-                    if (runAction != null) {
-                        ActionUtil.invokeAction(
-                            runAction,
-                            com.intellij.openapi.actionSystem.DataContext { dataId ->
+                    ActionInvoker.invokeAction("QonQrete.RunTasq", com.intellij.openapi.actionSystem.DataContext { dataId ->
                                 when {
                                     com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
                                     else -> null
                                 }
-                            },
-                            "QonQrete", null, null
-                        )
-                    }
+                            })
                 }
             }
         }
@@ -109,20 +101,12 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
             }
         } else {
             panel.createActionLabel("Create root tasq.md") {
-                val createAction = com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                    .getAction("QonQrete.CreateTasq")
-                if (createAction != null) {
-                    ActionUtil.invokeAction(
-                        createAction,
-                        com.intellij.openapi.actionSystem.DataContext { dataId ->
+                ActionInvoker.invokeAction("QonQrete.CreateTasq", com.intellij.openapi.actionSystem.DataContext { dataId ->
                             when {
                                 com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
                                 else -> null
                             }
-                        },
-                        "QonQrete", null, null
-                    )
-                }
+                        })
             }
         }
         return panel
@@ -158,20 +142,12 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
         val panel = EditorNotificationPanel(editor, EditorNotificationPanel.Status.Info)
         panel.text = "QonQrete project detected"
         panel.createActionLabel("Run as QonQrete Tasq") {
-            val runAction = com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                .getAction("QonQrete.RunAsQonqreteTasq")
-            if (runAction != null) {
-                ActionUtil.invokeAction(
-                    runAction,
-                    com.intellij.openapi.actionSystem.DataContext { dataId ->
+            ActionInvoker.invokeAction("QonQrete.RunAsQonqreteTasq", com.intellij.openapi.actionSystem.DataContext { dataId ->
                         when {
                             com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
                             else -> null
                         }
-                    },
-                    "QonQrete", null, null
-                )
-            }
+                    })
         }
         return panel
     }

@@ -31,7 +31,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.*
 import com.intellij.ui.treeStructure.Tree
-import com.intellij.openapi.actionSystem.ex.ActionUtil
+import sh.qonqrete.intellij.util.ActionInvoker
 import com.intellij.util.ui.JBUI
 import sh.qonqrete.intellij.services.*
 import sh.qonqrete.intellij.ui.QonQreteQonstructionNameDialog
@@ -635,48 +635,30 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     }
 
     private fun executeDeploy() {
-        val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
-            .getAction("QonQrete.DeployToWorkspace") ?: return
-        ActionUtil.invokeAction(
-            action,
-            com.intellij.openapi.actionSystem.DataContext { dataId ->
-                when {
-                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
-                    else -> null
-                }
-            },
-            "QonQrete", null, null
-        )
+        ActionInvoker.invokeAction("QonQrete.DeployToWorkspace", com.intellij.openapi.actionSystem.DataContext { dataId ->
+            when {
+                com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                else -> null
+            }
+        })
     }
 
     private fun executeCreateTasq() {
-        val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
-            .getAction("QonQrete.CreateTasq") ?: return
-        ActionUtil.invokeAction(
-            action,
-            com.intellij.openapi.actionSystem.DataContext { dataId ->
-                when {
-                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
-                    else -> null
-                }
-            },
-            "QonQrete", null, null
-        )
+        ActionInvoker.invokeAction("QonQrete.CreateTasq", com.intellij.openapi.actionSystem.DataContext { dataId ->
+            when {
+                com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                else -> null
+            }
+        })
     }
 
     private fun executeAIConfig() {
-        val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
-            .getAction("QonQrete.SetAIConfig") ?: return
-        ActionUtil.invokeAction(
-            action,
-            com.intellij.openapi.actionSystem.DataContext { dataId ->
-                when {
-                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
-                    else -> null
-                }
-            },
-            "QonQrete", null, null
-        )
+        ActionInvoker.invokeAction("QonQrete.SetAIConfig", com.intellij.openapi.actionSystem.DataContext { dataId ->
+            when {
+                com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                else -> null
+            }
+        })
     }
 
     private fun executeResume() {

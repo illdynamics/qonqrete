@@ -10,8 +10,8 @@
 package sh.qonqrete.intellij.actions
 
 import com.intellij.credentialStore.CredentialAttributes
-import com.intellij.credentialStore.Credentials
 import com.intellij.credentialStore.generateServiceName
+import com.intellij.credentialStore.Credentials
 import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
@@ -92,7 +92,7 @@ class SetAIConfigAction : AnAction() {
          */
         @Suppress("DEPRECATION")
         fun storeApiKey(envKey: String, value: String) {
-            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey))
+            val attrs = CredentialAttributes.Builder(generateServiceName("QonQrete", envKey)).build()
             PasswordSafe.instance.set(attrs, Credentials(envKey, value))
         }
 
@@ -101,7 +101,7 @@ class SetAIConfigAction : AnAction() {
          */
         @Suppress("DEPRECATION")
         fun getApiKey(envKey: String): String? {
-            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey))
+            val attrs = CredentialAttributes.Builder(generateServiceName("QonQrete", envKey)).build()
             return PasswordSafe.instance.getPassword(attrs)
         }
 

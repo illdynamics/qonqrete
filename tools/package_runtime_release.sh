@@ -38,6 +38,7 @@ cp -r \
   tasq-small.md \
   tasq-medium.md \
   tasq-big.md \
+  .env.example \
   qrane \
   worqer \
   worqspace \
