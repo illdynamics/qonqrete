@@ -118,7 +118,7 @@ Build a repository-scale platform with many directories and many files.
 - provision/02-databases.sh
 - provision/03-c2-frameworks.sh
 - provision/04-security-tools.sh
-- provision/05-autowonqnet-deploy.sh
+# This line was removed to eliminate autowonqnet reference
 - provision/06-evasion-tools.sh
 - provision/07-custom-env.sh
 - provision/99-finalize.sh

@@ -1,1 +1,0 @@
-build a pixoo 64 script where I can add an IP-address of the Divoom Pixoo 64 to send a mp4 or gif playing on it please. use the official divoom python library and make sure it is all one python script.
