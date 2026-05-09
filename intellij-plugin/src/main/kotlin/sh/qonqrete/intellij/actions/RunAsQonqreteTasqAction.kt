@@ -64,8 +64,14 @@ class RunAsQonqreteTasqAction : AnAction() {
                 Messages.getQuestionIcon()
             )
             if (choice == 0) {
-                com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                    .getAction("QonQrete.DeployToWorkspace")?.actionPerformed(e)
+                com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
+                        com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                            .getAction("QonQrete.DeployToWorkspace")!!,
+                        e.dataContext,
+                        e.place,
+                        null,
+                        null
+                    )
             }
             return
         }
@@ -130,8 +136,14 @@ class RunAsQonqreteTasqAction : AnAction() {
                     Messages.getWarningIcon()
                 )
                 if (choice == Messages.YES) {
-                    com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                        .getAction("QonQrete.SetAIConfig")?.actionPerformed(e)
+                    com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
+                            com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                                .getAction("QonQrete.SetAIConfig")!!,
+                            e.dataContext,
+                            e.place,
+                            null,
+                            null
+                        )
                     return
                 }
             }

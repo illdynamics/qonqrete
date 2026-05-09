@@ -1,3 +1,39 @@
+## v1.4.1 — JetBrains Compatibility & Auto Briq Sense Default-On
+
+This release resolves the IntelliJ Platform compatibility warnings flagged by the JetBrains Marketplace Verifier for 2026.2 EAP and restores clean startup behavior across all supported IDE versions. It also makes **Auto Briq Sensitivity** the default for both IDE plugins — matching the expected user experience.
+
+### JetBrains Compatibility Fixes
+
+All scheduled-for-removal and deprecated API usages have been replaced:
+
+| Issue | Fix |
+|-------|-----|
+| **`AnActionEvent.createFromDataContext()`** (6 usages) | Replaced with `ActionUtil.invokeAction()` |
+| **`TextFieldWithBrowseButton.addBrowseFolderListener()`** | Updated to 5-param overload with `TextComponentAccessor` |
+| **`FileChooserDescriptorFactory.createSingleFileDescriptor()`** | Replaced with `FileChooserDescriptor` constructor |
+| **`JBPopupFactory.createListPopupBuilder()` + `setItemChoosenCallback()`** | Replaced with `PopupChooserBuilder` + `setItemChosenCallback` |
+| **`ProcessAdapter`** (4 usages) | Replaced with `ProcessListener` interface |
+| **`CredentialAttributes(String)` constructor** | Replaced with `CredentialAttributes(Key)` |
+| **`URL(String)` constructor** | Replaced with `URI(urlStr).toURL()` |
+| **`AnAction.actionPerformed()` OverrideOnly violations** (8 usages) | Replaced with `ActionUtil.invokeAction()` |
+
+### Startup Timeout Fix
+
+- **Root cause:** Modal `showAndGet()` dialog during project startup blocked the EDT, causing the IDE verifier to time out after 10 minutes.
+- **Fix:** Replaced with non-blocking notification balloon. The first-launch AI provider wizard is still accessible from the tool window and menus.
+
+### Auto Briq Sensitivity Defaults to On
+
+- **IntelliJ:** `QonQreteSettingsState.State.defaultAutoBriqSensitivity` changed from `false` to `true`.
+- **VS Code:** `qonqrete.defaultAutoBriqSensitivity` in `package.json` changed from `false` to `true`. All internal fallback values (sidebar, config wizard, run command) updated to match.
+- **Behavior:** New installations will have `--auto-briq-sensitivity` enabled by default. Existing users can toggle it in IDE settings.
+
+### Upgrade Notes
+
+- No changes to the core runtime (`qonqrete.sh` or `qrane/`). Runtime version remains `1.4.0`.
+- IDE plugins only: rebuilt and republished against the same runtime.
+- Existing `1.4.0` plugin installations will be offered `1.4.1` as an in-IDE update.
+
 # QonQrete Release Notes
 
 ## v1.4.0 — MLcon Edition: Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment

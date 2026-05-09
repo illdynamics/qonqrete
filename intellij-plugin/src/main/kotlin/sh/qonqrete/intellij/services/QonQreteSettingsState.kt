@@ -24,7 +24,7 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
 
     data class State(
         var defaultSensitivity: Int = 1,
-        var defaultAutoBriqSensitivity: Boolean = false,
+        var defaultAutoBriqSensitivity: Boolean = true,
         var defaultCycles: Int = 1,
         var defaultMode: String = "program",
         var defaultAutonomous: Boolean = true,
@@ -117,7 +117,7 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
  */
 data class QonQreteRunConfig(
     val sensitivity: Int = 1,
-    val autoSensitivity: Boolean = false,
+    val autoSensitivity: Boolean = true,
     val cycles: Int = 1,
     val mode: String = "program",
     val autonomous: Boolean = true,

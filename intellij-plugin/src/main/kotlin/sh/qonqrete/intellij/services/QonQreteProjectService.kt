@@ -18,7 +18,7 @@ package sh.qonqrete.intellij.services
 
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
-import com.intellij.execution.process.ProcessAdapter
+import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -511,7 +511,7 @@ class QonQreteProjectService(private val project: Project) : Disposable {
         commandLine.withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
         val handler = OSProcessHandler(commandLine)
         val output = StringBuilder()
-        handler.addProcessListener(object : ProcessAdapter() {
+        handler.addProcessListener(object : ProcessListener {
             override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) { output.append(event.text) }
         })
         handler.startNotify()
@@ -551,7 +551,7 @@ class QonQreteProjectService(private val project: Project) : Disposable {
                 buildSecureEnvMap().forEach { (k, v) -> cmdLine.environment[k] = v }
 
                 val handler = com.intellij.execution.process.KillableColoredProcessHandler(cmdLine)
-                handler.addProcessListener(object : ProcessAdapter() {
+                handler.addProcessListener(object : ProcessListener {
                     override fun processTerminated(event: ProcessEvent) {
                         // Marker file handles completion detection
                     }

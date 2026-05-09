@@ -9,7 +9,7 @@
 <idea-plugin>
     <id>sh.qonqrete</id>
     <name>QonQrete</name>
-    <version>1.4.0</version>
+    <version>1.4.1</version>
     <idea-version since-build="233"/>
     <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
 

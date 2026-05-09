@@ -432,7 +432,7 @@ function getDefaultConfig(): QonQreteRunConfig {
     const vsConfig = vscode.workspace.getConfiguration('qonqrete');
     return {
         sensitivity: vsConfig.get<number>('defaultSensitivity', 1),
-        autoSensitivity: vsConfig.get<boolean>('defaultAutoBriqSensitivity', false),
+        autoSensitivity: vsConfig.get<boolean>('defaultAutoBriqSensitivity', true),
         cycles: vsConfig.get<number>('defaultCycles', 1),
         mode: vsConfig.get<string>('defaultMode', 'program'),
         autonomous: vsConfig.get<boolean>('defaultAutonomous', true),

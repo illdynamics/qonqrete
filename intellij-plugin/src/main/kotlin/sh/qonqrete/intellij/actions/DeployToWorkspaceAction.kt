@@ -24,6 +24,7 @@ import com.intellij.ide.plugins.PluginManagerCore
 import sh.qonqrete.intellij.services.QonQreteProjectService
 import sh.qonqrete.intellij.services.RunState
 import java.io.*
+import java.net.URI
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.ZipInputStream
@@ -220,7 +221,7 @@ class DeployToWorkspaceAction : AnAction() {
     }
 
     private fun downloadFile(urlStr: String, dest: File) {
-        var url = URL(urlStr)
+        var url = URI(urlStr).toURL()
         var redirects = 0
         while (redirects < 5) {
             val conn = url.openConnection() as HttpURLConnection
@@ -229,7 +230,7 @@ class DeployToWorkspaceAction : AnAction() {
             conn.instanceFollowRedirects = false
             val code = conn.responseCode
             if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP || code == 307) {
-                url = URL(conn.getHeaderField("Location"))
+                url = URI(conn.getHeaderField("Location")).toURL()
                 redirects++
                 conn.disconnect()
                 continue

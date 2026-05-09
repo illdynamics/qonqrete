@@ -62,8 +62,14 @@ class RunTasqAction : AnAction() {
                 Messages.getQuestionIcon()
             )
             when (choice) {
-                0 -> com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                    .getAction("QonQrete.DeployToWorkspace")?.actionPerformed(e)
+                0 -> com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
+                        com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                            .getAction("QonQrete.DeployToWorkspace")!!,
+                        e.dataContext,
+                        e.place,
+                        null,
+                        null
+                    )
                 1 -> com.intellij.openapi.options.ShowSettingsUtil.getInstance()
                     .showSettingsDialog(project, "QonQrete")
             }
@@ -81,8 +87,14 @@ class RunTasqAction : AnAction() {
                 Messages.getQuestionIcon()
             )
             if (choice == 0) {
-                com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                    .getAction("QonQrete.CreateTasq")?.actionPerformed(e)
+                com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
+                        com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                            .getAction("QonQrete.CreateTasq")!!,
+                        e.dataContext,
+                        e.place,
+                        null,
+                        null
+                    )
             }
             return
         }
@@ -136,8 +148,14 @@ class RunTasqAction : AnAction() {
                     Messages.getWarningIcon()
                 )
                 if (choice == Messages.YES) {
-                    com.intellij.openapi.actionSystem.ActionManager.getInstance()
-                        .getAction("QonQrete.SetAIConfig")?.actionPerformed(e)
+                    com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
+                            com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                                .getAction("QonQrete.SetAIConfig")!!,
+                            e.dataContext,
+                            e.place,
+                            null,
+                            null
+                        )
                     return
                 }
             }
