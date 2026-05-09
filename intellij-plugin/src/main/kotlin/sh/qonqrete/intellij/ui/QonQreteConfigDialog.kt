@@ -11,6 +11,7 @@ package sh.qonqrete.intellij.ui
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import javax.swing.DefaultComboBoxModel
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBCheckBox
@@ -33,11 +34,11 @@ class QonQreteConfigDialog(
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1))
     private val autoSensitivityCheckbox = JBCheckBox("Auto briq sensitivity (-B)")
     private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1))
-    private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web"))
+    private val modeCombo = ComboBox(DefaultComboBoxModel(arrayOf("program", "enterprise", "security", "data", "devops", "web")))
     private val autonomousCheckbox = JBCheckBox("Autonomous mode (no human-in-the-loop)")
     private val noSyncCheckbox = JBCheckBox("No repo-root sync (--no-sync)")
     private val sqrapyardCheckbox = JBCheckBox("Seed repository (--seed-repo)")
-    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman"))
+    private val engineCombo = ComboBox(DefaultComboBoxModel(arrayOf("auto", "docker", "podman")))
     private val qonstructionNameField = JBTextField()
 
     private var validatedConfig: QonQreteRunConfig? = null

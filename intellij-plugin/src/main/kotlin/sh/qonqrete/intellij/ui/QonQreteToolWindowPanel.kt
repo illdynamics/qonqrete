@@ -25,6 +25,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import javax.swing.DefaultComboBoxModel
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.JBColor
@@ -62,7 +63,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1)).apply {
         toolTipText = "Number of AI cycles (1-50). More cycles = more refinement."
     }
-    private val modeCombo = ComboBox(arrayOf("program", "enterprise", "security", "data", "devops", "web")).apply {
+    private val modeCombo = ComboBox(DefaultComboBoxModel(arrayOf("program", "enterprise", "security", "data", "devops", "web"))).apply {
         toolTipText = "QonQrete mode: program (general), enterprise, security, data, devops, or web"
     }
     private val autonomousCheckbox = JBCheckBox("Autonomous", settings.defaultAutonomous).apply {
@@ -74,7 +75,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private val sqrapyardCheckbox = JBCheckBox("Seed Repo", settings.useSqrapyard).apply {
         toolTipText = "Seed qodeyard from repository before run (--seed-repo)"
     }
-    private val engineCombo = ComboBox(arrayOf("auto", "docker", "podman")).apply {
+    private val engineCombo = ComboBox(DefaultComboBoxModel(arrayOf("auto", "docker", "podman"))).apply {
         toolTipText = "Container engine: auto (detect), docker, or podman"
     }
     private val qonstructionNameField = JBTextField().apply {

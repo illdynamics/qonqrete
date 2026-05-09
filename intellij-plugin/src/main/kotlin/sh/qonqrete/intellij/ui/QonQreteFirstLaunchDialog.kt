@@ -12,9 +12,10 @@ package sh.qonqrete.intellij.ui
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import javax.swing.DefaultComboBoxModel
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBPasswordField
+import javax.swing.JPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
@@ -37,7 +38,7 @@ data class ProviderInfo(
     val configId: String = id
 )
 
-class QonQreteFirstLaunchDialog(private val project: Project) : DialogWrapper(project, true) {
+class QonQreteFirstLaunchDialog(private val project: Project) : DialogWrapper(project) {
 
     companion object {
         private val AI_AGENTS = listOf("qrystallizer", "instruqtor", "construqtor", "inspeqtor")
@@ -139,10 +140,10 @@ class QonQreteFirstLaunchDialog(private val project: Project) : DialogWrapper(pr
     }
 
     // UI components
-    private val providerCombo = ComboBox(PROVIDERS.map { "${it.label}  ${if (it.notes.isNotEmpty()) "(${it.notes})" else ""}" }.toTypedArray())
+    private val providerCombo = ComboBox(DefaultComboBoxModel(PROVIDERS.map { "${it.label}  ${if (it.notes.isNotEmpty()) "(${it.notes})" else ""}" }.toTypedArray()))
     private val modelCombo = ComboBox<String>()
     private val customModelField = JBTextField(30)
-    private val apiKeyField = JBPasswordField()
+    private val apiKeyField = JPasswordField()
     private val envKeyLabel = JBLabel("")
     private val detectedKeyLabel = JBLabel("")
 

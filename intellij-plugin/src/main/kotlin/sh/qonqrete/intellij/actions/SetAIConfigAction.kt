@@ -18,10 +18,11 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import javax.swing.DefaultComboBoxModel
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBPasswordField
+import javax.swing.JPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
@@ -296,7 +297,7 @@ class SetAIConfigAction : AnAction() {
         )
 
         private val agentRows = mutableMapOf<String, AgentRow>()
-        private val apiKeyFields = mutableMapOf<String, JBPasswordField>()
+        private val apiKeyFields = mutableMapOf<String, JPasswordField>()
 
         init {
             title = "QonQrete: AI Configuration"
@@ -306,7 +307,6 @@ class SetAIConfigAction : AnAction() {
         override fun createCenterPanel(): JComponent {
             val configs = readAgentConfigs(configPath)
             val providerIds = PROVIDERS.keys.toList()
-            val providerLabels = providerIds.map { PROVIDERS[it]!!.label }
 
             val builder = FormBuilder.createFormBuilder()
             builder.addComponent(JBLabel("<html><b>Agent Providers & Models</b></html>"))
@@ -315,7 +315,7 @@ class SetAIConfigAction : AnAction() {
             for (agent in AI_AGENTS) {
                 val (currentProv, currentModel) = configs[agent] ?: Pair("deepseek", "deepseek-chat")
 
-                val providerCombo = ComboBox(providerIds.toTypedArray())
+                val providerCombo = ComboBox(DefaultComboBoxModel(providerIds.toTypedArray()))
                 providerCombo.selectedItem = currentProv
                 providerCombo.renderer = object : DefaultListCellRenderer() {
                     override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, isSelected: Boolean, cellHasFocus: Boolean) =
@@ -345,10 +345,10 @@ class SetAIConfigAction : AnAction() {
             builder.addSeparator()
             builder.addComponent(JBLabel("<html><b>API Keys</b> (stored securely in IntelliJ credential store)</html>"))
 
-            for ((provId, info) in PROVIDERS) {
+            for ((_, info) in PROVIDERS) {
                 val existing = getApiKey(info.envKey)
                 val envSet = !System.getenv(info.envKey).isNullOrEmpty()
-                val field = JBPasswordField()
+                val field = JPasswordField()
                 if (!existing.isNullOrEmpty()) {
                     field.text = existing
                 }
