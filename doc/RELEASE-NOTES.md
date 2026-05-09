@@ -5,8 +5,8 @@ Zero-deprecation IntelliJ plugin, bootstrap/hygiene fixes, and streamlined task 
 
 ### Changes
 - **IntelliJ plugin (v1.4.3→v1.4.4):** Replaced 8 `ActionUtil.invokeAction()` calls with modern `AnActionEvent.createFromDataContext()` pattern.
-  Replaced 2 deprecated `CredentialAttributes()` constructors with `CredentialAttributes.Builder()`.
-  Compatibility warnings eliminated across all verified IDE versions (2023.3.8–2026.2 EAP).
+  Suppressed 2 deprecated `CredentialAttributes()` constructor warnings (Builder API unavailable on 2023.3 minimum).
+  8 ActionUtil warnings eliminated; 2 CredentialAttributes warnings suppressed for 2023.3 compatibility.
 - **Repository version:** `1.4.3` → `1.4.4`
 - **IntelliJ plugin version:** `1.4.3` → `1.4.4`
 - **VS Code extension version:** `1.4.3` → `1.4.4`

@@ -92,7 +92,7 @@ class SetAIConfigAction : AnAction() {
          */
         @Suppress("DEPRECATION")
         fun storeApiKey(envKey: String, value: String) {
-            val attrs = CredentialAttributes.Builder(generateServiceName("QonQrete", envKey)).build()
+            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey))
             PasswordSafe.instance.set(attrs, Credentials(envKey, value))
         }
 
@@ -101,7 +101,7 @@ class SetAIConfigAction : AnAction() {
          */
         @Suppress("DEPRECATION")
         fun getApiKey(envKey: String): String? {
-            val attrs = CredentialAttributes.Builder(generateServiceName("QonQrete", envKey)).build()
+            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey))
             return PasswordSafe.instance.getPassword(attrs)
         }
 

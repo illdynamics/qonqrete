@@ -4,7 +4,7 @@
 
 ### Changes
 - Replaced 8 deprecated ActionUtil.invokeAction() calls with modern AnActionEvent pattern.
-- Replaced 2 deprecated CredentialAttributes() constructors with Builder pattern.
+- Suppressed 2 deprecated CredentialAttributes() constructor warnings (Builder unavailable on 2023.3 minimum).
 - Zero compatibility warnings across all verified IDE versions (2023.3.8–2026.2 EAP).
 - Verified marketplace compatibility: Success on all 4 tiers.
 
