@@ -76,13 +76,16 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
                     val runAction = com.intellij.openapi.actionSystem.ActionManager.getInstance()
                         .getAction("QonQrete.RunTasq")
                     if (runAction != null) {
-                        val dataContext = com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.getDataContext(project)
-                        com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
-                            runAction,
-                            dataContext,
-                            com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN,
-                            null,
-                            null
+                        runAction.actionPerformed(
+                            com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
+                                "QonQrete", null,
+                                com.intellij.openapi.actionSystem.DataContext { dataId ->
+                                    when {
+                                        com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                                        else -> null
+                                    }
+                                }
+                            )
                         )
                     }
                 }
@@ -109,13 +112,16 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
                 val createAction = com.intellij.openapi.actionSystem.ActionManager.getInstance()
                     .getAction("QonQrete.CreateTasq")
                 if (createAction != null) {
-                    val dataContext = com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.getDataContext(project)
-                    com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
-                        createAction,
-                        dataContext,
-                        com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN,
-                        null,
-                        null
+                    createAction.actionPerformed(
+                        com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
+                            "QonQrete", null,
+                            com.intellij.openapi.actionSystem.DataContext { dataId ->
+                                when {
+                                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                                    else -> null
+                                }
+                            }
+                        )
                     )
                 }
             }
@@ -156,13 +162,16 @@ class TasqEditorNotificationProvider : EditorNotificationProvider, DumbAware {
             val runAction = com.intellij.openapi.actionSystem.ActionManager.getInstance()
                 .getAction("QonQrete.RunAsQonqreteTasq")
             if (runAction != null) {
-                val dataContext = com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.getDataContext(project)
-                com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(
-                    runAction,
-                    dataContext,
-                    com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN,
-                    null,
-                    null
+                runAction.actionPerformed(
+                    com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
+                        "QonQrete", null,
+                        com.intellij.openapi.actionSystem.DataContext { dataId ->
+                            when {
+                                com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                                else -> null
+                            }
+                        }
+                    )
                 )
             }
         }

@@ -10,7 +10,7 @@
 package sh.qonqrete.intellij.ui
 
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
-import com.intellij.ui.TextComponentAccessor
+// TextComponentAccessor not available in 2023.3 SDK, using compatible overload
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -49,20 +49,20 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun createComponent(): JComponent {
         // Set up file choosers
+        @Suppress("DEPRECATION")
         customQonqretePathField.addBrowseFolderListener(
             "Select qonqrete.sh",
             "Select the QonQrete script",
             project,
-            FileChooserDescriptor(false, false, true, true, false, false),
-            TextComponentAccessor.TEXT_FIELD_WHOLE_TEXT
+            FileChooserDescriptor(false, false, true, true, false, false)
         )
 
+        @Suppress("DEPRECATION")
         customBashPathField.addBrowseFolderListener(
             "Select Bash",
             "Select the bash executable",
             project,
-            FileChooserDescriptor(false, false, true, true, false, false),
-            TextComponentAccessor.TEXT_FIELD_WHOLE_TEXT
+            FileChooserDescriptor(false, false, true, true, false, false)
         )
 
         val builder = FormBuilder.createFormBuilder()

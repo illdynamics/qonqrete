@@ -90,7 +90,7 @@ class SetAIConfigAction : AnAction() {
          * Store an API key using IntelliJ's PasswordSafe
          */
         fun storeApiKey(envKey: String, value: String) {
-            val attrs = CredentialAttributes(com.intellij.credentialStore.CredentialAttributes.Key(generateServiceName("QonQrete", envKey)))
+            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey))
             PasswordSafe.instance.set(attrs, Credentials(envKey, value))
         }
 
@@ -98,7 +98,7 @@ class SetAIConfigAction : AnAction() {
          * Retrieve an API key from PasswordSafe
          */
         fun getApiKey(envKey: String): String? {
-            val attrs = CredentialAttributes(com.intellij.credentialStore.CredentialAttributes.Key(generateServiceName("QonQrete", envKey)))
+            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey))
             return PasswordSafe.instance.getPassword(attrs)
         }
 

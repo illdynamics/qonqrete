@@ -122,7 +122,7 @@ class CleanQagesAction : AnAction() {
 
         PopupChooserBuilder(list)
             .setTitle("Select Qage to Clean")
-            .setItemChosenCallback {
+            .setItemChosenCallback(Runnable {
                 val selectedIndex = list.selectedIndex
                 if (selectedIndex >= 0) {
                     val selectedQage = qages[selectedIndex]
@@ -143,7 +143,7 @@ class CleanQagesAction : AnAction() {
                         }
                     }
                 }
-            }
+            })
             .createPopup()
             .showCenteredInCurrentWindow(project)
     }

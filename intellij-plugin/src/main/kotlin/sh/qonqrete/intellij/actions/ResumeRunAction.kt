@@ -83,7 +83,7 @@ class ResumeRunAction : AnAction() {
             .setTitle("Resume from Qage")
             .setMovable(true)
             .setResizable(true)
-            .setItemChosenCallback {
+            .setItemChosenCallback(Runnable {
                 val selected = list.selectedValue as? QageListItem
                 if (selected != null) {
                     try {
@@ -93,7 +93,7 @@ class ResumeRunAction : AnAction() {
                         service.notify("QonQrete Error", ex.message ?: "Unknown error", NotificationType.ERROR)
                     }
                 }
-            }
+            })
             .createPopup()
             .showInFocusCenter()
     }
