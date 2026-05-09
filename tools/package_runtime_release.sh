@@ -35,9 +35,6 @@ cp -r \
   COPYRIGHT \
   README.md \
   qonqrete.jpg \
-  tasq-small.md \
-  tasq-medium.md \
-  tasq-big.md \
   .env.example \
   qrane \
   worqer \
