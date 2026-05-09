@@ -30,6 +30,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.*
 import com.intellij.ui.treeStructure.Tree
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.util.ui.JBUI
 import sh.qonqrete.intellij.services.*
 import sh.qonqrete.intellij.ui.QonQreteQonstructionNameDialog
@@ -635,52 +636,45 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private fun executeDeploy() {
         val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
             .getAction("QonQrete.DeployToWorkspace") ?: return
-        // Must call OverrideOnly-annotated actionPerformed directly since
-        // we cannot use ActionUtil.invokeAction without ambiguity on 2023.3 SDK.
-        // The OverrideOnly flag is informational only; the call is valid
-        // when passing a properly constructed DataContext.
-        action.actionPerformed(
-            com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
-                "QonQrete", null,
-                com.intellij.openapi.actionSystem.DataContext { dataId ->
-                    when {
-                        com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
-                        else -> null
-                    }
+        ActionUtil.invokeAction(
+            action,
+            com.intellij.openapi.actionSystem.DataContext { dataId ->
+                when {
+                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                    else -> null
                 }
-            )
+            },
+            "QonQrete", null, null
         )
     }
 
     private fun executeCreateTasq() {
         val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
             .getAction("QonQrete.CreateTasq") ?: return
-        action.actionPerformed(
-            com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
-                "QonQrete", null,
-                com.intellij.openapi.actionSystem.DataContext { dataId ->
-                    when {
-                        com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
-                        else -> null
-                    }
+        ActionUtil.invokeAction(
+            action,
+            com.intellij.openapi.actionSystem.DataContext { dataId ->
+                when {
+                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                    else -> null
                 }
-            )
+            },
+            "QonQrete", null, null
         )
     }
 
     private fun executeAIConfig() {
         val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
             .getAction("QonQrete.SetAIConfig") ?: return
-        action.actionPerformed(
-            com.intellij.openapi.actionSystem.AnActionEvent.createFromDataContext(
-                "QonQrete", null,
-                com.intellij.openapi.actionSystem.DataContext { dataId ->
-                    when {
-                        com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
-                        else -> null
-                    }
+        ActionUtil.invokeAction(
+            action,
+            com.intellij.openapi.actionSystem.DataContext { dataId ->
+                when {
+                    com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(dataId) -> project
+                    else -> null
                 }
-            )
+            },
+            "QonQrete", null, null
         )
     }
 

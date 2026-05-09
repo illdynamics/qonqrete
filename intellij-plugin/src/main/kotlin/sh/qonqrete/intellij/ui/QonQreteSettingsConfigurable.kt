@@ -14,6 +14,7 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
@@ -49,20 +50,18 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
 
     override fun createComponent(): JComponent {
         // Set up file choosers
-        @Suppress("DEPRECATION")
         customQonqretePathField.addBrowseFolderListener(
-            "Select qonqrete.sh",
-            "Select the QonQrete script",
-            project,
-            FileChooserDescriptor(false, false, true, true, false, false)
+            TextBrowseFolderListener(
+                FileChooserDescriptor(false, false, true, true, false, false),
+                project
+            )
         )
 
-        @Suppress("DEPRECATION")
         customBashPathField.addBrowseFolderListener(
-            "Select Bash",
-            "Select the bash executable",
-            project,
-            FileChooserDescriptor(false, false, true, true, false, false)
+            TextBrowseFolderListener(
+                FileChooserDescriptor(false, false, true, true, false, false),
+                project
+            )
         )
 
         val builder = FormBuilder.createFormBuilder()

@@ -95,3 +95,4 @@ qontext.d/
 # Test runtime artifacts
 _test_runtime/
 **/_test_runtime/
+.codeseeq/
