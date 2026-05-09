@@ -14,7 +14,7 @@ package sh.qonqrete.intellij.actions
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.PopupChooserBuilder
 import sh.qonqrete.intellij.services.QonQreteProjectService
 import sh.qonqrete.intellij.services.QonQreteRunConfig
 import java.awt.Component
@@ -79,12 +79,11 @@ class ResumeRunAction : AnAction() {
         list.fixedCellHeight = 45
         list.selectedIndex = 0
 
-        JBPopupFactory.getInstance()
-            .createListPopupBuilder(list)
+        PopupChooserBuilder(list)
             .setTitle("Resume from Qage")
             .setMovable(true)
             .setResizable(true)
-            .setItemChoosenCallback {
+            .setItemChosenCallback {
                 val selected = list.selectedValue as? QageListItem
                 if (selected != null) {
                     try {

@@ -13,7 +13,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.PopupChooserBuilder
 import com.intellij.ui.components.JBList
 import sh.qonqrete.intellij.services.*
 import java.text.SimpleDateFormat
@@ -120,10 +120,9 @@ class CleanQagesAction : AnAction() {
         val list = JBList(displayItems)
         list.selectionMode = ListSelectionModel.SINGLE_SELECTION
 
-        JBPopupFactory.getInstance()
-            .createListPopupBuilder(list)
+        PopupChooserBuilder(list)
             .setTitle("Select Qage to Clean")
-            .setItemChoosenCallback {
+            .setItemChosenCallback {
                 val selectedIndex = list.selectedIndex
                 if (selectedIndex >= 0) {
                     val selectedQage = qages[selectedIndex]

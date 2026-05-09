@@ -39,7 +39,7 @@ function getDefaultConfig(): QonQreteRunConfig {
     
     return {
         sensitivity: config.get<number>('defaultSensitivity', 1),
-        autoSensitivity: config.get<boolean>('defaultAutoBriqSensitivity', false),
+        autoSensitivity: config.get<boolean>('defaultAutoBriqSensitivity', true),
         cycles: config.get<number>('defaultCycles', 1),
         mode: config.get<string>('defaultMode', 'program'),
         autonomous: config.get<boolean>('defaultAutonomous', true),
@@ -123,7 +123,7 @@ export async function showQuickConfigWizard(): Promise<QonQreteRunConfig | undef
 
     return {
         sensitivity: parseInt(sensitivityInput, 10),
-        autoSensitivity: defaults.autoSensitivity ?? false,
+        autoSensitivity: defaults.autoSensitivity ?? true,
         cycles: parseInt(cyclesInput, 10),
         mode: modeSelection.label,
         autonomous: autonomousSelection.label === 'Autonomous',

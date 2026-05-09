@@ -1,4 +1,4 @@
-# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.0 - MLcon Edition)
+# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.1 - MLcon Edition)
 ![Release](https://img.shields.io/github/v/release/illdynamics/qonqrete)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
@@ -11,8 +11,8 @@ QonQrete is a **local-first, file-based AI software construction system** that r
 
 ## Version
 
-**Current repository version:** `v1.4.0`
-**Release context:** `v1.4.0 - MLcon Edition`
+**Current repository version:** `v1.4.1`
+**Release context:** `v1.4.1 - MLcon Edition`
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
@@ -29,7 +29,7 @@ This repository currently ships three things:
 
 The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-> **v1.4.0 - MLcon Edition** — Truthful Inspection, Clean Streaming UX, Hybrid Venice Wiring
+> **v1.4.1 - MLcon Edition** — Truthful Inspection, Clean Streaming UX, Hybrid Venice Wiring
 
 This release focuses on three coordinated fixes:
 
@@ -111,7 +111,13 @@ After setup, QonQrete automatically configures all agents, runs `init`, and crea
 
 For a specific version:
 ```bash
-curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.0
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.1
+```
+
+### Version-specific install
+
+```bash
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.1
 ```
 
 For CI/non-interactive use:
@@ -254,7 +260,7 @@ python worqer/qompressor.py --capabilities   # Current compressor capability rep
 python -m worqer.smoqetester qodeyard --cycle 1 --config worqspace/config.yaml --json
 ```
 
-## IDE Commands (v1.4.0)
+## IDE Commands (v1.4.1)
 
 Both VS Code and IntelliJ support identical commands:
 
@@ -370,7 +376,7 @@ You must answer `y` or `yes` to continue. Any other answer cancels the run.
 
 This is useful for preventing accidental expensive runs with high sensitivity or many iterations.
 
-## v1.4.0 - MLcon Edition Snapshot Highlights
+## v1.4.1 - MLcon Edition Snapshot Highlights
 
 - **Truthful inspection + deterministic evidence upgrades** in final review paths
 - **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles

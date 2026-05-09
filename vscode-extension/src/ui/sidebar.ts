@@ -196,7 +196,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 },
                 defaultConfig: {
                     sensitivity: config.get<number>('defaultSensitivity', 1),
-                    autoSensitivity: config.get<boolean>('defaultAutoBriqSensitivity', false),
+                    autoSensitivity: config.get<boolean>('defaultAutoBriqSensitivity', true),
                     cycles: config.get<number>('defaultCycles', 1),
                     mode: config.get<string>('defaultMode', 'program'),
                     autonomous: config.get<boolean>('defaultAutonomous', true),

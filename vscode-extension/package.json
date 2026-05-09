@@ -2,7 +2,7 @@
   "name": "qonqrete",
   "displayName": "QonQrete",
   "description": "QonQrete is a deterministic AI coding agent for VS Code enabling autonomous code generation, local AI development, and secure sandboxed software construction workflows.",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "publisher": "QonQrete",
   "homepage": "https://qonqrete.sh",
   "icon": "assets/qonqrete-icon.png",
@@ -192,7 +192,7 @@
         },
         "qonqrete.defaultAutoBriqSensitivity": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Use --auto-briq-sensitivity by default. When enabled, the manual default sensitivity slider is ignored unless you force -b."
         },
         "qonqrete.defaultCycles": {
@@ -209,7 +209,7 @@
         },
         "qonqrete.noSync": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Skip repo-root sync-back by default and keep outputs in qage/qonstructions (--no-sync)."
         },
         "qonqrete.defaultMode": {
@@ -250,7 +250,7 @@
         },
         "qonqrete.useSqrapyard": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Seed qodeyard from current repository by default (--seed-repo; legacy --sqrapyard alias)."
         },
         "qonqrete.qonqretePath": {

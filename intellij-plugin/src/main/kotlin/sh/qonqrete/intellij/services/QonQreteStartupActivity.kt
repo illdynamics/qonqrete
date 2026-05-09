@@ -1,6 +1,7 @@
 /**
  * QonQrete Startup Activity
  * Handles plugin initialization on project open
+ * Non-blocking startup - never shows modal dialogs from startup
  *
  * @author WoNQ
  * @version VERSION
@@ -31,7 +32,7 @@ class QonQreteStartupActivity : ProjectActivity {
             log.warn("Error during orphan cleanup", e)
         }
 
-        // 2. Start shell verification
+        // 2. Start shell verification (non-blocking)
         service.verifyShell { verified ->
             if (!verified) {
                 val shellInfo = service.getShellInfo()
@@ -55,17 +56,18 @@ class QonQreteStartupActivity : ProjectActivity {
             }
         }
 
-        // 3. Show first-launch wizard if .qonqrete/ is missing or setup incomplete
         val settings = QonQreteSettingsState.getInstance()
         if (!service.isDeployed()) {
-            ApplicationManager.getApplication().invokeLater {
-                val dialog = sh.qonqrete.intellij.ui.QonQreteFirstLaunchDialog(project)
-                if (dialog.showAndGet()) {
-                    settings.welcomeShown = true
-                }
-            }
+            // Non-blocking startup: use a notification with an action instead of a
+            // modal dialog to avoid blocking the event dispatch thread during IDE
+            // initialization (which caused a 10-minute timeout in verification tests).
+            service.notify(
+                "QonQrete: Setup Required",
+                "Deploy QonQrete to this workspace and configure your AI provider.",
+                NotificationType.INFORMATION
+            )
         } else if (!settings.welcomeShown && service.getQonQretePath() != null) {
-            ApplicationManager.getApplication().invokeLater {
+            ApplicationManager.getApplication().invokeLater({
                 val version = service.getVersion() ?: "unknown"
                 service.notify(
                     "QonQrete Ready",
@@ -73,7 +75,7 @@ class QonQreteStartupActivity : ProjectActivity {
                     NotificationType.INFORMATION
                 )
                 settings.welcomeShown = true
-            }
+            }, { project.disposed })
         }
 
         log.info("QonQrete startup activity completed")

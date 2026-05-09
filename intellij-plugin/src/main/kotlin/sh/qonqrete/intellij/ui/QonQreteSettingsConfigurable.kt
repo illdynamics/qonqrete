@@ -9,7 +9,8 @@
 
 package sh.qonqrete.intellij.ui
 
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.fileChooser.FileChooserDescriptor
+import com.intellij.ui.TextComponentAccessor
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -52,14 +53,16 @@ class QonQreteSettingsConfigurable(private val project: Project) : Configurable 
             "Select qonqrete.sh",
             "Select the QonQrete script",
             project,
-            FileChooserDescriptorFactory.createSingleFileDescriptor()
+            FileChooserDescriptor(false, false, true, true, false, false),
+            TextComponentAccessor.TEXT_FIELD_WHOLE_TEXT
         )
 
         customBashPathField.addBrowseFolderListener(
             "Select Bash",
             "Select the bash executable",
             project,
-            FileChooserDescriptorFactory.createSingleFileDescriptor()
+            FileChooserDescriptor(false, false, true, true, false, false),
+            TextComponentAccessor.TEXT_FIELD_WHOLE_TEXT
         )
 
         val builder = FormBuilder.createFormBuilder()
