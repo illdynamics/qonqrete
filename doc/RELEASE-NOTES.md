@@ -1,3 +1,38 @@
+## v1.4.3 — Final API Compatibility & Marketplace Cleanup
+
+This release resolves the remaining IntelliJ Platform API deprecation warnings flagged by the Marketplace Verifier across all supported IDE versions (2023.3 through 2026.2 EAP).
+
+### API Deprecation Fixes
+
+- **`ComboBox(E[])` constructor** (6 usages): Replaced with `ComboBox(DefaultComboBoxModel(E[]))` — the array overload was deprecated in IntelliJ 2024.2+
+- **`JBPasswordField()`** (2 usages): Replaced with standard `javax.swing.JPasswordField()` — `JBPasswordField` was deprecated in IntelliJ 2024.2+
+- **`DialogWrapper(Project, boolean)`** (1 usage): Replaced with `DialogWrapper(Project)` — the `canBeParent` boolean parameter was deprecated in IntelliJ 2024.2+
+
+### Cleanup
+
+- Removed unused variables (`providerLabels`, `provId`) in `SetAIConfigAction`
+- Removed stale `build.gradle.kts.bak` file
+
+### Version Bump
+
+- Repository version: `1.4.2` → `1.4.3`
+- IntelliJ plugin version: `1.4.2` → `1.4.3`
+- VS Code extension version: `1.4.2` → `1.4.3`
+- All documentation and version strings synchronized
+
+### Marketplace Compatibility Status
+
+- **Scheduled-for-removal API:** 0 usages ✅
+- **OverrideOnly API violations:** 0 usages ✅
+- **Deprecated API:** ~1 or fewer remaining warnings ✅
+- All IDE versions from 2023.3 through 2026.2 EAP show **Compatible** verdict
+
+### Upgrade Notes
+
+- No changes to the core runtime (`qonqrete.sh` or `qrane/`). Runtime remains at `1.4.0`.
+- IDE plugins only: rebuilt and republished.
+- Existing `1.4.2` plugin installations will be offered `1.4.3` as an in-IDE update.
+
 ## v1.4.2 — Apache License Migration & JetBrains API Compatibility
 
 This release changes the project license from **AGPL-3.0** to **Apache-2.0** for broader permissive use and resolves remaining IntelliJ Platform API compatibility warnings flagged by the Marketplace Verifier.
