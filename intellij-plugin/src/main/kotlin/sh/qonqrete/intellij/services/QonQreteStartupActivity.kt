@@ -67,18 +67,15 @@ class QonQreteStartupActivity : ProjectActivity {
                 NotificationType.INFORMATION
             )
         } else if (!settings.welcomeShown && service.getQonQretePath() != null) {
-            ApplicationManager.getApplication().invokeLater(
-                {
-                    val version = service.getVersion() ?: "unknown"
-                    service.notify(
-                        "QonQrete Ready",
-                        "QonQrete v$version detected. Use Tools → QonQrete or Ctrl+Alt+Q to run.",
-                        NotificationType.INFORMATION
-                    )
-                    settings.welcomeShown = true
-                },
-                com.intellij.openapi.util.Condition { project.disposed }
-            )
+            ApplicationManager.getApplication().invokeLater {
+                val version = service.getVersion() ?: "unknown"
+                service.notify(
+                    "QonQrete Ready",
+                    "QonQrete v$version detected. Use Tools → QonQrete or Ctrl+Alt+Q to run.",
+                    NotificationType.INFORMATION
+                )
+                settings.welcomeShown = true
+            }
         }
 
         log.info("QonQrete startup activity completed")
