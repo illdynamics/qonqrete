@@ -1,4 +1,4 @@
-# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.4)
+# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.5)
 ![Release](https://img.shields.io/github/v/release/illdynamics/qonqrete)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
@@ -11,8 +11,8 @@ QonQrete is a **local-first, file-based AI software construction system** that r
 
 ## Version
 
-**Current repository version:** `v1.4.4`
-**Release context:** `v1.4.4`
+**Current repository version:** `v1.4.5`
+**Release context:** `v1.4.5`
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
@@ -29,35 +29,7 @@ This repository currently ships three things:
 
 The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-> **v1.4.4** — Plugin API Cleanup & Release Hygiene
-
-This release focuses on three coordinated fixes:
-
-- **QonQrete-native Sqrewdriver repair controller**
-  - `qrane/sqrewdriver_controller.py` now owns the artifact-driven stop-or-repair decision after InspeQtor.
-  - QonQrete does not run the root-level `sqrewdriver/` desktop app and does not add Bun/Electrobun to the runtime.
-  - Repairs are driven by InspeQtor verdicts, `repair-plan.v1.json`, validation bundles, and a generated `verdict/sqrewdriver-repair-brief.v1.md`.
-
-- **Inspection truthfulness hardening**
-  - Final artifact evidence from `qodeyard/` is now explicitly authoritative in review prompts.
-  - Review snippets now carry deterministic metadata (`file_bytes`, `snippet_chars`, `snippet_truncated`) so prompt clipping is never mistaken for file truncation.
-  - InspeQtor review calls now disable previous-log injection for tactical/meta review to reduce stale relay influence.
-  - Verdict synthesis now prioritizes deterministic gates; advisory briq-review noise no longer blocks completion when deterministic checks pass.
-
-- **Frontend localStorage false-negative fix**
-  - Deterministic validation now resolves direct literals plus compact constant/alias/object indirection for localStorage keys (for example `const KEY`, alias chains, `STORAGE_KEYS.foo`).
-
-- **Streaming UX cleanup (without losing audit capture)**
-  - Outer Qrane heartbeat chatter removed.
-  - Inner ConstruQtor `[Still working] ...` chatter removed.
-  - Full raw stream capture to qonsole/audit remains intact.
-  - Terminal defaults to concise rendering for streamed heredoc payloads:
-    - `Writing <file>...`
-    - `Wrote <file>`
-  - TTY hotkeys:
-    - `TAB` => raw stream mode
-    - `Shift+TAB` => concise mode
-  - Mode hints are edge-triggered (single status messages), never prefixed per streamed line.
+> **v1.4.5** — The current release. v1.4.0 shipped the MLcon Edition (inspection truthfulness, streaming UX, hybrid Venice alignment). v1.4.1–v1.4.5 are IDE-plugin-only patches that resolve all IntelliJ Platform API deprecation warnings across 2023.3–2026.2 EAP. Zero scheduled-for-removal, zero override-only, zero deprecated API.
 
 - **Execution wiring defaults**
   - Primary agents remain per-agent configurable; this workspace's live-test config uses DeepSeek for intake/planning/inspection and CodeSeeq only for ConstruQtor.
@@ -111,13 +83,13 @@ After setup, QonQrete automatically configures all agents, runs `init`, and crea
 
 For a specific version:
 ```bash
-curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.4
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.5
 ```
 
 ### Version-specific install
 
 ```bash
-curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.4
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.5
 ```
 
 For CI/non-interactive use:
@@ -260,7 +232,7 @@ python worqer/qompressor.py --capabilities   # Current compressor capability rep
 python -m worqer.smoqetester qodeyard --cycle 1 --config worqspace/config.yaml --json
 ```
 
-## IDE Commands (v1.4.4)
+## IDE Commands
 
 Both VS Code and IntelliJ support identical commands:
 
@@ -376,19 +348,16 @@ You must answer `y` or `yes` to continue. Any other answer cancels the run.
 
 This is useful for preventing accidental expensive runs with high sensitivity or many iterations.
 
-## v1.4.4 - Plugin API Cleanup & Release Hygiene
+## Current release highlights (v1.4.x line)
 
-- **License changed from AGPL-3.0 to Apache-2.0** for broader adoption and permissive use
-- **All JetBrains compatibility warnings resolved** — zero scheduled-for-removal, zero override-only, ~1 deprecated API
-- **ComboBox(E[]) `→` ComboBox(DefaultComboBoxModel(E[]))** — 6 usages fixed
-- **JBPasswordField `→` JPasswordField** — 2 usages fixed
-- **DialogWrapper(project, true) `→` DialogWrapper(project)** — 1 usage fixed
-- **Truthful inspection + deterministic evidence upgrades** in final review paths
-- **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles
-- **Launcher `-N/--no-sync`** run control to keep output in qage/qonstruction paths
-- **Primary AI provider wiring** remains per-agent configurable; ConstruQtor supports `hybrid` by default and can be routed through CodeSeeq.
-- **Versioned container images** (`qonqrete-qage:<version>`; Linux/WSL builds include a host-UID suffix)
-- **Aligned IDE behavior** in VS Code and IntelliJ around the same runtime and task-file model
+- **License changed from AGPL-3.0 to Apache-2.0** (v1.4.2) for broader permissive use
+- **All JetBrains compatibility warnings resolved** across 2023.3–2026.2 EAP — zero scheduled-for-removal, zero override-only, zero deprecated API (v1.4.5)
+- **Truthful inspection + deterministic evidence upgrades** in final review paths (v1.4.0)
+- **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles (v1.4.0)
+- **Launcher `-N/--no-sync`** run control to keep output in qage/qonstruction paths (v1.4.0)
+- **Auto Briq Sensitivity** now default-on in both IDE plugins (v1.4.1)
+- **Versioned container images** (`qonqrete-qage:<version>`; Linux/WSL builds include a host-UID suffix) (v1.4.0)
+- **Aligned IDE behavior** in VS Code and IntelliJ around the same runtime and task-file model (v1.4.0)
 
 ## Core principles
 

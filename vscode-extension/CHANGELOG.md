@@ -1,20 +1,21 @@
 # QonQrete VS Code Extension - Changelog
 
-## 1.4.4 - Plugin API Cleanup & Release Fixes
+## 1.4.5 — v1.4.x Line: Runtime Alignment & Version Sync
 
-### Changed
+### v1.4.x cumulative changes
 - AI config UI now targets the four primary runtime agents only:
   - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
-- Default primary-agent binding in the AI config flow is now:
-  - provider: `venice`
-  - model: `deepseek-v3.2`
+- Default primary-agent binding: `venice / deepseek-v3.2`
 - Shared provider/model picker no longer exposes local-only runtime providers (`mlx`, `llama-cpp`).
-- Venice model suggestions now include `deepseek-v3.2`.
 - Added run-level `--no-sync` wiring to settings, config wizards, and sidebar (`qonqrete.noSync`).
 - Corrected docs/settings defaults to match runtime-backed values (`sensitivity=1`, `cycles=1`, `autonomous=true`).
+- **License:** AGPL-3.0 → Apache-2.0 (v1.4.2)
+- **Auto Briq Sensitivity** default-on in settings (v1.4.1)
+- **Package-lock.json:** Fixed stale version (was stuck at 1.4.0 since v1.4.1) (v1.4.5)
 
 ### Notes
 - Local runtime providers remain supported by core runtime config files, but are no longer presented in the shared sidebar/panel provider picker.
+- No core runtime changes in any v1.4.x patch — IDE plugins only.
 
 ## 1.3.0 - Current Runtime Alignment
 

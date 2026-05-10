@@ -3,7 +3,7 @@
  * Build configuration - Production Ready
  *
  * @author QonQrete
- * @version v1.4.4
+ * @version v1.4.5
  * @license Apache-2.0
  */
 

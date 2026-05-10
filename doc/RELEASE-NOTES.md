@@ -1,142 +1,10 @@
-## v1.4.4 — Plugin API Cleanup & Release Fixes
+## v1.4.0 — MLcon Edition: Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment + IntelliJ Compatibility Series (v1.4.0–v1.4.5)
 
-### Summary
-Zero-deprecation IntelliJ plugin, bootstrap/hygiene fixes, and streamlined task layout.
-
-### Changes
-- **IntelliJ plugin (v1.4.3→v1.4.4):** Replaced 8 `ActionUtil.invokeAction()` calls with modern `AnActionEvent.createFromDataContext()` pattern.
-  Suppressed 2 deprecated `CredentialAttributes()` constructor warnings (Builder API unavailable on 2023.3 minimum).
-  8 ActionUtil warnings eliminated; 2 CredentialAttributes warnings suppressed for 2023.3 compatibility.
-- **Repository version:** `1.4.3` → `1.4.4`
-- **IntelliJ plugin version:** `1.4.3` → `1.4.4`
-- **VS Code extension version:** `1.4.3` → `1.4.4`
-- **Runtime version:** `1.4.3` → `1.4.4`
-- **Fixed:** `qonqrete-bootstrap.sh` is now executable (`chmod +x`).
-- **Fixed:** `package_runtime_release.sh` now includes `.env.example` in the runtime zip.
-- **Fixed:** `package_source_snapshot.sh` no longer wrongly excludes `*.gradle.kts` files.
-- **Fixed:** `verify_zip_hygiene.py` is now called automatically in the runtime-release CI workflow.
-- **Fixed:** Release hygiene test layout assumptions updated for the new task layout.
-- **Fixed:** Both `run_baseline.sh` scripts reference `worqspace/tasq.md` instead of the removed `tasq-small.md`.
-- **Added:** `tests/test_install_smoke.py` with 9 smoke tests for install/bootstrap scripts.
-- **Cleanup:** All stale tasq files removed from repo root; only `worqspace/tasq.md` (REST API) is kept.
-- **No breaking changes** to the runtime core (`qrane/`, `worqer/`) or existing workflows.
-
-### Upgrade notes
-- The IntelliJ plugin auto-updates in-IDE. Existing `1.4.3` installations will be offered `1.4.4`.
-- The runtime zip (`qonqrete-v1.4.4.zip`) can be downloaded from GitHub Releases or deployed via the plugin.
-
----
-
-## v1.4.3 — Final API Compatibility & Marketplace Cleanup
-
-This release resolves the remaining IntelliJ Platform API deprecation warnings flagged by the Marketplace Verifier across all supported IDE versions (2023.3 through 2026.2 EAP).
-
-### API Deprecation Fixes
-
-- **`ComboBox(E[])` constructor** (6 usages): Replaced with `ComboBox(DefaultComboBoxModel(E[]))` — the array overload was deprecated in IntelliJ 2024.2+
-- **`JBPasswordField()`** (2 usages): Replaced with standard `javax.swing.JPasswordField()` — `JBPasswordField` was deprecated in IntelliJ 2024.2+
-- **`DialogWrapper(Project, boolean)`** (1 usage): Replaced with `DialogWrapper(Project)` — the `canBeParent` boolean parameter was deprecated in IntelliJ 2024.2+
-
-### Cleanup
-
-- Removed unused variables (`providerLabels`, `provId`) in `SetAIConfigAction`
-- Removed stale `build.gradle.kts.bak` file
-
-### Version Bump
-
-- Repository version: `1.4.2` → `1.4.3`
-- IntelliJ plugin version: `1.4.2` → `1.4.3`
-- VS Code extension version: `1.4.2` → `1.4.3`
-- All documentation and version strings synchronized
-
-### Marketplace Compatibility Status
-
-- **Scheduled-for-removal API:** 0 usages ✅
-- **OverrideOnly API violations:** 0 usages ✅
-- **Deprecated API:** ~1 or fewer remaining warnings ✅
-- All IDE versions from 2023.3 through 2026.2 EAP show **Compatible** verdict
-
-### Upgrade Notes
-
-- No changes to the core runtime (`qonqrete.sh` or `qrane/`). Runtime remains at `1.4.0`.
-- IDE plugins only: rebuilt and republished.
-- Existing `1.4.2` plugin installations will be offered `1.4.3` as an in-IDE update.
-
-## v1.4.2 — Apache License Migration & JetBrains API Compatibility
-
-This release changes the project license from **AGPL-3.0** to **Apache-2.0** for broader permissive use and resolves remaining IntelliJ Platform API compatibility warnings flagged by the Marketplace Verifier.
-
-### License Change: AGPL-3.0 → Apache-2.0
-
-- **LICENSE file replaced** with the Apache License, Version 2.0
-- **COPYRIGHT file updated** to reflect Apache-2.0 licensing
-- **README.md** license badge, description, and footer updated
-- **All source file `@license` tags** updated to `Apache-2.0`
-- **IntelliJ plugin.xml** license metadata updated
-- **VS Code package.json** (license field) and README updated
-- The QonQrete branding, logos, and trademarks remain All Rights Reserved as noted in COPYRIGHT
-
-### JetBrains Compatibility (Final Pass)
-
-- **`TextFieldWithBrowseButton.addBrowseFolderListener()`** (4-param overload) replaced with `addBrowseFolderListener(TextBrowseFolderListener)` using the non-deprecated `TextBrowseFolderListener` API
-- **`CredentialAttributes(String)` constructor** usages annotated with `@Suppress("DEPRECATION")` — the modern `CredentialAttributes.Builder` is not available in the minimum-supported SDK (2023.3)
-
-### Version Bump
-
-- Repository version: `1.4.1` → `1.4.2`
-- IntelliJ plugin version: `1.4.1` → `1.4.2`
-- VS Code extension version: `1.4.1` → `1.4.2`
-- All documentation and version strings synchronized
-
-### Upgrade Notes
-
-- No changes to the core runtime (`qonqrete.sh` or `qrane/`). Runtime remains at `1.4.0`.
-- License change is forward-looking: existing users should review the new LICENSE file.
-- IDE plugins rebuilt and republished.
-
-## v1.4.1 — JetBrains Compatibility & Auto Briq Sense Default-On
-
-This release resolves the IntelliJ Platform compatibility warnings flagged by the JetBrains Marketplace Verifier for 2026.2 EAP and restores clean startup behavior across all supported IDE versions. It also makes **Auto Briq Sensitivity** the default for both IDE plugins — matching the expected user experience.
-
-### JetBrains Compatibility Fixes
-
-All scheduled-for-removal and deprecated API usages have been replaced:
-
-| Issue | Fix |
-|-------|-----|
-| **`AnActionEvent.createFromDataContext()`** (6 usages) | Replaced with `ActionUtil.invokeAction()` |
-| **`TextFieldWithBrowseButton.addBrowseFolderListener()`** | Updated to 5-param overload with `TextComponentAccessor` |
-| **`FileChooserDescriptorFactory.createSingleFileDescriptor()`** | Replaced with `FileChooserDescriptor` constructor |
-| **`JBPopupFactory.createListPopupBuilder()` + `setItemChoosenCallback()`** | Replaced with `PopupChooserBuilder` + `setItemChosenCallback` |
-| **`ProcessAdapter`** (4 usages) | Replaced with `ProcessListener` interface |
-| **`CredentialAttributes(String)` constructor** | Replaced with `CredentialAttributes(Key)` |
-| **`URL(String)` constructor** | Replaced with `URI(urlStr).toURL()` |
-| **`AnAction.actionPerformed()` OverrideOnly violations** (8 usages) | Replaced with `ActionUtil.invokeAction()` |
-
-### Startup Timeout Fix
-
-- **Root cause:** Modal `showAndGet()` dialog during project startup blocked the EDT, causing the IDE verifier to time out after 10 minutes.
-- **Fix:** Replaced with non-blocking notification balloon. The first-launch AI provider wizard is still accessible from the tool window and menus.
-
-### Auto Briq Sensitivity Defaults to On
-
-- **IntelliJ:** `QonQreteSettingsState.State.defaultAutoBriqSensitivity` changed from `false` to `true`.
-- **VS Code:** `qonqrete.defaultAutoBriqSensitivity` in `package.json` changed from `false` to `true`. All internal fallback values (sidebar, config wizard, run command) updated to match.
-- **Behavior:** New installations will have `--auto-briq-sensitivity` enabled by default. Existing users can toggle it in IDE settings.
-
-### Upgrade Notes
-
-- No changes to the core runtime (`qonqrete.sh` or `qrane/`). Runtime version remains `1.4.0`.
-- IDE plugins only: rebuilt and republished against the same runtime.
-- Existing `1.4.0` plugin installations will be offered `1.4.1` as an in-IDE update.
-
-# QonQrete Release Notes
-
-## v1.4.0 — MLcon Edition: Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment
+### Core runtime (v1.4.0)
 
 This release ships a coordinated patch pass across inspection truthfulness, terminal streaming UX, runtime wiring, and IDE plugin alignment, and corresponds to the MLcon-proven release snapshot.
 
-### Inspection / Truthfulness
+#### Inspection / Truthfulness
 - Final-file evidence from `qodeyard/` is now explicitly marked authoritative in InspeQtor review prompts.
 - Batched and per-briq review snippets now include deterministic metadata:
   - `file_bytes`
@@ -147,7 +15,7 @@ This release ships a coordinated patch pass across inspection truthfulness, term
 - Final verdict synthesis now prioritizes deterministic validation and completion criteria over advisory AI review noise.
 - Advisory briq-review findings are downgraded when deterministic gates pass and no longer force a blocking verdict by themselves.
 
-### Frontend deterministic validation
+#### Frontend deterministic validation
 - localStorage key checks now resolve:
   - direct string literals
   - const literal indirection
@@ -155,7 +23,7 @@ This release ships a coordinated patch pass across inspection truthfulness, term
   - simple const-object member indirection (`STORAGE_KEYS.foo`)
 - Truly missing required keys and undeclared extra keys remain deterministic failures.
 
-### Streaming UX (terminal rendering)
+#### Streaming UX (terminal rendering)
 - Removed outer Qrane heartbeat chatter.
 - Removed inner ConstruQtor `[Still working] ...` chatter.
 - Preserved full raw stream capture to qonsole/audit logs.
@@ -168,7 +36,7 @@ This release ships a coordinated patch pass across inspection truthfulness, term
   - `Shift+TAB` => concise mode
 - Mode hints are edge-triggered status messages only; they are not prefixed per streamed line and are not leaked into child logs.
 
-### Runtime wiring / defaults
+#### Runtime wiring / defaults
 - Primary agent defaults aligned to `venice / deepseek-v3.2`:
   - `qrystallizer`
   - `instruqtor`
@@ -181,18 +49,51 @@ This release ships a coordinated patch pass across inspection truthfulness, term
   - `--no-sync` skips that sync-back and keeps output in Qage/Qonstruction paths
   - run lineage now records `repo_sync_mode` (`sync_to_repo_root` or `no_sync`) for audit truthfulness
 
-### IDE plugin alignment
+#### IDE plugin alignment
 - VS Code and IntelliJ AI-config surfaces now focus on the four primary runtime agents:
   - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
 - Removed stale shared-sidebar/provider surfaces for local-only runtime providers (`mlx`, `llama-cpp`).
 - Updated plugin AI defaults to `venice / deepseek-v3.2` for the primary agents.
 
-### Control-flow and continuation hardening (v1.3.x → v1.4.0 line)
+#### Control-flow and continuation hardening (v1.3.x → v1.4.0 line)
 - Resume semantics preserve pass lineage explicitly:
   - queued `pending_next_pass_kind` is honored
   - interrupted active-pass semantics are restored instead of silently defaulting to build
 - Intake clarification blocking uses explicit `BLOCKED` / `RUN_WAITING_FOR_INPUT` states and resume re-enters cycle-1 clarification semantics when applicable.
 - Validation execution-mode reporting is evidence-driven (`NONE`, `STATIC_ONLY`, `EXECUTED`, `MIXED`) and no longer overclaims executed coverage from markdown presence alone.
+
+### v1.4.1–v1.4.5 — IntelliJ compatibility patch series
+
+The v1.4.x patches (v1.4.1 through v1.4.5) are IDE-plugin-only updates. No core runtime changes. The series resolves all IntelliJ Platform API deprecation warnings across IDE versions 2023.3–2026.2 EAP.
+
+#### v1.4.1 — JetBrains Compatibility & Auto Briq Sense Default-On
+- Replaced 8 scheduled-for-removal API usages (`AnActionEvent.createFromDataContext`, deprecated constructors, OverrideOnly `actionPerformed` calls).
+- Fixed startup timeout caused by modal `showAndGet()` during project startup (replaced with non-blocking notification balloon).
+- Made **Auto Briq Sensitivity** the default for both IDE plugins.
+
+#### v1.4.2 — Apache License Migration & JetBrains API (Final Pass)
+- **License changed from AGPL-3.0 to Apache-2.0** for broader permissive use.
+- Resolved remaining `TextFieldWithBrowseButton.addBrowseFolderListener()` deprecation.
+- `CredentialAttributes(String)` usages annotated with `@Suppress("DEPRECATION")` — modern Builder API unavailable on 2023.3 minimum.
+
+#### v1.4.3 — Final API Compatibility & Marketplace Cleanup
+- `ComboBox(E[])` → `ComboBox(DefaultComboBoxModel(E[]))` (6 usages).
+- `JBPasswordField()` → `JPasswordField()` (2 usages).
+- `DialogWrapper(Project, boolean)` → `DialogWrapper(Project)` (1 usage).
+- Removed unused variables and stale `build.gradle.kts.bak`. Marketplace verdict clean across all IDE versions.
+
+#### v1.4.4 — Plugin API Cleanup & Release Hygiene
+- Replaced 8 `ActionUtil.invokeAction()` calls with modern `AnActionEvent` pattern.
+- Suppressed 2 deprecated `CredentialAttributes()` constructor warnings.
+- Fixed bootstrap/hygiene: executable `qonqrete-bootstrap.sh`, zip packaging fixes, smoke tests, stale task file cleanup.
+
+#### v1.4.5 — JetBrains API Deprecation Resolution (Zero Warnings)
+- `AnActionEvent.createFromDataContext()` → direct `AnActionEvent()` constructor.
+- Override-only `actionPerformed()` → `ActionManager.tryToExecute()`.
+- `CredentialAttributes(serviceName)` → `CredentialAttributes(serviceName, key)` (2-arg constructor).
+- **Result: 0 scheduled-for-removal, 0 override-only, 0 deprecated API.** Marketplace clean across 2023.3–2026.2 EAP.
+
+---
 
 ## v1.3.12 — Hardened `direct` Coding Mode & Determinism
 

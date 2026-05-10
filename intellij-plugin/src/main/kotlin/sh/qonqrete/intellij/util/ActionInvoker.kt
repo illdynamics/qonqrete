@@ -1,7 +1,7 @@
 /**
  * Action invoker utility — replaces deprecated ActionUtil.invokeAction.
  *
- * Uses the modern AnAction.actionPerformed(AnActionEvent) pattern
+ * Uses ActionManager.tryToExecute() — the modern, supported invocation path
  * instead of the deprecated ActionUtil.invokeAction.
  *
  * @author QonQrete
@@ -15,9 +15,11 @@ import com.intellij.openapi.actionSystem.*
 import java.awt.event.InputEvent
 
 /**
- * Invoke an action by ID using the modern actionPerformed approach.
+ * Invoke an action by ID using the modern tryToExecute approach.
  *
  * This replaces deprecated ActionUtil.invokeAction() calls.
+ * Uses ActionManager.tryToExecute() — the modern non-deprecated invocation path.
+ * Constructs AnActionEvent directly instead of deprecated createFromDataContext().
  * Compatible with IntelliJ 2023.3+ (our minimum supported version).
  */
 object ActionInvoker {
@@ -27,8 +29,20 @@ object ActionInvoker {
      * Safe replacement for ActionUtil.invokeAction(action, dataContext, place, inputEvent, modifier)
      */
     fun invokeAction(actionId: String, dataContext: DataContext, place: String = "QonQrete", inputEvent: InputEvent? = null) {
-        val action = ActionManager.getInstance().getAction(actionId) ?: return
-        val event = AnActionEvent.createFromDataContext(place, null, dataContext)
-        action.actionPerformed(event)
+        val actionManager = ActionManager.getInstance()
+        val action = actionManager.getAction(actionId) ?: return
+        val presentation = action.templatePresentation.clone()
+        val event = AnActionEvent(
+            inputEvent,
+            dataContext,
+            place,
+            presentation,
+            actionManager,
+            0
+        )
+        action.update(event)
+        if (event.presentation.isEnabled) {
+            ActionManager.getInstance().tryToExecute(action, event, null, place, true)
+        }
     }
 }

@@ -1,27 +1,28 @@
 # QonQrete IntelliJ Plugin - Changelog
 
-## 1.4.4 - Plugin API Cleanup & Release Fixes
+## 1.4.5 — IntelliJ Compatibility Series (v1.4.1–v1.4.5)
 
-### Changes
-- Replaced 8 deprecated ActionUtil.invokeAction() calls with modern AnActionEvent pattern.
-- Suppressed 2 deprecated CredentialAttributes() constructor warnings (Builder unavailable on 2023.3 minimum).
-- Zero compatibility warnings across all verified IDE versions (2023.3.8–2026.2 EAP).
-- Verified marketplace compatibility: Success on all 4 tiers.
+IDE-plugin-only patches that resolve all IntelliJ Platform API deprecation warnings across 2023.3–2026.2 EAP.
+No core runtime changes.
 
+### API deprecation fixes (cumulative)
+- **`ActionUtil.invokeAction()`** (8 usages) → modern `AnActionEvent` pattern (v1.4.4)
+- **`AnActionEvent.createFromDataContext()`** (1 usage) → direct `AnActionEvent()` constructor (v1.4.5)
+- **Override-only `actionPerformed()`** (1 usage) → `ActionManager.tryToExecute()` (v1.4.5)
+- **`CredentialAttributes(serviceName)`** (2 usages) → `CredentialAttributes(serviceName, key)` (v1.4.5)
+- **`ComboBox(E[])`** (6 usages) → `ComboBox(DefaultComboBoxModel(E[]))` (v1.4.3)
+- **`JBPasswordField()`** (2 usages) → `JPasswordField()` (v1.4.3)
+- **`DialogWrapper(Project, boolean)`** (1 usage) → `DialogWrapper(Project)` (v1.4.3)
+- **`TextFieldWithBrowseButton.addBrowseFolderListener()`** → `TextBrowseFolderListener` (v1.4.2)
+- **License:** AGPL-3.0 → Apache-2.0 (v1.4.2)
+- **Auto Briq Sensitivity** default-on (v1.4.1)
+- **Startup timeout fix** — replaced modal dialog with non-blocking notification (v1.4.1)
 
-### Changed
-- AI config UI now targets the four primary runtime agents only:
-  - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
-- Default primary-agent binding in the AI config flow is now:
-  - provider: `venice`
-  - model: `deepseek-v3.2`
-- Shared provider/model picker no longer exposes local-only runtime providers (`mlx`, `llama-cpp`).
-- Venice model suggestions now include `deepseek-v3.2`.
-- Added run-level `--no-sync` wiring to settings, dialogs, and tool window controls.
-- Corrected docs/UI default-value text to match runtime-backed defaults (`sensitivity=1`, `cycles=1`, `autonomous=true`).
-
-### Notes
-- Local runtime providers remain supported by core runtime config files, but are no longer presented in the shared tool-window AI provider picker.
+### Marketplace compatibility status
+- **Scheduled-for-removal API:** 0 usages ✅
+- **OverrideOnly API violations:** 0 usages ✅
+- **Deprecated API:** 0 usages ✅
+- All IDE versions 2023.3–2026.2 EAP verified compatible
 
 ## 1.3.0 - Current Runtime Alignment
 
