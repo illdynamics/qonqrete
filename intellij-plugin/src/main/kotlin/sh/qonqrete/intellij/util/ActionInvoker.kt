@@ -40,9 +40,9 @@ object ActionInvoker {
             actionManager,
             0
         )
-        action.update(event)
+        action.beforeActionPerformedUpdate(event)
         if (event.presentation.isEnabled) {
-            ActionManager.getInstance().tryToExecute(action, event, null, place, true)
+            ActionManager.getInstance().tryToExecute(action, event.inputEvent, null, place, true)
         }
     }
 }
