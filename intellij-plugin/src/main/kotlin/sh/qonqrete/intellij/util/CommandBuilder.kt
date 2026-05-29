@@ -200,7 +200,11 @@ class CommandBuilder private constructor() {
      * Add the 'run' subcommand with configuration
      */
     fun run(config: QonQreteRunConfig, taskFilePath: String? = null): CommandBuilder {
-        taskFilePath?.let { parts.add(ShellEscape.escape(it)) } ?: parts.add("run")
+        parts.add("run")
+        taskFilePath?.let {
+            parts.add("-f")
+            parts.add(ShellEscape.escape(it))
+        }
         
         // Briq sensitivity mode and cycles
         if (config.autoSensitivity) {

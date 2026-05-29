@@ -25,6 +25,12 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
     data class State(
         var defaultSensitivity: Int = 3,
         var defaultAutoBriqSensitivity: Boolean = true,
+        var defaultAutoCycle: Boolean = true,
+        get() = myState.defaultAutoBriqSensitivity
+        set(value) { myState.defaultAutoBriqSensitivity = value }
+    var defaultAutoCycle: Boolean
+        get() = myState.defaultAutoCycle
+        set(value) { myState.defaultAutoCycle = value }
         var defaultCycles: Int = 3,
         var defaultMode: String = "program",
         var defaultAutonomous: Boolean = true,
@@ -60,6 +66,11 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
         set(value) { myState.defaultSensitivity = value.coerceIn(0, 16) }
 
     var defaultAutoBriqSensitivity: Boolean
+        get() = myState.defaultAutoBriqSensitivity
+        set(value) { myState.defaultAutoBriqSensitivity = value }
+    var defaultAutoCycle: Boolean
+        get() = myState.defaultAutoCycle
+        set(value) { myState.defaultAutoCycle = value }
         get() = myState.defaultAutoBriqSensitivity
         set(value) { myState.defaultAutoBriqSensitivity = value }
 
@@ -118,6 +129,7 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
 data class QonQreteRunConfig(
     val sensitivity: Int = 3,
     val autoSensitivity: Boolean = true,
+    val autoCycle: Boolean = true,
     val cycles: Int = 3,
     val mode: String = "program",
     val autonomous: Boolean = true,
@@ -132,6 +144,7 @@ data class QonQreteRunConfig(
             return QonQreteRunConfig(
                 sensitivity = settings.defaultSensitivity,
                 autoSensitivity = settings.defaultAutoBriqSensitivity,
+                autoCycle = settings.defaultAutoCycle,
                 cycles = settings.defaultCycles,
                 mode = settings.defaultMode,
                 autonomous = settings.defaultAutonomous,

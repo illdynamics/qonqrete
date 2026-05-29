@@ -456,20 +456,23 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         <div class="section">
             <div class="section-title">Configuration</div>
             
-            <div class="form-group">
+            <div class="checkbox-row">
+                <input type="checkbox" id="autoSensitivity" checked>
+                <label for="autoSensitivity">Auto briq sensitivity (-B)</label>
+            </div>
+            <div id="sensitivityGroup" class="form-group" style="display:none">
                 <label>Briq Sensitivity (0-16)</label>
                 <div class="slider-row">
                     <input type="range" id="sensitivity" min="0" max="16" value="3">
-                    <span id="sensitivityValue" class="slider-value">1</span>
+                    <span id="sensitivityValue" class="slider-value">3</span>
                 </div>
             </div>
 
             <div class="checkbox-row">
-                <input type="checkbox" id="autoSensitivity">
-                <label for="autoSensitivity">Auto briq sensitivity (-B)</label>
+                <input type="checkbox" id="autoCycle" checked>
+                <label for="autoCycle">Auto cycle determination</label>
             </div>
-
-            <div class="form-group">
+            <div id="cyclesGroup" class="form-group" style="display:none">
                 <label>Cycles</label>
                 <input type="number" id="cycles" min="1" max="50" value="3">
             </div>
@@ -496,17 +499,17 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 <label for="useSqrapyard">Seed from Repo (--seed-repo)</label>
             </div>
 
-            <div class="checkbox-row">
-                <input type="checkbox" id="noSync">
-                <label for="noSync">No Sync (--no-sync)</label>
+            <div class="form-group">
+                <label>Qonstruction Name</label>
+                <input type="text" id="qonstructionName" placeholder="(optional)">
+                <div class="name-hint">Allowed: a-z, A-Z, 0-9, _, -</div>
             </div>
             
             <button id="advancedToggleBtn" class="expand-btn">▸ Advanced</button>
             <div id="advancedOptions" class="collapsed">
-                <div class="form-group">
-                    <label>Qonstruction Name</label>
-                    <input type="text" id="qonstructionName" placeholder="(optional)">
-                    <div class="name-hint">Allowed: a-z, A-Z, 0-9, _, -</div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="noSync">
+                    <label for="noSync">No Sync (--no-sync)</label>
                 </div>
                 
                 <div class="form-group">
@@ -594,6 +597,8 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             byId('setAIConfigBtn').addEventListener('click', setAIConfig);
             byId('advancedToggleBtn').addEventListener('click', toggleAdvanced);
             byId('sensitivity').addEventListener('input', updateSlider);
+            byId('autoSensitivity').addEventListener('change', toggleSensitivityVisibility);
+            byId('autoCycle').addEventListener('change', toggleCyclesVisibility);
         }
 
         bindStaticEventHandlers();
@@ -692,7 +697,10 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 document.getElementById('sensitivity').value = data.defaultConfig.sensitivity;
                 document.getElementById('sensitivityValue').textContent = data.defaultConfig.sensitivity;
                 document.getElementById('autoSensitivity').checked = !!data.defaultConfig.autoSensitivity;
+                document.getElementById('autoCycle').checked = data.defaultConfig.autoCycle !== false;
                 document.getElementById('cycles').value = data.defaultConfig.cycles;
+                toggleSensitivityVisibility();
+                toggleCyclesVisibility();
                 document.getElementById('mode').value = data.defaultConfig.mode;
                 document.getElementById('autonomous').checked = data.defaultConfig.autonomous;
                 document.getElementById('noSync').checked = !!data.defaultConfig.noSync;
@@ -890,6 +898,16 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             byId('sensitivityValue').textContent = byId('sensitivity').value;
         }
 
+        function toggleSensitivityVisibility() {
+            const auto = byId('autoSensitivity').checked;
+            byId('sensitivityGroup').style.display = auto ? 'none' : '';
+        }
+
+        function toggleCyclesVisibility() {
+            const auto = byId('autoCycle').checked;
+            byId('cyclesGroup').style.display = auto ? 'none' : '';
+        }
+
         function toggleAdvanced() {
             advancedOpen = !advancedOpen;
             byId('advancedOptions').classList.toggle('collapsed', !advancedOpen);
@@ -901,6 +919,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             return {
                 sensitivity: parseInt(document.getElementById('sensitivity').value, 10),
                 autoSensitivity: document.getElementById('autoSensitivity').checked,
+                autoCycle: document.getElementById('autoCycle').checked,
                 cycles: parseInt(document.getElementById('cycles').value, 10),
                 mode: document.getElementById('mode').value,
                 autonomous: document.getElementById('autonomous').checked,

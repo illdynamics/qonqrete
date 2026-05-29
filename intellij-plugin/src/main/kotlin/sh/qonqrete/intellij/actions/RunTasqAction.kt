@@ -9,6 +9,7 @@
 
 package sh.qonqrete.intellij.actions
 
+import java.io.File
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -137,6 +138,30 @@ class RunTasqAction : AnAction() {
                 if (choice == Messages.YES) {
                     ActionInvoker.invokeAction("QonQrete.SetAIConfig", e.dataContext, "QonQrete", e.inputEvent)
                     return
+                }
+            }
+        }
+
+        // Save active editor content as the canonical tasq before running,
+        // so "Run Tasq" always runs what you're currently editing.
+        val editor = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)?.selectedTextEditor
+        if (editor != null) {
+            val psiFile = com.intellij.psi.PsiDocumentManager.getInstance(project)?.getPsiFile(editor.document)
+            if (psiFile != null && psiFile.fileType.name.lowercase().contains("markdown")) {
+                try {
+                    val tasqPath = service.getTasqPath()
+                    if (tasqPath != null) {
+                        val tasqFile = File(tasqPath)
+                        tasqFile.parentFile?.mkdirs()
+                        com.intellij.openapi.application.ApplicationManager.getApplication().runWriteAction {
+                            com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveDocument(editor.document)
+                        }
+                        // Read the saved content and write to worqspace tasq
+                        val editorContent = editor.document.text
+                        tasqFile.writeText(editorContent)
+                    }
+                } catch (_: Exception) {
+                    // Fall through — default tasq will be used
                 }
             }
         }

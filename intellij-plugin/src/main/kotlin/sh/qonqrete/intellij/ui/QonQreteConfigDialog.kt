@@ -33,7 +33,12 @@ class QonQreteConfigDialog(
 
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1))
     private val autoSensitivityCheckbox = JBCheckBox("Auto briq sensitivity (-B)")
+    private val sensitivityLabel = JBLabel("Briq Sensitivity:")
+
     private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1))
+    private val autoCycleCheckbox = JBCheckBox("Auto cycle determination")
+    private val cyclesLabel = JBLabel("Cycles:")
+
     private val modeCombo = ComboBox(DefaultComboBoxModel(arrayOf("program", "enterprise", "security", "data", "devops", "web")))
     private val autonomousCheckbox = JBCheckBox("Autonomous mode (no human-in-the-loop)")
     private val noSyncCheckbox = JBCheckBox("No repo-root sync (--no-sync)")
@@ -50,10 +55,30 @@ class QonQreteConfigDialog(
         // Set initial values
         modeCombo.selectedItem = settings.defaultMode
         autoSensitivityCheckbox.isSelected = settings.defaultAutoBriqSensitivity
+        autoCycleCheckbox.isSelected = settings.defaultAutoCycle
         autonomousCheckbox.isSelected = settings.defaultAutonomous
         noSyncCheckbox.isSelected = settings.noSync
         sqrapyardCheckbox.isSelected = settings.useSqrapyard
         engineCombo.selectedItem = settings.containerEngine
+
+        // Hide/show manual controls based on auto toggles
+        toggleSensitivityVisibility()
+        toggleCyclesVisibility()
+
+        autoSensitivityCheckbox.addChangeListener { toggleSensitivityVisibility() }
+        autoCycleCheckbox.addChangeListener { toggleCyclesVisibility() }
+    }
+
+    private fun toggleSensitivityVisibility() {
+        val auto = autoSensitivityCheckbox.isSelected
+        sensitivitySpinner.isVisible = !auto
+        sensitivityLabel.isVisible = !auto
+    }
+
+    private fun toggleCyclesVisibility() {
+        val auto = autoCycleCheckbox.isSelected
+        cyclesSpinner.isVisible = !auto
+        cyclesLabel.isVisible = !auto
     }
 
     override fun createCenterPanel(): JComponent {
@@ -66,23 +91,26 @@ class QonQreteConfigDialog(
         cyclesPanel.add(JBLabel("(1-50)"), BorderLayout.EAST)
 
         val builder = FormBuilder.createFormBuilder()
-            .addLabeledComponent("Briq Sensitivity:", sensitivityPanel)
+            .addLabeledComponent(sensitivityLabel, sensitivityPanel)
             .addComponent(autoSensitivityCheckbox)
-            .addLabeledComponent("Cycles:", cyclesPanel)
+            .addLabeledComponent(cyclesLabel, cyclesPanel)
+            .addComponent(autoCycleCheckbox)
             .addLabeledComponent("Mode:", modeCombo)
             .addLabeledComponent("Container Engine:", engineCombo)
             .addSeparator()
             .addComponent(autonomousCheckbox)
-            .addComponent(noSyncCheckbox)
             .addComponent(sqrapyardCheckbox)
             .addSeparator()
             .addLabeledComponent("Qonstruction Name:", qonstructionNameField)
             .addComponentToRightColumn(JBLabel("(optional, alphanumeric and _/- only)"))
+            .addSeparator()
+            .addComponent(JBLabel("Advanced:"))
+            .addComponent(noSyncCheckbox)
 
         val panel = JPanel(BorderLayout())
         panel.add(builder.panel, BorderLayout.CENTER)
         panel.border = JBUI.Borders.empty(10)
-        panel.preferredSize = Dimension(450, 350)
+        panel.preferredSize = Dimension(450, 380)
 
         return panel
     }
@@ -112,6 +140,7 @@ class QonQreteConfigDialog(
         validatedConfig = QonQreteRunConfig(
             sensitivity = sensitivitySpinner.value as Int,
             autoSensitivity = autoSensitivityCheckbox.isSelected,
+            autoCycle = autoCycleCheckbox.isSelected,
             cycles = cyclesSpinner.value as Int,
             mode = modeCombo.selectedItem as String,
             autonomous = autonomousCheckbox.isSelected,
