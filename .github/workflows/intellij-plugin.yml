@@ -1,6 +1,6 @@
 # .github/workflows/intellij-plugin.yml
 # QonQrete IntelliJ plugin builder
-# Aligned to: v1.4.0 - MLcon Edition
+# Aligned to: v1.4.6
 #
 # Notes for v1.4.0:
 #   - intellij-plugin/build.gradle.kts now reads version from rootProject.file("../VERSION")
@@ -8,7 +8,7 @@
 #     extraction (grep version = "..." build.gradle.kts) no longer matches and would
 #     yield "unknown". This workflow reads root VERSION directly instead.
 #   - build.gradle.kts targets JDK 17 (sourceCompatibility/targetCompatibility = 17)
-#     and the plugin verifier targets IntelliJ 2023.3+, all of which bundle JDK 17
+#     and the plugin verifier targets IntelliJ 2023.3.8+, all of which bundle JDK 17
 #     (or later JDKs that remain backward-compatible with 17 bytecode).
 #     We standardise on Temurin JDK 17 across all jobs.
 #   - Trigger paths now include the root VERSION file so a version bump alone
@@ -147,15 +147,15 @@ jobs:
         # build 233 onwards (since-build="233" in plugin.xml = 2023.3+),
         # and there is no until-build cap.
         intellij-version:
-          - '2023.3'
-          - '2024.1'
-          - '2024.2'
-          - '2024.3'
-          - '2025.1'
-          - '2025.2'
-          - '2025.3'
-          - '2026.1'
-
+          - '2023.3.8'
+          - '2024.1.7'
+          - '2024.2.6'
+          - '2024.3.7.1'
+          - '2025.1.7.1'
+          - '2025.2.6.2'
+          - '2025.3.5'
+          - '2026.1.2'
+          - '2026.2'        # EAP — latest snapshot
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -182,7 +182,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pluginVerifier/ides
-          key: pluginVerifier-ides-${{ matrix.intellij-version }}-v1
+          key: pluginVerifier-ides-${{ matrix.intellij-version }}-v2
           restore-keys: |
             pluginVerifier-ides-${{ matrix.intellij-version }}-
 

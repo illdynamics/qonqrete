@@ -3,7 +3,7 @@
  * Build configuration - Production Ready
  *
  * @author QonQrete
- * @version v1.4.5
+ * @version v1.4.6
  * @license Apache-2.0
  */
 
@@ -56,13 +56,14 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
-            <h2>${runtimeVersion} - Plugin API Cleanup & Release Fixes</h2>
+            <h2>v${runtimeVersion} — Plugin Verifier Zero-Warnings + DeepSeek V4</h2>
             <ul>
-                <li><b>Fixed:</b> 10 deprecated API usages eliminated (8 ActionUtil.invokeAction, 2 CredentialAttributes)</li>
-                <li><b>Fixed:</b> Verified compatible 2023.3.8–2026.2 EAP with zero warnings</li>
-                <li><b>Added:</b> First-launch wizard auto-creates starter tasq.md</li>
-                <li><b>Fixed:</b> Deploy action resolves runtime version from plugin version</li>
-                <li><b>Cleanup:</b> All stale task files removed, only worqspace/tasq.md kept</li>
+                <li><b>Fixed:</b> AnActionEvent constructor → createFromInputEvent() (scheduled for removal)</li>
+                <li><b>Fixed:</b> beforeActionPerformedUpdate() → AnAction.update() (override-only violation)</li>
+                <li><b>Fixed:</b> CredentialAttributes(serviceName, key) → 3-param constructor (deprecated, 2x)</li>
+                <li><b>Fixed:</b> PluginManagerCore.getPlugin() → classloader plugin.xml read (internal API)</li>
+                <li><b>Updated:</b> DeepSeek model names to V4 generation in AI config UI</li>
+                <li><b>Verified:</b> 0 warnings across 2023.3.8–2026.2 EAP (9 IDE versions)</li>
             </ul>
         """.trimIndent())
     }
@@ -82,6 +83,20 @@ tasks {
     }
 
     runPluginVerifier {
-        ideVersions.set(listOf("2023.3", "2024.1"))
+        // Exact versions matched to JetBrains Marketplace verifier (May 2026).
+        // Run `./gradlew verifyPlugin` locally to reproduce Marketplace results
+        // before uploading. Uses patch releases where the Marketplace verifier
+        // produced definitive results.
+        ideVersions.set(listOf(
+            "2023.3.8",
+            "2024.1.7",
+            "2024.2.6",
+            "2024.3.7.1",
+            "2025.1.7.1",
+            "2025.2.6.2",
+            "2025.3.5",
+            "2026.1.2",
+            "2026.2"       // EAP — resolves to latest snapshot
+        ))
     }
 }
