@@ -1,5 +1,18 @@
 # QonQrete IntelliJ Plugin - Changelog
 
+## 1.4.6 — Plugin Verifier: Zero Deprecation Warnings
+
+All JetBrains Plugin Verifier warnings resolved across 2023.3–2026.2 EAP.
+Zero scheduled-for-removal, zero override-only, zero deprecated API, zero internal API.
+
+### Fixes
+- **`AnActionEvent` constructor** (1 usage) → `AnActionEvent.createFromInputEvent()` factory
+- **`AnAction.beforeActionPerformedUpdate()`** (1 usage) → `AnAction.update()` public API
+- **`CredentialAttributes(serviceName, key)`** (2 usages) → 3-param constructor with `null` className
+- **`PluginManagerCore.getPlugin()`** (1 usage, 2026.2 only) → classloader `META-INF/plugin.xml` resource read
+- **DeepSeek model names** updated to v4 generation (`deepseek-v4-flash`, `deepseek-v4-pro`)
+
+
 ## 1.4.6 — IntelliJ Compatibility Series (v1.4.1–v1.4.6)
 
 IDE-plugin-only patches that resolve all IntelliJ Platform API deprecation warnings across 2023.3–2026.2 EAP.

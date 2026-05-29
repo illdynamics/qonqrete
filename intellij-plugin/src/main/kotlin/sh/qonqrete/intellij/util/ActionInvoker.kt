@@ -32,15 +32,12 @@ object ActionInvoker {
         val actionManager = ActionManager.getInstance()
         val action = actionManager.getAction(actionId) ?: return
         val presentation = action.templatePresentation.clone()
-        val event = AnActionEvent(
-            inputEvent,
-            dataContext,
-            place,
-            presentation,
-            actionManager,
-            0
-        )
-        action.beforeActionPerformedUpdate(event)
+        // Use createFromInputEvent (non-deprecated) instead of the
+        // scheduled-for-removal AnActionEvent constructor.
+        val event = AnActionEvent.createFromInputEvent(inputEvent, place, presentation, dataContext)
+        // Use action.update() (public API) instead of the
+        // override-only beforeActionPerformedUpdate().
+        action.update(event)
         if (event.presentation.isEnabled) {
             ActionManager.getInstance().tryToExecute(action, event.inputEvent, null, place, true)
         }

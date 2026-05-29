@@ -14,13 +14,11 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
-import com.intellij.ide.plugins.PluginManagerCore
 import sh.qonqrete.intellij.services.QonQreteProjectService
 import sh.qonqrete.intellij.services.RunState
 import java.io.*
@@ -33,7 +31,6 @@ class DeployToWorkspaceAction : AnAction() {
 
     companion object {
         private const val GITHUB_RELEASE_BASE = "https://github.com/illdynamics/qonqrete/releases/download"
-        private const val PLUGIN_ID = "sh.qonqrete"
         private val log = Logger.getInstance(DeployToWorkspaceAction::class.java)
 
         /**
@@ -41,7 +38,7 @@ class DeployToWorkspaceAction : AnAction() {
          *
          * Priority:
          *   1. <project>/.qonqrete/VERSION  (if runtime already deployed)
-         *   2. Plugin's own version from PluginManagerCore
+         *   2. Plugin's own version from bundled plugin.xml
          *   3. "latest" as ultimate fallback
          */
         fun resolveRuntimeVersion(project: Project): String {
@@ -63,19 +60,23 @@ class DeployToWorkspaceAction : AnAction() {
                 }
             }
 
-            // 2. Plugin version
+            // 2. Plugin version (read from bundled plugin.xml resource
+            //    to avoid PluginManagerCore internal API on 2026.2+)
             try {
-                val pluginId = PluginId.getId(PLUGIN_ID)
-                val descriptor = PluginManagerCore.getPlugin(pluginId)
-                if (descriptor != null) {
-                    val v = descriptor.version.trim().removePrefix("v").removePrefix("V")
-                    if (v.isNotEmpty() && v.matches(Regex("^\\d+\\.\\d+.*"))) {
-                        log.info("Resolved runtime version from plugin version: $v")
-                        return v
+                val pluginXml = javaClass.classLoader.getResourceAsStream("META-INF/plugin.xml")
+                if (pluginXml != null) {
+                    val xml = pluginXml.bufferedReader().readText()
+                    val versionMatch = Regex("<version>([^<]+)</version>").find(xml)
+                    if (versionMatch != null) {
+                        val v = versionMatch.groupValues[1].trim().removePrefix("v").removePrefix("V")
+                        if (v.isNotEmpty() && v.matches(Regex("^\\d+\\.\\d+.*"))) {
+                            log.info("Resolved runtime version from plugin.xml: $v")
+                            return v
+                        }
                     }
                 }
             } catch (e: Exception) {
-                log.warn("Could not read plugin version: ${e.message}")
+                log.warn("Could not read plugin version from plugin.xml: ${e.message}")
             }
 
             // 3. Fallback

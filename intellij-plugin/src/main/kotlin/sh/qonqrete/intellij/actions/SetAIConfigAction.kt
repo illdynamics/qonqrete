@@ -51,11 +51,11 @@ class SetAIConfigAction : AnAction() {
             "anthropic" to ProviderInfo("Anthropic", "ANTHROPIC_API_KEY",
                 listOf("claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-20250514")),
             "deepseek" to ProviderInfo("DeepSeek", "DEEPSEEK_API_KEY",
-                listOf("deepseek-chat", "deepseek-reasoner")),
+                listOf("deepseek-v4-flash", "deepseek-v4-pro")),
             "qwen" to ProviderInfo("Qwen", "QWEN_API_KEY",
                 listOf("qwen-plus", "qwen-turbo", "qwen-max")),
             "openrouter" to ProviderInfo("OpenRouter", "OPENROUTER_API_KEY",
-                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3")),
+                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-v4-flash")),
             // v1.3.12: Venice API (OpenAI-compatible). VENICE_API_KEY required, no fallback.
             "venice" to ProviderInfo("Venice", "VENICE_API_KEY",
                 listOf(
@@ -91,7 +91,7 @@ class SetAIConfigAction : AnAction() {
          * Store an API key using IntelliJ's PasswordSafe
          */
         fun storeApiKey(envKey: String, value: String) {
-            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey), envKey)
+            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey), envKey, null)
             PasswordSafe.instance.set(attrs, Credentials(envKey, value))
         }
 
@@ -99,7 +99,7 @@ class SetAIConfigAction : AnAction() {
          * Retrieve an API key from PasswordSafe
          */
         fun getApiKey(envKey: String): String? {
-            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey), envKey)
+            val attrs = CredentialAttributes(generateServiceName("QonQrete", envKey), envKey, null)
             return PasswordSafe.instance.getPassword(attrs)
         }
 
@@ -311,7 +311,7 @@ class SetAIConfigAction : AnAction() {
             builder.addSeparator()
 
             for (agent in AI_AGENTS) {
-                val (currentProv, currentModel) = configs[agent] ?: Pair("deepseek", "deepseek-chat")
+                val (currentProv, currentModel) = configs[agent] ?: Pair("deepseek", "deepseek-v4-flash")
 
                 val providerCombo = ComboBox(DefaultComboBoxModel(providerIds.toTypedArray()))
                 providerCombo.selectedItem = currentProv
