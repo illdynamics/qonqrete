@@ -1227,10 +1227,12 @@ run_container() {
 
     local -a run_mounts dev_mounts tty_flags
     local dev_mount_ro_suffix=":ro"
-    run_mounts=(-v "${norm_run_path}:${CONTAINER_WORKSPACE}")
+    local run_mount_suffix=""
     if [ "$CONTAINER_ENGINE" = "podman" ] && [ "$DETECTED_OS" = "Linux" ]; then
         dev_mount_ro_suffix=":ro,z"
+        run_mount_suffix=":z"
     fi
+    run_mounts=(-v "${norm_run_path}:${CONTAINER_WORKSPACE}${run_mount_suffix}")
     # Dev code mounts are READ-ONLY. The container must not mutate its own code.
     dev_mounts=(
         -v "${norm_script_dir}/qrane:/qonqrete/qrane${dev_mount_ro_suffix}"

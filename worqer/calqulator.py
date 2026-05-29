@@ -20,6 +20,11 @@ DEFAULT_MODEL = "gemini-2.5-flash-lite"
 PRICING = {
     "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40, "ratio": 4.0},
     "gemini-2.5-flash":      {"input": 0.30, "output": 2.50, "ratio": 4.0},
+    "deepseek-v4-flash":          {"input": 0.20, "output": 0.60, "ratio": 4.0},
+    "deepseek-v4-flash-thinking": {"input": 0.20, "output": 0.60, "ratio": 4.0},
+    "deepseek-v4-pro":            {"input": 0.80, "output": 2.40, "ratio": 4.0},
+    "deepseek-v4-pro-thinking":   {"input": 0.80, "output": 2.40, "ratio": 4.0},
+    # Legacy
     "deepseek-chat":         {"input": 0.14, "output": 0.28, "ratio": 4.0},
 }
 

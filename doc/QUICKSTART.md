@@ -1,7 +1,7 @@
 # QonQrete Quickstart
 
-**Version:** `v1.4.5`
-**Release context:** `v1.4.5`
+**Version:** `v1.4.6`
+**Release context:** `v1.4.6`
 
 This is the shortest accurate path to get QonQrete running.
 

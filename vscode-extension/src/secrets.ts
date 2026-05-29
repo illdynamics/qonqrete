@@ -87,7 +87,7 @@ export const PROVIDERS: Record<string, { label: string; envKey: string; models: 
     deepseek: {
         label: 'DeepSeek (API)',
         envKey: 'DEEPSEEK_API_KEY',
-        models: ['deepseek-chat', 'deepseek-reasoner'],
+        models: ['deepseek-v4-flash', 'deepseek-v4-flash-thinking', 'deepseek-v4-pro', 'deepseek-v4-pro-thinking'],
     },
     codeseeq: {
         label: 'CodeSeeq (Codex CLI on DeepSeek)',
@@ -103,7 +103,7 @@ export const PROVIDERS: Record<string, { label: string; envKey: string; models: 
     openrouter: {
         label: 'OpenRouter (API)',
         envKey: 'OPENROUTER_API_KEY',
-        models: ['anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'deepseek/deepseek-chat-v3'],
+        models: ['anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-pro', 'deepseek/deepseek-v4-flash'],
     },
     venice: {
         label: 'Venice (API)',

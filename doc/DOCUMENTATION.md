@@ -1,9 +1,9 @@
 # QonQrete Documentation
 
-**Version:** `v1.4.5`
-**Release context:** `v1.4.5`
+**Version:** `v1.4.6`
+**Release context:** `v1.4.6`
 
-This document is the synced technical reference for the current `v1.4.5` repository snapshot.
+This document is the synced technical reference for the current `v1.4.6` repository snapshot.
 
 ## Current release summary (v1.4.x line)
 
@@ -488,7 +488,7 @@ Implemented helper concepts include:
 
 ## 11. Current limitations
 
-These limitations should be documented honestly for `v1.4.5`:
+These limitations should be documented honestly for `v1.4.6`:
 
 1. **Repo-local workflow remains the active implementation model.**
    The central engine / per-project metadata architecture is a future/product direction, not the current repo behavior.
@@ -534,8 +534,8 @@ Install extension/plugin
 
 ### Image versioning
 Container images are now tagged with the version:
-- `qonqrete-qage:1.4.5` on macOS/Windows (example current version)
-- `qonqrete-qage:1.4.5-u<host_uid>` on Linux/WSL
+- `qonqrete-qage:1.4.6` on macOS/Windows (example current version)
+- `qonqrete-qage:1.4.6-u<host_uid>` on Linux/WSL
 - `qonqrete-qage:latest` (convenience alias)
 
 ## 13. Cost Confirmation Gate (GateQeeper)
@@ -587,7 +587,7 @@ export OPENROUTER_API_KEY='...'
 - `anthropic/claude-sonnet-4`
 - `openai/gpt-4.1`
 - `google/gemini-2.5-pro`
-- `deepseek/deepseek-chat-v3`
+- `deepseek/deepseek-v4-flash`
 - Any model available on OpenRouter's platform
 
 ## 15. Venice Provider Support *(v1.3.12)*
@@ -636,7 +636,7 @@ The user may set any valid Venice text model ID. The following is a representati
 - `dolphin-2.9.2-qwen2-72b`
 - `deepseek-r1-671b`
 - `deepseek-r1-llama-70b`
-- `deepseek-coder-v2-lite`
+- `deepseek-v4-flash` (or `deepseek-v4-pro` for heavier tasks)
 - `claude-opus-4.6`
 - `claude-sonnet-4.6`
 - `glm-5`

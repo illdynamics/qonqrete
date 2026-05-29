@@ -1,15 +1,15 @@
 # QonQrete IntelliJ Plugin - Changelog
 
-## 1.4.5 — IntelliJ Compatibility Series (v1.4.1–v1.4.5)
+## 1.4.6 — IntelliJ Compatibility Series (v1.4.1–v1.4.6)
 
 IDE-plugin-only patches that resolve all IntelliJ Platform API deprecation warnings across 2023.3–2026.2 EAP.
 No core runtime changes.
 
 ### API deprecation fixes (cumulative)
 - **`ActionUtil.invokeAction()`** (8 usages) → modern `AnActionEvent` pattern (v1.4.4)
-- **`AnActionEvent.createFromDataContext()`** (1 usage) → direct `AnActionEvent()` constructor (v1.4.5)
-- **Override-only `actionPerformed()`** (1 usage) → `ActionManager.tryToExecute()` (v1.4.5)
-- **`CredentialAttributes(serviceName)`** (2 usages) → `CredentialAttributes(serviceName, key)` (v1.4.5)
+- **`AnActionEvent.createFromDataContext()`** (1 usage) → direct `AnActionEvent()` constructor (v1.4.6)
+- **Override-only `actionPerformed()`** (1 usage) → `ActionManager.tryToExecute()` (v1.4.6)
+- **`CredentialAttributes(serviceName)`** (2 usages) → `CredentialAttributes(serviceName, key)` (v1.4.6)
 - **`ComboBox(E[])`** (6 usages) → `ComboBox(DefaultComboBoxModel(E[]))` (v1.4.3)
 - **`JBPasswordField()`** (2 usages) → `JPasswordField()` (v1.4.3)
 - **`DialogWrapper(Project, boolean)`** (1 usage) → `DialogWrapper(Project)` (v1.4.3)

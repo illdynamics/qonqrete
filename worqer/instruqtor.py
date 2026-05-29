@@ -78,7 +78,7 @@ except ImportError as e:
 try:
     from calqulator import estimate_tokens, calculate_cost, format_cost
 except ImportError:
-    def estimate_tokens(text, model="deepseek-chat"):
+    def estimate_tokens(text, model="deepseek-v4-flash"):
         return len(text or "") // 4
 
     def calculate_cost(tokens, model, is_input=True):

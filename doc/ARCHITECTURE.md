@@ -1,9 +1,9 @@
 # QonQrete Architecture
 
-**Version:** `v1.4.5`
-**Release context:** `v1.4.5`
+**Version:** `v1.4.6`
+**Release context:** `v1.4.6`
 
-This document describes the current repository architecture as shipped in the `v1.4.5` snapshot.
+This document describes the current repository architecture as shipped in the `v1.4.6` snapshot.
 
 ## High-level model
 
@@ -339,5 +339,5 @@ my-project/
 
 ### Deployment source
 
-Primary: versioned GitHub release zip (`qonqrete-v1.4.5.zip`)
+Primary: versioned GitHub release zip (`qonqrete-v1.4.6.zip`)
 Fallback: shallow git clone if zip download fails

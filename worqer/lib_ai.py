@@ -386,9 +386,14 @@ CAPABILITY_TABLE: tuple[ModelCapabilities, ...] = (
     ModelCapabilities("anthropic", "claude-sonnet-4*", 100000, 8192, 128000, 3.5, True, True, True),
     ModelCapabilities("anthropic", "claude-3-5-sonnet*", 80000, 8192, 100000, 3.5, True, True, True),
     ModelCapabilities("anthropic", "claude-opus-4*", 100000, 8192, 128000, 3.5, True, True, True),
+    # DeepSeek V4 models (current generation)
+    ModelCapabilities("deepseek", "deepseek-v4-flash*", 616000, 32768, 1000000, 3.33, True, True, True),
+    ModelCapabilities("deepseek", "deepseek-v4-flash-thinking*", 616000, 32768, 1000000, 3.33, True, True, True),
+    ModelCapabilities("deepseek", "deepseek-v4-pro*", 616000, 32768, 1000000, 3.33, True, True, True),
+    ModelCapabilities("deepseek", "deepseek-v4-pro-thinking*", 616000, 32768, 1000000, 3.33, True, True, True),
+    # Legacy aliases (kept for backward compat)
     ModelCapabilities("deepseek", "deepseek-reasoner*", 32000, 8192, 48000, 4.0, True, True, True),
     ModelCapabilities("deepseek", "deepseek-chat*", 32000, 8192, 48000, 4.0, True, True, True),
-    ModelCapabilities("deepseek", "deepseek-coder*", 32000, 8192, 48000, 4.0, True, True, True),
     ModelCapabilities("qwen", "qwen*", 32000, 4096, 48000, 4.0, True, True, True),
     ModelCapabilities("openrouter", "*", 32000, 4096, 48000, 4.0, True, True, True),
     # v1.3.12: mlx and llama-cpp providers (local / LAN OpenAI-compatible runtimes).
@@ -1672,7 +1677,7 @@ def _dispatch_openai_compatible(
     if provider_l == "venice" and not str(model or "").strip():
         raise ValueError(
             "Venice dispatch requires a non-empty model. "
-            "Set agents.<name>.model explicitly (recommended: deepseek-v3.2)."
+            "Set agents.<name>.model explicitly (recommended: deepseek-v4-flash)."
         )
 
     # v1.3.12: For mlx and llama-cpp, use direct HTTP requests to ensure true

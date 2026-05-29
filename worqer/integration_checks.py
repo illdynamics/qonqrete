@@ -412,14 +412,19 @@ def evaluate_frontend_group_contracts(
             if ref.startswith(("http://", "https://", "//")):
                 continue
             ref_rel = normalize_file_hint(str((Path(html_rel).parent / ref)))
-            # Scoped interleaved checks must not force cross-briq files that are
-            # outside the current write scope; defer those to full deterministic
-            # contract/harness validation.
-            if scope_set and not _in_scope(ref_rel):
-                ref_name = Path(ref_rel).name
-                if ref_rel in required_file_set or ref_name in required_file_names:
-                    continue
             if not (html_path.parent / ref).exists():
+                # Scoped interleaved checks must not force cross-briq files
+                # that are outside the current write scope (e.g. index.html
+                # references app.js which hasn't been created yet by a later
+                # briq). Defer those to the full deterministic contract/
+                # harness validation pass. Required files that are known from
+                # completion criteria are also deferred.
+                if scope_set:
+                    if not _in_scope(ref_rel):
+                        continue
+                    ref_name = Path(ref_rel).name
+                    if ref_rel in required_file_set or ref_name in required_file_names:
+                        continue
                 issues.append({
                     "source": "frontend_contract",
                     "severity": "error",

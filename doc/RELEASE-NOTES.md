@@ -1,4 +1,4 @@
-## v1.4.0 — MLcon Edition: Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment + IntelliJ Compatibility Series (v1.4.0–v1.4.5)
+## v1.4.0 — MLcon Edition: Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment + IntelliJ Compatibility Series (v1.4.0–v1.4.6)
 
 ### Core runtime (v1.4.0)
 
@@ -62,9 +62,9 @@ This release ships a coordinated patch pass across inspection truthfulness, term
 - Intake clarification blocking uses explicit `BLOCKED` / `RUN_WAITING_FOR_INPUT` states and resume re-enters cycle-1 clarification semantics when applicable.
 - Validation execution-mode reporting is evidence-driven (`NONE`, `STATIC_ONLY`, `EXECUTED`, `MIXED`) and no longer overclaims executed coverage from markdown presence alone.
 
-### v1.4.1–v1.4.5 — IntelliJ compatibility patch series
+### v1.4.1–v1.4.6 — IntelliJ compatibility patch series
 
-The v1.4.x patches (v1.4.1 through v1.4.5) are IDE-plugin-only updates. No core runtime changes. The series resolves all IntelliJ Platform API deprecation warnings across IDE versions 2023.3–2026.2 EAP.
+The v1.4.x patches (v1.4.1 through v1.4.6) are IDE-plugin-only updates. No core runtime changes. The series resolves all IntelliJ Platform API deprecation warnings across IDE versions 2023.3–2026.2 EAP.
 
 #### v1.4.1 — JetBrains Compatibility & Auto Briq Sense Default-On
 - Replaced 8 scheduled-for-removal API usages (`AnActionEvent.createFromDataContext`, deprecated constructors, OverrideOnly `actionPerformed` calls).
@@ -87,7 +87,7 @@ The v1.4.x patches (v1.4.1 through v1.4.5) are IDE-plugin-only updates. No core 
 - Suppressed 2 deprecated `CredentialAttributes()` constructor warnings.
 - Fixed bootstrap/hygiene: executable `qonqrete-bootstrap.sh`, zip packaging fixes, smoke tests, stale task file cleanup.
 
-#### v1.4.5 — JetBrains API Deprecation Resolution (Zero Warnings)
+#### v1.4.6 — JetBrains API Deprecation Resolution (Zero Warnings)
 - `AnActionEvent.createFromDataContext()` → direct `AnActionEvent()` constructor.
 - Override-only `actionPerformed()` → `ActionManager.tryToExecute()`.
 - `CredentialAttributes(serviceName)` → `CredentialAttributes(serviceName, key)` (2-arg constructor).
