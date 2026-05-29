@@ -205,12 +205,27 @@ def resolve_execution_limits(config: dict | None = None, cli_total_iterations: i
     config = config or {}
     options = config.get("options", {}) or {}
     repair = config.get("repair", {}) or {}
-    total_iterations = cli_total_iterations
-    if total_iterations is None:
-        total_iterations = options.get("max_total_iterations", options.get("auto_cycle_limit", 4))
-    build_passes = cli_build_passes
-    if build_passes is None:
-        build_passes = options.get("max_build_passes", total_iterations)
+
+    # auto_cycle: when true (default) and no CLI overrides, the scheduler
+    # determines when to stop. Config caps are generous ceilings so the
+    # scheduler can continue as needed; CLI switches (--cyqles, -c) always
+    # override and set exact limits.
+    auto_cycle = bool(options.get("auto_cycle", True))
+    has_cli_override = cli_total_iterations is not None
+
+    if has_cli_override or not auto_cycle:
+        # Manual mode: use explicit config or CLI values
+        total_iterations = cli_total_iterations
+        if total_iterations is None:
+            total_iterations = options.get("max_total_iterations", options.get("auto_cycle_limit", 3))
+        build_passes = cli_build_passes
+        if build_passes is None:
+            build_passes = options.get("max_build_passes", total_iterations)
+    else:
+        # Auto-cycle mode: high ceilings let the scheduler decide
+        total_iterations = 200
+        build_passes = 200
+
     repair_attempts = repair.get("max_attempts_per_build_pass", repair.get("max_attempts", 2))
     return ExecutionLimits(
         max_total_iterations=clamp_positive(total_iterations, 4, minimum=1, maximum=200),

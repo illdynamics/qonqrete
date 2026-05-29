@@ -23,9 +23,9 @@ import com.intellij.openapi.components.Storage
 class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.State> {
 
     data class State(
-        var defaultSensitivity: Int = 1,
+        var defaultSensitivity: Int = 3,
         var defaultAutoBriqSensitivity: Boolean = true,
-        var defaultCycles: Int = 1,
+        var defaultCycles: Int = 3,
         var defaultMode: String = "program",
         var defaultAutonomous: Boolean = true,
         var noSync: Boolean = false,
@@ -116,9 +116,9 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
  * Run configuration for QonQrete
  */
 data class QonQreteRunConfig(
-    val sensitivity: Int = 1,
+    val sensitivity: Int = 3,
     val autoSensitivity: Boolean = true,
-    val cycles: Int = 1,
+    val cycles: Int = 3,
     val mode: String = "program",
     val autonomous: Boolean = true,
     val noSync: Boolean = false,

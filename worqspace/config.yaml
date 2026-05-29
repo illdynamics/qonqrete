@@ -428,19 +428,26 @@ options:
   cheqpoint: false
 
   # Hard outer safety cap. Counts every actual pass: build + repair.
-  max_total_iterations: 4
+  max_total_iterations: 3
   # Compatibility alias for older configs / CLI wording.
-  auto_cycle_limit: 4
+  auto_cycle_limit: 3
   # Hard cap for non-repair build passes only.
-  max_build_passes: 4
+  max_build_passes: 4  # (only used when auto_cycle=false)
   # How InstruQtor estimated build passes are used. advisory = recorded only, scheduler = can continue with later build passes when allowed.
   cycle_estimate_mode: scheduler
 
   # Cost estimation gate
   cost_confirmation_gate: false
 
-  # Automatic briQ sensisitivty
+  # Automatic briQ sensitivity detection (default on). When true, the manual
+  # briq_sensitivity value is ignored and InstruQtor determines the right granularity.
   auto_briq_sens: true
+
+  # Automatic cycle/iteration count determination (default on). When true, the manual
+  # max_total_iterations and max_build_passes are ignored and the scheduler determines
+  # the right number of build passes and repair cycles.
+  # CLI switches (--cyqles <N>, -b <N>) still override both auto modes.
+  auto_cycle: true
 
   # Manual briQ sensitivity (0-16) Higher number = more briQs, but on a bounded practical scale.
   #   0  = Monolithic    (1 briq)
@@ -460,7 +467,7 @@ options:
   #  14  = Maximum       (36-64 briqs)
   #  15  = Insane        (48-84 briqs)
   #  16  = QONQRETE MAX  (64-120 briqs)
-  briq_sensitivity: 1
+  briq_sensitivity: 3  # (only used when auto_briq_sens=false)
 
   # Run Mode: program (functional), innovative (always suggest improvements), enterprise (include monitoring, logging and more)
   mode: program

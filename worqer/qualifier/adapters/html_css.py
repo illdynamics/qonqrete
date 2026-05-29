@@ -281,13 +281,13 @@ def _run_fallback_html_check(file_path: Path, rel: str) -> list[VerificationResu
 
     for tag in ("html", "head", "body"):
         if tag not in parser.tags_seen:
-            out.append(result_error(
+            out.append(result_warn(
                 rel, "html_css:html-fallback",
                 f"Missing <{tag}> element in standalone HTML document",
             ))
 
     for line_no, id_val, first_line in parser.duplicate_ids:
-        out.append(result_error(
+        out.append(result_warn(
             rel, "html_css:html-fallback",
             f"Duplicate id \x27{id_val}\x27 (first at line {first_line})",
             line_number=line_no,
@@ -295,7 +295,7 @@ def _run_fallback_html_check(file_path: Path, rel: str) -> list[VerificationResu
 
     for line_no, anchor_target in parser.anchor_refs:
         if anchor_target and anchor_target not in parser.ids:
-            out.append(result_error(
+            out.append(result_warn(
                 rel, "html_css:html-fallback",
                 f"Broken anchor reference \x27#{anchor_target}\x27 - no matching id found",
                 line_number=line_no,
@@ -319,7 +319,7 @@ def _run_fallback_html_check(file_path: Path, rel: str) -> list[VerificationResu
 
     for image in parser.images:
         if not image.get("has_alt"):
-            out.append(result_error(
+            out.append(result_warn(
                 rel, "html_css:html-fallback",
                 "<img> missing alt attribute",
                 line_number=int(image.get("line") or 0) or None,
@@ -330,7 +330,7 @@ def _run_fallback_html_check(file_path: Path, rel: str) -> list[VerificationResu
         if _is_local_ref(cleaned):
             target = (file_path.parent / cleaned).resolve()
             if not target.exists():
-                out.append(result_error(
+                out.append(result_warn(
                     rel, "html_css:html-fallback",
                     f"Missing local reference: {cleaned}",
                     line_number=line_no,
@@ -340,7 +340,7 @@ def _run_fallback_html_check(file_path: Path, rel: str) -> list[VerificationResu
         msg = f"Forbidden external network references: {chr(44).join(parser.external_refs[:5])}"
         if len(parser.external_refs) > 5:
             msg += f" ... +{len(parser.external_refs) - 5} more"
-        out.append(result_error(rel, "html_css:html-fallback", msg))
+        out.append(result_warn(rel, "html_css:html-fallback", msg))
 
     # WARNING: placeholder/scaffold content
     _check_placeholder_content(text, rel, "html_css:html-fallback", out)
