@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { getRunner, QonQreteRunConfig } from '../cli/qonqreteRunner';
 import { 
     showQuickConfigWizard, 
@@ -140,6 +141,26 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
             await vscode.commands.executeCommand('workbench.action.openSettings', 'qonqrete.qonqretePath');
         }
         return;
+    }
+
+    // If an editor with a markdown file is open, save its content as the
+    // canonical tasq before running — this way "Run Tasq" always runs what
+    // you're currently working on, not a stale example file.
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && activeEditor.document.languageId === 'markdown' && !activeEditor.document.isUntitled) {
+        const tasqPath = await runner.getTasqPath();
+        if (tasqPath) {
+            try {
+                const editorContent = activeEditor.document.getText();
+                const worqspaceDir = path.dirname(tasqPath);
+                if (!fs.existsSync(worqspaceDir)) {
+                    fs.mkdirSync(worqspaceDir, { recursive: true });
+                }
+                fs.writeFileSync(tasqPath, editorContent, 'utf8');
+            } catch {
+                // Fall through to default tasq check
+            }
+        }
     }
 
     // Check if a default task file exists (workspace root or internal compatibility copy)

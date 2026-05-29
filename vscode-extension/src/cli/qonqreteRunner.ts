@@ -797,10 +797,11 @@ export class QonQreteRunner {
 
         const unixTaskPath = this.toUnixPath(taskFilePath);
         const escapedTaskPath = this.escapeShellArg(unixTaskPath);
+        // args[0] is 'run', slice it off then re-add as `run -f <task>`
         const runArgs = args.slice(1);
         return runArgs.length > 0
-            ? `./qonqrete.sh ${escapedTaskPath} ${runArgs.join(' ')}`
-            : `./qonqrete.sh ${escapedTaskPath}`;
+            ? `./qonqrete.sh run -f ${escapedTaskPath} ${runArgs.join(' ')}`
+            : `./qonqrete.sh run -f ${escapedTaskPath}`;
     }
 
     /**
