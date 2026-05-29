@@ -15,7 +15,7 @@
 
 ### Notes
 - Local runtime providers remain supported by core runtime config files, but are no longer presented in the shared sidebar/panel provider picker.
-- No core runtime changes in any v1.4.x patch — IDE plugins only.
+- v1.4.6: DeepSeek model picker upgraded to V4 generation (`deepseek-v4-flash`, `deepseek-v4-flash-thinking`, `deepseek-v4-pro`, `deepseek-v4-pro-thinking`). OpenRouter reference updated to `deepseek/deepseek-v4-flash`.
 
 ## 1.3.0 - Current Runtime Alignment
 

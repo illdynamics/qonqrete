@@ -62,9 +62,9 @@ This release ships a coordinated patch pass across inspection truthfulness, term
 - Intake clarification blocking uses explicit `BLOCKED` / `RUN_WAITING_FOR_INPUT` states and resume re-enters cycle-1 clarification semantics when applicable.
 - Validation execution-mode reporting is evidence-driven (`NONE`, `STATIC_ONLY`, `EXECUTED`, `MIXED`) and no longer overclaims executed coverage from markdown presence alone.
 
-### v1.4.1–v1.4.6 — IntelliJ compatibility patch series
+### v1.4.1–v1.4.5 — IntelliJ compatibility patch series
 
-The v1.4.x patches (v1.4.1 through v1.4.6) are IDE-plugin-only updates. No core runtime changes. The series resolves all IntelliJ Platform API deprecation warnings across IDE versions 2023.3–2026.2 EAP.
+The v1.4.1–v1.4.5 patches are IDE-plugin-only updates. No core runtime changes. The series resolves all IntelliJ Platform API deprecation warnings across IDE versions 2023.3–2026.2 EAP.
 
 #### v1.4.1 — JetBrains Compatibility & Auto Briq Sense Default-On
 - Replaced 8 scheduled-for-removal API usages (`AnActionEvent.createFromDataContext`, deprecated constructors, OverrideOnly `actionPerformed` calls).
@@ -87,11 +87,38 @@ The v1.4.x patches (v1.4.1 through v1.4.6) are IDE-plugin-only updates. No core 
 - Suppressed 2 deprecated `CredentialAttributes()` constructor warnings.
 - Fixed bootstrap/hygiene: executable `qonqrete-bootstrap.sh`, zip packaging fixes, smoke tests, stale task file cleanup.
 
-#### v1.4.6 — JetBrains API Deprecation Resolution (Zero Warnings)
-- `AnActionEvent.createFromDataContext()` → direct `AnActionEvent()` constructor.
-- Override-only `actionPerformed()` → `ActionManager.tryToExecute()`.
-- `CredentialAttributes(serviceName)` → `CredentialAttributes(serviceName, key)` (2-arg constructor).
-- **Result: 0 scheduled-for-removal, 0 override-only, 0 deprecated API.** Marketplace clean across 2023.3–2026.2 EAP.
+### v1.4.6 — Core Runtime Fixes, DeepSeek V4, Plugin Verifier Zero-Warnings
+
+#### Core runtime
+
+- **Fedora SELinux permission fix:** Rootless Podman on SELinux-enforcing hosts (Fedora, RHEL)
+  could not write to the bind-mounted workspace (`/qonq/audit/timeline.md`). The `:z`
+  SELinux relabel flag cannot work in rootless mode (users lack privileges). Fix:
+  `--security-opt label=disable` for rootless Podman on Linux. The container remains
+  fully constrained by the user namespace, `--cap-drop=ALL`, `--no-new-privileges`,
+  and `--read-only` rootfs.
+
+- **Interleaved validation cross-briq deferral:** During multi-briq builds, the scoped
+  qualifier would flag `index.html` referencing `app.js` as "missing local file" when
+  `app.js` hadn't been created yet by a later briq, blocking the build. Fixed: cross-scope
+  missing file references are now deferred to the full deterministic validation pass.
+
+- **DeepSeek V4 model upgrade:** Default models upgraded from the legacy `deepseek-chat` /
+  `deepseek-reasoner` to the current V4 generation: `deepseek-v4-flash`,
+  `deepseek-v4-flash-thinking`, `deepseek-v4-pro`, `deepseek-v4-pro-thinking`.
+  Updated in model capabilities (`lib_ai.py`), pricing (`calqulator.py`), default
+  fallbacks (`instruqtor.py`), VSCode extension model picker, IntelliJ AI config UI,
+  installer (`install.sh`), and documentation. Legacy aliases retained for backward compat.
+
+#### IntelliJ Plugin Verifier — Zero Warnings (2023.3–2026.2 EAP)
+
+- `AnActionEvent(...)` constructor → `AnActionEvent.createFromInputEvent()` (scheduled for removal)
+- `AnAction.beforeActionPerformedUpdate()` → `AnAction.update()` (override-only violation)
+- `CredentialAttributes(serviceName, key)` → 3-param constructor with `null` className (deprecated, 2 usages)
+- `PluginManagerCore.getPlugin()` → classloader `META-INF/plugin.xml` resource read (internal API, 2026.2 only)
+- DeepSeek model names updated in plugin AI config UI
+
+**Result: 0 scheduled-for-removal, 0 override-only, 0 deprecated, 0 internal API.**
 
 ---
 

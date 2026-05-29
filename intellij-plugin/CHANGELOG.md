@@ -12,17 +12,13 @@ Zero scheduled-for-removal, zero override-only, zero deprecated API, zero intern
 - **`PluginManagerCore.getPlugin()`** (1 usage, 2026.2 only) → classloader `META-INF/plugin.xml` resource read
 - **DeepSeek model names** updated to v4 generation (`deepseek-v4-flash`, `deepseek-v4-pro`)
 
+## 1.4.1–1.4.5 — IntelliJ Compatibility Series
 
-## 1.4.6 — IntelliJ Compatibility Series (v1.4.1–v1.4.6)
+IDE-plugin-only patches resolving all IntelliJ Platform API deprecation warnings
+across 2023.3–2026.2 EAP. No core runtime changes.
 
-IDE-plugin-only patches that resolve all IntelliJ Platform API deprecation warnings across 2023.3–2026.2 EAP.
-No core runtime changes.
-
-### API deprecation fixes (cumulative)
+### Cumulative fixes
 - **`ActionUtil.invokeAction()`** (8 usages) → modern `AnActionEvent` pattern (v1.4.4)
-- **`AnActionEvent.createFromDataContext()`** (1 usage) → direct `AnActionEvent()` constructor (v1.4.6)
-- **Override-only `actionPerformed()`** (1 usage) → `ActionManager.tryToExecute()` (v1.4.6)
-- **`CredentialAttributes(serviceName)`** (2 usages) → `CredentialAttributes(serviceName, key)` (v1.4.6)
 - **`ComboBox(E[])`** (6 usages) → `ComboBox(DefaultComboBoxModel(E[]))` (v1.4.3)
 - **`JBPasswordField()`** (2 usages) → `JPasswordField()` (v1.4.3)
 - **`DialogWrapper(Project, boolean)`** (1 usage) → `DialogWrapper(Project)` (v1.4.3)
@@ -30,12 +26,6 @@ No core runtime changes.
 - **License:** AGPL-3.0 → Apache-2.0 (v1.4.2)
 - **Auto Briq Sensitivity** default-on (v1.4.1)
 - **Startup timeout fix** — replaced modal dialog with non-blocking notification (v1.4.1)
-
-### Marketplace compatibility status
-- **Scheduled-for-removal API:** 0 usages ✅
-- **OverrideOnly API violations:** 0 usages ✅
-- **Deprecated API:** 0 usages ✅
-- All IDE versions 2023.3–2026.2 EAP verified compatible
 
 ## 1.3.0 - Current Runtime Alignment
 
