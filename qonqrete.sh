@@ -330,10 +330,15 @@ security_flags() {
         --tmpfs /tmp:rw,noexec,nosuid,nodev,size=100m
         --tmpfs /home/qrane/.cache:rw,noexec,nosuid,nodev,size=500m
     )
-    # Rootless podman: keep host UID mapping consistent so bind-mounted files
-    # land with the host user's ownership (equivalent of HOST_UID match for docker).
+    # Rootless podman on Linux (SELinux): disable SELinux container labeling
+    # since the user namespace cannot relabel host files via :z/:Z. The container
+    # remains fully constrained by the user namespace, dropped caps, no-new-privs,
+    # and read-only rootfs — SELinux labeling is belt-and-suspenders here.
     if [ "$CONTAINER_ENGINE" = "podman" ] && [ "$(id -u)" -ne 0 ]; then
         flags+=(--userns=keep-id)
+        if [ "$DETECTED_OS" = "Linux" ]; then
+            flags+=(--security-opt label=disable)
+        fi
     fi
     printf '%s\n' "${flags[@]}"
 }
@@ -1230,7 +1235,7 @@ run_container() {
     local run_mount_suffix=""
     if [ "$CONTAINER_ENGINE" = "podman" ] && [ "$DETECTED_OS" = "Linux" ]; then
         dev_mount_ro_suffix=":ro,z"
-        run_mount_suffix=":z"
+        run_mount_suffix=":rw"
     fi
     run_mounts=(-v "${norm_run_path}:${CONTAINER_WORKSPACE}${run_mount_suffix}")
     # Dev code mounts are READ-ONLY. The container must not mutate its own code.
