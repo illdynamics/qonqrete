@@ -85,18 +85,8 @@ tasks {
     runPluginVerifier {
         // Exact versions matched to JetBrains Marketplace verifier (May 2026).
         // Run `./gradlew verifyPlugin` locally to reproduce Marketplace results
-        // before uploading. Uses patch releases where the Marketplace verifier
-        // produced definitive results.
-        ideVersions.set(listOf(
-            "2023.3.8",
-            "2024.1.7",
-            "2024.2.6",
-            "2024.3.7.1",
-            "2025.1.7.1",
-            "2025.2.6.2",
-            "2025.3.5",
-            "2026.1.2",
-            "2026.2"       // EAP — resolves to latest snapshot
-        ))
+        // before uploading. The CI sed command rewrites this single-line listOf
+        // per matrix runner — keep it on ONE LINE.
+        ideVersions.set(listOf("2023.3.8", "2024.1.7", "2024.2.6", "2024.3.7.1", "2025.1.7.1", "2025.2.6.2", "2025.3.5", "2026.1.2", "2026.2-EAP-SNAPSHOT"))
     }
 }
