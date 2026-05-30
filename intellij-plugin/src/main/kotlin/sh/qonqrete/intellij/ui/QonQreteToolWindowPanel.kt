@@ -362,6 +362,26 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private fun executeRun() {
         val (canRun, reason, _) = service.canExecute()
         if (!canRun) { service.notify("QonQrete", reason ?: "Cannot run", NotificationType.WARNING); return }
+
+        // Save active editor content as the canonical tasq before running
+        val editor = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)?.selectedTextEditor
+        if (editor != null) {
+            val psiFile = com.intellij.psi.PsiDocumentManager.getInstance(project)?.getPsiFile(editor.document)
+            if (psiFile != null && psiFile.fileType.name.lowercase().contains("markdown")) {
+                try {
+                    val tasqPath = service.getTasqPath()
+                    if (tasqPath != null) {
+                        val tasqFile = java.io.File(tasqPath)
+                        tasqFile.parentFile?.mkdirs()
+                        com.intellij.openapi.application.ApplicationManager.getApplication().runWriteAction {
+                            FileDocumentManager.getInstance().saveDocument(editor.document)
+                        }
+                        tasqFile.writeText(editor.document.text)
+                    }
+                } catch (_: Exception) { }
+            }
+        }
+
         if (!service.hasTasqFile()) { service.notify("QonQrete", "No default task file found.", NotificationType.WARNING); return }
         FileDocumentManager.getInstance().saveAllDocuments()
 
