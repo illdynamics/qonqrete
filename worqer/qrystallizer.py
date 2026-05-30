@@ -263,7 +263,7 @@ def detect_blocking_gaps(raw_task_text: str, clarified_task_text: str, goal: str
         deduped.append(gap)
         
     deduped.sort(key=lambda item: (0 if "placeholder" in str(item.get("reason", "")).lower() else 1))
-    return deduped[:3]
+    return deduped
 
 
 def _synthesize_clarified_goal(raw_goal: str, answers: list[dict]) -> tuple[str, str, str]:
@@ -440,6 +440,7 @@ def build_task_spec(
             "question_id": f"q-{index + 1}",
             "impact": gap["impact"],
             "reason": gap["reason"],
+            "default_assumption": gap.get("suggested_answer", ""),
             "question": gap["question"],
         }
         for index, gap in enumerate(blocking_gaps)
@@ -589,6 +590,32 @@ def main() -> None:
     ai_binding = resolve_qrystallizer_ai_binding(runtime_config)
     response_path = workspace_root / "task" / "clarification-response.v1.json"
     clarification_response = load_clarification_response(response_path, run_id)
+    # Auto-enhancement: use AI to improve task quality before gap detection.
+    # Skip when QONQ_DONT_ENHANCE_TASQ=1 (--dont-enhance-tasq / -E flag).
+    dont_enhance = os.environ.get("QONQ_DONT_ENHANCE_TASQ", "").strip() == "1"
+    if not dont_enhance and len(raw_task.strip()) < 2000:
+        from . import lib_ai as _lib_ai
+        try:
+            enhancement_prompt = (
+                "Enhance the following task description for an AI code generation system. "
+                "Add missing details, clarify ambiguous requirements, and structure the task "
+                "into clear sections (Goal, Context, Acceptance Criteria, Notes). "
+                "Preserve ALL original requirements. Do NOT add new requirements.\n\n"
+                f"Original task:\n{raw_task}"
+            )
+            enhanced = _lib_ai.ai_completion(
+                provider=ai_binding["provider"],
+                model=ai_binding["model"],
+                prompt=enhancement_prompt,
+                max_tokens=2000,
+                task_type="task_enhancement",
+            )
+            if enhanced and len(enhanced.strip()) > len(raw_task.strip()) * 0.5:
+                raw_task = enhanced.strip()
+                print("[Qrystallizer] Task enhanced via AI.", flush=True)
+        except Exception:
+            pass  # Enhancement is best-effort; fall through to original task
+
     print("[Qrystallizer] Qrystallizer: checking gaps", flush=True)
     print(
         f"[Qrystallizer] AI binding provider={ai_binding['provider']} model={ai_binding['model']}",

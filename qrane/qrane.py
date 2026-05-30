@@ -1002,7 +1002,7 @@ def load_clarification_questions(workspace_root: Path) -> list[dict]:
     if not isinstance(questions, list):
         return []
     normalized: list[dict] = []
-    for item in questions[:3]:
+    for item in questions:
         if isinstance(item, dict):
             normalized.append(item)
     return normalized
@@ -1148,15 +1148,20 @@ def prompt_for_clarification_answers(prefix: str, questions: list[dict]) -> list
     answers: list[dict] = []
     
     print(f"\n{qrane_prefix}{Colors.C}Task needs clarification before build can continue.{Colors.R}\r")
-    print(f"{qrane_prefix}Enter your answers below. Use {Colors.BOLD}/skip{Colors.R} to skip a question or {Colors.BOLD}/abort{Colors.R} to stop the run.\r\n")
+    print(f"{qrane_prefix}Press {Colors.BOLD}Enter{Colors.R} to accept the suggested assumption, or type your own answer.")
+    print(f"{qrane_prefix}Use {Colors.BOLD}/skip{Colors.R} to skip or {Colors.BOLD}/abort{Colors.R} to stop the run.\r\n")
 
     for idx, item in enumerate(questions, start=1):
         question_id = item.get("question_id", f"q-{idx}")
         question = item.get("question", "Clarification needed.")
+        default_assumption = item.get("default_assumption") or item.get("suggested_answer") or ""
         
         while True:
             try:
-                prompt = f"{qrane_prefix}{Colors.BOLD}[{question_id}]{Colors.R} Answer: "
+                if default_assumption:
+                    prompt = f"{qrane_prefix}{Colors.BOLD}[{question_id}]{Colors.R} [{Colors.G}{default_assumption}{Colors.R}]: "
+                else:
+                    prompt = f"{qrane_prefix}{Colors.BOLD}[{question_id}]{Colors.R} Answer: "
                 user_input = input(prompt).strip()
             except (EOFError, KeyboardInterrupt):
                 print(f"\n{qrane_prefix}Clarification aborted by user.\r")
@@ -1179,8 +1184,22 @@ def prompt_for_clarification_answers(prefix: str, questions: list[dict]) -> list
                     }
                 )
                 break
-                
-            if not user_input:
+            
+            # Empty input = accept the default assumption (if one exists)
+            if not user_input and default_assumption:
+                print(f"{qrane_prefix}{Colors.G}  → Accepted: {default_assumption}{Colors.R}\r")
+                answers.append(
+                    {
+                        "question_id": question_id,
+                        "question": question,
+                        "answer": default_assumption,
+                        "skipped": False,
+                        "source": "assumed-default",
+                        "answered_at": now_utc_iso(),
+                    }
+                )
+                break
+            elif not user_input:
                 print(f"{qrane_prefix}{Colors.YELLOW}Answer cannot be empty. Please provide a response or use /skip.{Colors.R}\r")
                 continue
                 
@@ -2222,6 +2241,7 @@ def main():
     parser.add_argument("-b", "--briq-sensitivity", type=int, help="Granularity (0-16)")
     parser.add_argument("-B", "--auto-briq-sensitivity", action="store_true", help="Force automatic briq sensitivity detection")
     parser.add_argument("-c", "--cyqles", type=int, help="Max total iterations (build + repair passes). Compatibility alias for max_total_iterations.")
+    parser.add_argument("-E", "--dont-enhance-tasq", action="store_true", help="Skip AI-based task enhancement (Qrystallizer runs deterministic-only).")
     parser.add_argument("--build-passes", type=int, help="Max non-repair build passes.")
     parser.add_argument("--cycle-estimate-mode", choices=[ESTIMATE_MODE_ADVISORY, ESTIMATE_MODE_SCHEDULER], help="How InstruQtor estimated build passes are used.")
     parser.add_argument("--interactive-clarification", action="store_true", help="Force interactive clarification prompts.")
@@ -2651,6 +2671,7 @@ def run_orchestration(args, prefix, is_autonomous, config):
             env["CYCLE_NUM"] = str(cycle)
             env["QONQ_GLOBAL_ITERATION_INDEX"] = str(execution_state.global_iteration_index)
             env["QONQ_PASS_KIND"] = execution_state.pass_kind
+            env["QONQ_DONT_ENHANCE_TASQ"] = "1" if args.dont_enhance_tasq else ""
             env["QONQ_BUILD_PASS_INDEX"] = str(execution_state.build_pass_index)
             env["QONQ_REPAIR_PASS_INDEX"] = str(execution_state.repair_pass_index)
             env["QONQ_CYCLE_ESTIMATE_MODE"] = execution_state.cycle_estimate_mode

@@ -1271,6 +1271,7 @@ run_container() {
         -e QONQ_RESUMED_FROM_QAGE
         -e QONQ_REPO_SYNC_MODE
         -e QONQ_TASK_SOURCE_PATH
+        -e QONQ_DONT_ENHANCE_TASQ="${QONQ_DONT_ENHANCE_TASQ:-}"
         -e QONQ_TASK_SOURCE_LABEL
         "$tag"
         python3 qrane/qrane.py
@@ -1417,6 +1418,7 @@ Run Options:
   --seed-repo, --continue-from-repo  Seed current repository into qodeyard before run.
   -s, --sqrapyard                    Legacy alias for --seed-repo (kept for compatibility).
   -N, --no-sync                    Skip sync-back into repo root; keep results in worqspace/qonstructions/qage flows.
+  -E, --dont-enhance-tasq          Skip AI-based task enhancement (Qrystallizer skips AI pass, deterministic only).
   -d, --docker                     Force Docker engine (auto-detect prefers Podman).
   -p, --podman                     Force Podman engine (default when both available).
 
@@ -1539,6 +1541,7 @@ while [[ $# -gt 0 ]]; do
                                            USE_REPO_SEED=true; shift ;;
         -s|--sqrapyard)                  USE_SQRAPYARD=true; USE_REPO_SEED=true; shift ;;
         -N|--no-sync)                    SYNC_TO_REPO=false; shift ;;
+        -E|--dont-enhance-tasq)          PY_ARGS+=(--dont-enhance-tasq); shift ;;
         -q|--qage)
             need_value "$1" "${2-}"; QAGE_NAME="$2"; shift 2 ;;
         -n|--qonstruction-name)
