@@ -9,7 +9,7 @@
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "2.0.21"
+    id("org.jetbrains.kotlin.jvm") version "2.1.20"
     id("org.jetbrains.intellij") version "1.17.3"
 }
 
@@ -24,8 +24,8 @@ repositories {
 
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.0.21")
-    testImplementation("io.mockk:mockk:1.13.8")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.1.20")
+    testImplementation("io.mockk:mockk:1.13.12")
 }
 
 java {
