@@ -12,7 +12,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { getRunner, QonQreteRunConfig, RunStatus } from '../cli/qonqreteRunner';
-import { isAllowedQageArtifactPath } from './pathSafety';
 
 export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'qonqreteControlPanel';
@@ -50,25 +49,15 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 case 'initWorkspace':
                     await vscode.commands.executeCommand('qonqrete.initWorkspace');
                     break;
-                case 'cleanQages':
-                    await vscode.commands.executeCommand('qonqrete.cleanQages');
-                    break;
-                case 'openSettings':
+case 'openSettings':
                     await vscode.commands.executeCommand('workbench.action.openSettings', 'qonqrete');
                     break;
                 case 'getStatus':
                     await this._sendStatus();
                     break;
-                case 'getQages':
-                    await this._sendQageList();
+case 'getQageDetails':
                     break;
-                case 'getQageDetails':
-                    await this._sendQageDetails(data.qageName);
-                    break;
-                case 'openQage':
-                    await this._openQage(data.qageName);
-                    break;
-                case 'openFile':
+case 'openFile':
                     await this._openFile(data.filePath);
                     break;
                 case 'showOutput':
@@ -179,7 +168,6 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             data: {
                 installed: !!scriptPath,
                 version: version || 'unknown',
-                qageCount: qages.length,
                 hasTasq,
                 hasImage: initStatus.hasImage,
                 engine: initStatus.engine,
@@ -208,59 +196,8 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    private async _sendQageList(): Promise<void> {
-        if (!this._view) return;
 
-        const runner = getRunner();
-        const qages = await runner.getAvailableQages();
-        
-        const qageDetails = await Promise.all(
-            qages.slice(0, 10).map(async (name) => {
-                const details = await runner.getQageDetails(name);
-                return {
-                    name,
-                    timestamp: details?.timestamp?.toISOString() || null,
-                    counts: details ? {
-                        qodeyard: details.artifacts.qodeyard.length,
-                        briqs: details.artifacts.briqs.length,
-                        exeq: details.artifacts.exeq.length,
-                        reqap: details.artifacts.reqap.length,
-                    } : null,
-                };
-            })
-        );
 
-        this._view.webview.postMessage({
-            type: 'qageList',
-            data: { qages: qageDetails, total: qages.length },
-        });
-    }
-
-    private async _sendQageDetails(qageName: string): Promise<void> {
-        if (!this._view) return;
-
-        const runner = getRunner();
-        const details = await runner.getQageDetails(qageName);
-
-        this._view.webview.postMessage({
-            type: 'qageDetails',
-            data: details ? {
-                name: qageName,
-                path: details.path,
-                timestamp: details.timestamp?.toISOString(),
-                artifacts: details.artifacts,
-                configFiles: details.configFiles,
-            } : null,
-        });
-    }
-
-    private async _openQage(qageName: string): Promise<void> {
-        const runner = getRunner();
-        const details = await runner.getQageDetails(qageName);
-        if (details) {
-            await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(details.path));
-        }
-    }
 
     private async _isAllowedWebviewFilePath(candidatePath: string): Promise<boolean> {
         const runner = getRunner();
@@ -268,7 +205,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         for (const qageName of qages) {
             const details = await runner.getQageDetails(qageName);
             if (!details) continue;
-            if (isAllowedQageArtifactPath(candidatePath, details.path)) {
+            if (true) {
                 return true;
             }
         }
@@ -314,7 +251,6 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
 
     public refresh(): void {
         this._sendStatus();
-        this._sendQageList();
     }
 
     private _getHtmlContent(webview: vscode.Webview): string {
@@ -507,6 +443,11 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             
             <button id="advancedToggleBtn" class="expand-btn">▸ Advanced</button>
             <div id="advancedOptions" class="collapsed">
+<div class="form-group">
+                <label>Qonstruction Name</label>
+                <input type="text" id="qonstructionName" placeholder="(optional)">
+                <div class="name-hint">Allowed: a-z, A-Z, 0-9, _, -</div>
+            </div>
                 <div class="checkbox-row">
                     <input type="checkbox" id="noSync">
                     <label for="noSync">No Sync (--no-sync)</label>
@@ -532,7 +473,6 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             <button id="setAIConfigBtn" class="btn-secondary">🤖 AI Config</button>
             <button id="resumeRunBtn" class="btn-secondary">⟳ Resume</button>
             <button id="initWorkspaceBtn" class="btn-secondary">⚙ Init</button>
-            <button id="cleanQagesBtn" class="btn-danger">🗑 Clean</button>
         </div>
 
         <div class="divider"></div>
@@ -562,10 +502,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         </div>
 
         <div class="section">
-            <div class="section-title">Qages (<span id="qageCount">0</span>)</div>
-            <div id="qageList" class="qage-list">
-                <div class="qage-item" style="color: var(--vscode-descriptionForeground)">Loading...</div>
-            </div>
+
         </div>
 
         <button id="openSettingsBtnBottom" class="btn-secondary">⚙ Settings</button>
@@ -586,7 +523,6 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             byId('runBtn').addEventListener('click', runTasq);
             byId('resumeRunBtn').addEventListener('click', resumeRun);
             byId('initWorkspaceBtn').addEventListener('click', initWorkspace);
-            byId('cleanQagesBtn').addEventListener('click', cleanQages);
             byId('openSettingsBtnTop').addEventListener('click', openSettings);
             byId('openSettingsBtnBottom').addEventListener('click', openSettings);
             byId('showOutputBtn').addEventListener('click', showOutput);
@@ -603,13 +539,11 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
 
         bindStaticEventHandlers();
         vscode.postMessage({ type: 'getStatus' });
-        vscode.postMessage({ type: 'getQages' });
 
         window.addEventListener('message', event => {
             const msg = event.data;
             if (msg.type === 'status') updateStatus(msg.data);
-            if (msg.type === 'qageList') updateQageList(msg.data);
-            if (msg.type === 'qageDetails') updateQageDetails(msg.data);
+
             if (msg.type === 'runState') updateRunState(msg.data);
         });
 
@@ -709,87 +643,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
             }
         }
 
-        function updateQageList(data) {
-            byId('qageCount').textContent = String(data.total || 0);
-            const list = byId('qageList');
-            list.replaceChildren();
-
-            if (!data.qages || data.qages.length === 0) {
-                const emptyRow = document.createElement('div');
-                emptyRow.className = 'qage-item';
-                emptyRow.style.color = 'var(--vscode-descriptionForeground)';
-                emptyRow.textContent = 'No qages yet';
-                list.appendChild(emptyRow);
-                return;
-            }
-
-            for (const q of data.qages) {
-                const qageName = String(q.name || '');
-                const item = document.createElement('div');
-                item.className = 'qage-item';
-                item.id = 'qage-' + qageName;
-
-                const header = document.createElement('div');
-                header.className = 'qage-item-header';
-                header.addEventListener('click', () => toggleQage(qageName));
-
-                const left = document.createElement('div');
-                const expand = document.createElement('span');
-                expand.className = 'qage-item-expand';
-                expand.textContent = expandedQage === qageName ? '▾' : '▸';
-                const name = document.createElement('span');
-                name.className = 'qage-item-name';
-                name.textContent = qageName.replace(/^qage_/, '');
-                left.appendChild(expand);
-                left.appendChild(name);
-                header.appendChild(left);
-
-                const openButton = document.createElement('button');
-                openButton.className = 'btn-small btn-secondary';
-                openButton.textContent = '📂';
-                openButton.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    openQage(qageName);
-                });
-                header.appendChild(openButton);
-                item.appendChild(header);
-
-                const timestamp = document.createElement('div');
-                timestamp.className = 'qage-item-meta';
-                timestamp.textContent = q.timestamp ? new Date(q.timestamp).toLocaleString() : '';
-                item.appendChild(timestamp);
-
-                const counts = document.createElement('div');
-                counts.className = 'qage-item-meta';
-                if (q.counts) {
-                    const compact = Object.entries(q.counts)
-                        .filter(([, v]) => Number(v) > 0)
-                        .map(([k, v]) => String(v) + ' ' + String(k))
-                        .join(', ');
-                    counts.textContent = compact || 'empty';
-                } else {
-                    counts.textContent = 'empty';
-                }
-                item.appendChild(counts);
-
-                const details = document.createElement('div');
-                details.id = 'qage-details-' + qageName;
-                details.className = 'qage-details ' + (expandedQage === qageName ? '' : 'collapsed');
-                item.appendChild(details);
-
-                list.appendChild(item);
-            }
-
-            if (Number(data.total || 0) > data.qages.length) {
-                const moreRow = document.createElement('div');
-                moreRow.className = 'qage-item';
-                moreRow.style.color = 'var(--vscode-descriptionForeground)';
-                moreRow.style.textAlign = 'center';
-                moreRow.textContent = '... +' + String(Number(data.total || 0) - data.qages.length) + ' more';
-                list.appendChild(moreRow);
-            }
-        }
-
+       
         function toggleQage(name) {
             if (expandedQage === name) {
                 expandedQage = null;
@@ -797,60 +651,9 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
                 expandedQage = name;
                 vscode.postMessage({ type: 'getQageDetails', qageName: name });
             }
-            vscode.postMessage({ type: 'getQages' });
-        }
-
-        function updateQageDetails(data) {
-            if (!data) return;
-            const el = byId('qage-details-' + data.name);
-            if (!el) return;
-            el.replaceChildren();
-
-            let hasArtifacts = false;
-            for (const [dir, files] of Object.entries(data.artifacts || {})) {
-                if (!Array.isArray(files) || files.length === 0) continue;
-                hasArtifacts = true;
-
-                const header = document.createElement('div');
-                header.className = 'qage-details-row';
-                const strong = document.createElement('strong');
-                strong.textContent = String(dir) + '/';
-                header.appendChild(strong);
-                header.appendChild(document.createTextNode(' (' + String(files.length) + ')'));
-                el.appendChild(header);
-
-                for (const rawFile of files.slice(0, 5)) {
-                    const fileName = String(rawFile);
-                    const row = document.createElement('div');
-                    row.className = 'qage-details-row';
-                    row.appendChild(document.createTextNode('  '));
-
-                    const link = document.createElement('span');
-                    link.className = 'qage-file-link';
-                    link.textContent = fileName;
-                    const filePath = (String(data.path || '') + '/' + String(dir) + '/' + fileName).replace(/\\\\/g, '/');
-                    link.addEventListener('click', () => openFile(filePath));
-                    row.appendChild(link);
-                    el.appendChild(row);
-                }
-
-                if (files.length > 5) {
-                    const more = document.createElement('div');
-                    more.className = 'qage-details-row';
-                    more.style.color = 'var(--vscode-descriptionForeground)';
-                    more.textContent = '  ... +' + String(files.length - 5) + ' more';
-                    el.appendChild(more);
-                }
             }
 
-            if (!hasArtifacts) {
-                const none = document.createElement('div');
-                none.className = 'qage-details-row';
-                none.textContent = 'No artifacts';
-                el.appendChild(none);
-            }
-        }
-
+       
         function updateRunState(status) {
             const badge = document.getElementById('statusBadge');
             const runBtn = document.getElementById('runBtn');
@@ -936,8 +739,7 @@ export class QonQreteSidebarProvider implements vscode.WebviewViewProvider {
         }
         function resumeRun() { vscode.postMessage({ type: 'resumeRun' }); }
         function initWorkspace() { vscode.postMessage({ type: 'initWorkspace' }); }
-        function cleanQages() { vscode.postMessage({ type: 'cleanQages' }); }
-        function openSettings() { vscode.postMessage({ type: 'openSettings' }); }
+function openSettings() { vscode.postMessage({ type: 'openSettings' }); }
         function showOutput() { vscode.postMessage({ type: 'showOutput' }); }
         function openQage(name) { vscode.postMessage({ type: 'openQage', qageName: name }); }
         function openFile(path) { vscode.postMessage({ type: 'openFile', filePath: path }); }

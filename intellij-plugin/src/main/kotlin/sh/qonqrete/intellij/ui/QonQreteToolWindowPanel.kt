@@ -1,14 +1,6 @@
 /**
  * QonQrete Tool Window Panel
- * Full control panel with status, config, and COMPLETE artifact browser
- * 
- * v1.3.0 IMPROVEMENTS:
- * - Auto-refresh when run completes via service.onRefresh()
- * - "Open Tasq" button for quick editing
- * - "Clean All" button with confirmation
- * - Tooltips on ALL config controls
- * - Qage timestamps displayed in list
- * - Implements Disposable for proper cleanup
+ * Compact control panel with run configuration and actions.
  *
  * @author WoNQ
  * @version VERSION
@@ -17,30 +9,22 @@
 
 package sh.qonqrete.intellij.ui
 
-import com.intellij.ide.BrowserUtil
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import javax.swing.DefaultComboBoxModel
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.*
-import com.intellij.ui.treeStructure.Tree
-import sh.qonqrete.intellij.util.ActionInvoker
 import com.intellij.util.ui.JBUI
+import sh.qonqrete.intellij.util.ActionInvoker
 import sh.qonqrete.intellij.services.*
-import sh.qonqrete.intellij.ui.QonQreteQonstructionNameDialog
 import java.awt.*
-import java.io.File
 import javax.swing.*
 import javax.swing.border.TitledBorder
-import javax.swing.tree.DefaultMutableTreeNode
-import javax.swing.tree.DefaultTreeModel
 
 class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
 
@@ -53,76 +37,76 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private val initStatusLabel = JBLabel("Checking...")
     private val versionLabel = JBLabel("-")
 
-    // Config controls with tooltips
+    // Config controls
     private val sensitivitySpinner = JSpinner(SpinnerNumberModel(settings.defaultSensitivity, 0, 16, 1)).apply {
-        toolTipText = "Briq sensitivity (0-16). Higher = more briqs generated."
+        toolTipText = "Briq sensitivity (0-16). Higher = more briqs."
     }
     private val autoSensitivityCheckbox = JBCheckBox("Auto briq sens", settings.defaultAutoBriqSensitivity).apply {
-        toolTipText = "Enable automatic briq sensitivity detection (--auto-briq-sensitivity)"
+        toolTipText = "Automatic briq sensitivity detection"
     }
     private val cyclesSpinner = JSpinner(SpinnerNumberModel(settings.defaultCycles, 1, 50, 1)).apply {
-        toolTipText = "Number of AI cycles (1-50). More cycles = more refinement."
+        toolTipText = "AI iteration cycles (1-50)"
+    }
+    private val autoCycleCheckbox = JBCheckBox("Auto cycles", settings.defaultAutoCycle).apply {
+        toolTipText = "Automatic cycle amount determination"
     }
     private val modeCombo = ComboBox(DefaultComboBoxModel(arrayOf("program", "enterprise", "security", "data", "devops", "web"))).apply {
-        toolTipText = "QonQrete mode: program (general), enterprise, security, data, devops, or web"
+        toolTipText = "QonQrete execution mode"
     }
     private val autonomousCheckbox = JBCheckBox("Autonomous", settings.defaultAutonomous).apply {
-        toolTipText = "Enable autonomous mode (--auto). AI makes decisions without prompts."
+        toolTipText = "Autonomous mode (--auto)"
     }
     private val noSyncCheckbox = JBCheckBox("No Sync", settings.noSync).apply {
-        toolTipText = "Skip repo-root sync-back and keep output in qage/qonstructions (--no-sync)"
+        toolTipText = "Skip repo-root sync-back (--no-sync)"
     }
-    private val sqrapyardCheckbox = JBCheckBox("Seed Repo", settings.useSqrapyard).apply {
-        toolTipText = "Seed qodeyard from repository before run (--seed-repo)"
+    private val sqrapyardCheckbox = JBCheckBox("Seed Repo", true).apply {
+        toolTipText = "Seed from repo before run (--seed-repo)"
+        isSelected = true
     }
     private val engineCombo = ComboBox(DefaultComboBoxModel(arrayOf("auto", "docker", "podman"))).apply {
-        toolTipText = "Container engine: auto (detect), docker, or podman"
+        toolTipText = "Container engine"
     }
+    private val qonstructionNameLabel = JBLabel("Qonstruction:")
     private val qonstructionNameField = JBTextField().apply {
-        toolTipText = "Optional name for this build. Invalid characters will be replaced with underscores."
+        toolTipText = "Optional build name (only used with No Sync)"
     }
 
     // Action buttons
     private val runButton = JButton("▶ Run Tasq")
+    private val deployButton = JButton("⬡ Deploy")
+    private val createTasqButton = JButton("+ Create Tasq")
+    private val aiConfigButton = JButton("🤖 AI Config")
     private val initButton = JButton("⚙ Init")
     private val resumeButton = JButton("↻ Resume")
-    private val cleanButton = JButton("🗑 Clean")
-    private val deployButton = JButton("⬡ Deploy").apply {
-        toolTipText = "Deploy QonQrete runtime to this project (.qonqrete/)"
-    }
-    private val createTasqButton = JButton("+ Create Tasq").apply {
-        toolTipText = "Create a starter tasq.md at project root"
-    }
-    private val aiConfigButton = JButton("🤖 AI Config").apply {
-        toolTipText = "Set AI providers, models, and API keys"
-    }
-    private val cleanAllButton = JButton("🗑 Clean All").apply {
-        toolTipText = "Delete ALL qages (with confirmation)"
-    }
-    private val openTasqButton = JButton("📝 Open Tasq").apply {
-        toolTipText = "Open tasq.md in editor"
-    }
-    private val refreshButton = JButton("↺ Refresh")
+    private val openTasqButton = JButton("📝 Open Tasq")
 
-    // Qage browser with timestamps
-    private data class QageListItem(val name: String, val timestamp: String, val artifactCount: Int) {
-        override fun toString() = "$name ($timestamp) [$artifactCount]"
-    }
-    private val qageListModel = DefaultListModel<QageListItem>()
-    private val qageList = JBList(qageListModel)
-    private val artifactTree = Tree()
-    private val artifactTreeRoot = DefaultMutableTreeNode("Artifacts")
-    private val artifactTreeModel = DefaultTreeModel(artifactTreeRoot)
-    
-    // Refresh callback reference for disposal
     private var refreshCallback: (() -> Unit)? = null
 
     init {
         border = JBUI.Borders.empty(8)
-        artifactTree.model = artifactTreeModel
         buildUI()
         setupListeners()
         refreshState()
+        // Apply initial visibility
+        toggleSensitivityVisibility()
+        toggleCyclesVisibility()
+        toggleQonstructionVisibility()
+    }
+
+    private fun toggleSensitivityVisibility() {
+        val auto = autoSensitivityCheckbox.isSelected
+        sensitivitySpinner.isVisible = !auto
+    }
+
+    private fun toggleCyclesVisibility() {
+        val auto = autoCycleCheckbox.isSelected
+        cyclesSpinner.isVisible = !auto
+    }
+
+    private fun toggleQonstructionVisibility() {
+        val show = noSyncCheckbox.isSelected
+        qonstructionNameLabel.isVisible = show
+        qonstructionNameField.isVisible = show
     }
 
     private fun buildUI() {
@@ -156,162 +140,93 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
 
         statusPanel.maximumSize = Dimension(Int.MAX_VALUE, statusPanel.preferredSize.height)
         mainPanel.add(statusPanel)
-        mainPanel.add(Box.createVerticalStrut(8))
+        mainPanel.add(Box.createVerticalStrut(6))
 
         // === CONFIG PANEL ===
         val configPanel = JPanel(GridBagLayout())
         configPanel.border = TitledBorder("Configuration")
-        val cgbc = GridBagConstraints().apply { 
-            anchor = GridBagConstraints.WEST; insets = JBUI.insets(2); fill = GridBagConstraints.HORIZONTAL 
+        val cgbc = GridBagConstraints().apply {
+            anchor = GridBagConstraints.WEST; insets = JBUI.insets(2); fill = GridBagConstraints.HORIZONTAL
         }
 
-        cgbc.gridx = 0; cgbc.gridy = 0; cgbc.weightx = 0.0
-        configPanel.add(JBLabel("Sensitivity:").apply { toolTipText = "Briq sensitivity (0-16)" }, cgbc)
+        var row = 0
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.weightx = 0.0
+        configPanel.add(JBLabel("Sensitivity:"), cgbc)
         cgbc.gridx = 1; cgbc.weightx = 1.0
         configPanel.add(sensitivitySpinner, cgbc)
+        cgbc.gridwidth = 1
 
-        cgbc.gridx = 0; cgbc.gridy = 1; cgbc.weightx = 0.0
-        configPanel.add(JBLabel("Cycles:").apply { toolTipText = "AI iteration cycles (1-50)" }, cgbc)
+        row++
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.gridwidth = 2; cgbc.weightx = 1.0
+        configPanel.add(autoSensitivityCheckbox, cgbc)
+
+        row++
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.weightx = 0.0; cgbc.gridwidth = 1
+        configPanel.add(JBLabel("Cycles:"), cgbc)
         cgbc.gridx = 1; cgbc.weightx = 1.0
         configPanel.add(cyclesSpinner, cgbc)
 
-        cgbc.gridx = 0; cgbc.gridy = 2; cgbc.weightx = 0.0
-        configPanel.add(JBLabel("Mode:").apply { toolTipText = "QonQrete execution mode" }, cgbc)
+        row++
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.gridwidth = 2; cgbc.weightx = 1.0
+        configPanel.add(autoCycleCheckbox, cgbc)
+
+        row++
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.weightx = 0.0; cgbc.gridwidth = 1
+        configPanel.add(JBLabel("Mode:"), cgbc)
         cgbc.gridx = 1; cgbc.weightx = 1.0
         modeCombo.selectedItem = settings.defaultMode
         configPanel.add(modeCombo, cgbc)
 
-        cgbc.gridx = 0; cgbc.gridy = 3; cgbc.weightx = 0.0
-        configPanel.add(JBLabel("Engine:").apply { toolTipText = "Container runtime engine" }, cgbc)
+        row++
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.weightx = 0.0
+        configPanel.add(JBLabel("Engine:"), cgbc)
         cgbc.gridx = 1; cgbc.weightx = 1.0
         engineCombo.selectedItem = settings.containerEngine
         configPanel.add(engineCombo, cgbc)
 
-        cgbc.gridx = 0; cgbc.gridy = 4; cgbc.gridwidth = 2
+        row++
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.gridwidth = 2
         val checkboxPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
-        checkboxPanel.add(autoSensitivityCheckbox)
         checkboxPanel.add(autonomousCheckbox)
         checkboxPanel.add(noSyncCheckbox)
         checkboxPanel.add(sqrapyardCheckbox)
         configPanel.add(checkboxPanel, cgbc)
 
-        cgbc.gridx = 0; cgbc.gridy = 5; cgbc.gridwidth = 1; cgbc.weightx = 0.0
-        configPanel.add(JBLabel("Qonstruction:").apply { toolTipText = "Optional build name" }, cgbc)
+        row++
+        cgbc.gridx = 0; cgbc.gridy = row; cgbc.gridwidth = 1; cgbc.weightx = 0.0
+        configPanel.add(qonstructionNameLabel, cgbc)
         cgbc.gridx = 1; cgbc.weightx = 1.0
         configPanel.add(qonstructionNameField, cgbc)
 
         configPanel.maximumSize = Dimension(Int.MAX_VALUE, configPanel.preferredSize.height)
         mainPanel.add(configPanel)
-        mainPanel.add(Box.createVerticalStrut(8))
+        mainPanel.add(Box.createVerticalStrut(6))
 
-        // === ACTION BUTTONS (2 rows) ===
-        val buttonPanel1 = JPanel(FlowLayout(FlowLayout.LEFT))
-        buttonPanel1.add(runButton)
-        buttonPanel1.add(deployButton)
-        buttonPanel1.add(createTasqButton)
-        buttonPanel1.add(aiConfigButton)
-        buttonPanel1.add(initButton)
-        buttonPanel1.add(resumeButton)
-        buttonPanel1.add(openTasqButton)
-        buttonPanel1.maximumSize = Dimension(Int.MAX_VALUE, buttonPanel1.preferredSize.height)
-        mainPanel.add(buttonPanel1)
+        // === ACTION BUTTONS (vertical stack) ===
+        val buttonPanel = JPanel()
+        buttonPanel.layout = BoxLayout(buttonPanel, BoxLayout.Y_AXIS)
+        
+        val row1 = JPanel(FlowLayout(FlowLayout.LEFT))
+        row1.add(runButton)
+        row1.add(deployButton)
+        row1.add(createTasqButton)
+        row1.add(aiConfigButton)
+        
+        val row2 = JPanel(FlowLayout(FlowLayout.LEFT))
+        row2.add(initButton)
+        row2.add(resumeButton)
+        row2.add(openTasqButton)
+        
+        buttonPanel.add(row1)
+        buttonPanel.add(row2)
+        buttonPanel.maximumSize = Dimension(Int.MAX_VALUE, buttonPanel.preferredSize.height)
+        mainPanel.add(buttonPanel)
 
-        val buttonPanel2 = JPanel(FlowLayout(FlowLayout.LEFT))
-        buttonPanel2.add(cleanButton)
-        buttonPanel2.add(cleanAllButton)
-        buttonPanel2.add(refreshButton)
-        buttonPanel2.maximumSize = Dimension(Int.MAX_VALUE, buttonPanel2.preferredSize.height)
-        mainPanel.add(buttonPanel2)
-        mainPanel.add(Box.createVerticalStrut(8))
-
-        // === QAGE BROWSER WITH FULL ARTIFACT TREE ===
-        val qagePanel = JPanel(BorderLayout())
-        qagePanel.border = TitledBorder("Qages & Artifacts")
-
-        // Custom renderer for qage list showing timestamp
-        qageList.cellRenderer = object : DefaultListCellRenderer() {
-            override fun getListCellRendererComponent(
-                list: JList<*>?, value: Any?, index: Int, isSelected: Boolean, cellHasFocus: Boolean
-            ): Component {
-                val comp = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-                if (value is QageListItem) {
-                    text = "<html><b>${value.name}</b><br><small>${value.timestamp} • ${value.artifactCount} files</small></html>"
-                }
-                return comp
-            }
-        }
-        qageList.fixedCellHeight = 40
-        qageList.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        val qageScroll = JBScrollPane(qageList)
-        qageScroll.preferredSize = Dimension(200, 140)
-
-        // Artifact tree with expand/collapse
-        artifactTree.isRootVisible = false
-        artifactTree.showsRootHandles = true
-        val treeScroll = JBScrollPane(artifactTree)
-        treeScroll.preferredSize = Dimension(200, 200)
-
-        // Buttons for qage actions
-        val openFileButton = JButton("Open File")
-        val revealButton = JButton("Reveal")
-        val qageButtonPanel = JPanel(FlowLayout(FlowLayout.LEFT))
-        qageButtonPanel.add(openFileButton)
-        qageButtonPanel.add(revealButton)
-
-        val qageDetailsPanel = JPanel(BorderLayout())
-        qageDetailsPanel.add(JBLabel("Double-click file to open:"), BorderLayout.NORTH)
-        qageDetailsPanel.add(treeScroll, BorderLayout.CENTER)
-        qageDetailsPanel.add(qageButtonPanel, BorderLayout.SOUTH)
-
-        val qageSplit = JSplitPane(JSplitPane.VERTICAL_SPLIT, qageScroll, qageDetailsPanel)
-        qageSplit.resizeWeight = 0.3
-        qagePanel.add(qageSplit, BorderLayout.CENTER)
-
-        mainPanel.add(qagePanel)
-
-        // Add to main
         val scrollPane = JBScrollPane(mainPanel)
         scrollPane.border = null
+        // Half-width: ~250px
+        scrollPane.preferredSize = Dimension(250, 500)
         add(scrollPane, BorderLayout.CENTER)
-
-        // === EVENT HANDLERS ===
-        qageList.addListSelectionListener {
-            if (!it.valueIsAdjusting) {
-                qageList.selectedValue?.let { qage -> loadArtifactTree(qage.name) }
-            }
-        }
-
-        artifactTree.addMouseListener(object : java.awt.event.MouseAdapter() {
-            override fun mouseClicked(e: java.awt.event.MouseEvent) {
-                if (e.clickCount == 2) {
-                    val node = artifactTree.lastSelectedPathComponent as? DefaultMutableTreeNode
-                    val userObj = node?.userObject
-                    if (userObj is ArtifactFile) {
-                        openFileInEditor(userObj.path)
-                    }
-                }
-            }
-        })
-
-        openFileButton.addActionListener {
-            val node = artifactTree.lastSelectedPathComponent as? DefaultMutableTreeNode
-            val userObj = node?.userObject
-            if (userObj is ArtifactFile) {
-                openFileInEditor(userObj.path)
-            } else {
-                service.notify("QonQrete", "Select a file in the tree", NotificationType.WARNING)
-            }
-        }
-
-        revealButton.addActionListener {
-            val selected = qageList.selectedValue
-            if (selected != null) {
-                val details = service.getQageDetails(selected.name)
-                if (details != null) {
-                    BrowserUtil.browse(File(details.path).toURI())
-                }
-            }
-        }
     }
 
     private fun setupListeners() {
@@ -320,11 +235,12 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         createTasqButton.addActionListener { executeCreateTasq() }
         aiConfigButton.addActionListener { executeAIConfig() }
         initButton.addActionListener { executeInit() }
-        resumeButton.addActionListener { executeResume() }
-        cleanButton.addActionListener { executeClean() }
-        cleanAllButton.addActionListener { executeCleanAll() }
+        resumeButton.addActionListener { executeResumeInteractive() }
         openTasqButton.addActionListener { openTasqFile() }
-        refreshButton.addActionListener { refreshState() }
+
+        autoSensitivityCheckbox.addChangeListener { toggleSensitivityVisibility() }
+        autoCycleCheckbox.addChangeListener { toggleCyclesVisibility() }
+        noSyncCheckbox.addChangeListener { toggleQonstructionVisibility() }
 
         service.onRunStateChange { status ->
             ApplicationManager.getApplication().invokeLater { updateRunStatus(status) }
@@ -332,8 +248,6 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         service.onShellStateChange { info ->
             ApplicationManager.getApplication().invokeLater { updateShellStatus(info) }
         }
-        
-        // Auto-refresh when run completes
         refreshCallback = { refreshState() }
         service.onRefresh(refreshCallback!!)
     }
@@ -350,7 +264,6 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         }
 
         versionLabel.text = service.getVersion() ?: "-"
-        refreshQageList()
         updateButtonStates()
     }
 
@@ -392,151 +305,34 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         val hasQonqrete = service.getQonQretePath() != null
         val hasTasq = service.hasTasqFile()
         val isRunning = service.getRunStatus().state == RunState.RUNNING
-        val hasQages = qageListModel.size() > 0
 
         runButton.isEnabled = canRun && hasQonqrete && hasTasq && !isRunning
         initButton.isEnabled = canRun && hasQonqrete && !isRunning
-        resumeButton.isEnabled = canRun && hasQonqrete && hasQages && !isRunning
-        cleanButton.isEnabled = canRun && hasQonqrete && hasQages && !isRunning
-        cleanAllButton.isEnabled = canRun && hasQonqrete && hasQages && !isRunning
+        resumeButton.isEnabled = canRun && hasQonqrete && !isRunning
         openTasqButton.isEnabled = hasQonqrete && hasTasq
         deployButton.isEnabled = !isRunning
         createTasqButton.isEnabled = !isRunning
         aiConfigButton.isEnabled = hasQonqrete && !isRunning
-        refreshButton.isEnabled = !isRunning
         runButton.text = if (isRunning) "⏳ Running..." else "▶ Run Tasq"
     }
 
-    private fun refreshQageList() {
-        qageListModel.clear()
-        artifactTreeRoot.removeAllChildren()
-        artifactTreeModel.reload()
-
-        service.getAvailableQages().forEach { qageName ->
-            // Determine a human-friendly timestamp. For standard qages, use the formatted
-            // timestamp derived from the name. For named qonstructions (parse returns null),
-            // fall back to the last modified time of the directory. If both fail, just
-            // display the name as the timestamp.
-            val parsedTs = service.parseQageTimestamp(qageName)
-            val timestamp: String = if (parsedTs != null) {
-                service.formatQageTimestamp(qageName)
-            } else {
-                val details = service.getQageDetails(qageName)
-                if (details != null) {
-                    try {
-                        val df = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-                        df.format(java.util.Date(java.io.File(details.path).lastModified()))
-                    } catch (_: Exception) {
-                        qageName
-                    }
-                } else qageName
-            }
-            val details = service.getQageDetails(qageName)
-            val artifactCount = details?.artifacts?.totalCount ?: 0
-            qageListModel.addElement(QageListItem(qageName, timestamp, artifactCount))
-        }
-        if (qageListModel.size() > 0) {
-            qageList.selectedIndex = 0
-        }
-    }
-
-    // Data class for tree nodes
-    private data class ArtifactFile(val name: String, val path: String) {
-        override fun toString() = name
-    }
-
-    private fun loadArtifactTree(qageName: String) {
-        artifactTreeRoot.removeAllChildren()
-
-        val details = service.getQageDetails(qageName)
-        if (details == null) {
-            artifactTreeModel.reload()
-            return
-        }
-
-        // Add each artifact category
-        fun addCategory(name: String, files: List<String>, subdir: String) {
-            if (files.isEmpty()) return
-            val catNode = DefaultMutableTreeNode("$name (${files.size})")
-            files.forEach { fileName ->
-                // FIX: Handle config files at root level (empty subdir)
-                val fullPath = if (subdir.isEmpty()) {
-                    "${details.path}/$fileName"
-                } else {
-                    "${details.path}/$subdir/$fileName"
-                }
-                catNode.add(DefaultMutableTreeNode(ArtifactFile(fileName, fullPath)))
-            }
-            artifactTreeRoot.add(catNode)
-        }
-
-        addCategory("qodeyard", details.artifacts.qodeyard, "qodeyard")
-        addCategory("exeq.d", details.artifacts.exeq, "exeq.d")
-        addCategory("reqap.d", details.artifacts.reqap, "reqap.d")
-        addCategory("briq.d", details.artifacts.briqs, "briq.d")
-        addCategory("bloq.d", details.artifacts.bloqs, "bloq.d")
-        addCategory("config", details.configFiles, "")
-
-        artifactTreeModel.reload()
-
-        // Expand all nodes
-        for (i in 0 until artifactTree.rowCount) {
-            artifactTree.expandRow(i)
-        }
-
-        // Automatically select the first category (typically qodeyard) so that the user
-        // sees the generated code immediately. Row 0 is the (hidden) root, so select row 1
-        // if available.
-        if (artifactTree.rowCount > 1) {
-            try {
-                // Use the setter method instead of the property to avoid unresolved reference
-                // errors on older Swing APIs. Row 0 is the hidden root; row 1 is the first
-                // child (qodeyard). Selecting it immediately shows the code to the user.
-                artifactTree.setSelectionRow(1)
-            } catch (_: Exception) {
-                // Ignore any selection errors – the tree will still display its nodes
-            }
-        }
-    }
-
-    private fun openFileInEditor(path: String) {
-        val file = File(path)
-        if (!file.exists()) {
-            service.notify("QonQrete", "File not found: $path", NotificationType.WARNING)
-            return
-        }
-        val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(path)
-        if (vf != null) {
-            FileEditorManager.getInstance(project).openFile(vf, true)
-        }
-    }
-    
     private fun openTasqFile() {
         val tasqPath = service.getTasqPath()
-        if (tasqPath != null && File(tasqPath).exists()) {
-            openFileInEditor(tasqPath)
+        if (tasqPath != null && java.io.File(tasqPath).exists()) {
+            val vf = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(tasqPath)
+            if (vf != null) {
+                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(vf, true)
+            }
         } else {
             service.notify("QonQrete", "No default task file found", NotificationType.WARNING)
         }
     }
 
     private fun getConfigFromUI(): QonQreteRunConfig? {
-        // Determine the final qonstruction name. First check the text field; if empty,
-        // prompt the user for a name via dialog. Otherwise sanitize the provided name.
         val rawName = qonstructionNameField.text.trim()
         var finalName: String? = null
 
-        if (rawName.isEmpty()) {
-            // No name entered in the field. Prompt the user for a name. If the user
-            // cancels the dialog, abort the configuration by returning null. When the
-            // user provides a name, it will be sanitized within the dialog itself.
-            val nameDialog = QonQreteQonstructionNameDialog(project, service)
-            if (!nameDialog.showAndGet()) {
-                return null
-            }
-            finalName = nameDialog.getQonstructionName()
-        } else {
-            // Sanitize the entered name and confirm if modifications are required
+        if (rawName.isNotEmpty()) {
             val result = service.sanitizeQonstructionName(rawName)
             if (result.wasModified) {
                 val confirm = Messages.showYesNoDialog(
@@ -552,6 +348,7 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         return QonQreteRunConfig(
             sensitivity = sensitivitySpinner.value as Int,
             autoSensitivity = autoSensitivityCheckbox.isSelected,
+            autoCycle = autoCycleCheckbox.isSelected,
             cycles = cyclesSpinner.value as Int,
             mode = modeCombo.selectedItem as String,
             autonomous = autonomousCheckbox.isSelected,
@@ -565,64 +362,21 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
     private fun executeRun() {
         val (canRun, reason, _) = service.canExecute()
         if (!canRun) { service.notify("QonQrete", reason ?: "Cannot run", NotificationType.WARNING); return }
-        if (!service.hasTasqFile()) { service.notify("QonQrete", "No default task file found. Use 'Create Task File' first.", NotificationType.WARNING); return }
-
+        if (!service.hasTasqFile()) { service.notify("QonQrete", "No default task file found.", NotificationType.WARNING); return }
         FileDocumentManager.getInstance().saveAllDocuments()
 
-        // Auto-init if image is missing
         val initStatus = service.isInitialized()
         if (!initStatus.hasImage && initStatus.hasDockerfile) {
-            val choice = Messages.showYesNoDialog(
-                project,
-                "Container image not built yet. Build it now?",
-                "QonQrete: Init Required",
-                Messages.getQuestionIcon()
-            )
+            val choice = Messages.showYesNoDialog(project, "Container image not built yet. Build it now?", "QonQrete: Init Required", Messages.getQuestionIcon())
             if (choice != Messages.YES) return
             try {
                 service.init()
-                service.notify("QonQrete", "Building container image... Run Tasq again when init completes.", NotificationType.INFORMATION)
-            } catch (e: Exception) {
-                service.notify("QonQrete Error", "Init failed: ${e.message}", NotificationType.ERROR)
-            }
+                service.notify("QonQrete", "Building... Run Tasq again when complete.", NotificationType.INFORMATION)
+            } catch (e: Exception) { service.notify("QonQrete Error", "Init failed: ${e.message}", NotificationType.ERROR) }
             return
         }
 
-        // Check for missing API keys
-        val workingDir = service.getQonQreteWorkingDir()
-        if (workingDir != null) {
-            val configYaml = "$workingDir/worqspace/config.yaml"
-            val missing = sh.qonqrete.intellij.actions.SetAIConfigAction.getMissingApiKeys(configYaml)
-            if (missing.isNotEmpty()) {
-                val providerNames = missing.mapNotNull { key ->
-                    when (key) {
-                        "OPENAI_API_KEY" -> "OpenAI"
-                        "GOOGLE_API_KEY" -> "Gemini"
-                        "ANTHROPIC_API_KEY" -> "Anthropic"
-                        "OPENROUTER_API_KEY" -> "OpenRouter"
-                        "DEEPSEEK_API_KEY" -> "DeepSeek"
-                        "QWEN_API_KEY" -> "Qwen"
-                        "VENICE_API_KEY" -> "Venice"
-                        "MLX_API_KEY" -> "MLX"
-                        "LLAMA_CPP_API_KEY" -> "Llama-cpp"
-                        else -> key
-                    }
-                }
-                val choice = Messages.showYesNoDialog(
-                    project,
-                    "API keys needed for: ${providerNames.joinToString(", ")}.\nSet them now?",
-                    "QonQrete: Missing API Keys",
-                    Messages.getWarningIcon()
-                )
-                if (choice == Messages.YES) {
-                    executeAIConfig()
-                    return
-                }
-            }
-        }
-
         val config = getConfigFromUI() ?: return
-
         try { service.run(config) }
         catch (e: Exception) { service.notify("QonQrete Error", e.message ?: "Unknown error", NotificationType.ERROR) }
     }
@@ -661,36 +415,10 @@ class QonQreteToolWindowPanel(private val project: Project) : JPanel(BorderLayou
         })
     }
 
-    private fun executeResume() {
-        val selected = qageList.selectedValue
-        if (selected == null) { service.notify("QonQrete", "Select a qage to resume", NotificationType.WARNING); return }
-        try {
-            val config = getConfigFromUI()
-            service.resume(selected.name, config)
-        } catch (e: Exception) { service.notify("QonQrete Error", e.message ?: "Unknown error", NotificationType.ERROR) }
+    private fun executeResumeInteractive() {
+        service.notify("QonQrete", "Use the Run Config dialog to resume from a qage.", NotificationType.INFORMATION)
     }
 
-    private fun executeClean() {
-        val selected = qageList.selectedValue
-        if (selected == null) { service.notify("QonQrete", "Select a qage to clean", NotificationType.WARNING); return }
-        val confirm = Messages.showYesNoDialog(project, "Delete qage '${selected.name}'?", "Confirm Clean", Messages.getWarningIcon())
-        if (confirm != Messages.YES) return
-        try { service.clean(qageName = selected.name); refreshQageList() }
-        catch (e: Exception) { service.notify("QonQrete Error", e.message ?: "Unknown error", NotificationType.ERROR) }
-    }
-    
-    private fun executeCleanAll() {
-        val confirm = Messages.showYesNoDialog(
-            project, 
-            "Delete ALL qages?\n\nThis cannot be undone.", 
-            "Confirm Clean All", 
-            Messages.getWarningIcon()
-        )
-        if (confirm != Messages.YES) return
-        try { service.clean(cleanAll = true); refreshQageList() }
-        catch (e: Exception) { service.notify("QonQrete Error", e.message ?: "Unknown error", NotificationType.ERROR) }
-    }
-    
     override fun dispose() {
         refreshCallback?.let { service.removeRefreshListener(it) }
     }
