@@ -687,8 +687,10 @@ class QonQreteProjectService(private val project: Project) : Disposable {
     // ========================================================================
 
     fun init() {
-        val scriptPath = getQonQretePath() ?: throw IllegalStateException("QonQrete script not found")
-        executeWithVerifiedBash(File(scriptPath).parent, CommandBuilder.qonqrete().init().build(), "Building container image")
+        val basePath = project.basePath ?: throw IllegalStateException("No project directory")
+        val qonqreteScript = ".qonqrete/qonqrete.sh"
+        if (!File(basePath, qonqreteScript).exists()) throw IllegalStateException("QonQrete script not found at $qonqreteScript")
+        executeWithVerifiedBash(basePath, "$qonqreteScript init", "Building container image")
     }
 
     fun run(config: QonQreteRunConfig) {

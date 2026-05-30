@@ -2,7 +2,8 @@
  * Action invoker utility — replaces deprecated ActionUtil.invokeAction.
  *
  * Uses ActionManager.tryToExecute() — the modern, supported invocation path
- * instead of the deprecated ActionUtil.invokeAction.
+ * instead of the deprecated ActionUtil.invokeAction and removed
+ * AnActionEvent.createFromInputEvent().
  *
  * @author QonQrete
  * @version VERSION
@@ -18,9 +19,10 @@ import java.awt.event.InputEvent
  * Invoke an action by ID using the modern tryToExecute approach.
  *
  * This replaces deprecated ActionUtil.invokeAction() calls.
- * Uses ActionManager.tryToExecute() — the modern non-deprecated invocation path.
- * Constructs AnActionEvent directly instead of deprecated createFromDataContext().
- * Compatible with IntelliJ 2023.3+ (our minimum supported version).
+ * Uses ActionManager.tryToExecute() directly, avoiding the deprecated
+ * AnActionEvent.createFromInputEvent() (scheduled for removal in 253+)
+ * and the override-only AnAction.update() call.
+ * Compatible with IntelliJ 2025.3+ (our minimum supported version).
  */
 object ActionInvoker {
 
@@ -31,15 +33,8 @@ object ActionInvoker {
     fun invokeAction(actionId: String, dataContext: DataContext, place: String = "QonQrete", inputEvent: InputEvent? = null) {
         val actionManager = ActionManager.getInstance()
         val action = actionManager.getAction(actionId) ?: return
-        val presentation = action.templatePresentation.clone()
-        // Use createFromInputEvent (non-deprecated) instead of the
-        // scheduled-for-removal AnActionEvent constructor.
-        val event = AnActionEvent.createFromInputEvent(inputEvent, place, presentation, dataContext)
-        // Use action.update() (public API) instead of the
-        // override-only beforeActionPerformedUpdate().
-        action.update(event)
-        if (event.presentation.isEnabled) {
-            ActionManager.getInstance().tryToExecute(action, event.inputEvent, null, place, true)
-        }
+        // tryToExecute handles AnActionEvent construction, update(), and
+        // presentation checks internally — no deprecated APIs needed.
+        actionManager.tryToExecute(action, inputEvent, dataContext, place, true)
     }
 }

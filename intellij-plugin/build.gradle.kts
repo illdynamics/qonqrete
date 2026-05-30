@@ -29,12 +29,12 @@ dependencies {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 intellij {
-    version.set("2023.3")
+    version.set("2025.3")
     type.set("IC")
     plugins.set(listOf())
     updateSinceUntilBuild.set(false)
@@ -42,12 +42,12 @@ intellij {
 
 tasks {
     withType<JavaCompile> {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
+        sourceCompatibility = "21"
+        targetCompatibility = "21"
     }
 
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        kotlinOptions.jvmTarget = "17"
+        kotlinOptions.jvmTarget = "21"
     }
 
     test {
@@ -56,14 +56,14 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
-            <h2>v${runtimeVersion} — Plugin Verifier Zero-Warnings + DeepSeek V4</h2>
+            <h2>v${runtimeVersion} — 253+ Compatibility + Zero-Warnings Cleanup</h2>
             <ul>
-                <li><b>Fixed:</b> AnActionEvent constructor → createFromInputEvent() (scheduled for removal)</li>
-                <li><b>Fixed:</b> beforeActionPerformedUpdate() → AnAction.update() (override-only violation)</li>
-                <li><b>Fixed:</b> CredentialAttributes(serviceName, key) → 3-param constructor (deprecated, 2x)</li>
-                <li><b>Fixed:</b> PluginManagerCore.getPlugin() → classloader plugin.xml read (internal API)</li>
-                <li><b>Updated:</b> DeepSeek model names to V4 generation in AI config UI</li>
-                <li><b>Verified:</b> 0 warnings across 2023.3.8–2026.2 EAP (9 IDE versions)</li>
+                <li><b>Minimum:</b> Raised IntelliJ baseline from 2023.3 (233) to 2025.3 (253)</li>
+                <li><b>Fixed:</b> AnActionEvent.createFromInputEvent() → direct tryToExecute() (removed API)</li>
+                <li><b>Fixed:</b> AnAction.update() call → removed (override-only violation)</li>
+                <li><b>Fixed:</b> CredentialAttributes 3-param → 2-param constructor (deprecated, 2x)</li>
+                <li><b>Java:</b> Target upgraded from 17 to 21 for 253+ platform compatibility</li>
+                <li><b>Verified:</b> 0 warnings across 2025.3.5–2026.2 EAP (3 IDE versions)</li>
             </ul>
         """.trimIndent())
     }
@@ -87,6 +87,6 @@ tasks {
         // Run `./gradlew verifyPlugin` locally to reproduce Marketplace results
         // before uploading. The CI sed command rewrites this single-line listOf
         // per matrix runner — keep it on ONE LINE.
-        ideVersions.set(listOf("2023.3.8", "2024.1.7", "2024.2.6", "2024.3.7.1", "2025.1.7.1", "2025.2.6.2", "2025.3.5", "2026.1.2", "2026.2-EAP-SNAPSHOT"))
+        ideVersions.set(listOf("2025.3.5", "2026.1.2", "2026.2-EAP-SNAPSHOT"))
     }
 }

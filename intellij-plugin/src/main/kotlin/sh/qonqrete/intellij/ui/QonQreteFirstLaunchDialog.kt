@@ -152,7 +152,6 @@ class QonQreteFirstLaunchDialog(private val project: Project) : DialogWrapper(pr
     init {
         title = "QonQrete Setup — Configure Your AI Provider"
         isResizable = false
-        isModal = false
 
         // Default: select deepseek (index 6)
         providerCombo.selectedIndex = 6
