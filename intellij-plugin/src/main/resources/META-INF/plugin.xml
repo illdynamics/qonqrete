@@ -3,13 +3,13 @@
   Plugin configuration - Production Ready
 
   @author QonQrete
-  @version v1.4.6
+  @version v1.4.7
   @license Apache-2.0
 -->
 <idea-plugin>
     <id>sh.qonqrete</id>
     <name>QonQrete</name>
-    <version>1.4.6</version>
+    <version>1.4.7</version>
     <idea-version since-build="253"/>
     <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
 

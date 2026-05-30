@@ -23,14 +23,14 @@ import com.intellij.openapi.components.Storage
 class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.State> {
 
     data class State(
-        var defaultSensitivity: Int = 3,
+        var defaultSensitivity: Int = 1,
         var defaultAutoBriqSensitivity: Boolean = true,
         var defaultAutoCycle: Boolean = true,
-        var defaultCycles: Int = 3,
+        var defaultCycles: Int = 1,
         var defaultMode: String = "program",
         var defaultAutonomous: Boolean = true,
         var noSync: Boolean = false,
-        var useSqrapyard: Boolean = false,
+        var useSqrapyard: Boolean = true,
         var containerEngine: String = "auto",
         var customQonqretePath: String = "",
         var customBashPath: String = "",
@@ -121,15 +121,15 @@ class QonQreteSettingsState : PersistentStateComponent<QonQreteSettingsState.Sta
  * Run configuration for QonQrete
  */
 data class QonQreteRunConfig(
-    val sensitivity: Int = 3,
+    val sensitivity: Int = 1,
     val autoSensitivity: Boolean = true,
     val autoCycle: Boolean = true,
-    val cycles: Int = 3,
+    val cycles: Int = 1,
     val mode: String = "program",
     val autonomous: Boolean = true,
     val noSync: Boolean = false,
     val qonstructionName: String? = null,
-    val useSqrapyard: Boolean = false,
+    val useSqrapyard: Boolean = true,
     val containerEngine: String = "auto"
 ) {
     companion object {

@@ -1,4 +1,4 @@
-# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.6)
+# QonQrete - The First 100% File-Based Local-First Secure Agentic AI System (v1.4.7)
 ![Release](https://img.shields.io/github/v/release/illdynamics/qonqrete)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
@@ -11,8 +11,8 @@ QonQrete is a **local-first, file-based AI software construction system** that r
 
 ## Version
 
-**Current repository version:** `v1.4.6`
-**Release context:** `v1.4.6`
+**Current repository version:** `v1.4.7`
+**Release context:** `v1.4.7`
 Canonical source of truth: `VERSION`
 
 ## What this repository contains
@@ -29,7 +29,7 @@ This repository currently ships three things:
 
 The IDE integrations let you trigger the existing CLI workflow from inside the IDE. They do **not** replace the core runtime.
 
-> **v1.4.6** — The current release. v1.4.0 shipped the MLcon Edition (inspection truthfulness, streaming UX, hybrid Venice alignment). v1.4.1–v1.4.5 are IDE-plugin-only patches. v1.4.6 adds core runtime fixes (Fedora SELinux rootless Podman, interleaved validation cross-briq deferral), upgrades default models to DeepSeek V4, and resolves all IntelliJ Plugin Verifier warnings (0 scheduled-for-removal, 0 override-only, 0 deprecated, 0 internal API across 2023.3–2026.2 EAP).
+> **v1.4.7** — The current release. v1.4.0 shipped the MLcon Edition (inspection truthfulness, streaming UX, hybrid Venice alignment). v1.4.1–v1.4.5 are IDE-plugin-only patches. v1.4.7 adds core runtime fixes (Fedora SELinux rootless Podman, interleaved validation cross-briq deferral), upgrades default models to DeepSeek V4, and resolves all IntelliJ Plugin Verifier warnings (0 scheduled-for-removal, 0 override-only, 0 deprecated, 0 internal API across 2023.3–2026.2 EAP).
 
 - **Execution wiring defaults**
   - Primary agents remain per-agent configurable; this workspace's live-test config uses DeepSeek for intake/planning/inspection and CodeSeeq only for ConstruQtor.
@@ -83,13 +83,13 @@ After setup, QonQrete automatically configures all agents, runs `init`, and crea
 
 For a specific version:
 ```bash
-curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.6
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.7
 ```
 
 ### Version-specific install
 
 ```bash
-curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.6
+curl -fsSL https://qonqrete.sh/install.sh | bash -s -- v1.4.7
 ```
 
 For CI/non-interactive use:
@@ -351,7 +351,7 @@ This is useful for preventing accidental expensive runs with high sensitivity or
 ## Current release highlights (v1.4.x line)
 
 - **License changed from AGPL-3.0 to Apache-2.0** (v1.4.2) for broader permissive use
-- **IntelliJ Plugin Verifier clean** across 2023.3–2026.2 EAP — zero scheduled-for-removal, zero override-only, zero deprecated, zero internal API (v1.4.6)
+- **IntelliJ Plugin Verifier clean** across 2023.3–2026.2 EAP — zero scheduled-for-removal, zero override-only, zero deprecated, zero internal API (v1.4.7)
 - **Truthful inspection + deterministic evidence upgrades** in final review paths (v1.4.0)
 - **Streaming UX cleanup** with concise-default rendering and TAB/Shift+TAB raw/concise toggles (v1.4.0)
 - **Launcher `-N/--no-sync`** run control to keep output in qage/qonstruction paths (v1.4.0)

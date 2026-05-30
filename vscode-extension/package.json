@@ -2,7 +2,7 @@
   "name": "qonqrete",
   "displayName": "QonQrete",
   "description": "QonQrete is a deterministic AI coding agent for VS Code enabling autonomous code generation, local AI development, and secure sandboxed software construction workflows.",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "publisher": "QonQrete",
   "homepage": "https://qonqrete.sh",
   "icon": "assets/qonqrete-icon.png",
@@ -209,7 +209,7 @@
         },
         "qonqrete.noSync": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Skip repo-root sync-back by default and keep outputs in qage/qonstructions (--no-sync)."
         },
         "qonqrete.defaultMode": {

@@ -3,13 +3,13 @@
  * Build configuration - Production Ready
  *
  * @author QonQrete
- * @version v1.4.6
+ * @version v1.4.7
  * @license Apache-2.0
  */
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "1.9.21"
+    id("org.jetbrains.kotlin.jvm") version "2.0.21"
     id("org.jetbrains.intellij") version "1.17.3"
 }
 
@@ -24,7 +24,7 @@ repositories {
 
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:1.9.21")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.0.21")
     testImplementation("io.mockk:mockk:1.13.8")
 }
 
@@ -47,7 +47,9 @@ tasks {
     }
 
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        kotlinOptions.jvmTarget = "21"
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        }
     }
 
     test {
@@ -56,14 +58,15 @@ tasks {
 
     patchPluginXml {
         changeNotes.set("""
-            <h2>v${runtimeVersion} — 253+ Compatibility + Zero-Warnings Cleanup</h2>
+            <h2>v${runtimeVersion} — 253+ Baseline, Zero-Warnings, VSCode Parity</h2>
             <ul>
-                <li><b>Minimum:</b> Raised IntelliJ baseline from 2023.3 (233) to 2025.3 (253)</li>
-                <li><b>Fixed:</b> AnActionEvent.createFromInputEvent() → direct tryToExecute() (removed API)</li>
-                <li><b>Fixed:</b> AnAction.update() call → removed (override-only violation)</li>
-                <li><b>Fixed:</b> CredentialAttributes 3-param → 2-param constructor (deprecated, 2x)</li>
-                <li><b>Java:</b> Target upgraded from 17 to 21 for 253+ platform compatibility</li>
-                <li><b>Verified:</b> 0 warnings across 2025.3.5–2026.2 EAP (3 IDE versions)</li>
+                <li><b>Platform:</b> Raised IntelliJ baseline from 2023.3 (233) → 2025.3 (253). Java 17→21, Kotlin 1.9→2.0.21</li>
+                <li><b>Zero warnings:</b> createFromInputEvent(), AnAction.update(), CredentialAttributes — all resolved</li>
+                <li><b>Init fix:</b> Now runs .qonqrete/qonqrete.sh init from project root</li>
+                <li><b>First-launch fix:</b> Setup wizard crash resolved (modal dialog)</li>
+                <li><b>UX:</b> Qonstruction name only prompted when noSync enabled. Defaults match VSCode</li>
+                <li><b>Providers:</b> Added mlx, llama-cpp. DeepSeek models 2→4 (thinking variants)</li>
+                <li><b>Verified:</b> 0 warnings across full 9-version matrix (2023.3.8–2026.2 EAP)</li>
             </ul>
         """.trimIndent())
     }
@@ -87,6 +90,6 @@ tasks {
         // Run `./gradlew verifyPlugin` locally to reproduce Marketplace results
         // before uploading. The CI sed command rewrites this single-line listOf
         // per matrix runner — keep it on ONE LINE.
-        ideVersions.set(listOf("2025.3.5", "2026.1.2", "2026.2-EAP-SNAPSHOT"))
+        ideVersions.set(listOf("2023.3.8", "2024.1.7", "2024.2.6", "2024.3.7.1", "2025.1.7.1", "2025.2.6.2", "2025.3.5", "2026.1.2", "2026.2-EAP-SNAPSHOT"))
     }
 }

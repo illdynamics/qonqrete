@@ -1,6 +1,23 @@
+## 1.4.7 — IntelliJ 253+ Baseline, Zero-Warnings, VSCode Parity
+
+- **Platform:** Raised minimum from 2023.3 (233) to 2025.3 (253). Java 17→21, Kotlin 1.9→2.0.21.
+- **API warnings:** Removed `AnActionEvent.createFromInputEvent()` (scheduled for removal),
+  `AnAction.update()` external call (override-only violation), `CredentialAttributes` 3-param→2-param.
+  Zero verifier warnings across all IDE versions.
+- **Init fix:** Now runs `.qonqrete/qonqrete.sh init` from project root (was `cd .qonqrete/ && ./qonqrete.sh init`).
+- **First-launch crash fix:** Removed `isModal=false` from setup wizard (caused `showAndGet()` crash).
+- **UX:** Qonstruction name prompt now only shown when `noSync` is enabled.
+- **Defaults aligned with VSCode:** sensitivity=1, cycles=1, noSync=false, useSqrapyard=true.
+- **Providers:** Added mlx, llama-cpp. DeepSeek models: 2→4 (added thinking variants).
+- **Template:** tasq.md now uses VSCode's richer template with tips and examples.
+- **Non-interactive mode:** `QONQ_NON_INTERACTIVE=1` injected into run environment.
+- **Verifier:** Expanded to full 9-version matrix (2023.3.8–2026.2 EAP).
+
+---
+
 # QonQrete IntelliJ Plugin - Changelog
 
-## 1.4.6 — Plugin Verifier: Zero Deprecation Warnings
+## 1.4.7 — Plugin Verifier: Zero Deprecation Warnings
 
 All JetBrains Plugin Verifier warnings resolved across 2023.3–2026.2 EAP.
 Zero scheduled-for-removal, zero override-only, zero deprecated API, zero internal API.

@@ -6,7 +6,7 @@
 
 This extension integrates the QonQrete Agentic AI System into VS Code.
 
-## AI Configuration (v1.4.6)
+## AI Configuration (v1.4.7)
 
 - The shared AI configuration surface now targets the four primary runtime agents:
   - `qrystallizer`, `instruqtor`, `construqtor`, `inspeqtor`
@@ -142,7 +142,7 @@ cd vscode-extension
 npm install
 npm run compile
 npx vsce package
-code --install-extension qonqrete-vscode-1.4.6.vsix
+code --install-extension qonqrete-vscode-1.4.7.vsix
 ```
 
 ## Settings

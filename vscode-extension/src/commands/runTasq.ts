@@ -225,7 +225,7 @@ export async function executeRunTasq(fileUri?: vscode.Uri): Promise<void> {
     }
 
     // Ask for qonstruction name with sanitization feedback
-    const rawName = await showQonstructionNameDialog();
+    const rawName = config.noSync ? await showQonstructionNameDialog() : undefined;
     if (rawName !== undefined) {
         const sanitizedName = await processQonstructionName(rawName);
         if (rawName && !sanitizedName) {
@@ -265,7 +265,7 @@ async function executeRunSpecificTasq(fileUri: vscode.Uri): Promise<void> {
         return;
     }
 
-    const rawName = await showQonstructionNameDialog();
+    const rawName = config.noSync ? await showQonstructionNameDialog() : undefined;
     if (rawName !== undefined) {
         const sanitizedName = await processQonstructionName(rawName);
         if (rawName && !sanitizedName) {
@@ -391,7 +391,7 @@ export async function executeRunAsQonqreteTasq(fileUri?: vscode.Uri): Promise<vo
         return;
     }
 
-    const rawName = await showQonstructionNameDialog();
+    const rawName = config.noSync ? await showQonstructionNameDialog() : undefined;
     if (rawName !== undefined) {
         const sanitizedName = await processQonstructionName(rawName);
         if (rawName && !sanitizedName) {
@@ -503,7 +503,7 @@ export function registerRunTasqCommands(_context: vscode.ExtensionContext): vsco
             }
             
             // Consistent qonstruction name handling (same as other run commands)
-            const rawName = await showQonstructionNameDialog();
+            const rawName = config.noSync ? await showQonstructionNameDialog() : undefined;
             if (rawName !== undefined) {
                 const sanitizedName = await processQonstructionName(rawName);
                 if (rawName && !sanitizedName) {

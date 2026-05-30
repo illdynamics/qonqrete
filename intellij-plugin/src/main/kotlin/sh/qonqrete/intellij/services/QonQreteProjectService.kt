@@ -587,10 +587,9 @@ class QonQreteProjectService(private val project: Project) : Disposable {
     private fun buildSecureEnvMap(): Map<String, String> {
         val env = mutableMapOf<String, String>()
 
-        // IDE-driven runs no longer force non-interactive saves.  Let the
-        // underlying runtime decide whether to prompt the user based on
-        // provided command-line flags (e.g. -n) instead of unconditionally
-        // setting the compatibility QONQ_NON_INTERACTIVE environment variable.
+        // IDE-driven runs: force non-interactive to prevent prompts
+        // that would block the run — same behavior as the VSCode extension.
+        env["QONQ_NON_INTERACTIVE"] = "1"
 
         val allKeys = listOf(
             "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY",

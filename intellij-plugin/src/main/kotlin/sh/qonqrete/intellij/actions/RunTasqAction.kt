@@ -212,9 +212,10 @@ class RunTasqAction : AnAction() {
             // Start with defaults from settings
             var config = QonQreteRunConfig.fromSettings()
 
-            // Always prompt for a qonstruction name if none has been provided.
+            // Only prompt for a qonstruction name when noSync is enabled
+            // (outputs go to qonstructions/<name> instead of repo root).
             // If the user cancels the dialog, abort the run.
-            if (config.qonstructionName == null) {
+            if (config.noSync && config.qonstructionName == null) {
                 val nameDialog = QonQreteQonstructionNameDialog(project, service)
                 if (!nameDialog.showAndGet()) {
                     return null

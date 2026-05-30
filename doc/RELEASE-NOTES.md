@@ -1,3 +1,59 @@
+## v1.4.7 — IntelliJ 253+ Baseline, IDE UX Alignment, Full VSCode/IntelliJ Parity
+
+This release raises the IntelliJ baseline to 2025.3+ (build 253), resolves all remaining
+platform deprecation warnings, and achieves full parity between the VS Code and IntelliJ
+extensions in defaults, providers, models, UX flow, and runtime behavior.
+
+### IntelliJ Platform Upgrade (233 → 253+)
+- **Minimum IntelliJ version:** Raised from 2023.3 (build 233) to 2025.3 (build 253).
+- **Java target:** Upgraded from 17 to 21 (required for 253+).
+- **Kotlin compiler:** Upgraded from 1.9.21 to 2.0.21 (matches IntelliJ 2025.3 bundled Kotlin).
+
+### All Deprecated API Warnings Resolved
+- `AnActionEvent.createFromInputEvent()` → removed. `ActionInvoker` now uses
+  `ActionManager.tryToExecute()` directly (no manual event construction needed).
+- `AnAction.update()` external call → removed (was an @OverrideOnly violation).
+  `tryToExecute()` handles update checks internally.
+- `CredentialAttributes(serviceName, key, user)` 3-param → 2-param
+  `CredentialAttributes(serviceName, user)` with `generateServiceName`. (2 usages)
+- **Plugin Verifier: 0 scheduled-for-removal, 0 override-only, 0 deprecated.**
+- **Verifier IDE list expanded to full 9-version matrix** (2023.3–2026.2 EAP).
+
+### IntelliJ UX Fixes
+- **Init button:** Now runs `.qonqrete/qonqrete.sh init` from project root instead of
+  `cd .qonqrete/ && ./qonqrete.sh init`. Fixes `/bin/bash: ./qonqrete.sh: is a directory`
+  error when a directory exists at the project root with the same name.
+- **First-launch dialog crash:** Removed erroneous `isModal = false` that caused
+  `showAndGet()` to throw `IllegalStateException` during deploy-to-workspace.
+- **Qonstruction name prompt:** Now only shown when `noSync` (skip repo-root sync)
+  is enabled. When sync-back is on, outputs go to repo root — no name needed.
+  Best UX with minimal friction.
+- **QONQ_NON_INTERACTIVE=1** now injected into build environment to prevent
+  blocking prompts during IDE-driven runs (matches VSCode behavior).
+
+### VS Code ↔ IntelliJ Full Alignment
+- **Default settings now identical:**
+  - `defaultSensitivity`: 3 → 1
+  - `defaultCycles`: 3 → 1
+  - `noSync`: false (was true in VSCode, now false in both)
+  - `useSqrapyard`: false → true
+- **Provider list synced:** Added `mlx` and `llama-cpp` local providers to IntelliJ
+  (present in VSCode, previously missing from JetBrains).
+- **DeepSeek model list synced:** Both IDEs now offer all 4 V4 variants:
+  `deepseek-v4-flash`, `deepseek-v4-flash-thinking`, `deepseek-v4-pro`,
+  `deepseek-v4-pro-thinking`.
+- **OpenRouter DeepSeek reference:** Fixed from `deepseek-chat-v3` to
+  `deepseek/deepseek-v4-flash` (matching VSCode).
+- **tasq.md template:** IntelliJ now uses the same rich template as VSCode, with
+  tips, examples, and a guided structure.
+
+### VS Code Extension Fixes
+- **`noSync` default:** Changed from `true` to `false` in package.json. Users
+  opting for repo-root sync-back (default, easiest path) won't see a qonstruction
+  name prompt. Only users enabling skip-sync will be asked.
+- **Qonstruction name prompt:** Made conditional on `config.noSync === true`
+  across all 4 run entry points in `runTasq.ts`.
+
 ## v1.4.0 — MLcon Edition: Truthful Inspection, Streaming UX Cleanup, Hybrid Venice Alignment + IntelliJ Compatibility Series (v1.4.0–v1.4.6)
 
 ### Core runtime (v1.4.0)

@@ -1,6 +1,17 @@
+## 1.4.7 — IDE Parity, UX Simplification, Default Alignment
+
+- **Defaults aligned with IntelliJ:** `noSync` now defaults to `false` (repo-root sync-back
+  is default, easiest path). `useSqrapyard` now defaults to `true`. Cycles and sensitivity
+  both default to 1.
+- **Qonstruction name prompt:** Now only shown when `noSync` is enabled. No prompt during
+  normal sync-back runs — minimal friction.
+- **Model alignment:** VSCode and IntelliJ now share identical provider and model lists.
+
+---
+
 # QonQrete VS Code Extension - Changelog
 
-## 1.4.6 — v1.4.x Line: Runtime Alignment & Version Sync
+## 1.4.7 — v1.4.x Line: Runtime Alignment & Version Sync
 
 ### v1.4.x cumulative changes
 - AI config UI now targets the four primary runtime agents only:
@@ -11,11 +22,11 @@
 - Corrected docs/settings defaults to match runtime-backed values (`sensitivity=1`, `cycles=1`, `autonomous=true`).
 - **License:** AGPL-3.0 → Apache-2.0 (v1.4.2)
 - **Auto Briq Sensitivity** default-on in settings (v1.4.1)
-- **Package-lock.json:** Fixed stale version (was stuck at 1.4.0 since v1.4.1) (v1.4.6)
+- **Package-lock.json:** Fixed stale version (was stuck at 1.4.0 since v1.4.1) (v1.4.7)
 
 ### Notes
 - Local runtime providers remain supported by core runtime config files, but are no longer presented in the shared sidebar/panel provider picker.
-- v1.4.6: DeepSeek model picker upgraded to V4 generation (`deepseek-v4-flash`, `deepseek-v4-flash-thinking`, `deepseek-v4-pro`, `deepseek-v4-pro-thinking`). OpenRouter reference updated to `deepseek/deepseek-v4-flash`.
+- v1.4.7: DeepSeek model picker upgraded to V4 generation (`deepseek-v4-flash`, `deepseek-v4-flash-thinking`, `deepseek-v4-pro`, `deepseek-v4-pro-thinking`). OpenRouter reference updated to `deepseek/deepseek-v4-flash`.
 
 ## 1.3.0 - Current Runtime Alignment
 

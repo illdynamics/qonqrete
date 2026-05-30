@@ -1,9 +1,9 @@
 # QonQrete Documentation
 
-**Version:** `v1.4.6`
-**Release context:** `v1.4.6`
+**Version:** `v1.4.7`
+**Release context:** `v1.4.7`
 
-This document is the synced technical reference for the current `v1.4.6` repository snapshot.
+This document is the synced technical reference for the current `v1.4.7` repository snapshot.
 
 ## Current release summary (v1.4.x line)
 
@@ -488,7 +488,7 @@ Implemented helper concepts include:
 
 ## 11. Current limitations
 
-These limitations should be documented honestly for `v1.4.6`:
+These limitations should be documented honestly for `v1.4.7`:
 
 1. **Repo-local workflow remains the active implementation model.**
    The central engine / per-project metadata architecture is a future/product direction, not the current repo behavior.
@@ -534,8 +534,8 @@ Install extension/plugin
 
 ### Image versioning
 Container images are now tagged with the version:
-- `qonqrete-qage:1.4.6` on macOS/Windows (example current version)
-- `qonqrete-qage:1.4.6-u<host_uid>` on Linux/WSL
+- `qonqrete-qage:1.4.7` on macOS/Windows (example current version)
+- `qonqrete-qage:1.4.7-u<host_uid>` on Linux/WSL
 - `qonqrete-qage:latest` (convenience alias)
 
 ## 13. Cost Confirmation Gate (GateQeeper)

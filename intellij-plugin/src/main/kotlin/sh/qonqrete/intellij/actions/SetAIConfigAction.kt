@@ -51,7 +51,7 @@ class SetAIConfigAction : AnAction() {
             "anthropic" to ProviderInfo("Anthropic", "ANTHROPIC_API_KEY",
                 listOf("claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-20250514")),
             "deepseek" to ProviderInfo("DeepSeek", "DEEPSEEK_API_KEY",
-                listOf("deepseek-v4-flash", "deepseek-v4-pro")),
+                listOf("deepseek-v4-flash", "deepseek-v4-flash-thinking", "deepseek-v4-pro", "deepseek-v4-pro-thinking")),
             "qwen" to ProviderInfo("Qwen", "QWEN_API_KEY",
                 listOf("qwen-plus", "qwen-turbo", "qwen-max")),
             "openrouter" to ProviderInfo("OpenRouter", "OPENROUTER_API_KEY",
@@ -84,7 +84,9 @@ class SetAIConfigAction : AnAction() {
                     "glm-5",
                     "glm-4.7-flash-heretic",
                     "minimax-2.5"
-                ))
+                )),
+            "mlx" to ProviderInfo("MLX (local/LAN)", "MLX_API_KEY", emptyList()),
+            "llama-cpp" to ProviderInfo("Llama-cpp (local/LAN)", "LLAMA_CPP_API_KEY", emptyList())
         )
 
         /**

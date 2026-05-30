@@ -57,16 +57,18 @@ class QonQreteFirstLaunchDialog(private val project: Project) : DialogWrapper(pr
             ProviderInfo("claude-code", "Claude Code (CLI)", "ANTHROPIC_API_KEY",
                 listOf("claude-sonnet-4-20250514", "claude-opus-4-20250514"), "Requires Claude Code CLI installed.", "anthropic"),
             ProviderInfo("deepseek", "DeepSeek (API)", "DEEPSEEK_API_KEY",
-                listOf("deepseek-chat", "deepseek-reasoner")),
+                listOf("deepseek-v4-flash", "deepseek-v4-flash-thinking", "deepseek-v4-pro", "deepseek-v4-pro-thinking")),
             ProviderInfo("codeseeq", "CodeSeeq (Codex CLI on DeepSeek)", "DEEPSEEK_API_KEY",
                 listOf("deepseek-v4-flash", "deepseek-v4-flash-thinking", "deepseek-v4-pro", "deepseek-v4-pro-thinking"),
                 "Requires CodeSeeq CLI + DEEPSEEK_API_KEY.", "codeseeq"),
             ProviderInfo("venice", "Venice (API)", "VENICE_API_KEY",
                 listOf("deepseek-v3.2", "qwen3-coder-480b-a35b-instruct-turbo", "venice-uncensored", "llama-3.3-70b")),
+            ProviderInfo("mlx", "MLX (local/LAN)", "MLX_API_KEY", emptyList()),
+            ProviderInfo("llama-cpp", "Llama-cpp (local/LAN)", "LLAMA_CPP_API_KEY", emptyList()),
             ProviderInfo("qwen", "Qwen (API)", "QWEN_API_KEY",
                 listOf("qwen-plus", "qwen-turbo", "qwen-max")),
             ProviderInfo("openrouter", "OpenRouter (API)", "OPENROUTER_API_KEY",
-                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3")),
+                listOf("anthropic/claude-sonnet-4", "openai/gpt-4.1", "google/gemini-2.5-pro", "deepseek/deepseek-v4-flash")),
         )
 
         /**

@@ -191,22 +191,35 @@ class DeployToWorkspaceAction : AnAction() {
                             val rootTasq = File(basePath, "tasq.md")
                             if (!rootTasq.exists()) {
                                 rootTasq.writeText("""
-                                    |# QonQrete Starter Tasq
+                                    |# TasQ - Define Your Objective
                                     |
-                                    |> Welcome to QonQrete! Replace this with your own task.
+                                    |<!--
+                                    |Welcome to QonQrete! Define your task below.
+                                    |This file lives at your workspace root for easy editing.
+                                    |When you run QonQrete, it gets synced into the runtime automatically.
                                     |
-                                    |## Goal
-                                    |Describe what you want to build or fix.
+                                    |Tips for a good TasQ:
+                                    |- Be specific about what you want to build
+                                    |- Include file/folder structure if you have preferences
+                                    |- Mention any specific libraries or frameworks
+                                    |- Define success criteria
                                     |
-                                    |## Context
-                                    |Any relevant background, constraints, or preferences.
+                                    |Example:
+                                    |Create a Python CLI tool that:
+                                    |1. Reads a CSV file from command line argument
+                                    |2. Generates a summary report with statistics
+                                    |3. Saves the report as JSON
                                     |
-                                    |## Acceptance
-                                    |- [ ] Criterion 1
-                                    |- [ ] Criterion 2
+                                    |Requirements:
+                                    |- Use argparse for CLI
+                                    |- Use pandas for data processing
+                                    |- Include error handling for missing files
+                                    |- Write unit tests
+                                    |-->
                                     |
-                                    |## Notes
-                                    |Add any additional guidance for the AI agents.
+                                    |## Your TasQ:
+                                    |
+                                    |
                                 """.trimMargin())
                             }
                         }
