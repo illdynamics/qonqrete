@@ -129,3 +129,7 @@ prompt.md
 **/*.vsix
 dist/
 **/dist/
+
+qq/tui/Cargo.lock
+qq/tui/target
+

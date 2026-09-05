@@ -44,11 +44,10 @@ providers:
     supports_thinking_mode: true
     default_model: gpt-5.5
     models:
+      - gpt-5.5-pro
       - gpt-5.5
-      - gpt-5.3-codex
-      - gpt-5.2-codex
-      - gpt-5.1-codex
-      - gpt-5-codex
+      - gpt-5.4-mini
+      - gpt-5.4-nano
     repo: https://github.com/illdynamics/codeseeq
     notes: "Native ChatGPT account sign-in through the system codeseeq CLI. No API key — QonQrete triggers `codeseeq login` automatically on the first run (interactive terminal) when no sign-in exists yet; choose 'Sign in with ChatGPT'. Every agent reuses that session."
 
