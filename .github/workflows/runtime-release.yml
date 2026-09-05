@@ -54,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           # The packaging script handles VERSION extraction and exclusions.
-          ./tools/package_runtime_release.sh
+          ./scripts/package_runtime_release.sh
 
       - name: Verify zip hygiene
         run: python3 tools/verify_zip_hygiene.py qonqrete-v*.zip

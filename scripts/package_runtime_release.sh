@@ -25,22 +25,23 @@ mkdir -p "$STAGING"
 trap 'rm -rf "$STAGING"' EXIT
 
 cp -r \
-  qonqrete.sh \
-  VERSION \
-  Dockerfile \
-  requirements.txt \
-  requirements-optional-tree-sitter.txt \
-  package.json \
-  LICENSE \
-  COPYRIGHT \
-  README.md \
-  qonqrete.jpg \
+  .dockerignore \
   .env.example \
-  qrane \
-  worqer \
-  worqspace \
+  config \
   doc \
+  install.sh \
+  intellij-plugin \
+  package.json \
+  pyproject.toml \
+  qonqrete-square.jpg \
+  qonqrete.jpg \
+  qq \
+  QUICKSTART.md \
+  README.md \
+  scripts \
   tests \
+  VERSION \
+  vscode-extension \
   "$STAGING/"
 
 # Remove Phase 2 and dev files from staging before zipping
