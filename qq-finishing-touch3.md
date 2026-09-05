@@ -1,0 +1,12 @@
+please fix the last remaining polishes/fixes:
+- make the PROGRESS: XX% block a bit less wide on the web-interface on the very top right. like 75% of its width or so.
+- make sure the Total and Agent times are in one block together, no line in between them.
+- change the "RUNS" menu button to a square button, with in the same yellow as the text RUNS was an icon of something representing sessions/runs, like a computer screen icon.
+- make sure we can still scroll down in the Config page, we cannot atm, its now just only showing the top of the config and we cannot go down to see the rest of the config.
+- I see this white text on the bottom right trough everything saying "vQQV_ROLE=construqtor" make sure that stuff doesnt leak into our GUI.
+- the snake_braille spinner on the bottom right of the web-interface actually moves now, but it stops after a certain amount of time, seems random, but when I refresh it works again, maybe something that triggers it to break? fix it please
+- move the snake_braille spinner from just above the squid image to actually on top of the squid image in the top left corner, like move the spinner ~1.5x its own height downwards over the image, and then 1x its own height to the right and then it will be perfectly where I want to have it
+- and the version string just above the image on the right side of it, do exactly the same but the other way around, so move the version string about 1.5x the spinner's height downwards, and about 1x the spinners height to the left. then its perfect.
+- then increaase the image size so the height matches the event log section height.
+- when we resize the panel, the squid image keeps the same height as the event log, so making it bigger will result in the image eating more space to the left, eating from the space from the event log terminal's right side
+- make sure in the TUI the Act: status will be actually set to FULLY_DONE in green when the complete session/run is finished. It seems to now hang on evaluating, evne though the Total time does freeze nicely so I can check the run time afterwards nicely. this is what it shows now: ╭─[ꝖꝖ]─[v2.0.0]─❯❯❯ inspeQtor ⣧ Cycle=1/∞ · Total=05:29 Agent=01:03 · Progre… · Act:Evaluating the result · ⧉Q⌖ ❮❮❮─[fla]── and progress should be on 95-100% according to how fully done it is of course :)

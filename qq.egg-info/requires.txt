@@ -1,0 +1,5 @@
+PyYAML>=6.0
+wcwidth>=0.2.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+httpx>=0.24.0

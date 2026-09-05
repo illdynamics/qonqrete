@@ -1,0 +1,19 @@
+// qq-tui library — exposes public API for integration tests and external use
+pub mod app;
+pub mod cli;
+pub mod commands;
+pub mod config;
+pub mod events;
+pub mod input;
+pub mod keymap;
+pub mod layout;
+pub mod logging;
+pub mod messages;
+pub mod pty;
+pub mod qq_events;
+pub mod shutdown;
+pub mod status;
+pub mod status_script;
+pub mod subprocess;
+pub mod theme;
+pub mod widgets;

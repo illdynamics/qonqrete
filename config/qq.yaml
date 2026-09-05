@@ -1,0 +1,203 @@
+# ---------------------------------------------------------------------------
+# QonQrete YOLO mode
+# ---------------------------------------------------------------------------
+qonqrete:
+  # When true, runs default to non-interactive mode (no clarification questions)
+  yolo: false
+
+# ---------------------------------------------------------------------------
+# QonQrete Runs API — external run-trigger endpoint
+# ---------------------------------------------------------------------------
+qonqrete_runs_api:
+  # Master toggle. When false, POST /api/qonqrete/runs returns 503.
+  enabled: true
+
+  # Where current-run.json, runs.jsonl, and control files live.
+  control_root: /x/qq/control
+
+  # Metadata runs root — where run logs, events, and metadata live.
+  runs_root: /x/qq/runs
+
+  # Code workspace parent — default targets resolve here, not under runs_root.
+  default_target_root: /x/qq/targets
+
+  # Where ingested task markdown files are stored.
+  task_dir: ~/.qonqrete/ingest/tasks
+
+  # Queue mode:
+  #   "latest_wins" (recommended): when active, only newest pending is kept; older pending are superseded.
+  #   "reject_if_running": blocks new requests while a run is active.
+  #   "queue": legacy FIFO queue (stacks runs).
+  queue_mode: latest_wins
+
+  # Runner: "tmux" for tmux sessions, "local_exec" for direct subprocess.
+  runner: tmux
+
+  # Default YOLO for API runs (true = non-interactive).
+  yolo_default: true
+
+  # Root whitelist for explicit target paths.
+  allowed_target_roots:
+    - /x/qq/targets
+
+  # Target aliases (case-insensitive).
+  aliases: {}
+
+  # Public-facing dashboard URL (leave empty to infer from host:port).
+  dashboard_url: ""
+
+# ---------------------------------------------------------------------------
+# briQsQope web dashboard (qq-web) — optional read-only kanban board for runs
+# ---------------------------------------------------------------------------
+qq_web:
+  # Master toggle. When false, no web dashboard starts.
+  enabled: true
+
+  # Automatically start the dashboard when `qq run` is invoked.
+  start_with_run: true
+
+  # If true, a dashboard startup failure aborts the entire QonQrete run.
+  hard_fail_on_dashboard_error: false
+
+  # Listen address. localhost only by default.
+  host: "0.0.0.0"
+
+  # Port. 31337 by default. 0 means auto-pick.
+  port: 31337
+
+  # Open the default browser after the dashboard starts.
+  open_browser: true
+
+  # Source-of-truth enforcement.
+  source_of_truth: "qonqrete"
+  mode: "local_read_model"
+
+  # Granularity of board cards: briq_group | briq
+  publish_level: "briq_group"
+
+  # Show individual briQs as checklist items inside group cards.
+  expose_briqs_as_subtasks: true
+
+  # Allow one card per briQ (noisy — disabled by default).
+  allow_briq_level_tickets: false
+
+  # How the dashboard reads events.
+  event_source:
+    type: "events_jsonl"
+    poll_interval_ms: 500
+    sse_enabled: true
+
+  # UI controls — all disabled by default for read-only mode.
+  controls:
+    allow_create_epic_from_ui: true
+    allow_start_run_from_ui: true
+    allow_pause_run_from_ui: true
+    allow_cancel_run_from_ui: true
+    allow_manual_status_override: true
+
+  # Branding.
+  branding:
+    product_name: "briQsQope"
+    parent_product_name: "QonQrete"
+# Run defaults. CLI flags (--provider, --runtime-mode, --bridge-mode, --max-cycles, etc.)
+# override these without editing this file.
+
+provider: codeseeq
+
+# Runtime defaults (used when not overridden by CLI or env)
+runtime_mode: host
+bridge_mode: process
+
+models:
+  # Each role accepts either the legacy flat form (`role: model-name`) or the
+  # structured form below. `reasoning` maps to DeepSeek's reasoning effort and
+  # is one of: low, high, max (empty = model/provider default). It only takes
+  # effect for `-thinking` model variants.
+  qlarifier:
+    model: deepseek-v4-flash-thinking  # needs real reasoning to ask good questions
+    reasoning: high
+  instruqtor:
+    model: deepseek-v4-flash-thinking  # needs real reasoning to split/group well
+    reasoning: high
+  construqtor:
+    model: deepseek-v4-flash           # fast -- this one runs every single cycle
+    reasoning: low
+  inspeqtor:
+    model: deepseek-v4-flash-thinking  # the strict reviewer -- worth the slower model
+    reasoning: max
+
+defaults:
+  briq_sensitivity: 0      # 0=auto (instruQtor decides), 1-16 manual granularity
+  max_cycles: 0            # 0=unlimited (continue until FULLY_DONE), >0=safety ceiling
+  max_time_seconds: 0      # 0=unlimited, >0=abort after this many seconds total
+  max_parallel_build_groups: 8
+  stream_agent_output: true  # stream agent output live by default
+  parallel_spawn_delay_seconds: 1.0  # delay between spawning parallel agents (prevents codeseeq race conditions)
+  parallel_safe: true
+
+# Agent output color mode:
+#   agent    — each agent's output is fully colored with that agent's color
+#              (Qlarifier=cyan, instruQtor=magenta, construQtor=yellow, inspeQtor=green)
+#   original — preserve original codeseeq output colors (wraps in agent prefix only)
+#   none     — no color at all in agent output
+# Override with --agent-color-output <mode> or QQ_AGENT_COLOR_OUTPUT env var.
+agent_color_output: original
+
+
+# ---------------------------------------------------------------------------
+# Image Generation Backend
+# ---------------------------------------------------------------------------
+# Controls which backend is used when QonQrete needs to generate images.
+# Venice.ai is the only supported real backend. No local tools (Pillow,
+# ImageMagick) or CodeSeeq imagegen skill are used — Venice first and only.
+# When no API key is configured, a deterministic mock image is generated.
+#
+# Supported backends:
+#   - none (default): no image backend, mock or fallback
+#   - venice:  Uses Venice.ai API (https://api.venice.ai/api/v1)
+#              Requires VENICE_API_KEY environment variable.
+#
+# Venice model options (auto will use the cheapest available model):
+#   auto           — Let Venice choose the default/cheapest model
+#   z-image-turbo  — Fast generation
+#   gpt-image-2    — OpenAI GPT Image 2 via Venice
+#   nano-banana-2  — Nano Banana 2
+#   nano-banana-pro — Nano Banana Pro
+#   qwen-image-2   — Qwen Image 2
+#   venice-sd35    — Stable Diffusion 3.5 via Venice
+#   grok-imagine-image — Grok Imagine
+#   flux-dev       — Flux Dev
+#
+# Venice supports these parameters (model-dependent):
+#   aspect_ratio:  "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"
+#   resolution:    "1K", "2K", "4K" (for gpt-image-2, nano-banana-2,
+#                  nano-banana-pro)
+#   width/height:  For pixel-based models (e.g. venice-sd35, qwen-image)
+#   quality:       "low", "medium", "high" (for gpt-image-2)
+#   format:        "png", "jpeg", "webp"
+#   style:         Optional image style preset
+#   cfg_scale:     1.0-20.0 (higher = more prompt adherence)
+#   steps:         1-50 (denoising steps for diffusion models)
+#   seed:          Integer for reproducibility
+#   safe_mode:     true/false (blur adult content, default: true)
+#   hide_watermark: true/false (hide Venice watermark)
+#
+image_backend:
+  # Backend: "none" (default) or "venice"
+  provider: venice
+
+  # Venice-specific settings (only used when provider is "venice")
+  venice:
+    # Model: "auto" for cheapest default, or a specific model name
+    model: seedream-v4
+
+    # Generation defaults (can be overridden per-request via CLI)
+    aspect_ratio: "16:9"
+    resolution: "720p"
+    format: "png"
+    quality: "high"
+    cfg_scale: 7.5
+    steps: 20
+    safe_mode: false
+    hide_watermark: true
+    embed_exif_metadata: false

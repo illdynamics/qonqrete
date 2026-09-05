@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>briQsQope – QonQrete Dashboard</title>
+<style>
+/* ====== QONQRETE INDUSTRIAL THEME ====== */
+:root {
+  --bg-deep: #070909; --bg-metal: #0b0d0d; --bg-panel: #101313;
+  --metal-dark: #181b1b; --metal-mid: #202322; --metal-light: #2a2d2b;
+  --bevel-edge: #3b3f3d; --bevel-hi: #555955;
+  --constr-orange: #d87a18; --constr-orange2: #e08a1f; --constr-amber: #f59e0b;
+  --constr-yellow: #d6a42b; --constr-yellow2: #f0b429;
+  --hazard-black: #050505;
+  --ok-green: #34c759; --ok-green2: #3fb950;
+  --alarm-red: #ff3b30; --alarm-red2: #f85149;
+  --text-muted: #a7aba6; --text-main: #d7d3c7;
+  --cyan-accent: #39d2c0; --pink-accent: #db61a2;
+  --font-industrial: Impact,"Arial Narrow","Roboto Condensed","DIN Condensed",sans-serif;
+  --font-mono: "SF Mono","Fira Code","Fira Mono",Menlo,Consolas,monospace;
+  --font-ui: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --font-industrial-readable: "Roboto Condensed","Arial Narrow","Segoe UI",Helvetica,Arial,sans-serif;
+  --font-digital: "Share Tech Mono","OCR A Std","Eurostile","Bank Gothic","Rajdhani","SFMono-Regular","SF Mono","Fira Code",Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg-deep);color:var(--text-main);font-family:var(--font-ui);
+  font-size:13px;line-height:1.5;overflow:hidden;height:100vh;
+  background-image:url('/briQsQope-bg.jpg');background-size:cover;background-position:center;background-blend-mode:overlay;
+}
+a{color:var(--constr-amber);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Reusable industrial elements ── */
+.metal-panel{
+  background:var(--metal-dark);border:2px solid var(--bevel-edge);
+  position:relative;
+}
+.metal-panel::before{
+  content:'';position:absolute;inset:0;border:1px solid var(--bevel-hi);
+  pointer-events:none;opacity:0.2;
+}
+.metal-plate{
+  background:var(--metal-mid);border:1px solid var(--bevel-edge);
+  position:relative;
+}
+.metal-plate::after{
+  content:'';position:absolute;inset:1px;border:1px solid rgba(255,255,255,0.03);
+  pointer-events:none;
+}
+.orange-plaque{
+  background:linear-gradient(135deg,var(--constr-orange),var(--constr-amber));
+  color:var(--hazard-black);font-family:var(--font-industrial);font-weight:700;
+  text-transform:uppercase;letter-spacing:1px;
+  border:1px solid var(--bevel-edge);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3),inset 0 -1px 0 rgba(0,0,0,0.4);
+}
+.inset-display{
+  background:var(--hazard-black);border:1px solid var(--bevel-edge);
+  color:var(--constr-amber);font-family:var(--font-mono);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,0.6);
+}
+.hazard-stripe{
+  background:repeating-linear-gradient(-45deg,var(--constr-amber),var(--constr-amber) 4px,var(--hazard-black) 4px,var(--hazard-black) 8px);
+  border:1px solid var(--bevel-edge);
+}
+.rivet{position:relative}
+.rivet::before,.rivet::after{
+  content:'';position:absolute;width:4px;height:4px;border-radius:50%;
+  background:radial-gradient(circle,var(--bevel-hi) 30%,var(--bevel-edge) 70%);
+  border:1px solid var(--metal-dark);
+}
+
+/* ── TOP BROWSER COCKPIT BAR ── */
+.qq-industrial-shell{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* ── NAV DECK ── */
+.nav-deck{
+  display:flex;align-items:center;gap:0;height:44px;
+  background:linear-gradient(180deg,var(--metal-mid) 0%,var(--metal-dark) 100%);
+  border-bottom:2px solid var(--bevel-edge);flex-shrink:0;padding:0;
+}
+.nav-brand-block{
+  display:flex;align-items:center;gap:8px;padding:0 12px;
+  background:var(--metal-dark);height:100%;
+  border-right:1px solid var(--bevel-edge);
+}
+.nav-brand-block img{height:28px;width:auto;filter:drop-shadow(0 0 2px rgba(216,122,24,0.5))}
+.nav-brand-label{
+  font-family:var(--font-industrial-readable);font-size:14px;font-weight:600;
+  color:var(--constr-orange);text-transform:uppercase;letter-spacing:1px;
+}
+.nav-product-plate{
+  padding:0 12px;height:100%;display:flex;align-items:center;justify-content:center;
+  background:var(--metal-mid);border-right:1px solid var(--bevel-edge);
+}
+.nav-product-logo{
+  height:30px;width:auto;max-width:150px;object-fit:contain;
+  filter:drop-shadow(0 0 2px rgba(216,122,24,0.45));
+}
+.nav-tabs{display:flex;height:100%;gap:0}
+.nav-tab{
+  padding:0 18px;height:100%;display:flex;align-items:center;justify-content:center;
+  background:var(--metal-dark);color:var(--text-muted);
+  font-family:var(--font-industrial-readable);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;
+  cursor:pointer;border:none;border-right:1px solid var(--bevel-edge);
+  position:relative;transition:background 0.15s;
+}
+.nav-tab:hover{background:var(--metal-mid);color:var(--constr-amber)}
+.nav-tab.active{
+  background:linear-gradient(180deg,var(--constr-orange2) 0%,var(--constr-orange) 100%);
+  color:var(--hazard-black);font-weight:700;
+  box-shadow:inset 0 2px 4px rgba(0,0,0,0.3);
+}
+.nav-tab.active::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:var(--hazard-black);
+}
+.nav-spacer{flex:1;min-width:0;overflow:hidden}
+.qonqrete-transmission{
+  height:28px;margin:8px 12px;
+  background:var(--hazard-black);
+  border:1px solid var(--bevel-edge);
+  position:relative;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.8);
+  overflow:hidden;
+}
+.qonqrete-transmission::before{
+  content:'';position:absolute;top:0;left:0;width:4px;height:100%;
+  background:linear-gradient(180deg,rgba(216,122,24,0.25),rgba(216,122,24,0.05),rgba(216,122,24,0.25));
+  z-index:1;pointer-events:none;
+}
+.qonqrete-transmission::after{
+  content:'';position:absolute;top:0;right:0;width:4px;height:100%;
+  background:linear-gradient(180deg,rgba(216,122,24,0.25),rgba(216,122,24,0.05),rgba(216,122,24,0.25));
+  z-index:1;pointer-events:none;
+}
+.transmission-viewport{
+  position:relative;height:100%;overflow:hidden;
+  mask-image:linear-gradient(to right,transparent 0%,black 30px,black calc(100% - 30px),transparent 100%);
+  -webkit-mask-image:linear-gradient(to right,transparent 0%,black 30px,black calc(100% - 30px),transparent 100%);
+}
+.transmission-track{
+  display:flex;align-items:center;height:100%;white-space:nowrap;
+  will-change:transform;
+}
+.phrase-group{
+  display:flex;align-items:center;flex-shrink:0;gap:18px;padding:0 10px;
+}
+.phrase-item{
+  font-family:var(--font-digital);font-size:10.5px;font-weight:500;
+  color:var(--constr-orange);
+  text-transform:uppercase;letter-spacing:0.6px;
+  white-space:nowrap;flex-shrink:0;
+  text-shadow:0 0 1px rgba(216,122,24,0.3);
+}
+.phrase-sep{
+  font-family:var(--font-digital);font-size:9px;
+  color:var(--bevel-edge);flex-shrink:0;
+  letter-spacing:1px;
+}
+.qonqrete-transmission .transmission-viewport{
+  animation-play-state:running;
+}
+.qonqrete-transmission.paused .transmission-viewport .transmission-track{
+  animation-play-state:paused;
+}
+@media(prefers-reduced-motion:reduce){
+  .transmission-viewport{overflow-x:auto;}
+  .transmission-track{animation:none!important;}
+}
+@media(max-width:1000px){
+  .qonqrete-transmission{display:none}
+}
+.nav-conn-block{
+  display:flex;align-items:center;gap:8px;padding:0 14px;height:100%;
+  background:var(--metal-dark);border-left:1px solid var(--bevel-edge);
+}
+.nav-signal-bars{display:flex;align-items:flex-end;gap:1px;height:14px}
+.nav-signal-bars span{
+  width:3px;background:var(--ok-green2);border-radius:1px;
+}
+.nav-signal-bars span:nth-child(1){height:4px}
+.nav-signal-bars span:nth-child(2){height:7px}
+.nav-signal-bars span:nth-child(3){height:10px}
+.nav-signal-bars span:nth-child(4){height:14px}
+.nav-signal-bars.err span{background:var(--alarm-red)}
+#status-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--ok-green2);
+  box-shadow:0 0 4px var(--ok-green2);
+}
+#status-dot.error{background:var(--alarm-red);box-shadow:0 0 4px var(--alarm-red)}
+#conn-text{font-family:var(--font-industrial);font-size:10px;text-transform:uppercase;
+  color:var(--text-muted);letter-spacing:0.5px;}
+#conn-text.error{color:var(--alarm-red)}
+
+/* ── RUN STATUS DECK ── */
+.run-status-deck{
+  background:var(--metal-dark);border-bottom:2px solid var(--bevel-edge);
+  flex-shrink:0;padding:0;
+}
+
+
+
+
+
+
+
+.run-status-row2{
+  display:flex;align-items:center;gap:0;padding:3px 12px 5px;
+  background:var(--hazard-black);border-top:1px solid var(--bevel-edge);
+  font-size:11px;flex-wrap:wrap;
+}
+.telemetry-item{
+  display:flex;align-items:center;gap:4px;padding:0 10px;
+  border-right:1px solid var(--bevel-edge);
+}
+.telemetry-item:last-child{border-right:none}
+.telemetry-lbl{
+  color:var(--text-muted);font-family:var(--font-industrial-readable);
+  font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:0.35px;
+}
+.telemetry-val{
+  color:var(--constr-amber);font-family:var(--font-mono);font-weight:600;font-size:11px;
+}
+.telemetry-val.good{color:var(--ok-green2)}
+.telemetry-val.bad{color:var(--alarm-red)}
+.telemetry-val.waiting{color:var(--constr-yellow2)}
+.telemetry-val.total-count{color:var(--constr-amber)}
+.telemetry-run-item{
+  min-width:260px;flex:0 0 auto;
+}
+.telemetry-run-id{
+  display:inline-block;min-width:210px;max-width:none;
+  overflow:visible;text-overflow:clip;white-space:nowrap;
+}
+
+/* ── MAIN WORK YARD ── */
+.workyard-main{flex:1 1 auto;min-height:180px;min-width:0;overflow:hidden;display:flex;position:relative}
+.ticket-yard{
+  display:flex;gap:0;height:100%;width:100%;overflow:hidden;
+  padding:6px;gap:6px;
+}
+.ticket-bay{
+  flex:1;display:flex;flex-direction:column;
+  background:var(--metal-dark);border:2px solid var(--bevel-edge);
+  position:relative;overflow:hidden;min-width:0;
+}
+.ticket-bay::before{
+  content:'';position:absolute;top:0;left:0;width:8px;height:8px;
+  background:var(--constr-amber);clip-path:polygon(0 0,100% 0,0 100%);
+  z-index:2;
+}
+.ticket-bay::after{
+  content:'';position:absolute;top:0;right:0;width:8px;height:8px;
+  background:var(--constr-amber);clip-path:polygon(100% 0,100% 100%,0 0);
+  z-index:2;
+}
+.ticket-bay .bay-corner-bl{
+  position:absolute;bottom:0;left:0;width:8px;height:8px;
+  background:var(--constr-amber);clip-path:polygon(0 100%,0 0,100% 100%);
+  z-index:2;
+}
+.ticket-bay .bay-corner-br{
+  position:absolute;bottom:0;right:0;width:8px;height:8px;
+  background:var(--constr-amber);clip-path:polygon(100% 100%,0 100%,100% 0);
+  z-index:2;
+}
+.bay-header{
+  padding:10px 12px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+  background:linear-gradient(180deg,var(--constr-orange) 0%,var(--constr-amber) 100%);
+  border-bottom:2px solid var(--bevel-edge);
+}
+.bay-header-icon{
+  font-size:20px;color:var(--hazard-black);font-weight:800;
+}
+.bay-header-label{
+  font-family:var(--font-industrial-readable);font-size:13px;font-weight:600;
+  color:var(--hazard-black);text-transform:uppercase;letter-spacing:1px;
+}
+.bay-header-count{
+  margin-left:auto;background:var(--hazard-black);color:var(--constr-amber);
+  font-family:var(--font-mono);font-size:13px;font-weight:700;
+  padding:1px 10px;border:1px solid rgba(0,0,0,0.3);
+}
+.bay-scroll{
+  flex:1;overflow-y:auto;padding:8px;
+  background:var(--bg-panel);
+}
+.bay-scroll::-webkit-scrollbar{width:5px}
+.bay-scroll::-webkit-scrollbar-track{background:var(--hazard-black)}
+.bay-scroll::-webkit-scrollbar-thumb{background:var(--constr-orange);border-radius:2px}
+
+/* ── Empty column cybersquid ── */
+.empty-bay{
+  text-align:center;padding:24px 8px;color:var(--text-muted);
+  display:flex;flex-direction:column;align-items:center;
+}
+.empty-bay .cybersquid-sm{width:70px;height:70px;margin-bottom:6px;opacity:0.7}
+.empty-bay .empty-label{font-family:var(--font-industrial);text-transform:uppercase;font-size:11px;letter-spacing:1px;color:var(--text-muted);}
+
+/* ── Group cards (metal ticket) ── */
+.group-card{
+  background:var(--metal-dark);border:1px solid var(--constr-orange);
+  padding:10px;margin-bottom:6px;cursor:pointer;
+  position:relative;transition:border-color 0.15s;
+}
+.group-card:hover{border-color:var(--constr-amber);box-shadow:0 0 8px rgba(216,122,24,0.15);}
+.group-card::before{
+  content:'';position:absolute;top:0;left:0;width:6px;height:6px;
+  background:var(--constr-orange);clip-path:polygon(0 0,100% 0,0 100%);
+}
+.group-title{
+  font-family:var(--font-industrial-readable);font-size:12px;font-weight:600;text-transform:uppercase;
+  letter-spacing:0.4px;margin-bottom:4px;display:flex;align-items:center;gap:6px;
+  color:var(--text-main);
+}
+.group-desc{font-size:11px;color:var(--text-muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.group-status{
+  font-size:9px;padding:1px 6px;font-family:var(--font-industrial-readable);text-transform:uppercase;
+  letter-spacing:0.25px;
+  background:var(--ok-green2);color:var(--hazard-black);font-weight:600;
+  line-height:1.2;
+}
+.group-status.status-planned{background:var(--pink-accent);}
+.group-status.status-building,.group-status.status-in_progress,.group-status.status-picked_up,.group-status.status-active{background:var(--constr-amber);}
+.group-status.status-reviewing,.group-status.status-built,.group-status.status-ready_for_review,.group-status.status-validating{background:var(--cyan-accent);}
+.group-status.status-repair_needed,.group-status.status-failed{background:var(--alarm-red);}
+.group-status.status-done{background:var(--ok-green2);}
+.group-weight{font-size:10px;color:var(--constr-amber);margin-left:auto;font-family:var(--font-mono);}
+.briq-list{display:flex;flex-wrap:wrap;gap:3px}
+.briq-item{
+  display:flex;align-items:center;gap:2px;font-size:10px;padding:1px 6px;
+  background:var(--hazard-black);border:1px solid var(--bevel-edge);
+}
+.briq-icon{font-size:9px;color:var(--constr-amber)}
+.briq-title{color:var(--text-muted)}
+
+/* ── DECK RESIZER ── */
+:root{
+  --bottom-deck-height:200px;
+  --deck-resizer-height:8px;
+}
+.deck-resizer{
+  width:100%;height:var(--deck-resizer-height);flex-shrink:0;
+  background:linear-gradient(180deg,var(--metal-dark),var(--metal-mid),var(--metal-dark));
+  border-top:1px solid var(--bevel-edge);border-bottom:1px solid var(--bevel-edge);
+  cursor:row-resize;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;z-index:10;
+  transition:background 0.15s;
+}
+.deck-resizer:hover,.deck-resizer:active,.deck-resizer.dragging{
+  background:linear-gradient(180deg,var(--metal-mid),var(--metal-light),var(--metal-mid));
+}
+.deck-resizer::after{
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:120px;height:2px;
+  background:linear-gradient(90deg,transparent 0%,var(--constr-orange) 10%,var(--constr-orange) 90%,transparent 100%);
+  border-radius:1px;
+}
+.deck-resizer::before{
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:60px;height:4px;
+  background:linear-gradient(90deg,transparent,var(--constr-orange) 20%,var(--constr-orange) 80%,transparent);
+  border-radius:2px;opacity:0.6;
+}
+.deck-resizer:focus-visible{
+  outline:2px solid var(--constr-orange);outline-offset:-1px;
+}
+body.deck-resizing{
+  user-select:none;-webkit-user-select:none;
+  cursor:row-resize;
+}
+body.deck-resizing .deck-resizer{background:linear-gradient(180deg,var(--metal-mid),var(--metal-light),var(--metal-mid));}
+
+/* ── BOTTOM INSTRUMENT DECK ── */
+.bottom-instrument-deck{
+  display:flex;gap:6px;padding:6px;height:var(--bottom-deck-height);flex:0 0 var(--bottom-deck-height);
+  background:var(--metal-dark);border-top:none;
+}
+
+
+
+
+
+
+.event-log-panel{
+  flex:1;display:flex;flex-direction:column;
+  background:var(--hazard-black);border:2px solid var(--bevel-edge);
+  overflow:hidden;min-width:0;
+}
+.event-log-header{
+  padding:4px 12px;display:flex;align-items:center;gap:10px;
+  background:linear-gradient(180deg,var(--metal-light) 0%,var(--metal-dark) 100%);
+  border-bottom:1px solid var(--bevel-edge);flex-shrink:0;
+}
+.event-log-header .log-label{
+  font-family:var(--font-industrial);font-size:11px;text-transform:uppercase;
+  letter-spacing:1px;color:var(--constr-orange);font-weight:700;
+}
+.event-log-header .log-clear{
+  margin-left:auto;cursor:pointer;font-size:10px;color:var(--text-muted);
+  background:var(--metal-dark);border:1px solid var(--bevel-edge);
+  padding:1px 8px;font-family:var(--font-industrial);text-transform:uppercase;
+}
+.event-log-header .log-clear:hover{color:var(--constr-amber);border-color:var(--constr-amber);}
+.event-log-body{
+  flex:1;overflow-y:auto;padding:4px 10px;font-family:var(--font-mono);font-size:10px;line-height:1.6;
+}
+.event-log-body::-webkit-scrollbar{width:4px}
+.event-log-body::-webkit-scrollbar-track{background:transparent}
+.event-log-body::-webkit-scrollbar-thumb{background:var(--constr-orange);border-radius:2px}
+.term-line{padding:1px 0;white-space:pre-wrap;word-break:break-all}
+.term-ts{color:var(--constr-amber);margin-right:6px}
+.term-type{color:var(--cyan-accent);margin-right:6px}
+
+.big-mascot-area{
+  width:180px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+
+.big-mascot-area img{width:100%;height:100%;object-fit:contain}
+.system-side-rail{
+  width:48px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;
+}
+.sys-pipe{
+  flex:1;background:linear-gradient(180deg,var(--bevel-hi),var(--bevel-edge),var(--bevel-hi));
+  border:1px solid var(--metal-dark);
+}
+.sys-hazard-strip{
+  height:40px;background:repeating-linear-gradient(-45deg,var(--constr-amber),var(--constr-amber) 3px,var(--hazard-black) 3px,var(--hazard-black) 6px);
+  border:1px solid var(--bevel-edge);
+}
+.sys-status-module{
+  padding:6px 4px;background:var(--metal-dark);border:1px solid var(--bevel-edge);
+  text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center;
+}
+.sys-online-text{
+  font-family:var(--font-industrial);font-size:8px;text-transform:uppercase;
+  letter-spacing:0.5px;color:var(--ok-green2);writing-mode:vertical-rl;text-orientation:mixed;
+}
+.sys-brand-badge{
+  background:var(--constr-orange);color:var(--hazard-black);
+  font-family:var(--font-industrial);font-size:8px;text-transform:uppercase;
+  font-weight:700;letter-spacing:1px;padding:2px 4px;
+}
+
+/* ── INLINE CYBERSQUID SVG ── */
+.cybersquid-sm svg,.cybersquid-big svg{width:100%;height:100%}
+.alarm-eye{fill:var(--alarm-red);animation:alarmPulse 2s infinite}
+@keyframes alarmPulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ── Panel views (agents, tasks, config) ── */
+#panel-view{display:none;flex:1;overflow-y:auto;padding:8px;flex-direction:column;gap:6px;background:var(--bg-panel)}
+#panel-view.active{display:flex}
+.panel-section{background:var(--metal-dark);border:1px solid var(--bevel-edge)}
+.panel-section-header{padding:6px 10px;background:var(--metal-mid);border-bottom:1px solid var(--bevel-edge);font-family:var(--font-industrial);font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--constr-orange);}
+.panel-section-body{padding:10px;font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:400px;overflow-y:auto;color:var(--text-muted);}
+.agent-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;height:100%}
+.agent-pane{background:var(--metal-dark);border:1px solid var(--bevel-edge);display:flex;flex-direction:column;overflow:hidden}
+.agent-pane-header{padding:5px 10px;background:var(--metal-mid);border-bottom:1px solid var(--bevel-edge);font-family:var(--font-industrial);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--constr-amber);}
+.agent-pane-body{flex:1;overflow-y:auto;padding:6px 10px;font-family:var(--font-mono);font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--text-muted);}
+.task-section{margin-bottom:10px}
+.task-label{font-family:var(--font-industrial);font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--constr-orange);margin-bottom:4px;}
+.task-content{font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;word-break:break-word;background:var(--hazard-black);padding:8px;border:1px solid var(--bevel-edge);max-height:200px;overflow-y:auto;color:var(--text-muted);}
+
+/* ── Overlay ── */
+#overlay{display:none;position:fixed;inset:0;background:rgba(5,5,5,0.85);z-index:100;align-items:center;justify-content:center}
+#overlay.active{display:flex}
+#overlay-content{
+  background:var(--metal-dark);border:2px solid var(--constr-orange);
+  width:90vw;max-width:800px;max-height:80vh;overflow-y:auto;padding:0;
+}
+
+/* ── Global scrollbars ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--hazard-black)}
+::-webkit-scrollbar-thumb{background:var(--bevel-edge);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--constr-orange)}
+
+/* ── Icons for columns ── */
+.icon-planned{color:var(--pink-accent)!important}
+.icon-build{color:var(--constr-amber)!important}
+.icon-review{color:var(--cyan-accent)!important}
+.icon-repair{color:var(--constr-amber)!important}
+.icon-done{color:var(--ok-green2)!important}
+.col-icon{font-weight:800}
+
+/* ── Responsive ── */
+@media(max-width:1200px){
+  .big-mascot-area{display:none}
+  .system-side-rail{display:none}
+  
+  .ticket-yard{gap:4px;padding:4px}
+  .nav-tab{padding:0 10px;font-size:10px}
+}
+</style>
+</head>
+<body>
+<div class="qq-industrial-shell">
+
+
+<!-- ── NAV DECK ── -->
+<div class="nav-deck">
+  <div class="nav-brand-block">
+    <img src="/QonQrete5.png" alt="QonQrete" onerror="var s=this;var d=document.createElement('span');d.className='nav-brand-label';d.textContent='QONQRETE';s.parentNode.replaceChild(d,s);">
+  </div>
+  <div class="nav-product-plate"><img class="nav-product-logo" src="/briQsQope.png" alt="briQsQope" onerror="var s=this;var d=document.createElement('span');d.textContent='briQsQope';s.parentNode.replaceChild(d,s);"></div>
+  <div class="nav-tabs">
+    <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-tab active">Dashboard</button>
+    <button onclick="switchView('agents')" id="nav-agents" class="nav-tab">Agents</button>
+    <button onclick="switchView('tasks')" id="nav-tasks" class="nav-tab">Tasks</button>
+    <button onclick="switchView('config')" id="nav-config" class="nav-tab">Config</button>
+    <button onclick="openSessionSelector()" id="nav-sessions" class="nav-tab" style="color:var(--constr-amber)">Sessions</button>
+  </div>
+  <div class="nav-spacer">
+    <div class="qonqrete-transmission" id="qonqrete-ticker" aria-live="off" role="marquee" aria-label="QonQrete transmission banner">
+      <div class="transmission-viewport">
+        <div class="transmission-track" id="transmission-track">
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="nav-conn-block">
+    <div class="nav-signal-bars" id="signal-bars">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="status-dot" id="status-dot"></div>
+    <span class="conn-status" id="conn-text">CONNECTED</span>
+  </div>
+</div>
+
+<!-- ── RUN STATUS DECK ── -->
+<div id="current-run-panel" class="run-status-deck" style="display:none">
+  <div class="run-status-row2" id="statsbar">
+    <div class="telemetry-item telemetry-run-item">
+      <span class="telemetry-lbl">Run:</span>
+      <span class="telemetry-val telemetry-run-id" id="live-run-id">—</span>
+    </div>
+    <div class="telemetry-item">
+      <span class="telemetry-lbl">YOLO:</span>
+      <span class="telemetry-val" id="live-yolo">—</span>
+    </div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Status:</span><span class="telemetry-val" id="live-status" style="color:var(--text-muted)">idle</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Agent:</span><span class="telemetry-val" id="live-agent-name">—</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Model:</span><span class="telemetry-val" id="live-model">—</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Action:</span><span class="telemetry-val" id="live-action">Waiting for run</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Cycle:</span><span class="telemetry-val" id="live-cycle">—/—</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Time:</span><span class="telemetry-val" id="live-total-time">00:00</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Progress:</span><span class="telemetry-val good" id="live-progress">0%</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">Groups:</span><span class="telemetry-val" id="live-groups-done">0</span><span class="telemetry-lbl">/</span><span class="telemetry-val total-count" id="live-total-groups">—</span></div>
+    <div class="telemetry-item"><span class="telemetry-lbl">BriQs:</span><span class="telemetry-val" id="live-briqs-done">0</span><span class="telemetry-lbl">/</span><span class="telemetry-val total-count" id="live-total-briqs">—</span></div>
+  </div>
+</div>
+
+<!-- ── MAIN WORK YARD ── -->
+<div class="workyard-main" id="main-area">
+  <div class="ticket-yard" id="col-view">
+    <div class="ticket-bay" id="col-planned">
+      <div class="bay-header">
+        <span class="bay-header-icon col-icon icon-planned">📋</span>
+        <span class="bay-header-label">Planned</span>
+        <span class="bay-header-count col-count">0</span>
+      </div>
+      <div class="bay-scroll col-scroll"></div>
+      <div class="bay-corner-bl"></div><div class="bay-corner-br"></div>
+    </div>
+    <div class="ticket-bay" id="col-building">
+      <div class="bay-header">
+        <span class="bay-header-icon col-icon icon-build">🔧</span>
+        <span class="bay-header-label">Build/Repair</span>
+        <span class="bay-header-count col-count">0</span>
+      </div>
+      <div class="bay-scroll col-scroll"></div>
+      <div class="bay-corner-bl"></div><div class="bay-corner-br"></div>
+    </div>
+    <div class="ticket-bay" id="col-review">
+      <div class="bay-header">
+        <span class="bay-header-icon col-icon icon-review">🎯</span>
+        <span class="bay-header-label">Review</span>
+        <span class="bay-header-count col-count">0</span>
+      </div>
+      <div class="bay-scroll col-scroll"></div>
+      <div class="bay-corner-bl"></div><div class="bay-corner-br"></div>
+    </div>
+    <div class="ticket-bay" id="col-done">
+      <div class="bay-header">
+        <span class="bay-header-icon col-icon icon-done">✅</span>
+        <span class="bay-header-label">Done</span>
+        <span class="bay-header-count col-count">0</span>
+      </div>
+      <div class="bay-scroll col-scroll"></div>
+      <div class="bay-corner-bl"></div><div class="bay-corner-br"></div>
+    </div>
+  </div>
+  <div id="panel-view">
+    <div id="agents-panel" style="display:none;flex:1;flex-direction:column;gap:6px">
+      <div class="agent-grid" style="height:100%">
+        <div class="agent-pane" id="pane-qlarifier"><div class="agent-pane-header">🔮 Qlarifier</div><div class="agent-pane-body"></div></div>
+        <div class="agent-pane" id="pane-instruqtor"><div class="agent-pane-header">📋 instruQtor</div><div class="agent-pane-body"></div></div>
+        <div class="agent-pane" id="pane-construqtor"><div class="agent-pane-header">🏗️ construQtor</div><div class="agent-pane-body"></div></div>
+        <div class="agent-pane" id="pane-inspeqtor"><div class="agent-pane-header">🔍 inspeQtor</div><div class="agent-pane-body"></div></div>
+      </div>
+    </div>
+    <div id="tasks-panel" style="display:none;flex:1;flex-direction:column;gap:6px">
+      <div class="task-section"><div class="task-label">Original Task</div><div class="task-content" id="tasks-original">Loading...</div></div>
+      <div class="task-section"><div class="task-label">Enhanced Task</div><div class="task-content" id="tasks-enhanced">Loading...</div></div>
+      <div class="task-section" id="tasks-groups"><div class="task-label">Build Groups</div><div id="tasks-groups-list"></div></div>
+    </div>
+    <div id="config-panel" style="display:none;flex:1;flex-direction:column;gap:6px">
+      <div class="panel-section"><div class="panel-section-header">Configuration</div><div class="panel-section-body"><div class="config-json" id="config-content">Loading...</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── DECK RESIZER ── -->
+<div id="deck-resizer" class="deck-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize ticket board and event log" aria-valuemin="130" aria-valuemax="600" aria-valuenow="200" tabindex="0"></div>
+
+<!-- ── BOTTOM INSTRUMENT DECK ── -->
+<div class="bottom-instrument-deck">
+<!-- Event log -->
+  <div class="event-log-panel" id="terminal">
+    <div class="event-log-header" id="term-header">
+      <span class="log-label">EVENT LOG ▼</span>
+      <span class="log-clear" onclick="document.getElementById('term-body').innerHTML=''">Clear</span>
+    </div>
+    <div class="event-log-body" id="term-body">
+      <div class="placeholder-msg" style="text-align:center;color:var(--text-muted);padding:24px">Waiting for events...</div>
+    </div>
+  </div>
+
+  <!-- Big cybersquid -->
+  <div class="big-mascot-area">
+    <img src="/qonqrete-bottom-right.jpg" alt="QonQrete" style="width:100%;height:100%;object-fit:contain;">
+  </div>
+
+  <!-- System side rail -->
+  <div class="system-side-rail">
+    <div class="sys-pipe"></div>
+    <div class="sys-hazard-strip"></div>
+    <div class="sys-status-module">
+      <span class="sys-online-text">SYSTEM ONLINE</span>
+      <span class="sys-brand-badge">QONQRETE</span>
+    </div>
+  </div>
+</div>
+
+</div><!-- /qq-industrial-shell -->
+
+<div id="overlay"><div id="overlay-content"></div></div>
+
+<!-- ── INLINE CYBERSQUID SVG ── -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sq-body-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3b3f3d"/><stop offset="100%" stop-color="#181b1b"/>
+    </linearGradient>
+    <linearGradient id="sq-armor-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e08a1f"/><stop offset="100%" stop-color="#d87a18"/>
+    </linearGradient>
+  </defs>
+  <g id="cybersquid-svg">
+    <!-- Tentacles -->
+    <path d="M18 58 Q14 72 8 80" fill="none" stroke="#2a2d2b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M25 60 Q24 74 20 82" fill="none" stroke="#3b3f3d" stroke-width="3" stroke-linecap="round"/>
+    <path d="M32 58 Q35 72 40 80" fill="none" stroke="#2a2d2b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M38 56 Q44 68 50 76" fill="none" stroke="#3b3f3d" stroke-width="3" stroke-linecap="round"/>
+    <!-- Body -->
+    <ellipse cx="28" cy="42" rx="16" ry="18" fill="url(#sq-body-grad)" stroke="#555955" stroke-width="1.5"/>
+    <!-- Armor plates -->
+    <rect x="16" y="32" width="8" height="6" rx="1" fill="#d87a18" stroke="#555955" stroke-width="0.5"/>
+    <rect x="32" y="32" width="8" height="6" rx="1" fill="#d87a18" stroke="#555955" stroke-width="0.5"/>
+    <rect x="20" y="26" width="16" height="5" rx="1" fill="url(#sq-armor-grad)" stroke="#555955" stroke-width="0.5"/>
+    <!-- Bolts -->
+    <circle cx="18" cy="34" r="1.2" fill="#555955"/>
+    <circle cx="38" cy="34" r="1.2" fill="#555955"/>
+    <circle cx="18" cy="48" r="1.2" fill="#555955"/>
+    <circle cx="38" cy="48" r="1.2" fill="#555955"/>
+    <!-- Eye panel -->
+    <rect x="22" y="18" width="12" height="10" rx="1" fill="#050505" stroke="#555955" stroke-width="1"/>
+    <!-- Red alarm eye -->
+    <rect x="25" y="21" width="6" height="4" rx="0.5" fill="#ff3b30" class="alarm-eye"/>
+    <!-- Small indicator dots -->
+    <circle cx="20" cy="20" r="1" fill="#34c759"/>
+    <circle cx="36" cy="20" r="1" fill="#34c759"/>
+  </g>
+</svg>
+
+<script>
+// ====== INLINE SVG CYBERSQUID RENDERER ======
+(function() {
+  var svgSrc = document.getElementById('cybersquid-svg');
+  var svgNS = 'http://www.w3.org/2000/svg';
+  function renderSquid(size) {
+    var svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', '0 0 56 84');
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size);
+    svg.innerHTML = svgSrc.innerHTML;
+    return svg;
+  }
+  // Replace placeholders
+  var smallEls = document.querySelectorAll('.cybersquid-sm');
+  for (var i = 0; i < smallEls.length; i++) {
+    var parent = smallEls[i];
+    if (parent.textContent.trim() === 'MASCOT_SMALL') {
+      parent.innerHTML = '';
+      parent.appendChild(renderSquid('100%'));
+    }
+  }
+  var bigEls = document.querySelectorAll('.cybersquid-big');
+  for (var j = 0; j < bigEls.length; j++) {
+    var parent2 = bigEls[j];
+    if (parent2.textContent.trim() === 'MASCOT_BIG') {
+      parent2.innerHTML = '';
+      parent2.appendChild(renderSquid('100%'));
+    }
+  }
+})();
+
+// ====== HELPERS ======
+function normalizeModelCode(model) {
+  if (!model) return '—';
+  var mc = String(model);
+  var lower = mc.toLowerCase();
+  if (mc === 'fla' || mc === 'fla-T' || mc === 'pro' || mc === 'pro-T') return mc;
+  if (lower.indexOf('flash') >= 0) return lower.indexOf('thinking') >= 0 ? 'fla-T' : 'fla';
+  if (lower.indexOf('pro') >= 0) return lower.indexOf('thinking') >= 0 ? 'pro-T' : 'pro';
+  return mc === '?' ? '—' : mc;
+}
+function agentDisplay(role) {
+  return {
+    qlarifier: 'Qlarifier',
+    instruqtor: 'instruQtor',
+    construqtor: 'construQtor',
+    inspeqtor: 'inspeQtor'
+  }[role] || role || '—';
+}
+function agentColor(role) {
+  return {
+    qlarifier: 'var(--cyan-accent)',
+    instruqtor: 'var(--pink-accent)',
+    construqtor: 'var(--constr-amber)',
+    inspeqtor: 'var(--ok-green2)'
+  }[role] || 'var(--text-muted)';
+}
+function setProgressDisplay(value) {
+  var el = document.getElementById('live-progress');
+  if (!el) return;
+  var pct = 0;
+  if (typeof value === 'number') pct = value;
+  else {
+    var m = String(value || '0').match(/-?\d+/);
+    pct = m ? parseInt(m[0], 10) : 0;
+  }
+  pct = Math.max(0, Math.min(100, pct));
+  el.textContent = pct + '%';
+  el.className = 'telemetry-val';
+  if (pct <= 0) el.style.color = 'var(--alarm-red)';
+  else if (pct < 95) el.style.color = 'var(--constr-amber)';
+  else el.style.color = 'var(--ok-green2)';
+}
+
+var allGroups = [];
+var allAgentOutputs = [];
+var currentView = 'dashboard';
+var sseReady = false;
+var termBodyEl = null;
+var isIdleMode = true;
+
+// ====== TIMERS ======
+(function() {
+  var runStartTs = 0;
+  var agentStartTs = 0;
+  var totalPaused = false;
+  var totalFrozen = false;
+  var totalFrozenVal = '';
+  function fmtElapsed(s) {
+    if (s < 0) s = 0;
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+    if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+    return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  }
+  var runMaxTimeSeconds = 0;
+  window.setRunMaxTimeSeconds = function(s) { runMaxTimeSeconds = s || 0; };
+  function fmtTimeLimit(seconds) {
+    return seconds && seconds > 0 ? fmtElapsed(seconds) : '\u221E';
+  }
+  function renderRunTime(elapsedSeconds) {
+    return fmtElapsed(elapsedSeconds) + ' / ' + fmtTimeLimit(runMaxTimeSeconds);
+  }
+  window.resetRunTimeForNewRun = function(startedAt, maxTimeSecs) {
+    runStartTs = startedAt || (Date.now() / 1000);
+    agentStartTs = Date.now() / 1000;
+    runMaxTimeSeconds = maxTimeSecs || 0;
+    totalPaused = false;
+    totalFrozen = false;
+    totalFrozenVal = '';
+    window._totalTimeFrozen = false;
+    window._timerInitialized = true;
+  };
+  window.resetAgentTime = function() { agentStartTs = Date.now() / 1000; };
+  window.freezeTotalTime = function(totalSecs) {
+    if (window._totalTimeFrozen) return;
+    window._totalTimeFrozen = true;
+    totalFrozen = true;
+    totalFrozenVal = renderRunTime(totalSecs);
+  };
+  setInterval(function() {
+    var totalEl = document.getElementById('live-total-time');
+    if (!totalEl) return;
+    if (totalFrozen) { totalEl.textContent = totalFrozenVal; totalEl.style.color = 'var(--ok-green2)'; return; }
+    if (!runStartTs) { totalEl.textContent = renderRunTime(0); return; }
+    if (totalPaused) return;
+    var secs = (Date.now() / 1000) - runStartTs;
+    totalEl.textContent = renderRunTime(secs);
+    totalEl.style.color = '';
+  }, 250);
+})();
+
+// ====== VIEW SWITCHING ======
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.nav-tab').forEach(function(b) { b.classList.remove('active'); });
+  var btn = document.getElementById('nav-' + view); if (btn) btn.classList.add('active');
+  var colView = document.getElementById('col-view');
+  var panelView = document.getElementById('panel-view');
+  var agentsPanel = document.getElementById('agents-panel');
+  var tasksPanel = document.getElementById('tasks-panel');
+  var configPanel = document.getElementById('config-panel');
+  colView.style.display = 'none';
+  panelView.classList.remove('active');
+  if (agentsPanel) agentsPanel.style.display = 'none';
+  if (tasksPanel) tasksPanel.style.display = 'none';
+  if (configPanel) configPanel.style.display = 'none';
+  if (view === 'dashboard') {
+    colView.style.display = '';
+    updateBoardFromModel();
+  } else if (view === 'agents') {
+    panelView.classList.add('active');
+    if (agentsPanel) agentsPanel.style.display = '';
+    renderAgentsPage();
+  } else if (view === 'tasks') {
+    panelView.classList.add('active');
+    if (tasksPanel) tasksPanel.style.display = '';
+    updateBoardFromModel();
+  } else if (view === 'config') {
+    panelView.classList.add('active');
+    if (configPanel) configPanel.style.display = '';
+    loadConfig();
+  }
+}
+
+function loadConfig() {
+  fetch('/api/qonqrete/config')
+    .then(function(r) { return r.json(); })
+    .then(function(cfg) {
+      var el = document.getElementById('config-content');
+      if (!el) return;
+      var redacted = cfg.redacted_keys || [];
+      var html = '<div><strong>Sources:</strong> ' + JSON.stringify(cfg.sources, null, 2) + '</div>';
+      html += '<div><strong>Redacted keys:</strong> ' + redacted.join(', ') + '</div>';
+      html += '<div><strong>Config:</strong><pre>' + JSON.stringify(cfg.config, null, 2) + '</pre></div>';
+      el.innerHTML = html;
+    })
+    .catch(function(err) {
+      var el = document.getElementById('config-content');
+      if (el) el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--alarm-red);">Failed to load config: ' + err.message + '</div>';
+    });
+}
+
+function setConnectionStatus(status) {
+  var dot = document.getElementById('status-dot');
+  var txt = document.getElementById('conn-text');
+  var bars = document.getElementById('signal-bars');
+  if (status === 'error' || status === 'reconnecting') {
+    if (dot) dot.className = 'status-dot error';
+    if (txt) { txt.textContent = status.toUpperCase(); txt.className = 'conn-status error'; }
+    if (bars) bars.className = 'nav-signal-bars err';
+  } else {
+    if (dot) dot.className = 'status-dot';
+    if (txt) { txt.textContent = 'CONNECTED'; txt.className = 'conn-status'; }
+    if (bars) bars.className = 'nav-signal-bars';
+  }
+}
+
+function addTermLine(ts, type, detail) {
+  var body = document.getElementById('term-body');
+  if (!body) return;
+  var line = document.createElement('div');
+  line.className = 'term-line';
+  var typeColor = 'var(--cyan-accent)';
+  if (type === 'connected' || type === 'system' || type === 'retarget') typeColor = 'var(--ok-green2)';
+  if (type === 'error' || type === 'connection' || type.indexOf('fail') >= 0) typeColor = 'var(--alarm-red)';
+  if (type === 'run.completed' || type.indexOf('done') >= 0) typeColor = 'var(--ok-green2)';
+  line.innerHTML = '<span class="term-ts">' + ts + '</span><span class="term-type" style="color:' + typeColor + '">' + type + '</span>' + detail;
+  body.appendChild(line);
+  body.scrollTop = body.scrollHeight;
+}
+
+function openGroupOverlay(gid) {
+  var overlay = document.getElementById('overlay');
+  var content = document.getElementById('overlay-content');
+  var g = allGroups.find(function(x) { return (x.safe_id || x.id) === gid; });
+  if (!g) return;
+  var html = '<div style="padding:16px"><h3>' + (g.title || gid) + '</h3>';
+  html += '<p style="color:var(--text-muted)">Status: ' + (g.status || '?') + '</p>';
+  html += '<p>' + (g.description || '') + '</p>';
+  html += '<h4 style="margin-top:12px">BriQs</h4>';
+  (g.briqs || []).forEach(function(b) {
+    var icon = {done:'✅',needs_repair:'🔧',failed:'❌',in_progress:'🔄',building:'🔨'}[b.status] || '⏳';
+    html += '<div>' + icon + ' <strong>' + (b.title || '') + '</strong> — ' + (b.status || '?') + '</div>';
+    if (b.description) html += '<div style="color:var(--text-muted);margin-left:24px;font-size:12px">' + b.description + '</div>';
+  });
+  html += '</div>';
+  content.innerHTML = html;
+  overlay.classList.add('active');
+}
+
+document.getElementById('overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('active');
+});
+
+function renderAgentsPage() {
+  var agents = ['qlarifier','instruqtor','construqtor','inspeqtor'];
+  agents.forEach(function(agent) {
+    var pane = document.getElementById('pane-' + agent);
+    if (!pane) return;
+    var body = pane.querySelector('.agent-pane-body');
+    if (!body) return;
+
+    // agent_outputs is a dict keyed by role, not an array
+    var agentData = null;
+    if (allAgentOutputs) {
+      if (Array.isArray(allAgentOutputs)) {
+        // Legacy array format: filter by role
+        var filtered = allAgentOutputs.filter(function(o) { return o.role === agent; });
+        if (filtered.length > 0) agentData = filtered[filtered.length - 1];
+      } else {
+        // Dict/object format: keyed by role
+        agentData = allAgentOutputs[agent];
+      }
+    }
+
+    if (!agentData) {
+      body.textContent = (agentData && agentData.status === 'waiting') ? 'Waiting to start...' : 'No output yet.';
+      return;
+    }
+
+    // Update header with model info
+    var header = pane.querySelector('.agent-pane-header');
+    if (header && agentData.model) {
+      header.textContent = header.textContent.split(' (')[0] + (agentData.model ? ' (' + agentData.model + ')' : '');
+    }
+
+    var lines = agentData.lines || [];
+    if (lines.length === 0) {
+      // Show status if no output lines yet
+      var statusMap = {waiting:'Waiting to start...', active:'Running...', completed:'Completed.'};
+      body.textContent = statusMap[agentData.status] || 'No output yet.';
+      return;
+    }
+
+    // Show last output lines (up to 50)
+    var recentLines = lines.slice(-50);
+    var text = recentLines.map(function(l) {
+      var prefix = l.ts ? '[' + l.ts + '] ' : '';
+      return prefix + (l.text || '');
+    }).join('\n');
+    body.textContent = text;
+    body.scrollTop = body.scrollHeight;
+  });
+}
+
+function updateBoardFromModel() {
+  fetch('/api/qonqrete/read-model?_refresh=' + Date.now())
+    .then(function(r) { return r.json(); })
+    .then(function(model) {
+      if (model && model.build_groups) {
+        allGroups = model.build_groups;
+        refreshTicketBoard(model.build_groups);
+      }
+      if (model && model.metrics) updateMetrics(model.metrics, model.run);
+      if (model && model.run) updateRunState(model.run);
+      if (model && model.agent_outputs) {
+        allAgentOutputs = model.agent_outputs;
+        if (currentView === 'agents') renderAgentsPage();
+      }
+      if (model && model.task) {
+        var origEl = document.getElementById('tasks-original');
+        var enhEl = document.getElementById('tasks-enhanced');
+        if (origEl) origEl.textContent = model.task.original_user_task || model.task.raw_text || 'No original task';
+        if (enhEl) enhEl.textContent = model.task.enhanced_clarified_task || model.task.clarified_text || 'No enhanced task';
+      }
+    }).catch(function(err) {});
+}
+
+function updateMetrics(m, run) {
+  var el;
+  el = document.getElementById('live-total-groups'); if (el && m.total_groups !== undefined) el.textContent = m.total_groups;
+  el = document.getElementById('live-groups-done'); if (el && m.groups_done !== undefined) el.textContent = m.groups_done;
+  el = document.getElementById('live-total-briqs'); if (el && m.total_briqs !== undefined) el.textContent = m.total_briqs;
+  el = document.getElementById('live-briqs-done'); if (el && m.briqs_done !== undefined) el.textContent = m.briqs_done;
+  if (run) {
+    var maxCycles = run.max_cycles_display || ((run.max_cycles && run.max_cycles > 0) ? String(run.max_cycles) : '\u221E');
+    var cycleStr = (run.cycle || 1) + '/' + maxCycles;
+    el = document.getElementById('live-cycle'); if (el) el.textContent = cycleStr;
+    if (run.max_time_seconds && run.max_time_seconds > 0 && typeof window.setRunMaxTimeSeconds === 'function') {
+      window.setRunMaxTimeSeconds(run.max_time_seconds);
+    }
+    setProgressDisplay(m.effective_progress_pct !== undefined && m.effective_progress_pct !== null ? m.effective_progress_pct : (run && run.status === 'done' ? 100 : (m.groups_done || 0) / (m.total_groups || 1) * 100));
+  }
+}
+
+function updateRunState(run) {
+  var statusEl = document.getElementById('live-status');
+  if (statusEl) {
+    statusEl.textContent = run.status || 'running';
+    var sc = {clarifying:'#22d3ee',planning:'#e879f9',building:'#facc15',harnessing:'#fb923c',reviewing:'#c084fc',repairing:'#f87171',done:'var(--ok-green2)',aborted:'var(--alarm-red)',failed:'var(--alarm-red)',running:'var(--constr-amber)',starting:'var(--constr-amber)',started:'var(--constr-amber)'};
+    statusEl.style.color = sc[run.status] || 'var(--text-muted)';
+  }
+  var idEl = document.getElementById('live-run-id'); if (idEl && run.run_id) { idEl.textContent = run.run_id; idEl.title = run.run_id; }
+  var actionEl = document.getElementById('live-action');
+  if (actionEl && run.action_status) {
+    actionEl.textContent = run.action_status;
+    actionEl.className = 'telemetry-val';
+    if (run.action_status === 'FULLY_DONE') actionEl.className = 'telemetry-val good';
+    else if (run.action_status === 'FAILED' || run.action_status === 'BLOCKED') actionEl.className = 'telemetry-val bad';
+  }
+  var agentEl = document.getElementById('live-agent-name');
+  if (agentEl && run.active_agent) {
+    agentEl.textContent = agentDisplay(run.active_agent);
+    agentEl.style.color = agentColor(run.active_agent);
+  }
+  var modelEl = document.getElementById('live-model');
+  if (modelEl && run.model_code) modelEl.textContent = normalizeModelCode(run.model_code);
+  else if (modelEl && run.model) modelEl.textContent = normalizeModelCode(run.model);
+  else if (modelEl && run.active_model) modelEl.textContent = normalizeModelCode(run.active_model);
+  if (run.started_at && run.started_at > 0 && typeof window.resetRunTimeForNewRun === 'function' && !window._timerInitialized) {
+    window.resetRunTimeForNewRun(run.started_at, run.max_time_seconds);
+  }
+  var terminalStates = ['done','aborted','failed'];
+  if (terminalStates.indexOf(run.status) >= 0 && !window._totalTimeFrozen) {
+    if (typeof window.freezeTotalTime === 'function') {
+      window.freezeTotalTime(run.started_at ? ((Date.now() / 1000) - run.started_at) : 0);
+    }
+  }
+  var cycleEl2 = document.getElementById('live-cycle');
+  if (cycleEl2 && run.cycle !== undefined) {
+    var maxCycles2 = run.max_cycles_display || ((run.max_cycles && run.max_cycles > 0) ? String(run.max_cycles) : '\u221E');
+    cycleEl2.textContent = (run.cycle || 1) + '/' + maxCycles2;
+  }
+}
+
+function refreshTicketBoard(groups) {
+  var cols = {
+    'planned': {title:'Planned', statuses:['planned','pending','queued']},
+    'building': {title:'Build/Repair', statuses:['picked_up','building','in_progress','active','repair_needed','needs_repair','repairing','failed_validation']},
+    'review': {title:'Review', statuses:['built','build_done','build_complete','ready_for_review','pending_review','reviewing','review_needed','validating','validation_all_pass','validation_passed','validation_failed','validation_needed','validating_in_progress','inspection','inspecting','needs_review','awaiting_review']},
+    'done': {title:'Done', statuses:['done','completed','merged','finalized','accepted','valid_done','fully_done','success','inspeqtor_approved','approved']}
+  };
+  for (var colKey in cols) {
+    var col = cols[colKey];
+    var colDiv = document.getElementById('col-' + colKey);
+    if (!colDiv) continue;
+    var scrollDiv = colDiv.querySelector('.bay-scroll') || colDiv.querySelector('.col-scroll');
+    if (!scrollDiv) continue;
+    var countSpan = colDiv.querySelector('.bay-header-count') || colDiv.querySelector('.col-count');
+    // Bay header counts are group-ticket counts, not individual briQ counts.
+    var matching = groups.filter(function(g) { return col.statuses.indexOf(g.status) >= 0; });
+    if (countSpan) countSpan.textContent = matching.length;
+    var html = '';
+    if (matching.length === 0) {
+      html = '<div class="empty-bay"><div class="cybersquid-sm" style="width:70px;height:70px"></div><div class="empty-label">No tickets</div></div>';
+      setTimeout(function() {
+        var squids = colDiv.querySelectorAll('.cybersquid-sm');
+        for (var si = 0; si < squids.length; si++) {
+          if (squids[si].querySelector('svg')) continue;
+          var svgSrc = document.getElementById('cybersquid-svg');
+          if (!svgSrc) continue;
+          var svgNS = 'http://www.w3.org/2000/svg';
+          var svg = document.createElementNS(svgNS, 'svg');
+          svg.setAttribute('viewBox', '0 0 56 84');
+          svg.setAttribute('width', '100%');
+          svg.setAttribute('height', '100%');
+          svg.innerHTML = svgSrc.innerHTML;
+          squids[si].innerHTML = '';
+          squids[si].appendChild(svg);
+        }
+      }, 10);
+    } else {
+      matching.forEach(function(g) {
+        var gid = g.safe_id || g.id || '';
+        var gstatus = g.status || 'planned';
+        var weight = g.progress_weight_pct != null ? (' ' + g.progress_weight_pct.toFixed(0) + '%') : '';
+        html += '<div class="group-card" data-group-id="' + gid + '" onclick="openGroupOverlay(\'' + gid + '\')" tabindex="0" role="button"><div class="group-title">' + (g.title || gid) + ' <span class="group-status status-' + gstatus + '">' + gstatus + '</span><span class="group-weight">' + weight + '</span></div>';
+        html += '<div class="group-desc">' + (g.description || '').slice(0, 120) + '</div>';
+        html += '<div class="briq-list">';
+        (g.briqs || []).forEach(function(b) {
+          var s = b.status || '';
+          var icon = {done:'✅',needs_repair:'🔧',failed:'❌',in_progress:'🔄',building:'🔨'}[s] || '⏳';
+          html += '<div class="briq-item"><span class="briq-icon">' + icon + '</span><span class="briq-title">' + (b.title || '') + '</span></div>';
+        });
+        html += '</div></div>';
+      });
+    }
+    scrollDiv.innerHTML = html;
+  }
+}
+
+// ====== IDLE MODE ======
+function setIdleState() {
+  isIdleMode = true;
+  var el;
+  el = document.getElementById('live-run-id'); if (el) el.textContent = '\u2014';
+  el = document.getElementById('live-status'); if (el) { el.textContent = 'idle'; el.style.color = 'var(--text-muted)'; }
+  el = document.getElementById('live-agent-name'); if (el) { el.textContent = '\u2014'; el.style.color = ''; }
+  el = document.getElementById('live-model'); if (el) el.textContent = '\u2014';
+  el = document.getElementById('live-action'); if (el) { el.textContent = 'Waiting for run'; el.className = 'telemetry-val'; }
+  el = document.getElementById('live-cycle'); if (el) el.textContent = '\u2014/\u2014';
+  el = document.getElementById('live-total-time'); if (el) { el.textContent = '00:00'; el.style.color = ''; }
+  setProgressDisplay(0);
+  el = document.getElementById('live-total-groups'); if (el) el.textContent = '—';
+  el = document.getElementById('live-groups-done'); if (el) el.textContent = '0';
+  el = document.getElementById('live-total-briqs'); if (el) el.textContent = '—';
+  el = document.getElementById('live-briqs-done'); if (el) el.textContent = '0';
+  setYoloDisplay(null);
+  ['planned','building','review','done'].forEach(function(c) {
+    var colDiv = document.getElementById('col-' + c);
+    if (colDiv) {
+      var scrollDiv = colDiv.querySelector('.bay-scroll') || colDiv.querySelector('.col-scroll');
+      if (scrollDiv) scrollDiv.innerHTML = '<div class="empty-bay"><div class="cybersquid-sm" style="width:70px;height:70px"></div><div class="empty-label">No tickets</div></div>';
+      var countSpan = colDiv.querySelector('.bay-header-count') || colDiv.querySelector('.col-count');
+      if (countSpan) countSpan.textContent = '0';
+    }
+  });
+  var body = document.getElementById('term-body');
+  if (body) { body.innerHTML = '<div class="placeholder-msg" style="text-align:center;color:var(--text-muted);padding:24px">Connected \u2014 waiting for run</div>'; }
+}
+
+var lastActiveRunId = null;
+function checkIdleMode() {
+  fetch('/api/qonqrete/health')
+    .then(function(r) { return r.json(); })
+    .then(function(h) {
+      if (!h.active_run_root || !h.active_run_id) {
+        if (lastActiveRunId !== null) {
+          lastActiveRunId = null;
+          setIdleState();
+          reconnectSSE();
+        } else if (!isIdleMode) {
+          setIdleState();
+        }
+      } else {
+        isIdleMode = false;
+        if (h.active_run_id !== lastActiveRunId) {
+          lastActiveRunId = h.active_run_id;
+          reconnectSSE();
+          var body = document.getElementById('term-body');
+          if (body) { var placeholder = body.querySelector('.placeholder-msg'); if (placeholder) placeholder.remove(); }
+          if (sseReady) {
+            addTermLine(new Date().toISOString().slice(11,19), 'retarget', 'Switched to run ' + h.active_run_id);
+          }
+          setTimeout(updateBoardFromModel, 200);
+        } else {
+          var body2 = document.getElementById('term-body');
+          if (body2) { var placeholder2 = body2.querySelector('.placeholder-msg'); if (placeholder2) placeholder2.remove(); }
+        }
+      }
+    }).catch(function() {});
+}
+
+function reconnectSSE() {
+  if (window._sseInstance) {
+    window._sseInstance.close();
+    window._sseInstance = null;
+  }
+  sseReady = false;
+  initSSE();
+}
+setTimeout(updateCurrentRunPanel, 600);
+
+// ====== Session Selector ======
+function openSessionSelector() {
+  document.getElementById('session-modal').style.display = 'flex';
+  refreshSessions();
+}
+function closeSessionSelector() {
+  document.getElementById('session-modal').style.display = 'none';
+}
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+function refreshSessions() {
+  var list = document.getElementById('session-list');
+  list.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">Scanning sessions...</div>';
+  fetch('/api/qonqrete/sessions')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.ok || !data.sessions || data.sessions.length === 0) {
+        list.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">No sessions found</div>';
+        return;
+      }
+      var linkedId = data.linked_run_id;
+      var html = '';
+      data.sessions.forEach(function(s) {
+        var isLinked = s.run_id === linkedId;
+        var linkStatus = s.link_status || (isLinked ? 'linked' : (s.selectable !== false ? 'resolved' : 'tmux_only_unresolved'));
+        var selectable = s.selectable !== false;
+        var borderColor = isLinked ? 'var(--constr-amber)' : (linkStatus === 'tmux_only_unresolved' ? '#f59e0b' : 'var(--bevel-edge)');
+        var bgColor = isLinked ? 'var(--metal-mid)' : 'var(--metal-dark)';
+        var stateColors = {running:'#4ade80',starting:'#facc15',started:'#4ade80',finished:'#8b949e',failed:'#ef4444',stale:'#6b7280'};
+        var sc = stateColors[s.state] || '#8b949e';
+        html += '<div style="background:' + bgColor + ';border:1px solid ' + borderColor + ';padding:12px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+        html += '<span style="font-family:monospace;font-size:13px;color:var(--constr-amber);">' + escapeHtml((s.run_id || '').slice(0, 20)) + '</span>';
+        html += '<div style="display:flex;gap:4px;align-items:center;">';
+        if (linkStatus) html += '<span style="font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.2);padding:1px 5px;">' + escapeHtml(linkStatus) + '</span>';
+        html += '<span style="font-size:11px;color:' + sc + ';background:rgba(0,0,0,0.3);padding:2px 8px;">' + escapeHtml(s.state || 'unknown') + '</span>';
+        html += '</div></div>';
+        html += '<div style="font-size:11px;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;">';
+        if (s.runner) html += '<span>Runner: ' + escapeHtml(s.runner) + '</span>';
+        if (s.yolo !== undefined && s.yolo !== null) html += '<span>YOLO: ' + (s.yolo ? 'ON' : 'OFF') + '</span>';
+        if (s.tmux_session) html += '<span>tmux: ' + escapeHtml(s.tmux_session) + '</span>';
+        html += '<span>Source: ' + escapeHtml(s.source || 'unknown') + '</span>';
+        html += '</div>';
+        if (s.run_root) html += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Root: ' + escapeHtml(s.run_root) + '</div>';
+        if (s.events_path) html += '<div style="font-size:10px;color:var(--text-muted);">Events: ' + escapeHtml(s.events_path) + '</div>';
+        if (s.target_path) html += '<div style="font-size:10px;color:var(--text-muted);">Target: ' + escapeHtml(s.target_path) + '</div>';
+        html += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">';
+        if (!isLinked && selectable) {
+          html += '<button data-action="select" data-run-id="' + (s.run_id || '') + '" style="background:var(--constr-orange);color:#000;border:none;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:bold;font-family:var(--font-industrial);text-transform:uppercase;">Select</button>';
+        } else if (isLinked) {
+          html += '<span style="color:var(--constr-amber);font-size:11px;font-weight:bold;">&check; Linked</span>';
+        }
+        if (s.attach_command) {
+          html += '<button data-action="copy" data-copy-value="' + (s.attach_command || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;') + '" style="background:var(--metal-dark);color:var(--text-main);border:1px solid var(--bevel-edge);padding:4px 10px;cursor:pointer;font-size:12px;">Copy Attach</button>';
+        }
+        if (s.run_root) {
+          html += '<button data-action="copy" data-copy-value="' + (s.run_root || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;') + '" style="background:var(--metal-dark);color:var(--text-main);border:1px solid var(--bevel-edge);padding:4px 10px;cursor:pointer;font-size:12px;">Copy Root</button>';
+        }
+        if (s.events_path) {
+          html += '<button data-action="copy" data-copy-value="' + (s.events_path || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;') + '" style="background:var(--metal-dark);color:var(--text-main);border:1px solid var(--bevel-edge);padding:4px 10px;cursor:pointer;font-size:12px;">Copy Events</button>';
+        }
+        if (linkStatus === 'tmux_only_unresolved') {
+          html += '<button data-action="adopt" data-tmux="' + (s.tmux_session || '') + '" style="background:#f59e0b;color:#000;border:none;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:bold;font-family:var(--font-industrial);text-transform:uppercase;">Adopt</button>';
+        }
+        html += '</div></div>';
+      });
+      list.innerHTML = html;
+    }).catch(function(e) {
+      list.innerHTML = '<div style="color:var(--alarm-red);text-align:center;padding:20px;">Error loading sessions</div>';
+    });
+}
+
+function selectSession(runId) {
+  fetch('/api/qonqrete/sessions/select', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({run_id: runId})
+  }).then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        closeSessionSelector();
+        reconnectSSE();
+        setTimeout(updateBoardFromModel, 200);
+        setTimeout(checkIdleMode, 500);
+        addTermLine(new Date().toISOString().slice(11,19), 'system', 'Switched to run ' + runId);
+      } else {
+        alert('Failed to switch: ' + (data.message || 'unknown error'));
+      }
+    }).catch(function(e) {
+      alert('Error switching session');
+    });
+}
+
+function openAdoptForm(tmuxSession) {
+  var runRoot = prompt('Enter the run_root path for tmux session ' + tmuxSession + ':');
+  if (!runRoot) return;
+  var eventsPath = prompt('Enter events_path (default: run_root/events.jsonl):', runRoot + '/events.jsonl');
+  if (!eventsPath) return;
+  var targetPath = prompt('Enter target_path (optional):', '');
+  var taskPath = prompt('Enter task_path (optional):', '');
+  var payload = {
+    tmux_session: tmuxSession,
+    run_root: runRoot,
+    events_path: eventsPath
+  };
+  if (targetPath) payload.target_path = targetPath;
+  if (taskPath) payload.task_path = taskPath;
+  fetch('/api/qonqrete/sessions/adopt', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        closeSessionSelector();
+        reconnectSSE();
+        setTimeout(updateBoardFromModel, 200);
+        setTimeout(checkIdleMode, 500);
+        addTermLine(new Date().toISOString().slice(11,19), 'system', 'Adopted tmux session: ' + tmuxSession);
+        alert('Session adopted successfully!');
+      } else {
+        alert('Adopt failed: ' + (data.message || 'unknown error'));
+      }
+    }).catch(function(e) {
+      alert('Error adopting session');
+    });
+}
+
+function copyToClipboard(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  addTermLine(new Date().toISOString().slice(11,19), 'system', 'Copied: ' + text.slice(0, 60));
+}
+
+// ====== Current Run Panel ======
+// ====== Current Run helpers ======
+function isUsefulText(v) {
+  if (v === null || v === undefined) return false;
+  var s = String(v).trim();
+  if (!s) return false;
+  return ['—', '-', '--', '---', 'unknown', 'Unknown', 'UNKNOWN', 'null', 'undefined'].indexOf(s) < 0;
+}
+
+function setTextOrHide(id, text, prefix) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (!isUsefulText(text)) {
+    el.textContent = '';
+    el.style.display = 'none';
+    return;
+  }
+  el.textContent = (prefix || '') + text;
+  el.style.display = '';
+}
+
+function setYoloDisplay(value) {
+  var el = document.getElementById('live-yolo');
+  if (!el) return;
+  if (value === true) {
+    el.textContent = 'ON';
+    el.style.color = 'var(--ok-green2)';
+  } else if (value === false) {
+    el.textContent = 'OFF';
+    el.style.color = 'var(--text-muted)';
+  } else {
+    el.textContent = '—';
+    el.style.color = 'var(--text-muted)';
+  }
+}
+
+function updateCurrentRunPanel() {
+  fetch('/api/qonqrete/current-run')
+    .then(function(r) { return r.json(); })
+    .then(function(cr) {
+      var panel = document.getElementById('current-run-panel');
+      if (!panel) return;
+
+      if (!cr.exists) {
+        panel.style.display = 'none';
+        setYoloDisplay(null);
+        return;
+      }
+
+      panel.style.display = '';
+
+      if (cr.run_id) {
+        var runEl = document.getElementById('live-run-id');
+        if (runEl) {
+          runEl.textContent = cr.run_id;
+          runEl.title = cr.run_id;
+        }
+      }
+
+      setYoloDisplay(cr.yolo);
+    }).catch(function() {});
+}
+
+var _origCheckIdleMode = checkIdleMode;
+checkIdleMode = function() {
+  fetch('/api/qonqrete/health')
+    .then(function(r) { return r.json(); })
+    .then(function(h) {
+      if (!h.active_run_root || !h.active_run_id) {
+        if (lastActiveRunId !== null) {
+          lastActiveRunId = null;
+          setIdleState();
+          reconnectSSE();
+        } else if (!isIdleMode) {
+          setIdleState();
+        }
+      } else {
+        isIdleMode = false;
+        if (h.active_run_id !== lastActiveRunId) {
+          lastActiveRunId = h.active_run_id;
+          reconnectSSE();
+          var body = document.getElementById('term-body');
+          if (body) { var placeholder = body.querySelector('.placeholder-msg'); if (placeholder) placeholder.remove(); }
+          if (sseReady) {
+            addTermLine(new Date().toISOString().slice(11,19), 'retarget', 'Switched to run ' + h.active_run_id);
+          }
+          setTimeout(updateBoardFromModel, 200);
+        }
+      }
+    }).catch(function() {});
+};
+
+// ====== SSE ======
+function initSSE() {
+  if (window._sseInstance) {
+    window._sseInstance.close();
+  }
+  var es = new EventSource('/api/qonqrete/events/stream');
+  window._sseInstance = es;
+  var reconnecting = false;
+
+  es.onopen = function() {
+    setConnectionStatus('connected');
+    if (!sseReady) {
+      sseReady = true;
+      addTermLine(new Date().toISOString().slice(11,19), 'connected', 'SSE stream connected');
+    }
+    checkIdleMode();
+    setTimeout(updateBoardFromModel, 100);
+  };
+
+  es.onerror = function() {
+    setConnectionStatus('reconnecting');
+    sseReady = false;
+    if (!reconnecting) { addTermLine('--:--:--', 'connection', 'SSE connection lost, retrying...'); reconnecting = true; }
+    setTimeout(function() { reconnecting = false; }, 5000);
+  };
+
+  var _boardDebounce = null;
+  function debouncedBoardRefresh() {
+    if (_boardDebounce) clearTimeout(_boardDebounce);
+    _boardDebounce = setTimeout(function() { updateBoardFromModel(); }, 300);
+  }
+
+  es.onmessage = function(e) {
+    var data;
+    try { data = JSON.parse(e.data); } catch(err) { return; }
+    var evtType = data.type || 'message';
+    var ts = new Date((data.ts || 0) * 1000).toISOString().slice(11, 19);
+    var detail = '';
+    var keyFields = ['message','text','name','role','model','status','score','cycle','exit_code','reason','action_status','verdict'];
+    for (var i = 0; i < keyFields.length; i++) {
+      var k = keyFields[i];
+      if (data[k] !== undefined) {
+        var v = data[k]; if (typeof v === 'object') v = JSON.stringify(v).slice(0, 80); else v = String(v).slice(0, 80);
+        detail += k + '=' + v + ' ';
+      }
+    }
+    if (!detail) {
+      for (var k2 in data) {
+        if (['ts','run_id','type'].indexOf(k2) >= 0) continue;
+        var v2 = data[k2]; if (typeof v2 === 'object') v2 = JSON.stringify(v2).slice(0, 80); else v2 = String(v2).slice(0, 80);
+        detail += k2 + '=' + v2 + ' '; if (detail.length > 200) break;
+      }
+    }
+    if (sseReady) addTermLine(ts, evtType, detail);
+
+    switch (evtType) {
+      case 'active_agent_changed': {
+        if (data.role) {
+          var el = document.getElementById('live-agent-name');
+          if (el) { el.textContent = agentDisplay(data.role); el.style.color = agentColor(data.role); }
+        }
+        if (data.model) {
+          var el2 = document.getElementById('live-model'); if (el2) el2.textContent = normalizeModelCode(data.model);
+        }
+        if (typeof window.resetAgentTime === 'function') window.resetAgentTime();
+        break;
+      }
+      case 'action_status_changed': {
+        if (data.action_status) {
+          var ael = document.getElementById('live-action');
+          if (ael) {
+            ael.textContent = data.action_status;
+            ael.className = 'telemetry-val';
+            if (data.action_status === 'FULLY_DONE') ael.className = 'telemetry-val good';
+            else if (data.action_status === 'FAILED' || data.action_status === 'BLOCKED') ael.className = 'telemetry-val bad';
+          }
+        }
+        break;
+      }
+      case 'run.completed': {
+        var sel = document.getElementById('live-status'); if (sel) { sel.textContent = 'done'; sel.style.color = 'var(--ok-green2)'; }
+        setProgressDisplay(100);
+        var ael2 = document.getElementById('live-action'); if (ael2) { ael2.textContent = 'FULLY_DONE'; ael2.className = 'telemetry-val good'; }
+        break;
+      }
+      case 'run.aborted': {
+        var sel2 = document.getElementById('live-status'); if (sel2) { sel2.textContent = 'aborted'; sel2.style.color = 'var(--alarm-red)'; }
+        break;
+      }
+      case 'run.failed': {
+        var sel3 = document.getElementById('live-status'); if (sel3) { sel3.textContent = 'failed'; sel3.style.color = 'var(--alarm-red)'; }
+        break;
+      }
+      case 'run.started': {
+        if (typeof window.resetRunTimeForNewRun === 'function') window.resetRunTimeForNewRun(data.ts || (Date.now() / 1000), data.max_time_seconds || 0);
+        var rel;
+        rel = document.getElementById('live-status'); if (rel) { rel.textContent = 'running'; rel.style.color = 'var(--constr-amber)'; }
+        setProgressDisplay(0);
+        rel = document.getElementById('live-cycle'); if (rel) { var mc2 = data.max_cycles_display || ((data.max_cycles && data.max_cycles > 0) ? String(data.max_cycles) : '\u221E'); rel.textContent = '1/' + mc2; }
+        if (data.yolo !== undefined && typeof setYoloDisplay === 'function') setYoloDisplay(data.yolo);
+        rel = document.getElementById('live-action'); if (rel) { rel.textContent = 'Preparing'; rel.className = 'telemetry-val waiting'; }
+        rel = document.getElementById('live-total-groups'); if (rel) rel.textContent = '—';
+        rel = document.getElementById('live-groups-done'); if (rel) rel.textContent = '0';
+        rel = document.getElementById('live-total-briqs'); if (rel) rel.textContent = '—';
+        rel = document.getElementById('live-briqs-done'); if (rel) rel.textContent = '0';
+        if (data.run_id) { rel = document.getElementById('live-run-id'); if (rel) { rel.textContent = data.run_id; rel.title = data.run_id; } }
+        ['planned','building','review','done'].forEach(function(c) {
+          var colDiv = document.getElementById('col-' + c);
+          if (colDiv) {
+            var scrollDiv = colDiv.querySelector('.bay-scroll') || colDiv.querySelector('.col-scroll');
+            if (scrollDiv) scrollDiv.innerHTML = '<div class="empty-bay"><div class="cybersquid-sm" style="width:70px;height:70px"></div><div class="empty-label">No tickets</div></div>';
+            var countSpan = colDiv.querySelector('.bay-header-count') || colDiv.querySelector('.col-count');
+            if (countSpan) countSpan.textContent = '0';
+          }
+        });
+        sseReady = true;
+        var body = document.getElementById('term-body');
+        if (body) { var placeholder = body.querySelector('.placeholder-msg'); if (placeholder) placeholder.remove(); }
+        setTimeout(function() { updateBoardFromModel(); }, 300);
+        break;
+      }
+    }
+    debouncedBoardRefresh();
+  };
+
+  setInterval(function() { checkIdleMode(); updateBoardFromModel(); updateCurrentRunPanel(); }, 2000);
+  setTimeout(function() { checkIdleMode(); updateBoardFromModel(); }, 500);
+}
+initSSE();
+setTimeout(updateCurrentRunPanel, 600);
+
+// ====== QONQRETE PHRASE TICKER ======
+var QONQRETE_BANNER_PHRASES = [
+  "Controlling the void since HTTP 404.",
+  "We don't write apps. We pour them into production.",
+  "Autonomy mixed fresh, reinforced with bad intentions.",
+  "From vague prompt to hardened QonQrete\u2014no adult supervision required.",
+  "Release the cybersquid. The backlog owes us money.",
+  "Blueprints are temporary. Fully autonomous construQtion is forever.",
+  "Built in the dark. Inspected under harsher lighting.",
+  "Your requirements entered the yard. Something stronger came back.",
+  "Measure twice. Spawn agents. Demolish assumptions.",
+  "Turning TODO graveyards into fully operational infrastructure.",
+  "No cowboy coding\u2014only industrial-grade squid wrangling.",
+  "We monkeypatch reality, then make inspeQtor review the diff.",
+  "Concrete logic. Reinforced prompts. Questionable machinery.",
+  "The cybersquid reviewed your architecture and is quietly disappointed.",
+  "One prompt in. Entire application out. Sanity sold separately.",
+  "Autonomous by design. Unreasonably QonQrete by nature.",
+  "Built from tickets, caffeine, and unresolved cosmic pressure.",
+  "We don't fight technical debt. We encase it in load-bearing QonQrete.",
+  "Constructing tomorrow with tools that probably shouldn't be awake.",
+  "Fully done means FULLY_DONE. Anything else goes back into the mixer."
+];
+
+function initQonQreteTicker() {
+  var track = document.getElementById('transmission-track');
+  var ticker = document.getElementById('qonqrete-ticker');
+  if (!track || !ticker) return;
+
+  var phrases = QONQRETE_BANNER_PHRASES;
+  var phraseIndex = 0;
+  var currentItem = null;
+  var animationTimer = null;
+  var paused = false;
+
+  // Clear any existing content
+  track.innerHTML = '';
+
+  // Create a single phrase element that we'll reuse
+  currentItem = document.createElement('span');
+  currentItem.className = 'phrase-item phrase-solo';
+  track.appendChild(currentItem);
+
+  // Insert keyframes if not already present
+  if (!document.getElementById('ticker-keyframes')) {
+    var styleSheet = document.createElement('style');
+    styleSheet.id = 'ticker-keyframes';
+    styleSheet.textContent =
+      '@keyframes scrollPhraseIn{0%{transform:translateX(100%)}100%{transform:translateX(0)}}' +
+      '@keyframes scrollPhraseOut{0%{transform:translateX(0)}100%{transform:translateX(calc(-100% - 40px))}}';
+    document.head.appendChild(styleSheet);
+  }
+
+  // Add solo-phrase styling if not already present
+  if (!document.getElementById('ticker-solo-style')) {
+    var soloStyle = document.createElement('style');
+    soloStyle.id = 'ticker-solo-style';
+    soloStyle.textContent =
+      '.phrase-solo{position:absolute;top:50%;right:0;transform:translateY(-50%);}' +
+      '.phrase-solo.entering{animation:scrollPhraseIn 0.6s ease-out forwards;}' +
+      '.phrase-solo.holding{transform:translateX(0) translateY(-50%);}' +
+      '.phrase-solo.exiting{animation:scrollPhraseOut 10s linear forwards;}';
+    document.head.appendChild(soloStyle);
+  }
+
+  function showNextPhrase() {
+    if (paused) {
+      // Retry after a short delay
+      animationTimer = setTimeout(showNextPhrase, 200);
+      return;
+    }
+
+    // Set the next phrase
+    currentItem.textContent = phrases[phraseIndex];
+    phraseIndex = (phraseIndex + 1) % phrases.length;
+
+    // Reset position: start off-screen right, invisible
+    currentItem.classList.remove('entering', 'holding', 'exiting');
+    currentItem.style.opacity = '1';
+
+    // Phase 1: Enter from right
+    void currentItem.offsetWidth; // force reflow
+    currentItem.classList.add('entering');
+
+    // After entering (0.6s), hold briefly then exit
+    animationTimer = setTimeout(function() {
+      if (paused) {
+        animationTimer = setTimeout(function() {
+          currentItem.classList.remove('entering');
+          currentItem.classList.add('holding');
+          startExit();
+        }, 200);
+        return;
+      }
+
+      currentItem.classList.remove('entering');
+      currentItem.classList.add('holding');
+
+      // Hold for readability (1.2s) then start exiting
+      animationTimer = setTimeout(function() {
+        if (paused) {
+          animationTimer = setTimeout(startExit, 200);
+          return;
+        }
+        startExit();
+      }, 1200);
+    }, 600);
+  }
+
+  function startExit() {
+    currentItem.classList.remove('holding');
+    void currentItem.offsetWidth;
+    currentItem.classList.add('exiting');
+
+    // After exiting (10s for slow scroll), show next
+    animationTimer = setTimeout(function() {
+      if (paused) {
+        animationTimer = setTimeout(function() {
+          currentItem.classList.remove('exiting');
+          showNextPhrase();
+        }, 200);
+        return;
+      }
+      currentItem.classList.remove('exiting');
+      showNextPhrase();
+    }, 10000);
+  }
+
+  // Pause on hover
+  ticker.addEventListener('mouseenter', function() {
+    paused = true;
+    if (currentItem) {
+      currentItem.style.animationPlayState = 'paused';
+    }
+  });
+  ticker.addEventListener('mouseleave', function() {
+    paused = false;
+    if (currentItem) {
+      currentItem.style.animationPlayState = 'running';
+    }
+  });
+  ticker.addEventListener('focusin', function() {
+    paused = true;
+    if (currentItem) {
+      currentItem.style.animationPlayState = 'paused';
+    }
+  });
+  ticker.addEventListener('focusout', function() {
+    paused = false;
+    if (currentItem) {
+      currentItem.style.animationPlayState = 'running';
+    }
+  });
+
+  // Start the cycle
+  showNextPhrase();
+}
+// ====== DECK RESIZER ======
+function calculateDeckResizeBounds() {
+  var shell = document.querySelector('.qq-industrial-shell');
+  if (!shell) return {min: 130, max: 600};
+  var shellHeight = shell.clientHeight;
+  // Sum heights of fixed children
+  var fixedHeight = 0;
+  var children = shell.children;
+  for (var i = 0; i < children.length; i++) {
+    var c = children[i];
+    if (c.classList.contains('workyard-main') || c.classList.contains('bottom-instrument-deck') || c.id === 'deck-resizer') continue;
+    if (c.offsetHeight > 0 && getComputedStyle(c).display !== 'none') {
+      fixedHeight += c.offsetHeight;
+    }
+  }
+  var resizerH = document.getElementById('deck-resizer');
+  var rH = resizerH ? resizerH.offsetHeight : 8;
+  var minWorkyard = 180;
+  var minDeck = 130;
+  var availableH = shellHeight - fixedHeight - rH;
+  var maxDeck = Math.max(minDeck, availableH - minWorkyard);
+  return {min: minDeck, max: maxDeck};
+}
+
+function applyBottomDeckHeight(h) {
+  var bounds = calculateDeckResizeBounds();
+  h = Math.max(bounds.min, Math.min(bounds.max, h));
+  if (isNaN(h) || h <= 0) h = 200;
+  h = Math.round(h);
+  document.documentElement.style.setProperty('--bottom-deck-height', h + 'px');
+  // Update ARIA
+  var resizer = document.getElementById('deck-resizer');
+  if (resizer) {
+    resizer.setAttribute('aria-valuemin', bounds.min);
+    resizer.setAttribute('aria-valuemax', bounds.max);
+    resizer.setAttribute('aria-valuenow', h);
+  }
+  // Scale big cybersquid area
+  var bigArea = document.querySelector('.big-mascot-area');
+  if (bigArea) {
+    var scaledW = Math.max(80, Math.min(180, h * 0.9));
+    bigArea.style.width = scaledW + 'px';
+  }
+  return h;
+}
+
+function storeBottomDeckHeight(h) {
+  try {
+    localStorage.setItem('qonqrete.bottomDeckHeight.v1', String(Math.round(h)));
+  } catch(e) {}
+}
+
+function loadStoredBottomDeckHeight() {
+  try {
+    var raw = localStorage.getItem('qonqrete.bottomDeckHeight.v1');
+    if (raw !== null) {
+      var v = parseFloat(raw);
+      if (!isNaN(v) && isFinite(v) && v > 0 && v < 10000) {
+        return v;
+      }
+    }
+  } catch(e) {}
+  return 200;
+}
+
+function initDeckResizer() {
+  var resizer = document.getElementById('deck-resizer');
+  if (!resizer) return;
+
+  // Restore saved height
+  var savedH = loadStoredBottomDeckHeight();
+  var appliedH = applyBottomDeckHeight(savedH);
+
+  // Set up pointer events for drag
+  var startY, startHeight;
+
+  function onPointerDown(e) {
+    if (e.button !== 0 && e.pointerType === 'mouse') return; // primary only for mouse
+    e.preventDefault();
+    startY = e.clientY;
+    startHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-deck-height')) || 200;
+    resizer.setPointerCapture(e.pointerId);
+    resizer.classList.add('dragging');
+    document.body.classList.add('deck-resizing');
+  }
+
+  function onPointerMove(e) {
+    if (!resizer.hasPointerCapture(e.pointerId)) return;
+    var dy = startY - e.clientY; // upward = positive
+    var newH = startHeight + dy;
+    applyBottomDeckHeight(newH);
+  }
+
+  function onPointerUp(e) {
+    if (!resizer.hasPointerCapture && !resizer.classList.contains('dragging')) return;
+    resizer.classList.remove('dragging');
+    document.body.classList.remove('deck-resizing');
+    try { resizer.releasePointerCapture(e.pointerId); } catch(ex) {}
+    var finalH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-deck-height')) || 200;
+    storeBottomDeckHeight(finalH);
+  }
+
+  resizer.addEventListener('pointerdown', onPointerDown);
+  resizer.addEventListener('pointermove', onPointerMove);
+  resizer.addEventListener('pointerup', onPointerUp);
+  resizer.addEventListener('pointercancel', onPointerUp);
+  resizer.addEventListener('lostpointercapture', onPointerUp);
+
+  // Keyboard accessibility
+  resizer.addEventListener('keydown', function(e) {
+    var current = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-deck-height')) || 200;
+    var step = e.shiftKey ? 40 : 14;
+    var newH = current;
+    if (e.key === 'ArrowUp') { newH = current + step; e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { newH = current - step; e.preventDefault(); }
+    else if (e.key === 'Home') { var b = calculateDeckResizeBounds(); newH = b.min; e.preventDefault(); }
+    else if (e.key === 'End') { var b = calculateDeckResizeBounds(); newH = b.max; e.preventDefault(); }
+    else return;
+    newH = applyBottomDeckHeight(newH);
+    storeBottomDeckHeight(newH);
+  });
+
+  // Double-click resets to default
+  resizer.addEventListener('dblclick', function(e) {
+    e.preventDefault();
+    applyBottomDeckHeight(200);
+    storeBottomDeckHeight(200);
+  });
+
+  // Re-clamp on window resize
+  var resizeTimeout;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(function() {
+      var current = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-deck-height')) || 200;
+      applyBottomDeckHeight(current);
+    }, 100);
+  });
+
+  // Observe current-run panel changes
+  var runPanel = document.getElementById('current-run-panel');
+  if (runPanel) {
+    var observer = new MutationObserver(function() {
+      var current = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-deck-height')) || 200;
+      applyBottomDeckHeight(current);
+    });
+    observer.observe(runPanel, {attributes: true, attributeFilter: ['style']});
+  }
+}
+
+// Initialize after DOM is ready
+initQonQreteTicker();
+initDeckResizer();
+
+</script>
+
+<!-- Session Selector Modal -->
+<div id="session-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(5,5,5,0.85);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--metal-dark);border:2px solid var(--constr-orange);max-width:700px;width:90%;max-height:80vh;overflow-y:auto;padding:20px;color:var(--text-main);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;font-size:18px;color:var(--constr-amber);font-family:var(--font-industrial);text-transform:uppercase;letter-spacing:1px;">QonQrete Sessions</h2>
+      <button onclick="closeSessionSelector()" style="background:none;border:none;color:var(--text-muted);font-size:24px;cursor:pointer;">&times;</button>
+    </div>
+    <div id="session-list" style="display:flex;flex-direction:column;gap:8px;">Loading sessions...</div>
+<script>
+(function() {
+  var list = document.getElementById('session-list');
+  if (list) {
+    list.addEventListener('click', function(e) {
+      var target = e.target;
+      while (target && target !== list) {
+        if (target.tagName === 'BUTTON') {
+          var action = target.getAttribute('data-action');
+          if (action === 'select') {
+            var runId = target.getAttribute('data-run-id');
+            if (runId) selectSession(runId);
+          } else if (action === 'copy') {
+            var val = target.getAttribute('data-copy-value');
+            if (val) copyToClipboard(val);
+          } else if (action === 'adopt') {
+            var tmuxName = target.getAttribute('data-tmux');
+            if (tmuxName) openAdoptForm(tmuxName);
+          }
+          break;
+        }
+        target = target.parentElement;
+      }
+    });
+  }
+})();
+</script>
+    <div style="margin-top:12px;text-align:right;">
+      <button onclick="refreshSessions()" style="background:var(--metal-dark);color:var(--text-main);border:1px solid var(--bevel-edge);padding:6px 14px;cursor:pointer;font-family:var(--font-industrial);text-transform:uppercase;">Refresh</button>
+      <button onclick="closeSessionSelector()" style="background:var(--metal-dark);color:var(--text-muted);border:1px solid var(--bevel-edge);padding:6px 14px;cursor:pointer;margin-left:8px;font-family:var(--font-industrial);text-transform:uppercase;">Close</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

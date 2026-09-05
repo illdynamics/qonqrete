@@ -1,0 +1,2 @@
+[console_scripts]
+qq = qq.cli:main

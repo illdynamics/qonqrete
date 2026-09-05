@@ -1,0 +1,15 @@
+{
+  "check_1_server_binds_127.0.0.1:31337": "PASS",
+  "check_2_kanban_columns": ["Planned","Build/Repair","Review","Done"],
+  "check_2_status": "PASS",
+  "check_3_live_progress": "0% (updates via read-model)",
+  "check_3_status": "PASS",
+  "check_4_sessions_fallback": "source=local-fallback, events_exists=true, newest_run_id=20260811-141516-4564a26e",
+  "check_4_status": "PASS",
+  "check_5_agents_2x2_grid": "dict-format agent_outputs, qlarifier=active, instruqtor/construqtor/inspeqtor=waiting",
+  "check_5_status": "PASS",
+  "check_6_open_browser": "process.py uses local_url=http://{display_host}:{port} with display_host=127.0.0.1; web.qonqrete.sh absent from served dashboard HTML",
+  "check_6_status": "PASS",
+  "dashboard_url_actual": "http://127.0.0.1:31337",
+  "run_root": "/x/nuxel/.qq/runs/20260811-141516-4564a26e"
+}

@@ -1,6 +1,0 @@
-# Optional Qompressor fallback support for unsupported parseable languages.
-# Not shipped in the default environment on purpose.
-# Install manually when you want real tree-sitter fallback locally:
-#   python -m pip install -r requirements-optional-tree-sitter.txt
-
-tree-sitter-language-pack

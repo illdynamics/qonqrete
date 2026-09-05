@@ -1,0 +1,58 @@
+# Single source of truth for provider capabilities. Runtime, docs, and any
+# future IDE integration should all read this instead of each guessing
+# independently — that kind of drift (README vs VSCode defaults vs
+# IntelliJ notes vs actual config.yaml all disagreeing) is exactly what we
+# found in QonQrete v1.
+
+providers:
+  mock:
+    kind: cli
+    status: implemented
+    supports_sessions: false
+    supports_interactive_tui: false
+    supports_exec_mode: true
+    supports_tools: true
+    supports_thinking_mode: false
+    default_model: mock
+    models:
+      - mock
+    notes: "Offline test adapter — zero API calls. Use with --dry-run."
+
+  codeseeq:
+    kind: cli
+    status: implemented
+    supports_sessions: true
+    supports_interactive_tui: true   # exists upstream, deliberately unused — see qq/adapters/parameters.py
+    supports_exec_mode: true
+    supports_tools: true
+    supports_thinking_mode: true
+    default_model: deepseek-v4-flash
+    models:
+      - deepseek-v4-flash
+      - deepseek-v4-flash-thinking
+      - deepseek-v4-pro
+      - deepseek-v4-pro-thinking
+    repo: https://github.com/illdynamics/codeseeq
+
+  jamini:
+    kind: cli
+    status: stub
+    notes: "Intended Gemini-backed sibling to codeseeq. Wire up the same way (qq/adapters/parameters.py is the pattern)."
+
+  jeanclaude:
+    kind: cli
+    status: stub
+    notes: "Intended Claude-Code-backed sibling. Same pattern."
+
+  codex:
+    kind: cli
+    status: stub
+    notes: "Raw upstream Codex CLI, for people without a DeepSeek key."
+
+  gemini-cli:
+    kind: cli
+    status: stub
+
+  claude-code:
+    kind: cli
+    status: stub
