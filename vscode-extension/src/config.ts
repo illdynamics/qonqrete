@@ -177,7 +177,7 @@ export async function listProviders(): Promise<ProviderInfo[]> {
         let current = '';
         let currentInfo: any = null;
         for (const line of lines) {
-            const m = line.match(/^  ([A-Za-z0-9_-]+)\s*:\s*$/);
+            const m = line.match(/^ {2}([A-Za-z0-9_-]+)\s*:\s*$/);
             if (m) {
                 if (current && currentInfo) {
                     result.push({ name: current, ...currentInfo });
