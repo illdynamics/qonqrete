@@ -46,7 +46,7 @@ _EXCLUDE_PATTERNS = [
     r"\.pytest_cache/",
     r"\.ruff_cache/",
     r"\.mypy_cache/",
-    r"qq-tui/target/",
+    r"qq/tui/target/",
     r"qq/web/target/",
     r"(^|/)target/",
     r"qonqrete_cybersquid",
@@ -54,6 +54,8 @@ _EXCLUDE_PATTERNS = [
     r"\.qq/worktrees/",
     r"\.qq/image-tests/",
     r"\.codeseeq/",
+    r"\.venv/",
+    r"^ide\.md$",
     r"\.env$",
     r"dist/",
     r"\.hypothesis/",
@@ -104,7 +106,7 @@ _TREE_UPLOAD_BANNED_DIRS = [
 
 # Banned in archive (MUST NOT appear in any zip entry path component)
 _ARCHIVE_BANNED_NAMES = {
-    ".git", "__MACOSX", ".DS_Store", ".env", ".codeseeq",
+    ".git", "__MACOSX", ".DS_Store", ".env", ".codeseeq", ".venv",
     ".qq", "__pycache__", ".pytest_cache", ".ruff_cache",
     ".mypy_cache", ".hypothesis", ".egg-info", "*.egg-info",
     "qq.egg-info",
@@ -414,7 +416,7 @@ def build(root: str = None, dist_dir: str = None) -> str:
             fpath = os.path.join(dirpath, fname)
             rel = os.path.relpath(fpath, build_dir)
             if (fname.endswith(".sh")
-                    and (rel.startswith("scripts/") or fname == "qq-install.sh")):
+                    and (rel.startswith("scripts/") or fname == "install.sh")):
                 os.chmod(fpath, 0o755)
 
     # Create zip

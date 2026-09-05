@@ -4227,6 +4227,7 @@ function initSSE() {
         if (data.model) {
           var el2 = document.getElementById('live-model'); if (el2) el2.textContent = modelDisplayBracketed(data.model);
         }
+        if (window.qonqreteStateOverlay) window.qonqreteStateOverlay(data.role === 'instruqtor' ? 'Planning' : (data.role === 'construqtor' ? 'Building' : 'Clarifying'), data.role || '');
         // A10: reset the Agent timer on every active-agent handoff. Also sync
         // lastHandoffAgent below so the subsequent poll path does not double-reset.
         if (typeof window.resetAgentTime === 'function') window.resetAgentTime();
@@ -4247,7 +4248,7 @@ function initSSE() {
             if (liveStatus === 'FULLY_DONE') ael.className = 'telemetry-val good';
             else if (liveStatus === 'FAILED' || liveStatus === 'BLOCKED') ael.className = 'telemetry-val bad';
           }
-          if (typeof setActionStatus === 'function') setActionStatus(data.action_status);
+          if (typeof setActionStatus === 'function') setActionStatus(data.action_status); if (window.qonqreteStateOverlay) window.qonqreteStateOverlay(data.action_status, data.role || data.agent || '');
         }
         break;
       }
@@ -4273,7 +4274,7 @@ function initSSE() {
         // A15: freeze Total + Agent at the terminal FULLY_DONE moment (idempotent guard inside freezeTotalTime).
         if (typeof window.freezeTotalTime === 'function') window.freezeTotalTime(null);
         if (typeof window.stopMascotLoader === 'function') window.stopMascotLoader();
-        if (typeof setActionStatus === 'function') setActionStatus('FULLY_DONE');
+        if (typeof setActionStatus === 'function') setActionStatus('FULLY_DONE'); if (window.qonqreteStateOverlay) window.qonqreteStateOverlay('FULLY_DONE','');
         break;
       }
       case 'run.aborted': {
@@ -4306,7 +4307,7 @@ function initSSE() {
         rel = document.getElementById('live-cycle'); if (rel) { var mc2 = data.max_cycles_display || ((data.max_cycles && data.max_cycles > 0) ? String(data.max_cycles) : '\u221E'); rel.textContent = '1/' + mc2; }
         if (data.yolo !== undefined && typeof setYoloDisplay === 'function') setYoloDisplay(data.yolo);
         rel = document.getElementById('live-action'); if (rel) { rel.textContent = 'Preparing'; rel.className = 'telemetry-val waiting'; }
-        if (typeof setActionStatus === 'function') setActionStatus('Preparing');
+        if (typeof setActionStatus === 'function') setActionStatus('Preparing'); if (window.qonqreteStateOverlay) window.qonqreteStateOverlay('Preparing','qlarifier');
         rel = document.getElementById('live-total-groups'); if (rel) rel.textContent = '—';
         rel = document.getElementById('live-groups-done'); if (rel) rel.textContent = '0';
         rel = document.getElementById('live-total-briqs'); if (rel) rel.textContent = '—';
@@ -4791,6 +4792,39 @@ initDeckResizer();
     </div>
   </div>
 </div>
+
+<style>
+#qonqrete-state-overlay{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;
+background:rgba(5,7,8,.88);backdrop-filter:blur(5px);text-align:center}
+#qonqrete-state-overlay .qso-card{padding:34px 44px;border:1px solid var(--bevel-edge);border-radius:18px;background:var(--bg-panel);
+box-shadow:0 0 50px rgba(0,0,0,.7);min-width:min(520px,88vw)}
+#qonqrete-state-overlay img{width:150px;height:150px;object-fit:contain;display:block;margin:0 auto 18px}
+#qonqrete-state-overlay h2{font-family:var(--font-industrial);font-size:28px;letter-spacing:1px;color:var(--constr-amber);margin-bottom:8px}
+#qonqrete-state-overlay p{color:var(--text-muted);font-size:15px}
+#qonqrete-state-overlay.done h2{color:var(--ok-green2)}
+</style>
+<div id="qonqrete-state-overlay" aria-live="polite">
+ <div class="qso-card"><img src="/qonqrete-bottom-right.jpg" alt="QonQrete cybersquid">
+ <h2 id="qso-title">PREPARING TASKS</h2><p id="qso-text">Qlarifier is preparing and enhancing the task…</p></div>
+</div>
+<script>
+(function(){
+ function qso(title,text,show,done){
+   var o=document.getElementById('qonqrete-state-overlay'); if(!o)return;
+   document.getElementById('qso-title').textContent=title;
+   document.getElementById('qso-text').textContent=text;
+   o.classList.toggle('done',!!done); o.style.display=show?'flex':'none';
+ }
+ window.qonqreteStateOverlay=function(status,role){
+   var s=String(status||'').toLowerCase(), r=String(role||'').toLowerCase();
+   if(s==='fully_done'||s==='done'||s==='completed'){qso('FULLY_DONE','QonQrete has finished the run. The yard is complete.',true,true);return}
+   if(s.indexOf('plan')>=0||r==='instruqtor'){qso('PREPARING TICKETS','instruQtor is preparing the tickets for the board…',true,false);return}
+   if(s.indexOf('build')>=0||r==='construqtor'){qso('','',false,false);return}
+   if(s.indexOf('clarif')>=0||r==='qlarifier'||s==='preparing'||s==='pending'){qso('PREPARING TASKS','Qlarifier is preparing and enhancing the task…',true,false);return}
+   if(s===''){return}
+ };
+})();
+</script>
 </body>
 </html>
 """

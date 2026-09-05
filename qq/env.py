@@ -76,29 +76,3 @@ def upstream_codex_services_available() -> bool:
     """Return True if upstream Codex services are configured and enabled."""
     ok, _ = check_upstream_services_enabled()
     return ok
-
-def get_venice_api_key() -> str | None:
-    """Return the VENICE_API_KEY environment variable, or None."""
-    key = os.environ.get("VENICE_API_KEY", "").strip()
-    return key if key else None
-
-
-def venice_available() -> bool:
-    """Return True if VENICE_API_KEY is set and non-empty."""
-    return get_venice_api_key() is not None
-
-
-def check_venice_configured() -> tuple[bool, str]:
-    """Check if Venice API is properly configured for image generation.
-
-    Returns:
-        (True, "") if everything is configured correctly.
-        (False, reason) if something is missing or misconfigured.
-    """
-    key = get_venice_api_key()
-    if not key:
-        return False, (
-            "VENICE_API_KEY is not set. Set it in your environment or .env file. "
-            "Get a key at https://venice.ai/settings/api"
-        )
-    return True, ""

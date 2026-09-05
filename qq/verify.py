@@ -68,7 +68,7 @@ def _build_dry_run_step() -> tuple:
     """Build the dry-run step with a temp dir."""
     return (
         "dry-run", 90,
-        ["python3", "-m", "qq", "run", "examples/example_task.md",
+        ["python3", "-m", "qq", "run", "${TMPDIR_DRY}/task.md",
          "${TMPDIR_DRY}",
          "--dry-run", "--max-cycles", "10"],
     )
@@ -78,7 +78,7 @@ def _build_streaming_step() -> tuple:
     """Build the streaming dry-run step with a temp dir."""
     return (
         "streaming dry-run", 90,
-        ["python3", "-m", "qq", "run", "examples/example_task.md",
+        ["python3", "-m", "qq", "run", "${TMPDIR_STREAM}/task.md",
          "${TMPDIR_STREAM}",
          "--dry-run", "--max-cycles", "10", "--stream-agent-output"],
     )
@@ -112,7 +112,10 @@ _PACKAGE_DEPENDENT_STEPS = [
 
 
 def _resolve_tempdir(cmd: list, tmp_dir: str) -> list:
-    """Replace ${TMPDIR_DRY} / ${TMPDIR_STREAM} placeholders."""
+    """Replace ${TMPDIR_DRY} / ${TMPDIR_STREAM} placeholders and create a task."""
+    task_path = os.path.join(tmp_dir, "task.md")
+    with open(task_path, "w", encoding="utf-8") as fh:
+        fh.write("# Verify task\n\nBuild a tiny hello-world file.\n")
     return [
         arg.replace("${TMPDIR_DRY}", tmp_dir).replace("${TMPDIR_STREAM}", tmp_dir)
         for arg in cmd

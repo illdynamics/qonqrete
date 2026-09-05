@@ -107,43 +107,36 @@ class QqWebConfig:
 
 
 @dataclasses.dataclass
-class VeniceImageConfig:
-    """Venice-specific image generation settings."""
-    model: str = "auto"                     # "auto" or specific model name
-    aspect_ratio: str = "1:1"              # "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"
-    resolution: str = "1K"                 # "1K", "2K", "4K"
-    format: str = "png"                    # "png", "jpeg", "webp"
-    quality: str = "low"                   # "low", "medium", "high"
-    cfg_scale: float = 7.5                 # 1.0-20.0
-    steps: int = 20                        # 1-50
+class ImageBackendConfig:
+    """Image generation routing.
+
+    provider may be ``auto``, ``openai``, ``gemini`` or ``gradio``.  Auto
+    follows the configured agent provider: OpenAI/Codex -> OpenAI, Gemini ->
+    Google GenAI, everything else -> the public FLUX Gradio Space.
+    """
+    provider: str = "auto"
+    model: str = "auto"
+    aspect_ratio: str = "1:1"
+    resolution: str = "1K"
+    format: str = "png"
+    quality: str = ""
+    cfg_scale: float = 7.5
+    steps: int = 20
     safe_mode: bool = False
     hide_watermark: bool = False
-    embed_exif_metadata: bool = False
-    style: str = ""                        # Optional style preset
-    seed: int = 0                          # Random seed (0 = random)
-    negative_prompt: str = ""              # What to avoid in the image
-
-
-@dataclasses.dataclass
-class ImageBackendConfig:
-    """Image generation backend configuration.
-
-    Supported providers:
-      - "none": No image backend (default). Mocks or delegates to upstream.
-      - "venice": Venice.ai API using VENICE_API_KEY env var.
-    """
-    provider: str = "none"                 # "none" or "venice"
-    venice: VeniceImageConfig = dataclasses.field(default_factory=VeniceImageConfig)
+    negative_prompt: str = ""
+    style: str = ""
+    seed: int = 0
+    gradio_space: str = "black-forest-labs/FLUX.1-schnell"
 
     @property
     def enabled(self) -> bool:
-        """Return True if a real image backend is configured."""
         return self.provider != "none"
 
     @property
     def is_venice(self) -> bool:
-        """Return True if Venice is the configured image backend."""
-        return self.provider == "venice"
+        return False
+
 
 @dataclasses.dataclass
 class QqConfig:
@@ -549,28 +542,25 @@ def resolve_config(
     cfg.run_root = run_root
     cfg.config_path = qq_path or _DEFAULT_QQ
 
-    # Image backend — from qq config only (no CLI/env overrides for now)
-    image_raw = spine_raw.get("image_backend", {})
-    if image_raw:
-        provider = image_raw.get("provider", "none")
-        cfg.image_backend.provider = provider
-        if provider == "venice":
-            vc = image_raw.get("venice", {})
-            cfg.image_backend.venice = VeniceImageConfig(
-                model=vc.get("model", "auto"),
-                aspect_ratio=str(vc.get("aspect_ratio", "1:1")),
-                resolution=str(vc.get("resolution", "1K")),
-                format=vc.get("format", "png"),
-                quality=vc.get("quality", "low"),
-                cfg_scale=float(vc.get("cfg_scale", 7.5)),
-                steps=int(vc.get("steps", 20)),
-                safe_mode=bool(vc.get("safe_mode", False)),
-                hide_watermark=bool(vc.get("hide_watermark", False)),
-                embed_exif_metadata=bool(vc.get("embed_exif_metadata", False)),
-                style=str(vc.get("style", "")),
-                seed=int(vc.get("seed", 0)),
-                negative_prompt=str(vc.get("negative_prompt", "")),
-            )
+    # Image backend routing.  Kept in qq.yaml so runs and `generate-image`
+    # share exactly the same configuration.
+    image_raw = spine_raw.get("image_backend", {}) or {}
+    if isinstance(image_raw, dict):
+        ib = cfg.image_backend
+        ib.provider = str(image_raw.get("provider", "auto"))
+        ib.model = str(image_raw.get("model", "auto"))
+        for key in ("aspect_ratio", "resolution", "format", "quality", "style", "negative_prompt", "gradio_space"):
+            if key in image_raw:
+                setattr(ib, key, str(image_raw[key]))
+        for key in ("cfg_scale",):
+            if key in image_raw:
+                setattr(ib, key, float(image_raw[key]))
+        for key in ("steps", "seed"):
+            if key in image_raw:
+                setattr(ib, key, int(image_raw[key]))
+        for key in ("safe_mode", "hide_watermark"):
+            if key in image_raw:
+                setattr(ib, key, bool(image_raw[key]))
 
     cfg.providers_config_path = providers_path or _DEFAULT_PROVIDERS
 

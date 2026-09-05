@@ -36,6 +36,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional, List as ListType
 
+from . import __version__
 from .adapters import get_adapter
 from .adapters.codeseeq import _find_codeseeq_binary
 from .config import load_providers, resolve_config, QqConfig
@@ -59,7 +60,7 @@ _INSTALL_SCRIPT = os.path.normpath(
 def _ask_human(questions):
     """Ask the user clarification questions. TUI-safe.
 
-    When running inside qq-tui, the terminal is in raw mode and the TUI
+    When running inside integrated TUI, the terminal is in raw mode and the TUI
     consumes all keyboard events directly. In that context, blocking on
     input() would stall the pipeline forever. We detect non-interactive
     contexts and auto-answer with sensible defaults to keep the pipeline
@@ -72,7 +73,7 @@ def _ask_human(questions):
       f"{_ROLE_DISPLAY.get('instruqtor', ('[instruQtor]', ''))[1]}[instruQtor]{_RESET} can plan this:")
 
     # Check if stdin is usable for blocking interactive input.
-    # CRITICAL: In qq-tui raw mode, select.select may find stray terminal
+    # CRITICAL: In integrated TUI raw mode, select.select may find stray terminal
     # escape bytes on stdin, misleadingly returning True. Then input()
     # blocks forever because TUI consumes keystrokes. We use a TWO-PHASE
     # guard to avoid this:
@@ -199,6 +200,17 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--allow-dirty", action="store_true", default=True,
                         help="Allow running on a dirty git repo")
     run_p.add_argument("--verbose", action="store_true", default=False)
+    # Integrated TUI options (the old integrated TUI flags are now part of qq run).
+    run_p.add_argument("--agent", default=None, help="Agent name shown in the TUI status bar")
+    run_p.add_argument("--model", default=None, help="Model code shown in the TUI status bar")
+    run_p.add_argument("--budget", type=int, default=None, help="Budget shown in the TUI status bar")
+    run_p.add_argument("--progress", type=float, default=None, help="Initial TUI progress percentage")
+    run_p.add_argument("--status-command", default=None, help="Statusline command")
+    run_p.add_argument("--events-out", default=None, help="TUI JSONL event output path")
+    run_p.add_argument("--ascii", action="store_true", help="Force ASCII TUI mode")
+    run_p.add_argument("--debug-log", default=None, help="TUI debug log path")
+    run_p.add_argument("--refresh-ms", type=int, default=None, help="TUI spinner refresh interval in ms")
+    run_p.add_argument("--status-refresh-ms", type=int, default=None, help="TUI status refresh interval in ms")
     run_p.add_argument("--json", action="store_true", default=False, dest="json_output",
                         help="Output JSON to stdout")
     run_p.add_argument("--no-color", action="store_true", default=False)
@@ -293,17 +305,21 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Force interactive mode: allow clarification questions and approvals")
 
     # ---- install ----
-    install_p = sub.add_parser("install", help="Install qq and qq-tui locally")
+    install_p = sub.add_parser("install", help="Install qq locally")
 
     # ---- reinstall ----
     reinstall_p = sub.add_parser("reinstall", help="Nuke existing install then reinstall from source")
 
     # ---- nuke ----
-    nuke_p = sub.add_parser("nuke", help="Uninstall qq and qq-tui binaries from the system")
+    nuke_p = sub.add_parser("nuke", help="Uninstall qq from the system")
 
     # ---- replay ----
     replay_p = sub.add_parser("replay", help="Print an events.jsonl run log")
     replay_p.add_argument("events_file", help="Path to events.jsonl")
+
+    # ---- exec ----
+    exec_p = sub.add_parser("exec", help="Run an arbitrary command through the QonQrete TUI exec mode")
+    exec_p.add_argument("command", nargs=argparse.REMAINDER, help="Command and arguments")
 
     # ---- doctor ----
     doctor_p = sub.add_parser("doctor", help="Check system readiness or run tests")
@@ -332,11 +348,13 @@ def build_parser() -> argparse.ArgumentParser:
     clean_p.add_argument("--older-than", default=None,
                           help="Remove runs older than this (e.g., 7d, 24h)")
 
-    # ---- image-smoke-test ----
-    img_p = sub.add_parser("image-smoke-test", help="Run QonQrete cybersquid image smoke test")
-    img_p.add_argument("--output-dir", default=".",
-                        help="Output directory for generated images (default: repo root)")
-    img_p.add_argument("--real", action="store_true",
+    # ---- test ----
+    test_p = sub.add_parser("test", help="Run QonQrete tests")
+    test_p.add_argument("tests", nargs="?", default="all",
+                        help="Comma-separated tests: image-smoke,statusline,all (default: all)")
+    test_p.add_argument("--output-dir", default=".",
+                        help="Output directory for image-smoke artifacts")
+    test_p.add_argument("--real", action="store_true",
                         help="Force real upstream image generation")
 
     # ---- generate-image ----
@@ -346,6 +364,11 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Text description of the image to generate")
     gen_img_p.add_argument("--output", "-o", default=None,
                             help="Output file path (default: repo root / generated.<fmt>)")
+    gen_img_p.add_argument("--method", default=None,
+                            choices=["auto", "openai", "openai_codex", "gemini", "gradio", "gradio_client"],
+                            help="Image backend (default: configured routing)")
+    gen_img_p.add_argument("--provider", default=None,
+                            help="Agent provider used when resolving auto image routing")
     gen_img_p.add_argument("--model", default="auto",
                             help="Model name or 'auto' for backend default")
     gen_img_p.add_argument("--aspect-ratio", default="1:1",
@@ -373,7 +396,7 @@ def build_parser() -> argparse.ArgumentParser:
     gen_img_p.add_argument("--safe-mode", action="store_true",
                             help="Enable safe mode")
     gen_img_p.add_argument("--hide-watermark", action="store_true",
-                            help="Hide Venice watermark")
+                            help="Compatibility flag; ignored by current backends")
     gen_img_p.add_argument("--negative-prompt", default="",
                             help="Description of what to avoid")
     gen_img_p.add_argument("--style", default="",
@@ -382,6 +405,29 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Output result as JSON")
     gen_img_p.add_argument("--meta", default=None,
                             help="Write metadata JSON to this path")
+
+    # ---- generate-video ----
+    vid_p = sub.add_parser("generate-video", help="Generate a programmatic animation/video")
+    vid_p.add_argument("method", choices=["manim", "remotion", "p5"],
+                       help="Animation backend")
+    vid_p.add_argument("prompt", nargs="?", default="QonQrete animation",
+                       help="Animation description or text")
+    vid_p.add_argument("--output", "-o", default="generated.mp4")
+    vid_p.add_argument("--script", default=None, help="Existing source script instead of generated starter")
+    vid_p.add_argument("--width", type=int, default=1280)
+    vid_p.add_argument("--height", type=int, default=720)
+    vid_p.add_argument("--fps", type=int, default=30)
+    vid_p.add_argument("--duration", type=int, default=5)
+
+    # ---- chat ----
+    chat_p = sub.add_parser("chat", help="Start the QonQrete browser chat interface")
+    chat_p.add_argument("--host", default="127.0.0.1")
+    chat_p.add_argument("--port", type=int, default=1337)
+    chat_p.add_argument("--open-browser", action="store_true", default=True)
+    chat_p.add_argument("--no-open-browser", action="store_false", dest="open_browser")
+    chat_p.add_argument("--provider", default=None, help="Override QonQrete provider for builds")
+    chat_p.add_argument("--config", default=DEFAULT_QQ_PATH)
+    chat_p.add_argument("--web-port", type=int, default=None, help="briQsQope port used by chat-triggered runs")
 
     # ---- package ----
     pkg_p = sub.add_parser("package", help="Build and validate a release zip")
@@ -408,11 +454,6 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Skip package build/check steps (dev tree)")
     verify_p.add_argument("--continue-on-failure", action="store_true",
                            help="Keep running after a required step fails")
-
-    # ---- tui ----
-    tui_p = sub.add_parser("tui", help="Launch the TUI cockpit with optional task")
-    tui_p.add_argument("task_file", nargs="?", help="Markdown/text file containing the task")
-    tui_p.add_argument("tui_args", nargs=argparse.REMAINDER, help="Additional run flags (passthrough)")
 
     # ---- web ----
     web_p = sub.add_parser("web", help="Manage the briQsQope web dashboard")
@@ -553,6 +594,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 2
 
 
+    # Make sure the target directory exists before we write .qqignore into it.
+    os.makedirs(os.path.abspath(repo_root), exist_ok=True)
+
     # Ensure .qqignore exists in the target directory so agents skip
     # Qq's own artifacts (.qq/, .codeseeq/, .env) when reading the project
     _ensure_qqignore(os.path.abspath(repo_root))
@@ -659,6 +703,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
         web_publish_level=args.web_publish_level,
         web_hard_fail=args.web_hard_fail,
     )
+
+    # Resolve the image backend once per run so every agent/subprocess uses
+    # the same configured method (and `qq generate-image` behaves identically).
+    image_method = cfg.image_backend.provider
+    if image_method == "auto":
+        image_method = {"codex": "openai", "openai": "openai",
+                        "gemini": "gemini", "gemini-cli": "gemini"}.get(cfg.provider, "gradio")
+    os.environ["QQ_IMAGE_METHOD"] = image_method
+    os.environ["QQ_IMAGE_PROVIDER"] = cfg.provider
 
     # Validate model-type constraints against reasoning/temperature/top_p
     _all_models = [
@@ -814,13 +867,17 @@ def _cmd_run(args: argparse.Namespace) -> int:
         # Stop the briQsQope dashboard if we started it
         if qcfg.web_started:
             from .web.process import stop_dashboard
+            # Keep briQsQope alive briefly after FULLY_DONE so the terminal
+            # state overlay is actually visible before the dashboard closes.
+            if 'state' in locals() and getattr(state, 'status', None) is not None and state.status.value == "done":
+                time.sleep(3.0)
             stop_dashboard()
             if cfg.verbose:
                 print("briQsQope: dashboard stopped")
 
 
 def _cmd_install(args: argparse.Namespace) -> int:
-    """Install qq and qq-tui locally using install-qq-local.sh."""
+    """Install qq locally using install-qq-local.sh."""
     if not os.path.isfile(_INSTALL_SCRIPT):
         print(f"error: install script not found: {_INSTALL_SCRIPT}", file=sys.stderr)
         return 1
@@ -840,10 +897,10 @@ def _cmd_reinstall(args: argparse.Namespace) -> int:
 
 
 def _cmd_nuke_impl() -> int:
-    """Uninstall qq and qq-tui from the system (not from the repo)."""
+    """Uninstall the qq wrapper from the system (not from the repo)."""
     bin_dir = os.environ.get("QQ_BIN_DIR", os.path.expanduser("~/.local/bin"))
     removed = False
-    for binary in ["qq", "qq-tui"]:
+    for binary in ["qq"]:
         path = os.path.join(bin_dir, binary)
         if os.path.isfile(path) or os.path.islink(path):
             try:
@@ -853,7 +910,7 @@ def _cmd_nuke_impl() -> int:
             except OSError as e:
                 print(f"  Failed to remove {path}: {e}", file=sys.stderr)
     if not removed:
-        print(f"  No qq/qq-tui binaries found in {bin_dir}")
+        print(f"  No qq binary found in {bin_dir}")
     return 0
 
 
@@ -995,12 +1052,12 @@ def _run_doctor_checks(args: argparse.Namespace) -> int:
     except Exception as e:
         check("Provider manifest loadable", False, str(e))
 
-    try:
-        csq = _find_codeseeq_binary()
-        check(f"CodeSeeq binary: {csq}", True)
-    except FileNotFoundError as e:
-        check("CodeSeeq binary", False, str(e),
-              warn_only=args.offline)
+    codeseeq_expected = os.path.normpath(os.path.join(os.path.dirname(__file__), "codeseeq", "codeseeq"))
+    if os.path.isfile(codeseeq_expected) and os.access(codeseeq_expected, os.X_OK):
+        check(f"CodeSeeq binary: {codeseeq_expected}", True)
+    else:
+        check(f"CodeSeeq binary: {codeseeq_expected}", False,
+              "install CodeSeeq into ./qq/codeseeq", warn_only=args.offline)
 
     key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
     check("API key set (DEEPSEEK_API_KEY or OPENAI_API_KEY)", bool(key),
@@ -1744,6 +1801,8 @@ def _cmd_generate_image(args: argparse.Namespace) -> int:
     result = generate_image(
         prompt=args.prompt,
         model=args.model,
+        method=args.method,
+        provider=args.provider,
         aspect_ratio=args.aspect_ratio,
         resolution=args.resolution,
         width=args.width,
@@ -1812,6 +1871,54 @@ def _cmd_image_smoke_test(args: argparse.Namespace) -> int:
     return run_image_smoke_test(
         output_dir=args.output_dir,
         force_real=args.real,
+    )
+
+
+
+def _cmd_test(args: argparse.Namespace) -> int:
+    """Run the generic QonQrete test suite."""
+    selected = [x.strip() for x in args.tests.split(",") if x.strip()]
+    if "all" in selected:
+        selected = ["image-smoke", "statusline"]
+    rc = 0
+    for name in selected:
+        if name in ("image-smoke", "image_smoke"):
+            from .image_smoke import run_image_smoke_test
+            result = run_image_smoke_test(output_dir=args.output_dir, force_real=args.real)
+        elif name in ("statusline", "status-line"):
+            # Exercise the Python statusline renderer directly; this is the
+            # portable replacement for the former statusline-test command.
+            from .terminal_ui import StreamActivityStatus, format_qonqrete_status_bar
+            sample = StreamActivityStatus(role="qlarifier", model_code="fla-T", score=50)
+            print(format_qonqrete_status_bar(sample, color=False, width=100, version=__version__))
+            result = 0
+        else:
+            print(f"error: unknown test '{name}'", file=sys.stderr)
+            result = 2
+        if result:
+            rc = result
+    return rc
+
+
+def _cmd_generate_video(args: argparse.Namespace) -> int:
+    from .video_gen import generate_video
+    result = generate_video(
+        method=args.method, prompt=args.prompt, output_path=args.output,
+        script_path=args.script, width=args.width, height=args.height,
+        fps=args.fps, duration=args.duration,
+    )
+    if result.success:
+        print(f"Video generated successfully.\n  Method: {result.method}\n  Saved to: {result.output_path}")
+        return 0
+    print(f"Video generation FAILED: {result.error}", file=sys.stderr)
+    return 1
+
+
+def _cmd_chat(args: argparse.Namespace) -> int:
+    from .chat import serve_chat
+    return serve_chat(
+        host=args.host, port=args.port, open_browser=args.open_browser,
+        provider=args.provider, config_path=args.config, web_port=args.web_port,
     )
 
 
@@ -2149,16 +2256,16 @@ def main(argv=None) -> None:
 
     # Known subcommands — subcommand is mandatory
     known_subcommands = {
-        "run", "replay", "doctor", "providers", "cleanup",
-        "image-smoke-test", "generate-image", "package", "verify", "tui",
+        "run", "replay", "exec", "doctor", "providers", "cleanup",
+        "generate-image", "generate-video", "test", "package", "verify",
         "install", "reinstall", "nuke", "models", "web",
-        "runs", "ingest",
+        "runs", "ingest", "chat",
     }
 
     # Must supply a subcommand
     if not argv:
         print("qq: missing command. Usage: qq <command> [options]", file=sys.stderr)
-        print("Commands: run, install, reinstall, nuke, doctor, models, providers, cleanup, replay, package, verify, tui", file=sys.stderr)
+        print("Commands: run, replay, exec, chat, test, generate-image, generate-video, install, reinstall, nuke, doctor, models, providers, cleanup, package, verify", file=sys.stderr)
         sys.exit(1)
 
     # Allow --help/-h at top level
@@ -2177,10 +2284,15 @@ def main(argv=None) -> None:
             print(f"qq: unknown command '{argv[0]}'. Run 'qq --help' for usage.", file=sys.stderr)
         sys.exit(1)
 
-    # Handle `qq tui` specially - pass through to TUI launcher
-    if argv[0] == "tui":
-        from .tui_launcher import launch_tui
-        sys.exit(launch_tui(argv[1:]))
+    # The legacy integrated TUI command line is gone. Run/replay use the migrated
+    # internal TUI automatically; --no-tui remains the explicit headless escape hatch.
+    from .tui_launcher import launch_tui_with_args, launch_internal_mode
+    if argv[0] == "run" and "--no-tui" not in argv and "--help" not in argv and "-h" not in argv:
+        sys.exit(launch_tui_with_args(argv))
+    if argv[0] == "replay" and "--help" not in argv and "-h" not in argv:
+        sys.exit(launch_internal_mode("replay", argv[1:]))
+    if argv[0] == "exec" and "--help" not in argv and "-h" not in argv:
+        sys.exit(launch_internal_mode("exec", argv[1:]))
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -2203,11 +2315,6 @@ def main(argv=None) -> None:
         sys.exit(_cmd_providers(args))
     elif args.command == "cleanup":
         sys.exit(_cmd_cleanup(args))
-    elif args.command == "tui":
-        from .tui_launcher import launch_tui
-        task_args = [args.task_file] if args.task_file else []
-        task_args.extend(args.tui_args)
-        sys.exit(launch_tui(task_args))
     elif args.command == "web":
         sys.exit(_cmd_web(args))
     elif args.command == "runs":
@@ -2218,10 +2325,14 @@ def main(argv=None) -> None:
 
     elif args.command == "verify":
         sys.exit(_cmd_verify(args))
-    elif args.command == "image-smoke-test":
-        sys.exit(_cmd_image_smoke_test(args))
+    elif args.command == "test":
+        sys.exit(_cmd_test(args))
     elif args.command == "generate-image":
         sys.exit(_cmd_generate_image(args))
+    elif args.command == "generate-video":
+        sys.exit(_cmd_generate_video(args))
+    elif args.command == "chat":
+        sys.exit(_cmd_chat(args))
     elif args.command == "package":
         sys.exit(_cmd_package(args))
 

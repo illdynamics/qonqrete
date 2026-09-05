@@ -1,7 +1,0 @@
-config
-examples
-qq
-qq-tui
-scripts
-tasks
-test-results

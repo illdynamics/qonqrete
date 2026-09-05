@@ -175,8 +175,8 @@ class TestCommandGeneration:
         )
         assert "qq-tui" not in args, f"local_exec should not have qq-tui: {args}"
 
-    def test_tmux_contains_qq_tui(self):
-        """tmux command contains qq-tui run --exit-when-done --qq-events <path> -- qq run."""
+    def test_tmux_uses_integrated_qq_run(self):
+        """tmux command uses direct qq run; the integrated TUI is now automatic."""
         from qq.web.ingest import generate_command
         args = generate_command(
             runner="tmux",
@@ -186,10 +186,8 @@ class TestCommandGeneration:
             run_root="/tmp/runs/r1",
             events_path="/tmp/runs/r1/events.jsonl",
         )
-        assert "qq-tui" in args, f"tmux command missing qq-tui: {args}"
-        assert "--exit-when-done" in args
-        assert "--qq-events" in args
-        assert "/tmp/runs/r1/events.jsonl" in args
+        assert args[0:2] == ["qq", "run"], f"tmux command should use direct qq run: {args}"
+        assert "--no-tui" not in args, f"tmux command must keep the integrated TUI: {args}"
 
     def test_command_preview_uses_shlex_quote(self):
         """command_preview must use shlex.quote."""

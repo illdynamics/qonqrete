@@ -1851,11 +1851,11 @@ class TestRunnerCommandDetails:
         assert "qq-tui" not in preview, f"local_exec should not have qq-tui in preview: {preview}"
         assert "qq run" in preview
         
-        # tmux mode: should have qq-tui wrapper
+        # tmux mode: direct qq run now owns the integrated TUI
         args_tmux = generate_command(runner="tmux", task_path="/tmp/task.md", target_path="/tmp/target", mode="repo", run_root="/x/qq/runs/test", events_path="/x/qq/runs/test/events.jsonl")
         preview_tmux = command_preview(args_tmux)
-        assert "qq-tui run" in preview_tmux
-        assert "--exit-when-done" in preview_tmux
+        assert preview_tmux.startswith("qq run ")
+        assert "--no-tui" not in preview_tmux
 
 
 # ---------------------------------------------------------------------------

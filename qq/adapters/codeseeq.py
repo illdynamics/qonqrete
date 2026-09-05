@@ -70,8 +70,12 @@ def _find_codeseeq_binary(explicit_path: Optional[str] = None) -> str:
     found = shutil.which("codeseeq")
     if found:
         return found
-    for candidate in ("../codeseeq/codeseeq", "./codeseeq/codeseeq",
-                       "./codeseeq"):
+    repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    for candidate in (
+        os.path.join(repo_root, "qq", "codeseeq", "codeseeq"),
+        os.path.join(repo_root, "qq", "codeseeq"),
+        "../codeseeq/codeseeq", "./codeseeq/codeseeq", "./codeseeq"
+    ):
         if os.path.isfile(candidate):
             return candidate
     raise FileNotFoundError(

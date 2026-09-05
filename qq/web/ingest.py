@@ -1797,21 +1797,15 @@ def generate_command(
 
     Two runners:
       - local_exec: plain `qq run --no-web --no-tui --run-root ...`
-        Never uses qq-tui.
-      - tmux: `qq-tui run --exit-when-done --qq-events <events_path> -- qq run ...`
-        Includes the proper wrapper with events path.
+      - tmux: direct `qq run` in the managed TTY; the integrated QonQrete TUI
+        is now part of `qq run`, so no separate wrapper command is required.
 
     repo  mode: no --no-repo flag
     folder mode: --no-repo flag included
     """
     if runner == "tmux":
-        # tmux runner: outer qq-tui with events path, inner qq run
-        base = ["qq-tui", "run", "--exit-when-done"]
-        if events_path:
-            base.extend(["--qq-events", events_path])
-        base.append("--")
-        base.append("qq")
-        base.append("run")
+        # tmux provides the TTY; qq run now owns the integrated TUI.
+        base = ["qq", "run"]
     else:
         # local_exec: plain qq run, no qq-tui
         base = ["qq", "run"]
@@ -1819,8 +1813,9 @@ def generate_command(
     # Always include --no-web to prevent qq from starting its own web server
     base.append("--no-web")
 
-    # Always include --no-tui for API runs
-    base.append("--no-tui")
+    # local_exec is intentionally headless; tmux gets the integrated TUI.
+    if runner != "tmux":
+        base.append("--no-tui")
 
     # YOLO flag
     if yolo:
@@ -2692,7 +2687,7 @@ def _do_launch_tmux(item: Dict[str, Any]) -> bool:
     # Build command as quoted string for tmux send-keys / new-session
     quoted_args = " ".join(_shlex.quote(a) for a in args)
 
-    # Use qq-tui run --exit-when-done so that when the QonQrete command exits,
+    # Use qq run (integrated TUI) so that when the QonQrete command exits,
     # we can capture the exit code and write marker files. The tmux pane stays
     # we can capture the exit code and write marker files before the shell exits.
     run_root_quoted = _shlex.quote(item.get("run_root", ""))
@@ -2787,7 +2782,7 @@ def _do_launch_tmux(item: Dict[str, Any]) -> bool:
         item["launch_error"] = "tmux_preflight_failed"
         return False
 
-    # Validate qq-tui exists (check with which or direct check)
+    # Validate qq exists (check with which or direct check)
     if not _has_qonqrete_runner_binary():
         item["launch_ok"] = False
         item["launch_error"] = "qq_binary_not_found"

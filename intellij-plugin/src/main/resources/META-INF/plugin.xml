@@ -1,0 +1,132 @@
+<!--
+  QonQrete IntelliJ Plugin (v2)
+-->
+<idea-plugin>
+    <id>sh.qonqrete</id>
+    <name>QonQrete</name>
+    <version>2.0.1</version>
+    <idea-version since-build="253"/>
+    <vendor email="ricky@qonqrete.sh" url="https://qonqrete.sh">QonQrete</vendor>
+
+    <description><![CDATA[
+    <h2>QonQrete</h2>
+
+    <p>
+    QonQrete is a deterministic AI coding agent for IntelliJ enabling autonomous code
+    generation and secure local software construction with the v2 engine.
+    </p>
+
+    <h3>Features</h3>
+    <ul>
+        <li><b>Run Open Task File</b> — run the file you have open as a QonQrete task</li>
+        <li><b>Provider &amp; Model</b> — configure the v2 engine provider and model</li>
+        <li><b>Doctor / Verify / Cleanup</b> — quick engine diagnostics</li>
+        <li><b>List Runs / Replay Run</b> — inspect previous QonQrete runs</li>
+        <li><b>Exec / Chat</b> — run a command through qq exec or open the chat UI</li>
+    </ul>
+
+    <p>Learn more at <a href="https://qonqrete.sh">qonqrete.sh</a>.</p>
+    ]]></description>
+
+    <category>Code tools</category>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <projectService serviceImplementation="sh.qonqrete.intellij.services.QonQreteProjectService"/>
+        <applicationService serviceImplementation="sh.qonqrete.intellij.services.QonQreteSettingsState"/>
+
+        <toolWindow
+            id="QonQrete"
+            anchor="right"
+            icon="/icons/qonqreteToolWindowIcon.svg"
+            factoryClass="sh.qonqrete.intellij.ui.QonQreteToolWindowFactory"/>
+
+        <statusBarWidgetFactory
+            id="QonQreteStatusWidget"
+            implementation="sh.qonqrete.intellij.ui.QonQreteStatusWidgetFactory"
+            order="after ReadOnlyAttribute"/>
+
+        <projectConfigurable
+            parentId="tools"
+            instance="sh.qonqrete.intellij.ui.QonQreteSettingsConfigurable"
+            id="sh.qonqrete.intellij.settings"
+            displayName="QonQrete"
+            nonDefaultProject="true"/>
+
+        <notificationGroup
+            id="QonQrete Notifications"
+            displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <action id="QonQrete.RunCurrentFile"
+                class="sh.qonqrete.intellij.actions.RunCurrentFileAction"
+                text="QonQrete: Run Open File as Task"
+                description="Run the currently open file as a QonQrete task"
+                icon="AllIcons.Actions.Execute">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt Q"/>
+            <add-to-group group-id="RunMenu" anchor="last"/>
+        </action>
+
+        <action id="QonQrete.RunTaskFile"
+                class="sh.qonqrete.intellij.actions.RunTaskFileAction"
+                text="QonQrete: Run Task File…"
+                description="Choose a task file and run it with QonQrete"
+                icon="AllIcons.Actions.Execute"/>
+
+        <action id="QonQrete.Configure"
+                class="sh.qonqrete.intellij.actions.ConfigureAction"
+                text="QonQrete: Provider &amp; Model"
+                description="Configure the QonQrete provider and model"
+                icon="AllIcons.General.Settings"/>
+
+        <action id="QonQrete.OpenConfig"
+                class="sh.qonqrete.intellij.actions.OpenConfigAction"
+                text="QonQrete: Open Config"
+                description="Open config/qq.yaml"
+                icon="AllIcons.Actions.EditSource"/>
+
+        <action id="QonQrete.Doctor"
+                class="sh.qonqrete.intellij.actions.DoctorAction"
+                text="QonQrete: Doctor"
+                description="Run qq doctor"
+                icon="AllIcons.Actions.CheckOut"/>
+
+        <action id="QonQrete.Verify"
+                class="sh.qonqrete.intellij.actions.VerifyAction"
+                text="QonQrete: Verify"
+                description="Run qq verify"
+                icon="AllIcons.Actions.Commit"/>
+
+        <action id="QonQrete.Cleanup"
+                class="sh.qonqrete.intellij.actions.CleanupAction"
+                text="QonQrete: Cleanup"
+                description="Run qq cleanup"
+                icon="AllIcons.Actions.GC"/>
+
+        <action id="QonQrete.Replay"
+                class="sh.qonqrete.intellij.actions.ReplayAction"
+                text="QonQrete: Replay Run"
+                description="Replay a QonQrete events.jsonl file"
+                icon="AllIcons.Actions.Rollback"/>
+
+        <action id="QonQrete.Runs"
+                class="sh.qonqrete.intellij.actions.RunsAction"
+                text="QonQrete: List Runs"
+                description="List QonQrete runs"
+                icon="AllIcons.Actions.GroupBy"/>
+
+        <action id="QonQrete.Exec"
+                class="sh.qonqrete.intellij.actions.ExecAction"
+                text="QonQrete: Exec"
+                description="Run a command through qq exec"
+                icon="AllIcons.Actions.StartDebugger"/>
+
+        <action id="QonQrete.Chat"
+                class="sh.qonqrete.intellij.actions.ChatAction"
+                text="QonQrete: Chat"
+                description="Open the QonQrete chat interface"
+                icon="AllIcons.Actions.Comments"/>
+    </actions>
+</idea-plugin>

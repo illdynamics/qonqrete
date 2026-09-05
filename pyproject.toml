@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qq"
-version = "2.0.0"
+version = "2.0.1"
 description = "QonQrete v2 Spine — deterministic local-first multi-agent coding harness"
 readme = "README.md"
 license = { text = "MIT" }
@@ -35,3 +35,13 @@ Repository = "https://github.com/illdynamics/qq"
 
 [tool.setuptools.packages.find]
 exclude = ["tests", "tests.*", "dist"]
+
+[project.optional-dependencies]
+# Optional media features: image generation (google-genai / gradio_client)
+# and p5/video generation (playwright). Imported lazily — not required for
+# the core qq harness/CLI. Install with: pip install -e ".[media]"
+media = [
+    "google-genai>=1.0.0",
+    "gradio_client>=1.0.0",
+    "playwright>=1.40.0",
+]

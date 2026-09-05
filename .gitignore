@@ -95,4 +95,37 @@ qontext.d/
 # Test runtime artifacts
 _test_runtime/
 **/_test_runtime/
+.codeseeq**
 .codeseeq/
+.codeseeq/**
+.qq
+.qq**
+.qq/**
+qq.egg-info
+qq.egg-info**
+qq.egg-info/**
+
+qq-tui/target
+qq-tui/target/**
+
+**/.DS_Store
+.DS_Store
+
+.venv
+.venv**
+.venv/**
+
+prompt.md
+.prompts
+.prompts/**
+**/.prompts
+**/.prompts/**
+
+# Qq
+.env
+
+# IDE packaging artifacts
+*.vsix
+**/*.vsix
+dist/
+**/dist/

@@ -38,8 +38,10 @@ class TestPackageCLIFlags(unittest.TestCase):
                           # Large build artifact directories
                           ".venv", "node_modules",
                           "target",  # Rust build artifacts (qq-tui/target, qq/web/target)
+                          # IDE build output (VS Code / IntelliJ)
+                          "build", ".gradle", "out",
                           }
-                return [n for n in names if n in banned]
+                return [n for n in names if n in banned or n.endswith(".vsix")]
             shutil.copytree(PROJECT_ROOT, dst, ignore=_ignore)
             rc = check_tree(root=dst)
             self.assertEqual(rc, 0, f"check_tree failed: rc={rc}")
@@ -76,7 +78,9 @@ class TestPackageCLIFlags(unittest.TestCase):
                                                   # Large build artifact directories
                                                   ".venv", "node_modules",
                                                   "target",  # Rust build artifacts (qq-tui/target, qq/web/target)
-                                                  )]
+                                                  # IDE build output (VS Code / IntelliJ)
+                                                  "build", ".gradle", "out",
+                                                  ) or n.endswith(".vsix")]
             shutil.copytree(PROJECT_ROOT, dst, ignore=_ignore)
             rc = check_tree(root=dst, upload_mode=True)
             self.assertEqual(rc, 0, f"Expected pass on clean temp: rc={rc}")

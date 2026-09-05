@@ -1,492 +1,153 @@
-# Qq — QonQrete v2 Spine
+# QonQrete - Fully Autonomous File-Based Local-First AI Coding Harness (v2.0.1)
+![Release](https://img.shields.io/github/v/release/illdynamics/qonqrete)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+![Repo Views](https://komarev.com/ghpvc/?username=illdynamics-qonqrete&label=Repo+Views&color=blue)
+[![Build VS Code Extension](https://github.com/illdynamics/qonqrete/actions/workflows/vscode-extension.yml/badge.svg)](https://github.com/illdynamics/qonqrete/actions/workflows/vscode-extension.yml)
+[![Build IntelliJ Plugin](https://github.com/illdynamics/qonqrete/actions/workflows/intellij-plugin.yml/badge.svg)](https://github.com/illdynamics/qonqrete/actions/workflows/intellij-plugin.yml)
 
-Deterministic local-first multi-agent coding harness.
+![QonQrete](./qonqrete.jpg)
 
-```
-Qlarifier → instruQtor → (construQtor ↔ inspeQtor)
-    ↑ ask_human            ↓            ↓
-    └─── clarification ───┘    harness  ─┘
-```
+**Current repository version:** `2.0.1`
 
-Qq is the rebuilt base architecture for the devops-team agent loop.
-It runs a deterministic orchestration engine (Qontroller) that cycles
-through Qlarifier (clarification), instruQtor (plan splitting), construQtor
-(implementation), harness (shell checks), and inspeQtor (review) until
-inspeQtor returns the exact token `FULLY_DONE`.
+2.0.1 — QonQrete v2 engine (current release)
 
-## Quick start
+> **New since v2.0.0:** QonQrete now runs on a completely new engine — the `qq` CLI. It is fully autonomous and designed to finish even huge tasks in one shot: clarify → plan → build → review, looping automatically until the build is genuinely done. No more babysitting.
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+QonQrete is a **local-first, file-based, deterministic AI software construction harness**. You give it a Markdown task and a destination directory; it produces a working, reviewed build. The multi-agent pipeline (Qlarifier → instruQtor → construQtor ↔ inspeQtor) plans the work into briqs, generates code, reviews it, and iterates until `FULLY_DONE` — with a rich TUI cockpit and the **briQsQope** web dashboard for live progress.
 
-# Run with mock adapter (zero API calls, zero CodeSeeq required)
-python3 -m qq run examples/example_task.md --repo-root /tmp/myapp --dry-run --max-cycles 10
+## What this repository contains
 
-# Run all acceptance checks
-python3 -m compileall -q qq tests
-python3 -m unittest discover -s tests -v
-pytest -q                                    # optional, if pytest is available
-python3 -m qq providers --json
-python3 -m qq package
-python3 -m qq package --check
-bash scripts/verify.sh                       # runs all of the above
-```
+1. **QonQrete v2 core CLI** — the `qq` Python engine under `qq/`.
+2. **VS Code extension** in `vscode-extension/`.
+3. **IntelliJ / JetBrains plugin** in `intellij-plugin/`.
+4. **briQsQope** — the read-only web kanban dashboard served by the engine.
+5. **QonQrete Chat** — a local browser chat that turns prompts into QonQrete runs.
 
-## Running with CodeSeeq (optional)
+The IDE integrations are thin, friendly frontends for the same `qq` commands described below.
 
-CodeSeeq is an open-source launcher for the Codex CLI wired to DeepSeek V4 models.
-See https://github.com/illdynamics/codeseeq for installation.
+## Install (CLI)
+
+From a fresh clone:
 
 ```bash
-# Set your API key
-export DEEPSEEK_API_KEY=sk-...
-
-# Install codeseeq from the repo above, then:
-python3 -m qq run task.md --repo-root . --provider codeseeq
+git clone https://github.com/illdynamics/qonqrete.git
+cd qonqrete
+./qq-install.sh
 ```
 
-**Important:** Live CodeSeeq integration was not executed in this environment.
-The CodeSeeq adapter is covered by command-construction/unit tests only.
-Provide your own CodeSeeq binary and API key to use the real adapter.
-
-
-
-## Streaming live CodeSeeq output
-
-Qq can stream agent stdout/stderr live to the terminal while still writing
-artifacts. Quiet mode is the default — no agent output is shown unless
-`--stream-agent-output` is passed.
-
-When `--stream-agent-output` is enabled, Qq prints agent stdout/stderr chunks
-as they arrive. It must not wait for the agent process to finish before showing
-output. The streaming path uses `subprocess.Popen` with threaded concurrent
-readers for stdout and stderr, emitting each line/chunk immediately to the
-terminal and writing it to artifact files.
-
-### CLI flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--stream-agent-output` | off | Stream agent stdout/stderr live |
-| `--stream-mode prefixed\|raw` | prefixed | Prefix mode (`[role stdout]`) or raw |
-| `--stream-stderr` / `--no-stream-stderr` | on (when streaming) | Whether to stream stderr |
-| `--show-prompts` | off | Print prompt file paths during streaming |
-| `--stream-indicator stream\|spinner\|none` | stream | What to show after role prefix |
-| `--stream-transport pipe\|pty` | pipe | Subprocess transport mode (pty for heavy-buffering CLIs) |
-| `--event-log-agent-output` | *optional* | Log per-line output to events.jsonl |
-
-### Dry-run
+Then run:
 
 ```bash
-python3 -m qq run examples/example_task.md \
-  --repo-root "$(mktemp -d)" \
-  --dry-run \
-  --max-cycles 10 \
-  --stream-agent-output
-
-# With spinner indicator (braille_snake)
-python3 -m qq run examples/example_task.md \
-  --repo-root "$(mktemp -d)" \
-  --dry-run \
-  --max-cycles 10 \
-  --stream-agent-output \
-  --stream-indicator spinner
+qq run task.md ./my-build
 ```
 
-Dry-run streaming emits simulated output:
-```
-[Qlarifier stdout] clarified task ready
-[instruQtor stdout] created 2 briQs across 1 build group
-[construQtor stdout] mock build cycle 1 wrote files
-[inspeQtor stdout] NOT_DONE: one issue found
-```
+The installer creates a Python venv, installs the `qq` package, builds the integrated Rust TUI (when `cargo` is available), installs CodeSeeq, and creates the `qq` wrapper in `~/.local/bin`.
 
-With spinner indicator, the terminal shows a `braille_snake` animation:
-```
-[Qlarifier] ⠁ clarified task ready
-[instruQtor] ⠁ created 2 briQs across 1 build group
-[construQtor] ⠁ mock build cycle 1 wrote files
-[inspeQtor] ⠁ NOT_DONE: one issue found
-```
-
-The spinner indicator is terminal display only:
-- Default indicator is `stream` (shows literal `stdout`/`stderr`).
-- `spinner` shows a `braille_snake` frame sequence: `⠁⠃⠇⡇⣇⣧⣷⣿⡿⠿⠟⠛⠙⠉`.
-- `none` shows only the role prefix.
-- Artifacts (`stdout.txt`/`stderr.txt`) and event metadata still use `stdout`/`stderr`.
-- `stdin` is not an output stream and is never rendered as agent output.
-- Spinner state is per `(role, stream_name, call_id)` — concurrent streams don't share counters.
-- Raw mode ignores the spinner indicator.
-
-
-
-### Sticky terminal status line
-
-Qq supports a sticky terminal status bar that displays live agent/session metadata
-at the top or bottom of the terminal while streaming output scrolls normally.
-
-#### CLI flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--stream-status-line off\|bottom\|top` | off | Enable sticky status line |
-| `--stream-line-prefix auto\|agent\|stream\|none` | auto | Control body line prefix behavior |
-
-#### Exact sticky status line format
-
-```
-╭─[ꝖꝖ]─❯❯❯<agent-name> <spinner> M=<model-code> C=<cycle> · T=<time> · A=<time> · B=<number> · P≈<score>% [✓0|↯N]─╮
-```
-
-#### Field reference
-
-| Field | Meaning |
-|-------|---------|
-| `ꝖꝖ` | Qq logo |
-| `❯❯❯` | QonQrete flow arrows |
-| `<agent-name>` | Active agent: Qlarifier, instruQtor, construQtor, or inspeQtor |
-| `<spinner>` | Current braille_snake spinner frame (`⠁⠃⠇⡇⣇⣧⣷⣿⡿⠿⠟⠛⠙⠉`) |
-| `M=<code>` | Model code: F, FT, P, PT, or ? |
-| `C=<n>` | Current cycle number |
-| `T=<time>` | Total QonQrete run time (MM:SS or H:MM:SS) |
-| `A=<time>` | Current active agent runtime |
-| `B=<n>` | Streamed chunk count for active agent call |
-| `P≈<score>%` | Latest InspeQtor score as estimated completion percentage |
-| `[✓0]` | Last exit status: success (green checkmark) |
-| `[↯N]` | Last exit status: failure with exit code N (red lightning) |
-
-#### Model codes
-
-```
-F  = deepseek-v4-flash
-FT = deepseek-v4-flash-thinking (thinking mode on)
-P  = deepseek-v4-pro
-PT = deepseek-v4-pro-thinking (thinking mode on)
-?  = unknown/custom model
-```
-
-#### Examples
+### Run a task
 
 ```bash
-# Sticky status line at top
-python3 -m qq run examples/example_task.md   --repo-root "$(mktemp -d)"   --dry-run   --max-cycles 10   --stream-agent-output   --stream-indicator spinner   --stream-status-line top
+# Build a task into a target directory (TUI cockpit by default)
+qq run task.md ./my-build
 
-# Sticky status line at bottom
-python3 -m qq run examples/example_task.md   --repo-root "$(mktemp -d)"   --dry-run   --max-cycles 10   --stream-agent-output   --stream-indicator spinner   --stream-status-line bottom
+# Headless / exec mode (no TUI)
+qq run task.md ./my-build --no-tui
 
-# Explicit stream prefix override
-python3 -m qq run examples/example_task.md   --repo-root "$(mktemp -d)"   --dry-run   --stream-agent-output   --stream-status-line bottom   --stream-line-prefix stream
+# Fully non-interactive: no clarifications or approvals
+qq run task.md ./my-build --yolo
+
+# Use the briQsQope web dashboard for this run
+qq run task.md ./my-build --web
 ```
 
-#### Behavior
+## Core commands
 
-- **TTY-only**: Sticky ANSI codes are emitted only in interactive terminals.
-  Non-TTY output (pipes, CI, redirects) degrades to clean line streaming automatically.
-- **Clean body**: When sticky line is active, stream body output defaults to clean text
-  (no agent prefix like `[construQtor]`). Prefixes can be restored with
-  `--stream-line-prefix agent` or `--stream-line-prefix stream`.
-- **Raw mode incompatible**: `--stream-mode raw` + `--stream-status-line` exits with
-  a clear error — sticky line uses terminal control sequences incompatible with raw mode.
-- **Agent switching**: The sticky line switches agent name, model code, spinner, and
-  resets chunk count/chunk timer whenever the active agent changes.
-- **InspeQtor score**: `P≈<score>%` updates after each InspeQtor review. Pre-reviews
-  show `P≈0%`.
-- **Score validation**: `FULLY_DONE` requires score >= 95. Score 100 with
-  non-empty issues is rejected as inconsistent. Missing/invalid score triggers retry.
-- **Spinner animation**: Spinner advances on every stream chunk, with idle animation
-  at ~6 fps during quiet agent runtime (without increasing chunk count B).
+| Command | What it does |
+|---|---|
+| `qq run <task> <dest>` | Run the full clarify → plan → build → review loop |
+| `qq doctor` | Check system readiness (`qq doctor -t all` runs tests) |
+| `qq verify` | Run the Python acceptance checks |
+| `qq cleanup --repo-root .` | Remove old run artifacts |
+| `qq replay <events.jsonl>` | Print an events log for a past run |
+| `qq runs sessions` | List discoverable QonQrete runs |
+| `qq exec <command>` | Run an arbitrary command through the engine exec mode |
+| `qq chat` | Start the local browser chat interface |
+| `qq web serve` | Start the briQsQope dashboard |
+| `qq models` / `qq providers` | Show models / providers |
+| `qq package` | Build and validate a release zip |
 
-### PTY transport mode
+## Configuration
 
-If a provider CLI buffers output heavily when stdout is a pipe (some CLIs only
-stream properly when attached to a TTY), use the PTY transport mode:
+Configuration lives in `config/qq.yaml` (with provider capabilities in `config/providers.yaml`). The IDE integrations and `qq configure`-style flows write here.
+
+The only settings most people need are the **provider** and the **model**:
+
+```yaml
+provider: codeseeq
+
+models:
+  qlarifier:
+    model: deepseek-v4-flash-thinking
+    reasoning: high
+  instruqtor:
+    model: deepseek-v4-flash-thinking
+    reasoning: high
+  construqtor:
+    model: deepseek-v4-flash
+    reasoning: low
+  inspeqtor:
+    model: deepseek-v4-flash-thinking
+    reasoning: max
+```
+
+Everything else (loops, dashboard, image backend, YOLO mode, harness checks) has sensible defaults and can be tuned via CLI flags or the file.
+
+## IDE integrations
+
+### VS Code
+
+1. Install **QonQrete** from the VS Code Marketplace.
+2. `Ctrl+Shift+P` → **QonQrete: Provider & Model** to set provider/model.
+3. Open a `.md` task file, then **QonQrete: Run Open File as Task** (or press the sidebar button).
+4. Choose the destination directory and TUI/headless mode when prompted.
+
+### IntelliJ / JetBrains
+
+1. Install **QonQrete** from the JetBrains Marketplace.
+2. Use **Settings → Tools → QonQrete** to set the destination directory and `qq` path.
+3. Use **QonQrete: Provider & Model** to configure the engine.
+4. Press `Ctrl+Alt+Q` or **QonQrete: Run Open File as Task**.
+
+Both IDEs expose the same v2 controls: **Run Open Task File**, **Provider & Model**, **Doctor**, **Verify**, **Cleanup**, **List Runs**, **Replay Run**, **Exec**, and **Chat**.
+
+## briQsQope web dashboard
+
+`qq run` can launch a read-only kanban board that shows build groups as cards and live progress:
 
 ```bash
-python3 -m qq run task.md \
-  --repo-root /path/to/repo \
-  --provider codeseeq \
-  --stream-agent-output \
-  --stream-transport pty
+qq run task.md ./my-build --web
+# or standalone:
+qq web serve
 ```
 
-- Default: `pipe` (uses `subprocess.Popen(stdout=PIPE, stderr=PIPE)`).
-- `pty`: attaches child stdout/stderr to a pseudo-terminal for unbuffered streaming.
-- PTY mode is terminal UX only; artifacts are still written normally.
-- PTY mode does not corrupt JSON parsing.
-- If PTY is unsupported on the platform, a clear error is printed.
+It is a read-only view over the run events; QonQrete remains the controller and source of truth.
 
-### Production
+## QonQrete Chat
 
 ```bash
-python3 -m qq run task.md \
-  --repo-root /path/to/repo \
-  --provider codeseeq \
-  --runtime-mode host \
-  --bridge-mode process \
-  --stream-agent-output \
-  --check "pytest -q"
+qq chat
 ```
 
-Production streaming shows live CodeSeeq stdout/stderr with `[role stream]`
-prefixes while writing the same output (non-redacted) to artifact files under
-`.qq/runs/<id>/agents/`.
+Opens `http://127.0.0.1:1337` with a destination field and a task box. Every submitted prompt becomes a temporary Markdown task and runs through the normal `qq run <task> <destination>` pipeline (TUI + briQsQope included).
 
-### Behavior
+## Documentation map
 
-- **Quiet mode** (default): Only high-level Qq status lines are printed.
-- **Streaming mode**: Agent subprocess stdout/stderr is printed live in real time.
-- **Artifacts**: All output is still written to `stdout.txt` and `stderr.txt` in the artifact directories — streaming never replaces artifact writing.
-- **Redaction**: Terminal output is redacted (secrets like API keys are masked). Artifact files preserve the original raw output for debugging.
-- **Prompts**: Not printed unless `--show-prompts` is enabled (and then only the file path, not the full content).
-
-## Commands
-
-```text
-qq run task.md --repo-root .
-    Run the full clarify → plan → build → review loop
-
-qq run task.md --repo-root . --dry-run
-    Run with the mock adapter — zero API calls, no CodeSeeq required
-
-qq run task.md --repo-root . --check "pytest -q"
-    Add harness check commands (repeatable)
-
-qq run task.md --repo-root . --max-cycles 25 --briq-sensitivity 5
-    Tune the repair loop ceiling and decomposition granularity
-
-qq run task.md --repo-root . --provider codeseeq
-    Use the real CodeSeeq provider (requires API key)
-
-qq run task.md --repo-root . --review-on-harness-failure
-    Run InspeQtor even when harness checks fail
-
-qq replay .qq/runs/<run-id>/events.jsonl
-    Print an events.jsonl run log
-
-qq doctor
-    Check system readiness (git, CodeSeeq binary, API keys, config)
-
-qq doctor --offline
-    Check only local/offline readiness (warns on missing API keys)
-
-qq providers
-    List available providers and their capabilities
-
-qq cleanup --repo-root . --older-than 7d
-    Remove old Qq run artifacts
-
-qq package
-    Build a clean release zip
-
-qq package --check
-    Validate the source tree is package-clean
-
-qq package --check-archive dist/qonqrete-qq-v2.0.0.zip
-    Validate a release archive
-
-qq package --final
-    Build and print the final artifact path prominently
-
-qq package --check-upload-tree
-    Stricter tree check (also fails on .git/ and dist/*.zip)
-
-qq package --check-uploaded-zip <path>
-    Validate an uploaded zip archive
-```
-
-## CodeSeeq Image Fallback
-
-Qq can use CodeSeeq's upstream Codex/OpenAI image services without requiring
-a direct OpenAI API key. This is the recommended path for generating images
-through CodeSeeq skills like `imagegen`.
-
-### Setup
-
-```bash
-export CODESEEQ_ALLOW_UPSTREAM_CODEX_SERVICES=true
-export CODESEEQ_RUNTIME_MODE=host
-```
-
-This enables:
-- CodeSeeq to use upstream Codex/OpenAI services where supported
-- Host runtime (required for image generation skills)
-- No local OpenAI API key needed
-- Variables are propagated to CodeSeeq and all skills
-
-### Image Smoke Test
-
-```bash
-# Mocked test (no network, no upstream services)
-python3 -m qq image-smoke-test
-
-# Real upstream image test (requires codeseeq + imagegen skill)
-CODESEEQ_ALLOW_UPSTREAM_CODEX_SERVICES=true \
-CODESEEQ_RUNTIME_MODE=host \
-QQ_RUN_IMAGE_SMOKE_TEST=1 \
-python3 -m qq image-smoke-test
-```
-
-The smoke test generates an image of QonQrete the cybersquid and saves:
-- `.qq/image-tests/qonqrete_cybersquid.png` — the image
-- `.qq/image-tests/qonqrete_cybersquid.meta.json` — metadata
-
-### Environment Propagation
-
-The `build_codeseeq_env()` helper ensures consistent env propagation:
-- `CODESEEQ_ALLOW_UPSTREAM_CODEX_SERVICES` (default: `true`)
-- `CODESEEQ_RUNTIME_MODE` (default: `host`)
-
-User-set values are preserved; only missing keys get defaults.
-If upstream services are disabled, image commands fail with a clear message.
-
-## Testing
-
-Both test runners are supported:
-
-```bash
-# unittest (required by acceptance criteria)
-python3 -m unittest discover -s tests -v
-
-# pytest (optional, if installed)
-pytest -q
-
-# Run specific test classes for streaming:
-python3 -m pytest tests/test_streaming.py -q -v
-
-# Full verification (all acceptance checks)
-python3 -m qq.verify
-bash scripts/verify.sh
-```
-
-## Architecture
-
-```
-qq/
-├── __init__.py, __main__.py, cli.py   # Entry points
-├── qontroller.py                       # Orchestration loop
-├── agents/
-│   ├── qlarifier.py     # Clarification
-│   ├── instruqtor.py    # Plan splitting
-│   ├── construqtor.py   # Implementation
-│   ├── inspeqtor.py     # Review
-│   └── _jsonio.py       # JSON I/O + streaming bridge
-├── adapters/
-│   ├── base.py          # AgentAdapter interface
-│   ├── parameters.py    # CodeSeeq (Codex CLI) adapter
-│   ├── mock.py          # Mock adapter for offline/dry-run
-│   └── stubs.py         # Future provider stubs
-├── models.py             # Data classes (Task, BriQ, Plan, etc.)
-├── config.py             # YAML configuration + provider loading
-├── streaming.py          # Live stdout/stderr rendering
-├── eventlog.py           # JSONL event logging
-├── process.py            # Subprocess management
-├── verify.py             # Python-based verification runner
-├── package.py            # Release packaging (pure Python)
-├── workspaces.py         # Git worktree management
-└── harness/              # Shell-based quality gates
-```
-
-## Verifier
-
-The Python verifier (`qq.verify`) runs all acceptance checks with Python
-subprocess management instead of fragile shell-process timeout logic.
-
-```bash
-# Run all checks (fail-fast: stops on first failure)
-python3 -m qq.verify
-
-# Run all checks, continue after failures
-python3 -m qq.verify --continue-on-failure
-
-# Dev tree mode (skip package + archive steps)
-python3 -m qq.verify --skip-pytest --timeout-scale 0.5
-
-# Via shell wrapper
-bash scripts/verify.sh --skip-pytest --timeout-scale 0.5
-```
-
-### Verification steps
-
-| # | Check | Default timeout |
-|---|-------|----------------|
-| 1 | `python3 -m compileall -q qq tests` | 180s |
-| 2 | `python3 -m unittest discover -s tests -v` | 600s |
-| 3 | `python3 -m pytest -q -s` | 180s |
-| 4 | `python3 -m qq providers --json` | 30s |
-| 5 | `python3 -m qq doctor --offline` | 30s |
-| 6 | `python3 -m qq run ... --dry-run` | 90s |
-| 7 | `python3 -m qq run ... --stream-agent-output` | 90s |
-| 8 | `python3 -m qq package --check` | 60s |
-| 9 | `python3 -m qq package --final` | 120s |
-| 10 | `python3 -m qq package --check-archive` | 30s |
-| 11 | `python3 -m qq package --check-uploaded-zip` | 30s |
-| 12 | Orphan-process audit | n/a |
-
-## Verification with Python-extracted releases
-
-When the release zip is extracted with Python's `zipfile.extractall()`,
-`scripts/verify.sh` becomes non-executable on disk (Python's default
-extraction does not restore POSIX permissions). This is expected:
-
-```bash
-# Works fine — Bash only needs read permission
-bash scripts/verify.sh --skip-pytest --skip-package-steps --timeout-scale 0.5
-
-# Does NOT require chmod
-python3 -m qq.verify --skip-pytest --skip-package-steps --timeout-scale 0.5
-```
-
-The executable bit is validated at archive level (`ZipInfo.external_attr`),
-not at extracted file level, so Python-extracted release trees pass
-verification without manual `chmod +x`.
-
-## Package archive validation
-
-`python3 -m qq package --check-archive` validates:
-- Exactly one top-level directory
-- No banned entries (.git/, __MACOSX/, .DS_Store, pycache, .pyc, etc.)
-- `scripts/verify.sh` has executable bits in `ZipInfo.external_attr` (mode 0755)
-- No nested .zip files
-- No .qq/runs, .qq/worktrees
-
-## Version history
-
-2.0.0 — 2026-06-30
-    Major version bump to QonQrete v2.0.0. Full repo cleanup, consolidated
-    documentation, and final hardened release. Clean sweep of all temporary
-    files, pycache, and legacy artifacts. Production-ready multi-agent
-    coding harness with streaming, sticky status line, PTY transport,
-    CodeSeeq upstream image fallback, and comprehensive verification suite.
-
-0.2.27 — 2026-06-29
-    Lightened frame/chrome grey (ANSI 254) for status bar; hardened three-part
-    float layout (left/center/right) with explicit padding to terminal width
-    and ljust fallback; all decorative line-art, brackets, and separator dots
-    use consistent lighter grey.
-
-0.2.22 — 2026-06-28
-    CodeSeeq upstream image-generation fallback integration; image smoke-test
-    command; build_codeseeq_env() env propagation helper; inspeQtor display
-    changes: NOT_DONE in red, FULLY_DONE to FULLY_DONE in green;
-    comprehensive env propagation and image tests.
-
-0.2.20 — 2026-06-28
-    Sticky terminal status line with live agent/session metadata; InspeQtor
-    score integration; exact formatter with braille_snake spinner; TTY-only
-    activation; clean body output; model code derivation; CLI flags for
-    --stream-status-line and --stream-line-prefix; comprehensive UI tests.
-    Fix verify.sh executable-bit test; fail-fast verifier; live streaming;
-    archive-level permissions validation; PTY transport mode.
-    Fix verify.sh executable-bit test; fail-fast verifier; live streaming;
-    archive-level permissions validation; PTY transport mode.
-
-0.2.18 — 2026-06-28
-    Verified verifier; braille_snake spinner; archive hygiene hardening.
-
-0.2.17
-    Original qonqrete-qq-v0.2.17.zip (archived) release.
+- [QUICKSTART.md](./QUICKSTART.md) — shortest path to a first run
+- [doc/DOCUMENTATION.md](./doc/DOCUMENTATION.md) — full technical reference
+- [doc/ARCHITECTURE.md](./doc/ARCHITECTURE.md) — architecture and pipeline layout
+- [doc/RELEASE-NOTES.md](./doc/RELEASE-NOTES.md) — version history
+- [doc/TERMINOLOGY.md](./doc/TERMINOLOGY.md) — QonQrete vocabulary
 
 ## License
 
-MIT
+QonQrete is licensed under the Apache License, Version 2.0.
+See [LICENSE](LICENSE) for full terms.

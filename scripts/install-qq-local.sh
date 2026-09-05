@@ -20,15 +20,13 @@ if [ -n "${VIRTUAL_ENV:-}" ]; then
     echo "→ Detected virtual environment: $VIRTUAL_ENV"
     if [ "$VIRTUAL_ENV" = "$ROOT/.venv" ]; then
         INSIDE_PROJECT_VENV=true
-        echo "   (this is the project .venv — will install deps and editable package)"
+        echo "   (this is the project .venv — will install the editable package + pyproject deps)"
     fi
 fi
 
 # ── Install Python qq package ──
 if [ "$INSIDE_PROJECT_VENV" = true ]; then
-    echo "→ Installing Python dependencies from requirements.txt …"
-    "$PY" -m pip install -r "$ROOT/requirements.txt" 2>&1 | tail -3
-    echo "→ Installing qq in editable mode …"
+    echo "→ Installing qq in editable mode (deps from pyproject.toml) …"
     "$PY" -m pip install -e "$ROOT" 2>&1 | tail -3
 elif [ -n "${VIRTUAL_ENV:-}" ]; then
     # Inside a different venv — pip install without --user
@@ -41,35 +39,52 @@ else
 fi
 echo ""
 
-# ── Build Rust qq-tui if cargo is available ──
+# ── Build the migrated internal TUI ──
 if command -v cargo >/dev/null 2>&1; then
-    echo "→ Building Rust qq-tui …"
-    cargo build --release --manifest-path "$ROOT/qq-tui/Cargo.toml" 2>&1 | tail -5
-    if [ -f "$ROOT/qq-tui/target/release/qq-tui" ]; then
-        install -m 0755 "$ROOT/qq-tui/target/release/qq-tui" "$BIN/qq-tui"
-        echo "   qq-tui installed to $BIN/qq-tui"
-    else
-        echo "   WARNING: qq-tui binary not found — Rust build may have failed."
-    fi
+    echo "→ Building internal QonQrete TUI …"
+    cargo build --release --manifest-path "$ROOT/qq/tui/Cargo.toml" 2>&1 | tail -5
 else
-    echo "⚠  cargo not found — skipping Rust qq-tui build."
-    echo "   Install Rust from https://rustup.rs or use the pre-built binary."
+    echo "⚠  cargo not found — the Python CLI will still work, but the full TUI cannot be built."
+fi
+echo ""
+
+# ── Install CodeSeeq into ./qq/codeseeq ──
+echo "→ Checking CodeSeeq runtime prerequisites …"
+for dep in podman node npm codex; do
+    if command -v "$dep" >/dev/null 2>&1; then
+        echo "   $dep: OK"
+    else
+        echo "   ERROR: $dep is required before CodeSeeq can be installed." >&2
+        exit 1
+    fi
+done
+echo "→ Installing CodeSeeq into $ROOT/qq/codeseeq …"
+(
+    cd "$ROOT/qq"
+    curl -fsSL https://raw.githubusercontent.com/illdynamics/codeseeq/main/scripts/install.sh | bash
+)
+if [ ! -x "$ROOT/qq/codeseeq/codeseeq" ]; then
+    echo "WARNING: CodeSeeq installer completed but $ROOT/qq/codeseeq/codeseeq was not found." >&2
+else
+    echo "   CodeSeeq installed: $ROOT/qq/codeseeq/codeseeq"
 fi
 echo ""
 
 # ── Create wrapper for source-tree convenience ──
-# NOTE: heredoc delimiter is UNQUOTED so $ROOT, $PY, $BIN are expanded at install time.
+# Prefer the project venv interpreter (install.sh flow) so `qq` keeps working
+# in fresh shells; fall back to the interpreter used for a --user install.
+if [ -x "$ROOT/.venv/bin/python" ]; then
+    WRAPPER_PY="$ROOT/.venv/bin/python"
+else
+    WRAPPER_PY="${QQ_PYTHON:-$PY}"
+fi
+# NOTE: heredoc delimiter is UNQUOTED so $ROOT, $WRAPPER_PY, $BIN expand at install time.
 cat > "$BIN/qq" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 export PATH="$HOME/.local/bin:\$PATH"
 export QQ_SRC="\${QQ_SRC:-$ROOT}"
-export QQ_PYTHON="\${QQ_PYTHON:-$PY}"
-if command -v qq-tui >/dev/null 2>&1; then
-    export QQ_TUI_BIN="\$(command -v qq-tui)"
-elif [ -f "\$QQ_SRC/qq-tui/target/release/qq-tui" ]; then
-    export QQ_TUI_BIN="\$QQ_SRC/qq-tui/target/release/qq-tui"
-fi
+export QQ_PYTHON="\${QQ_PYTHON:-$WRAPPER_PY}"
 exec "\$QQ_PYTHON" -m qq "\$@"
 EOF
 chmod 0755 "$BIN/qq"

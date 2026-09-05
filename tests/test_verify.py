@@ -197,7 +197,7 @@ class TestVerifyCommandList(unittest.TestCase):
 
         dry = _build_dry_run_step()
         self.assertEqual(dry[0], "dry-run")
-        self.assertIn("examples/example_task.md", " ".join(dry[2]))
+        self.assertIn("${TMPDIR_DRY}/task.md", " ".join(dry[2]))
         self.assertIn("--dry-run", dry[2])
 
         stream = _build_streaming_step()

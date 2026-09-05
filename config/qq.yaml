@@ -145,59 +145,23 @@ agent_color_output: original
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Image Generation Backend
 # ---------------------------------------------------------------------------
-# Controls which backend is used when QonQrete needs to generate images.
-# Venice.ai is the only supported real backend. No local tools (Pillow,
-# ImageMagick) or CodeSeeq imagegen skill are used — Venice first and only.
-# When no API key is configured, a deterministic mock image is generated.
-#
-# Supported backends:
-#   - none (default): no image backend, mock or fallback
-#   - venice:  Uses Venice.ai API (https://api.venice.ai/api/v1)
-#              Requires VENICE_API_KEY environment variable.
-#
-# Venice model options (auto will use the cheapest available model):
-#   auto           — Let Venice choose the default/cheapest model
-#   z-image-turbo  — Fast generation
-#   gpt-image-2    — OpenAI GPT Image 2 via Venice
-#   nano-banana-2  — Nano Banana 2
-#   nano-banana-pro — Nano Banana Pro
-#   qwen-image-2   — Qwen Image 2
-#   venice-sd35    — Stable Diffusion 3.5 via Venice
-#   grok-imagine-image — Grok Imagine
-#   flux-dev       — Flux Dev
-#
-# Venice supports these parameters (model-dependent):
-#   aspect_ratio:  "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"
-#   resolution:    "1K", "2K", "4K" (for gpt-image-2, nano-banana-2,
-#                  nano-banana-pro)
-#   width/height:  For pixel-based models (e.g. venice-sd35, qwen-image)
-#   quality:       "low", "medium", "high" (for gpt-image-2)
-#   format:        "png", "jpeg", "webp"
-#   style:         Optional image style preset
-#   cfg_scale:     1.0-20.0 (higher = more prompt adherence)
-#   steps:         1-50 (denoising steps for diffusion models)
-#   seed:          Integer for reproducibility
-#   safe_mode:     true/false (blur adult content, default: true)
-#   hide_watermark: true/false (hide Venice watermark)
-#
+# auto routes by agent provider:
+#   OpenAI/Codex -> OpenAI/Codex route
+#   Gemini       -> Google GenAI
+#   other        -> public FLUX Gradio Space
 image_backend:
-  # Backend: "none" (default) or "venice"
-  provider: venice
-
-  # Venice-specific settings (only used when provider is "venice")
-  venice:
-    # Model: "auto" for cheapest default, or a specific model name
-    model: seedream-v4
-
-    # Generation defaults (can be overridden per-request via CLI)
-    aspect_ratio: "16:9"
-    resolution: "720p"
-    format: "png"
-    quality: "high"
-    cfg_scale: 7.5
-    steps: 20
-    safe_mode: false
-    hide_watermark: true
-    embed_exif_metadata: false
+  provider: auto
+  model: auto
+  aspect_ratio: "1:1"
+  resolution: "1K"
+  format: "png"
+  quality: ""
+  cfg_scale: 7.5
+  steps: 20
+  seed: 0
+  safe_mode: false
+  hide_watermark: false
+  gradio_space: "black-forest-labs/FLUX.1-schnell"
