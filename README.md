@@ -82,22 +82,33 @@ Configuration lives in `config/qq.yaml` (with provider capabilities in `config/p
 The only settings most people need are the **provider** and the **model**:
 
 ```yaml
-provider: codeseeq
+provider: chatgpt
 
 models:
   qlarifier:
-    model: deepseek-v4-flash-thinking
-    reasoning: high
+    model: gpt-5.5
   instruqtor:
-    model: deepseek-v4-flash-thinking
-    reasoning: high
+    model: gpt-5.5
   construqtor:
-    model: deepseek-v4-flash
-    reasoning: low
+    model: gpt-5.5
   inspeqtor:
-    model: deepseek-v4-flash-thinking
-    reasoning: max
+    model: gpt-5.5
 ```
+
+The default `chatgpt` provider uses your **ChatGPT account** (Plus / Pro /
+Team) through the system `codeseeq` CLI — no API key needed. When you run
+QonQrete with this provider and no sign-in exists yet, it starts the login
+for you on an interactive terminal:
+
+```bash
+# QonQrete runs this automatically the first time it is needed:
+codeseeq login        # choose "Sign in with ChatGPT"
+```
+
+QonQrete runs the **system** `codeseeq` from your `PATH` (never a copy
+vendored under `qq/codeseeq`) and reuses that `codeseeq login` session for
+every agent automatically. To use the DeepSeek bridge instead, switch the
+provider to `codeseeq` and set `DEEPSEEK_API_KEY`.
 
 Everything else (loops, dashboard, image backend, YOLO mode, harness checks) has sensible defaults and can be tuned via CLI flags or the file.
 

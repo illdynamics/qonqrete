@@ -570,6 +570,88 @@ def _install_dashboard_signal_handlers():
         except Exception:
             pass
 
+def _uses_chatgpt_provider(cfg) -> bool:
+    """True when the run targets the native ChatGPT account provider."""
+    if cfg.provider == "chatgpt":
+        return True
+    for model in (cfg.model_qlarifier, cfg.model_instruqtor,
+                  cfg.model_construqtor, cfg.model_inspeqtor):
+        if (model or "").strip().lower().startswith("chatgpt@"):
+            return True
+    return False
+
+
+def _ensure_chatgpt_login(cfg) -> int:
+    """Preflight for the chatgpt provider.
+
+    Every agent call authenticates through the ChatGPT OAuth session created
+    by the *system* `codeseeq login` (choose "Sign in with ChatGPT"). When no
+    sign-in exists yet, trigger that login once, right here — QonQrete never
+    needs an API key for this provider. The login only runs when it is
+    actually needed, and only when an interactive terminal is available (the
+    browser sign-in needs a human); non-interactive runs fail fast with one
+    clear hint instead of hanging or letting each agent die with a cryptic
+    codeseeq error.
+    """
+    from types import SimpleNamespace
+
+    from .adapters.codeseeq import find_chatgpt_auth
+
+    if not _uses_chatgpt_provider(cfg):
+        return 0
+
+    probe = SimpleNamespace(
+        workdir=cfg.repo_root,
+        repo_root=cfg.repo_root,
+        workspace_root=cfg.repo_root,
+        run_root=cfg.run_root or "",
+    )
+    if find_chatgpt_auth(probe):
+        return 0
+
+    def _hint(reason: str) -> None:
+        print(f"error: {reason}", file=sys.stderr)
+        print("Sign in once with the *system* codeseeq CLI (no API key "
+              "needed):", file=sys.stderr)
+        print("    CODESEEQ_ALLOW_UPSTREAM_CODEX_SERVICES=true "
+              "CODESEEQ_RUNTIME_MODE=host codeseeq login", file=sys.stderr)
+        print("and choose 'Sign in with ChatGPT'. QonQrete reuses that "
+              "session for all agents automatically.", file=sys.stderr)
+
+    try:
+        csq = _find_codeseeq_binary(cfg.codeseeq_bin)
+    except FileNotFoundError as exc:
+        _hint(str(exc).splitlines()[0])
+        return 2
+
+    if not sys.stdin.isatty():
+        _hint("provider 'chatgpt' has no ChatGPT account sign-in and this "
+              "run is not interactive, so QonQrete cannot launch "
+              "`codeseeq login` for you")
+        return 2
+
+    print("provider 'chatgpt': no ChatGPT sign-in found yet — starting "
+          "`codeseeq login` once (choose 'Sign in with ChatGPT').",
+          file=sys.stderr)
+    env = dict(os.environ)
+    env["CODESEEQ_ALLOW_UPSTREAM_CODEX_SERVICES"] = "true"
+    env["CODESEEQ_RUNTIME_MODE"] = "host"
+    try:
+        rc = subprocess.call(
+            [csq, "login"],
+            cwd=os.path.abspath(cfg.repo_root or "."),
+            env=env,
+        )
+    except OSError as exc:
+        _hint(f"failed to launch `codeseeq login`: {exc}")
+        return 2
+    if rc == 0 and find_chatgpt_auth(probe):
+        return 0
+    _hint("`codeseeq login` did not complete (sign-in was cancelled or "
+          "failed)")
+    return 2
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     repo_root = args.repo_root or "."
 
@@ -735,6 +817,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
         bridge_mode=cfg.bridge_mode,
         no_repo=cfg.no_repo,
     )
+
+    # chatgpt provider: make sure a `codeseeq login` (ChatGPT account)
+    # session exists so all agents are automatically authenticated. When it
+    # is missing, trigger the login once (interactive runs only).
+    login_err = _ensure_chatgpt_login(cfg)
+    if login_err:
+        return login_err
 
     qcfg = QontrollerConfig(
         repo_root=os.path.abspath(repo_root),
@@ -1052,30 +1141,47 @@ def _run_doctor_checks(args: argparse.Namespace) -> int:
     except Exception as e:
         check("Provider manifest loadable", False, str(e))
 
-    codeseeq_expected = os.path.normpath(os.path.join(os.path.dirname(__file__), "codeseeq", "codeseeq"))
-    if os.path.isfile(codeseeq_expected) and os.access(codeseeq_expected, os.X_OK):
-        check(f"CodeSeeq binary: {codeseeq_expected}", True)
+    # The runtime CLI for the codeseeq and chatgpt providers is the *system*
+    # codeseeq on PATH (never a copy vendored under ./qq/codeseeq) so the
+    # `codeseeq login` session the user created outside QonQrete is reused.
+    csq = None
+    try:
+        csq = _find_codeseeq_binary()
+        check(f"CodeSeeq binary (system): {csq}", True)
+    except FileNotFoundError as exc:
+        check("CodeSeeq binary (system) on PATH", False,
+              str(exc).splitlines()[0], warn_only=args.offline)
+
+    provider = "codeseeq"
+    try:
+        import yaml
+        with open(args.config, "r") as fh:
+            provider = (yaml.safe_load(fh) or {}).get("provider", "codeseeq")
+    except Exception:
+        pass
+    if provider == "chatgpt":
+        # ChatGPT account sign-in needs no API key — just the `codeseeq
+        # login` OAuth session stored next to the workspace.
+        auth_home = (os.environ.get("CODEX_HOME")
+                     or os.path.join(os.path.abspath(os.curdir), ".codeseeq"))
+        auth = os.path.join(auth_home, "auth.json")
+        check("ChatGPT login (codeseeq login)", os.path.isfile(auth),
+              f"Run `codeseeq login` and choose 'Sign in with ChatGPT' "
+              f"(session stored at: {auth})", warn_only=args.offline)
     else:
-        check(f"CodeSeeq binary: {codeseeq_expected}", False,
-              "install CodeSeeq into ./qq/codeseeq", warn_only=args.offline)
+        key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        check("API key set (DEEPSEEK_API_KEY or OPENAI_API_KEY)", bool(key),
+              "Set DEEPSEEK_API_KEY environment variable",
+              warn_only=args.offline)
 
-    key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    check("API key set (DEEPSEEK_API_KEY or OPENAI_API_KEY)", bool(key),
-          "Set DEEPSEEK_API_KEY environment variable",
-          warn_only=args.offline)
-
-    if not args.offline:
+    if not args.offline and csq:
         try:
-            csq = _find_codeseeq_binary()
-            try:
-                r = subprocess.run([csq, "doctor"], capture_output=True,
-                                   text=True, timeout=30)
-                check("codeseeq doctor", r.returncode == 0,
-                      r.stderr[:200] if r.stderr else "")
-            except Exception as e:
-                check("codeseeq doctor", False, str(e))
-        except FileNotFoundError:
-            pass
+            r = subprocess.run([csq, "doctor"], capture_output=True,
+                               text=True, timeout=30)
+            check("codeseeq doctor", r.returncode == 0,
+                  r.stderr[:200] if r.stderr else "")
+        except Exception as e:
+            check("codeseeq doctor", False, str(e))
 
     print()
     if all_ok:
@@ -1106,9 +1212,9 @@ def _cmd_models(args: argparse.Namespace) -> int:
             if os.path.exists(qq_path):
                 with open(qq_path, "r") as f:
                     raw = yaml.safe_load(f) or {}
-            provider_name = raw.get("provider", "codeseeq")
+            provider_name = raw.get("provider", "chatgpt")
         except Exception:
-            provider_name = "codeseeq"
+            provider_name = "chatgpt"
 
     if provider_name not in providers:
         print(f"Unknown provider: {provider_name}", file=sys.stderr)

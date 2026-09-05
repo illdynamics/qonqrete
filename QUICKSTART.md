@@ -41,22 +41,29 @@ qq web serve              # briQsQope live dashboard
 Edit `config/qq.yaml`:
 
 ```yaml
-provider: codeseeq
+provider: chatgpt
 
 models:
   qlarifier:
-    model: deepseek-v4-flash-thinking
-    reasoning: high
+    model: gpt-5.5
   instruqtor:
-    model: deepseek-v4-flash-thinking
-    reasoning: high
+    model: gpt-5.5
   construqtor:
-    model: deepseek-v4-flash
-    reasoning: low
+    model: gpt-5.5
   inspeqtor:
-    model: deepseek-v4-flash-thinking
-    reasoning: max
+    model: gpt-5.5
 ```
+
+The default `chatgpt` provider signs in with your ChatGPT account through
+the system `codeseeq` CLI — no API key. QonQrete triggers the login
+automatically the first time it is needed (interactive terminal):
+
+```bash
+codeseeq login   # choose "Sign in with ChatGPT"
+```
+
+QonQrete runs the **system** `codeseeq` (from `PATH`, never a copy under
+`qq/codeseeq`) and every agent reuses that login automatically.
 
 Provider capabilities live in `config/providers.yaml`. `qq models` and `qq providers` show what is available.
 

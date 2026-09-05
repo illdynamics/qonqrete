@@ -102,7 +102,11 @@ qq_web:
 # Run defaults. CLI flags (--provider, --runtime-mode, --bridge-mode, --max-cycles, etc.)
 # override these without editing this file.
 
-provider: codeseeq
+# Default provider: "chatgpt" = native ChatGPT account sign-in through the
+# system codeseeq CLI (run `codeseeq login` once, choose "Sign in with
+# ChatGPT"; QonQrete reuses that session). Switch to "codeseeq" for the
+# DeepSeek bridge if you prefer an API key.
+provider: chatgpt
 
 # Runtime defaults (used when not overridden by CLI or env)
 runtime_mode: host
@@ -110,21 +114,18 @@ bridge_mode: process
 
 models:
   # Each role accepts either the legacy flat form (`role: model-name`) or the
-  # structured form below. `reasoning` maps to DeepSeek's reasoning effort and
-  # is one of: low, high, max (empty = model/provider default). It only takes
-  # effect for `-thinking` model variants.
+  # structured form below. `reasoning` maps to the provider's reasoning
+  # effort and is one of: low, high, max (empty = model/provider default).
+  # It only takes effect for `-thinking` model variants.
+  # Default model for every agent: gpt-5.5 on the chatgpt provider.
   qlarifier:
-    model: deepseek-v4-flash-thinking  # needs real reasoning to ask good questions
-    reasoning: high
+    model: gpt-5.5
   instruqtor:
-    model: deepseek-v4-flash-thinking  # needs real reasoning to split/group well
-    reasoning: high
+    model: gpt-5.5
   construqtor:
-    model: deepseek-v4-flash           # fast -- this one runs every single cycle
-    reasoning: low
+    model: gpt-5.5
   inspeqtor:
-    model: deepseek-v4-flash-thinking  # the strict reviewer -- worth the slower model
-    reasoning: max
+    model: gpt-5.5
 
 defaults:
   briq_sensitivity: 0      # 0=auto (instruQtor decides), 1-16 manual granularity

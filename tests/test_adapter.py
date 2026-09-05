@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), ".."
 from qq.adapters.base import AgentCallSpec
 from qq.adapters.codeseeq import (
     _redact_secrets, _find_codeseeq_binary, CodeSeeqAdapter,
+    ChatGptAdapter, find_chatgpt_auth,
 )
 from qq.adapters.mock import MockAdapter
 
@@ -388,6 +389,157 @@ class TestStubAdapters(unittest.TestCase):
                 adapter.call(AgentCallSpec(
                     role="test", model="x", prompt="", workdir="/tmp",
                     output_file="o.json"))
+
+
+class TestChatGptAdapter(unittest.TestCase):
+    """chatgpt provider: env routing + codeseeq-login session reuse."""
+
+    def setUp(self):
+        self.fake_bin = "/fake/path/to/codeseeq"
+
+    def _make_spec(self, tmp, run_root="", model="gpt-5.5", role="construqtor"):
+        output_path = os.path.join(tmp, "output.json")
+        with open(output_path, "w") as f:
+            json.dump({"status": "ok"}, f)
+        return AgentCallSpec(
+            role=role, model=model, prompt="build stuff", workdir=tmp,
+            output_file="output.json", repo_root=tmp, workspace_root=tmp,
+            run_root=run_root, call_id="call-abc123",
+        )
+
+    @patch("subprocess.run")
+    def test_env_sets_codeseeq_provider_chatgpt(self, mock_run):
+        """Chatgpt adapter must route codeseeq through CODESEEQ_PROVIDER."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="ok", stderr="")
+
+        adapter = ChatGptAdapter(codeseeq_path=self.fake_bin)
+        with tempfile.TemporaryDirectory() as td:
+            spec = self._make_spec(td)
+            adapter.call(spec)
+
+            env = mock_run.call_args[1].get("env", {})
+            self.assertEqual(env.get("CODESEEQ_PROVIDER"), "chatgpt")
+
+    @patch("subprocess.run")
+    def test_login_auth_seeded_into_isolated_codeseeq_home(self, mock_run):
+        """A `codeseeq login` session in the workspace must be reused by the
+        isolated per-call CODEX_HOME (so chatgpt runs auto-authenticate)."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="ok", stderr="")
+
+        adapter = ChatGptAdapter(codeseeq_path=self.fake_bin)
+        with tempfile.TemporaryDirectory() as ws, \
+             tempfile.TemporaryDirectory() as run_root:
+            # Simulate the user's system `codeseeq login` from the project.
+            login_home = os.path.join(ws, ".codeseeq")
+            os.makedirs(login_home, exist_ok=True)
+            auth_path = os.path.join(login_home, "auth.json")
+            with open(auth_path, "w") as f:
+                json.dump({"tokens": {"access_token": "test-token"}}, f)
+
+            spec = self._make_spec(ws, run_root=run_root)
+            adapter.call(spec)
+
+            env = mock_run.call_args[1].get("env", {})
+            codeseeq_home = env.get("CODESEEQ_HOST_CODEX_HOME")
+            self.assertTrue(codeseeq_home, "isolated CODEX_HOME must be set")
+            seeded = os.path.join(codeseeq_home, "auth.json")
+            self.assertTrue(os.path.exists(seeded))
+            self.assertTrue(os.path.islink(seeded))
+            self.assertEqual(os.path.realpath(seeded),
+                             os.path.realpath(auth_path))
+
+    @patch("subprocess.run")
+    def test_codeseeq_provider_with_chatgpt_model_also_seeds_auth(
+            self, mock_run):
+        """Provider codeseeq + model chatgpt@gpt-5.5 still needs the login."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="ok", stderr="")
+
+        adapter = CodeSeeqAdapter(codeseeq_path=self.fake_bin)
+        with tempfile.TemporaryDirectory() as ws, \
+             tempfile.TemporaryDirectory() as run_root:
+            login_home = os.path.join(ws, ".codeseeq")
+            os.makedirs(login_home, exist_ok=True)
+            with open(os.path.join(login_home, "auth.json"), "w") as f:
+                f.write('{"tokens": {"access_token": "x"}}')
+
+            spec = self._make_spec(ws, run_root=run_root,
+                                   model="chatgpt@gpt-5.5")
+            adapter.call(spec)
+
+            env = mock_run.call_args[1].get("env", {})
+            self.assertEqual(env.get("CODESEEQ_PROVIDER"), "chatgpt")
+            seeded = os.path.join(env["CODESEEQ_HOST_CODEX_HOME"],
+                                  "auth.json")
+            self.assertTrue(os.path.exists(seeded))
+
+
+class TestFindChatgptAuth(unittest.TestCase):
+    def test_finds_login_in_workspace(self):
+        with tempfile.TemporaryDirectory() as ws:
+            os.makedirs(os.path.join(ws, ".codeseeq"), exist_ok=True)
+            auth = os.path.join(ws, ".codeseeq", "auth.json")
+            with open(auth, "w") as f:
+                f.write("{}")
+            spec = AgentCallSpec(
+                role="construqtor", model="gpt-5.5", prompt="p",
+                workdir=ws, output_file="o.json", repo_root=ws,
+                workspace_root=ws, run_root="",
+            )
+            self.assertEqual(find_chatgpt_auth(spec), auth)
+
+    def test_returns_none_when_no_login(self):
+        # Isolate HOME/CODEX_HOME so an ambient `codeseeq login` on the
+        # developer's own machine (~/.codeseeq/auth.json) can't leak in.
+        with tempfile.TemporaryDirectory() as ws, \
+             tempfile.TemporaryDirectory() as home, \
+             patch.dict(os.environ, {"HOME": home}, clear=False):
+            os.environ.pop("CODEX_HOME", None)
+            os.environ.pop("CODESEEQ_HOST_CODEX_HOME", None)
+            spec = AgentCallSpec(
+                role="construqtor", model="gpt-5.5", prompt="p",
+                workdir=ws, output_file="o.json", repo_root=ws,
+                workspace_root=ws, run_root="",
+            )
+            self.assertIsNone(find_chatgpt_auth(spec))
+
+
+class TestSystemBinaryDiscovery(unittest.TestCase):
+    """QonQrete must run the *system* codeseeq, never a qq/codeseeq copy."""
+
+    def test_prefers_path_codeseeq_over_bundled_copy(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("QQ_CODESEEQ_BIN", None)
+            with patch("shutil.which", return_value="/usr/local/bin/codeseeq"):
+                # A bundled copy under ./qq/codeseeq must be ignored.
+                with tempfile.TemporaryDirectory() as td:
+                    bundled = os.path.join(td, "qq", "codeseeq", "codeseeq")
+                    os.makedirs(os.path.dirname(bundled), exist_ok=True)
+                    with open(bundled, "w") as f:
+                        f.write("#!/bin/sh\n")
+                    os.chmod(bundled, 0o755)
+                    old_cwd = os.getcwd()
+                    try:
+                        os.chdir(td)
+                        self.assertEqual(
+                            _find_codeseeq_binary(),
+                            "/usr/local/bin/codeseeq")
+                    finally:
+                        os.chdir(old_cwd)
+
+    def test_raises_when_no_system_codeseeq(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("QQ_CODESEEQ_BIN", None)
+            with patch("shutil.which", return_value=None):
+                with self.assertRaises(FileNotFoundError):
+                    _find_codeseeq_binary()
+
+    def test_respects_qq_codeseeq_bin_env(self):
+        with patch.dict(os.environ, {"QQ_CODESEEQ_BIN": "/opt/codeseeq"},
+                        clear=False):
+            self.assertEqual(_find_codeseeq_binary(), "/opt/codeseeq")
 
 
 if __name__ == "__main__":

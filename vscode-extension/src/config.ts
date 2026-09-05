@@ -94,7 +94,7 @@ function parseYamlValue(lines: string[], key: string): string | undefined {
 
 function readQqYaml(configPath: string): { provider: string; models: Record<string, string> } {
     const lines = fs.readFileSync(configPath, 'utf8').split(/\r?\n/);
-    const provider = parseYamlValue(lines, 'provider') || 'codeseeq';
+    const provider = parseYamlValue(lines, 'provider') || 'chatgpt';
     const models: Record<string, string> = {};
 
     // Walk the top-level `models:` block and read `model:` keys for each role.
@@ -132,10 +132,10 @@ export async function readQonQreteConfig(): Promise<QonQreteConfigView | undefin
     }
     const raw = readQqYaml(configPath);
     const defaults = {
-        qlarifier: 'deepseek-v4-pro-thinking',
-        instruqtor: 'deepseek-v4-pro-thinking',
-        construqtor: 'deepseek-v4-flash',
-        inspeqtor: 'deepseek-v4-pro-thinking',
+        qlarifier: 'gpt-5.5',
+        instruqtor: 'gpt-5.5',
+        construqtor: 'gpt-5.5',
+        inspeqtor: 'gpt-5.5',
     };
     return {
         configPath,

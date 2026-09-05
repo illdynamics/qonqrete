@@ -62,6 +62,19 @@ def _redact_secrets(text: str) -> str:
 # Binary discovery
 # ---------------------------------------------------------------------------
 def _find_codeseeq_binary(explicit_path: Optional[str] = None) -> str:
+    """Locate the *system* codeseeq CLI.
+
+    Resolution order:
+      1. explicit_path (``--codeseeq-bin`` / ``codeseeq_path=``)
+      2. ``$QQ_CODESEEQ_BIN``
+      3. ``codeseeq`` found on PATH
+
+    A CodeSeeq copy vendored under ``./qq/codeseeq`` is deliberately NOT
+    used: the system install is the one that owns the ``codeseeq login``
+    state (``auth.json`` lives in ``<workdir>/.codeseeq``), so QonQrete
+    automatically reuses the ChatGPT / DeepSeek sign-in the user already
+    performed outside QonQrete.
+    """
     if explicit_path:
         return explicit_path
     env_path = os.environ.get("QQ_CODESEEQ_BIN")
@@ -70,20 +83,49 @@ def _find_codeseeq_binary(explicit_path: Optional[str] = None) -> str:
     found = shutil.which("codeseeq")
     if found:
         return found
-    repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    for candidate in (
-        os.path.join(repo_root, "qq", "codeseeq", "codeseeq"),
-        os.path.join(repo_root, "qq", "codeseeq"),
-        "../codeseeq/codeseeq", "./codeseeq/codeseeq", "./codeseeq"
-    ):
+    raise FileNotFoundError(
+        "Could not find the system `codeseeq` CLI on PATH. Install it "
+        "(see https://github.com/illdynamics/codeseeq) and put it on PATH, "
+        "set QQ_CODESEEQ_BIN, or pass codeseeq_path= explicitly to "
+        "CodeSeeqAdapter()."
+    )
+
+
+# ---------------------------------------------------------------------------
+# ChatGPT account auth (native upstream Codex sign-in, no API key)
+# ---------------------------------------------------------------------------
+def _is_chatgpt_model(model: str) -> bool:
+    """True when a model slug targets the ChatGPT provider (chatgpt@...)."""
+    return (model or "").strip().lower().startswith("chatgpt@")
+
+
+def chatgpt_auth_candidates(spec: "AgentCallSpec") -> list:
+    """Directories that may hold the ``codeseeq login`` ChatGPT session.
+
+    ``codeseeq login`` stores ``auth.json`` under ``<workdir>/.codeseeq`` on
+    the machine where the user ran it (usually the project root QonQrete is
+    building). Most specific candidates come first.
+    """
+    homes: list = []
+    for attr in ("workdir", "repo_root", "workspace_root", "run_root"):
+        base = getattr(spec, attr, "") or ""
+        if base:
+            homes.append(os.path.join(base, ".codeseeq"))
+    env_home = os.environ.get("CODEX_HOME") or os.environ.get(
+        "CODESEEQ_HOST_CODEX_HOME")
+    if env_home:
+        homes.append(env_home)
+    homes.append(os.path.join(os.path.expanduser("~"), ".codeseeq"))
+    return homes
+
+
+def find_chatgpt_auth(spec: "AgentCallSpec") -> Optional[str]:
+    """Return the auth.json of the user's ``codeseeq login`` session, if any."""
+    for home in chatgpt_auth_candidates(spec):
+        candidate = os.path.join(home, "auth.json")
         if os.path.isfile(candidate):
             return candidate
-    raise FileNotFoundError(
-        "Could not find a `codeseeq` binary. Install it "
-        "(see https://github.com/illdynamics/codeseeq) and either put it on "
-        "PATH, set QQ_CODESEEQ_BIN, or pass codeseeq_path= explicitly "
-        "to CodeSeeqAdapter()."
-    )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -94,14 +136,53 @@ class CodeSeeqAdapter(AgentAdapter):
 
     def __init__(self, codeseeq_path: Optional[str] = None,
                  runtime_mode: str = "auto", bridge_mode: str = "auto",
-                 no_repo: bool = False,
+                 no_repo: bool = False, provider: str = "codeseeq",
                  event_log_cb: Optional[Callable] = None):
         self.codeseeq_path = _find_codeseeq_binary(codeseeq_path)
         self.runtime_mode = runtime_mode
         self.bridge_mode = bridge_mode
         self.no_repo = no_repo
+        self.provider = provider or "codeseeq"
         # Optional stream->event-log bridge (set by qontroller for web streaming)
         self._output_event_log = event_log_cb
+
+    def _chatgpt_active(self, spec: AgentCallSpec) -> bool:
+        """Whether this call should use the native ChatGPT account provider."""
+        if self.provider == "chatgpt":
+            return True
+        if _is_chatgpt_model(getattr(spec, "model", "") or ""):
+            return True
+        if os.environ.get("CODESEEQ_PROVIDER") == "chatgpt":
+            return True
+        extra = getattr(spec, "extra_env", None) or {}
+        return extra.get("CODESEEQ_PROVIDER") == "chatgpt"
+
+    def _seed_chatgpt_auth(self, spec: AgentCallSpec, codeseeq_home: str) -> None:
+        """Link the workspace's ``codeseeq login`` session into the isolated
+        per-call CODEX_HOME.
+
+        QonQrete gives each agent call its own CODEX_HOME so parallel agents
+        never race on config.toml writes. The ChatGPT OAuth session, however,
+        belongs to the project the user logged in from
+        (``<project>/.codeseeq/auth.json``). Linking that file keeps the
+        login authoritative: when Codex refreshes tokens it writes through
+        the link back to the user's real login, and a fresh link is created
+        on every call.
+        """
+        auth_path = find_chatgpt_auth(spec)
+        if not auth_path:
+            return
+        dest = os.path.join(codeseeq_home, "auth.json")
+        try:
+            if os.path.lexists(dest):
+                os.remove(dest)
+            try:
+                os.symlink(auth_path, dest)
+            except OSError:
+                shutil.copyfile(auth_path, dest)
+                os.chmod(dest, 0o600)
+        except OSError:
+            pass
 
     def capabilities(self) -> Capabilities:
         return Capabilities(
@@ -193,6 +274,11 @@ class CodeSeeqAdapter(AgentAdapter):
             pass  # no-op: codeseeq binary already adds this flag
 
         env = build_codeseeq_env()
+        if self._chatgpt_active(spec):
+            # Native ChatGPT account provider: no bridge, no API key. The
+            # codeseeq CLI maps bare model names (e.g. "gpt-5.5") onto the
+            # ChatGPT backend when CODESEEQ_PROVIDER=chatgpt is set.
+            env["CODESEEQ_PROVIDER"] = "chatgpt"
         env["CODESEEQ_RUNTIME_MODE"] = self.runtime_mode
         env["CODESEEQ_BRIDGE_MODE"] = self.bridge_mode
         env["CODESEEQ_WORKSPACE_BANNER"] = "false"
@@ -210,6 +296,11 @@ class CodeSeeqAdapter(AgentAdapter):
                 codeseeq_home = tempfile.mkdtemp(prefix='qq-codeseeq-home-', suffix=f'-{_pfx}')
             os.makedirs(codeseeq_home, exist_ok=True)
             env["CODESEEQ_HOST_CODEX_HOME"] = codeseeq_home
+            # Reuse the user's `codeseeq login` (ChatGPT session) so every
+            # agent is automatically authenticated, even with per-call
+            # CODEX_HOME isolation.
+            if self._chatgpt_active(spec):
+                self._seed_chatgpt_auth(spec, codeseeq_home)
         if spec.extra_env:
             env.update(spec.extra_env)
         if spec.reasoning_effort:
@@ -521,3 +612,19 @@ def _terminate_process(proc: subprocess.Popen) -> None:
             proc.kill()
         except Exception:
             pass
+
+
+class ChatGptAdapter(CodeSeeqAdapter):
+    """CodeSeeq adapter pre-bound to the native ChatGPT account provider.
+
+    The system ``codeseeq`` CLI runs upstream Codex against the ChatGPT
+    backend using the OAuth session created by ``codeseeq login`` (choose
+    "Sign in with ChatGPT"). No API key is required, and the session is
+    automatically reused from the workspace the user logged in from.
+    """
+
+    name = "chatgpt"
+
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("provider", None)
+        super().__init__(*args, provider="chatgpt", **kwargs)

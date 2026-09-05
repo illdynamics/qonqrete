@@ -34,6 +34,24 @@ providers:
       - deepseek-v4-pro-thinking
     repo: https://github.com/illdynamics/codeseeq
 
+  chatgpt:
+    kind: cli
+    status: implemented
+    supports_sessions: true
+    supports_interactive_tui: true
+    supports_exec_mode: true
+    supports_tools: true
+    supports_thinking_mode: true
+    default_model: gpt-5.5
+    models:
+      - gpt-5.5
+      - gpt-5.3-codex
+      - gpt-5.2-codex
+      - gpt-5.1-codex
+      - gpt-5-codex
+    repo: https://github.com/illdynamics/codeseeq
+    notes: "Native ChatGPT account sign-in through the system codeseeq CLI. No API key — QonQrete triggers `codeseeq login` automatically on the first run (interactive terminal) when no sign-in exists yet; choose 'Sign in with ChatGPT'. Every agent reuses that session."
+
   jamini:
     kind: cli
     status: stub

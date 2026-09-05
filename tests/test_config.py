@@ -19,11 +19,20 @@ class TestProviders(unittest.TestCase):
     def test_load_providers(self):
         providers = load_providers()
         self.assertIn("codeseeq", providers)
+        self.assertIn("chatgpt", providers)
         self.assertIn("mock", providers)
         csq = providers["codeseeq"]
         self.assertEqual(csq.status, "implemented")
         self.assertIn("deepseek-v4-flash", csq.models)
         self.assertTrue(csq.supports_thinking_mode)
+
+    def test_chatgpt_provider_defaults(self):
+        providers = load_providers()
+        chat = providers["chatgpt"]
+        self.assertEqual(chat.status, "implemented")
+        self.assertEqual(chat.default_model, "gpt-5.5")
+        self.assertIn("gpt-5.5", chat.models)
+        self.assertTrue(chat.supports_thinking_mode)
 
 
 class TestConfigResolution(unittest.TestCase):
@@ -34,6 +43,24 @@ class TestConfigResolution(unittest.TestCase):
         self.assertEqual(cfg.max_cycles, 0)
         self.assertEqual(cfg.max_time_seconds, 0)
         self.assertEqual(cfg.max_parallel_build_groups, 8)
+
+    def test_shipped_defaults_are_chatgpt_gpt55_on_all_agents(self):
+        """Default config: chatgpt provider, gpt-5.5 on every agent."""
+        cfg = resolve_config(provider="chatgpt")
+        self.assertEqual(cfg.provider, "chatgpt")
+        self.assertEqual(cfg.model_qlarifier, "gpt-5.5")
+        self.assertEqual(cfg.model_instruqtor, "gpt-5.5")
+        self.assertEqual(cfg.model_construqtor, "gpt-5.5")
+        self.assertEqual(cfg.model_inspeqtor, "gpt-5.5")
+
+    def test_chatgpt_provider_accepts_bare_gpt55_model(self):
+        """gpt-5.5 must pass validation against the chatgpt manifest."""
+        cfg = resolve_config(provider="chatgpt",
+                             model_qlarifier="gpt-5.5",
+                             model_instruqtor="gpt-5.5",
+                             model_construqtor="gpt-5.5",
+                             model_inspeqtor="gpt-5.5")
+        self.assertEqual(cfg.model_construqtor, "gpt-5.5")
 
     def test_cli_overrides(self):
         cfg = resolve_config(

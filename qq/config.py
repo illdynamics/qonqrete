@@ -142,16 +142,16 @@ class ImageBackendConfig:
 class QqConfig:
     """Resolved runtime config after merging all sources."""
     # Provider / adapter
-    provider: str = "codeseeq"
+    provider: str = "chatgpt"
     codeseeq_bin: Optional[str] = None
     runtime_mode: str = "host"
     bridge_mode: str = "process"
 
     # Models per role
-    model_qlarifier: str = "deepseek-v4-pro-thinking"
-    model_instruqtor: str = "deepseek-v4-pro-thinking"
-    model_construqtor: str = "deepseek-v4-flash"
-    model_inspeqtor: str = "deepseek-v4-pro-thinking"
+    model_qlarifier: str = "gpt-5.5"
+    model_instruqtor: str = "gpt-5.5"
+    model_construqtor: str = "gpt-5.5"
+    model_inspeqtor: str = "gpt-5.5"
 
     # Reasoning effort for thinking models (low, high, max, or empty for default)
     reasoning_effort: str = ""
@@ -330,7 +330,7 @@ def resolve_config(
     cfg = QqConfig()
 
     # provider
-    cfg.provider = spine_raw.get("provider", "codeseeq")
+    cfg.provider = spine_raw.get("provider", "chatgpt")
     if env_provider:
         cfg.provider = env_provider
     if provider is not None:
@@ -378,13 +378,13 @@ def resolve_config(
         return model, reasoning
 
     cfg.model_qlarifier, cfg.reasoning_qlarifier = _resolve_role(
-        model_qlarifier, "qlarifier", "deepseek-v4-pro-thinking")
+        model_qlarifier, "qlarifier", "gpt-5.5")
     cfg.model_instruqtor, cfg.reasoning_instruqtor = _resolve_role(
-        model_instruqtor, "instruqtor", "deepseek-v4-pro-thinking")
+        model_instruqtor, "instruqtor", "gpt-5.5")
     cfg.model_construqtor, cfg.reasoning_construqtor = _resolve_role(
-        model_construqtor, "construqtor", "deepseek-v4-flash")
+        model_construqtor, "construqtor", "gpt-5.5")
     cfg.model_inspeqtor, cfg.reasoning_inspeqtor = _resolve_role(
-        model_inspeqtor, "inspeqtor", "deepseek-v4-pro-thinking")
+        model_inspeqtor, "inspeqtor", "gpt-5.5")
 
     # loop
     cfg.briq_sensitivity = briq_sensitivity if briq_sensitivity is not None else defaults_raw.get("briq_sensitivity", 0)

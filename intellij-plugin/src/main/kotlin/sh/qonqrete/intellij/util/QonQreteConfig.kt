@@ -84,7 +84,7 @@ object QonQreteConfig {
         val path = configPath(project) ?: return null
         val lines = runCatching { File(path).readLines() }.getOrElse { return null }
         val provider = lines.firstOrNull { it.trim().startsWith("provider:") }
-            ?.substringAfter(":", "")?.trim()?.trim('\'', '"') ?: "codeseeq"
+            ?.substringAfter(":", "")?.trim()?.trim('\'', '"') ?: "chatgpt"
 
         var model = ""
         var inModels = false
