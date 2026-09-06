@@ -89,3 +89,8 @@ providers:
       No model name is sent — the server uses whatever model is currently loaded.
       Endpoint: http://127.0.0.1:8888/v1 (override with QQ_LLAMA_CPP_ENDPOINT).
       No API key required for local servers (set QQ_LLAMA_CPP_API_KEY for proxied setups).
+      Windows + WSL2: qq auto-detects a llama-server that runs on the Windows host
+      through the WSL NAT gateway, but the Windows server must listen on all
+      interfaces (llama-server ... --host 0.0.0.0 --port 8888). Running llama-server
+      inside WSL is the zero-config option (127.0.0.1 works and Windows reaches it via
+      localhost:8888). QQ_WSL_HOST_IP can seed/override the detected Windows-host IP.

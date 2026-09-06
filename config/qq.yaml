@@ -106,6 +106,10 @@ qq_web:
 # The server must be running at http://127.0.0.1:8888/v1 (override with the
 # QQ_LLAMA_CPP_ENDPOINT env var). No model name is configured here — llama.cpp
 # uses whatever model is currently loaded. No API key required.
+# Windows + WSL2: when qq runs under WSL but llama-server runs on the Windows
+# host, qq auto-detects the Windows host through the WSL NAT gateway (start the
+# Windows server with --host 0.0.0.0), or simply run llama-server inside WSL —
+# 127.0.0.1 then works and Windows still reaches it via localhost:8888.
 provider: llama-cpp
 
 # Runtime defaults (used when not overridden by CLI or env)

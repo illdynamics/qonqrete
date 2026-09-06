@@ -13,15 +13,45 @@ Override via:
 
 No API key is required for local servers. Set QQ_LLAMA_CPP_API_KEY if your
 llama.cpp server is behind an auth proxy.
+
+WSL / Windows interop
+---------------------
+When ``qq`` runs inside Windows Subsystem for Linux (WSL2) while llama.cpp
+runs as a native Windows process, the default ``127.0.0.1:8888`` endpoint is
+NOT reachable: WSL2 is its own lightweight VM, so loopback traffic never
+leaves it (the classic ``[Errno 111] Connection refused``). This adapter
+detects WSL and, when the loopback endpoint refuses connections, transparently
+retries the same host/port against the Windows host through the WSL NAT
+gateway (the IP WSL auto-writes into ``/etc/resolv.conf`` / the default
+route). The first working endpoint is cached for the rest of the process, so
+every role call after the first uses it directly.
+
+For the auto-detection to succeed the Windows llama-server must accept
+non-loopback connections: start it with ``--host 0.0.0.0``, e.g.
+``llama-server -m model.gguf --host 0.0.0.0 --port 8888``, and allow it
+through Windows Firewall for the WSL virtual adapter.
+
+Order of preference for WSL users:
+  1. Run llama-server inside WSL. 127.0.0.1 then just works, and Windows can
+     still reach it via ``localhost:8888`` (WSL2 forwards Windows localhost
+     into WSL automatically).
+  2. Let this adapter auto-detect the Windows host (requires ``--host
+     0.0.0.0`` on the Windows llama-server).
+  3. Set ``QQ_LLAMA_CPP_ENDPOINT=http://<windows-host-ip>:8888/v1`` manually.
+``QQ_WSL_HOST_IP`` may optionally seed/override the auto-detected
+Windows-host IPs (comma/space separated).
 """
 from __future__ import annotations
 
 import json
 import os
+import socket
+import subprocess
 import time
 import urllib.error
 import urllib.request
-from typing import Optional, Callable
+from typing import Callable, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from .base import AgentAdapter, AgentCallResult, AgentCallSpec, Capabilities
 
@@ -32,6 +62,151 @@ from .base import AgentAdapter, AgentCallResult, AgentCallSpec, Capabilities
 _DEFAULT_ENDPOINT = "http://127.0.0.1:8888/v1"
 _CONNECT_TIMEOUT = 30   # seconds for initial connection
 _STREAM_TIMEOUT = 1800  # seconds for the full completion (matches codeseeq default)
+
+
+# ---------------------------------------------------------------------------
+# WSL / Windows-host interop helpers
+# ---------------------------------------------------------------------------
+# Under WSL2 default NAT networking the Windows host is the WSL gateway: WSL
+# auto-generates /etc/resolv.conf with the gateway as "nameserver", and `ip
+# route` shows it as "default via <gw>". Either source gives us an IP that
+# can reach Windows-host services (llama-server) from inside WSL.
+_PROBE_TIMEOUT = 1.0  # seconds per TCP probe
+
+
+def _is_wsl() -> bool:
+    """Return True when this Python process runs under Windows Subsystem for Linux."""
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    return "microsoft" in _read_text_file("/proc/version").lower()
+
+
+def _read_text_file(path: str) -> str:
+    """Read a small text file best-effort; empty string on any failure."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def _run_ip_route() -> str:
+    """Return ``ip route`` output best-effort; empty string on any failure."""
+    try:
+        proc = subprocess.run(
+            ["ip", "route"], capture_output=True, text=True, timeout=3
+        )
+        return proc.stdout or ""
+    except Exception:
+        return ""
+
+
+def _nameserver_ips(resolv_conf: str) -> List[str]:
+    """Extract dotted-quad nameserver entries from /etc/resolv.conf content."""
+    ips: List[str] = []
+    for line in resolv_conf.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == "nameserver":
+            ip = parts[1].strip()
+            # Skip the systemd-resolved stub and IPv6 forms — we want the
+            # real gateway address WSL2 publishes for the Windows host.
+            if ip and not ip.startswith(("127.", "::")) and ip not in ips:
+                ips.append(ip)
+    return ips
+
+
+def _default_gateway_ips(ip_route: str) -> List[str]:
+    """Extract ``default via <gw>`` gateways from ``ip route`` output."""
+    ips: List[str] = []
+    for line in ip_route.splitlines():
+        parts = line.split()
+        if not parts or parts[0] != "default" or "via" not in parts:
+            continue
+        try:
+            gw = parts[parts.index("via") + 1]
+        except (ValueError, IndexError):
+            continue
+        if gw and gw not in ips:
+            ips.append(gw)
+    return ips
+
+
+def _wsl_windows_host_ips() -> List[str]:
+    """Best-effort list of Windows-host IPs reachable from this WSL session.
+
+    Sources, in order: /etc/resolv.conf nameserver, ``ip route`` default
+    gateway, and the optional ``QQ_WSL_HOST_IP`` env override. Candidates are
+    probed later with a short TCP connect, so stale/misleading entries simply
+    fail fast and the next one is tried.
+    """
+    ips: List[str] = []
+    for ip in _nameserver_ips(_read_text_file("/etc/resolv.conf")):
+        if ip not in ips:
+            ips.append(ip)
+    for ip in _default_gateway_ips(_run_ip_route()):
+        if ip not in ips:
+            ips.append(ip)
+    extra = os.environ.get("QQ_WSL_HOST_IP", "").strip()
+    for ip in extra.replace(",", " ").split():
+        if ip and ip not in ips:
+            ips.append(ip)
+    return ips
+
+
+def _host_is_loopback(endpoint: str) -> bool:
+    """True when *endpoint* targets the local machine (localhost/127.x/::1)."""
+    host = (urlsplit(endpoint).hostname or "").lower()
+    return host in ("localhost", "::1") or host.startswith("127.")
+
+
+def _replace_host(endpoint: str, new_host: str) -> str:
+    """Return *endpoint* with only its hostname swapped for *new_host*.
+
+    Scheme, port and path are preserved, e.g.
+    ``http://127.0.0.1:8888/v1`` + ``172.24.64.1`` ->
+    ``http://172.24.64.1:8888/v1``.
+    """
+    parts = urlsplit(endpoint)
+    netloc = parts.netloc
+    prefix = ""
+    if "@" in netloc:
+        prefix, _, netloc = netloc.rpartition("@")
+        prefix += "@"
+    if netloc.startswith("["):
+        return endpoint  # IPv6 literal — leave untouched
+    if ":" in netloc:
+        host, _, port = netloc.rpartition(":")
+        netloc = f"{new_host}:{port}" if port.isdigit() else new_host
+    else:
+        netloc = new_host
+    return urlunsplit((parts.scheme, prefix + netloc, parts.path,
+                       parts.query, parts.fragment))
+
+
+def _port_open(host: str, port: int, timeout: float = _PROBE_TIMEOUT) -> bool:
+    """True when a TCP connection to host:port succeeds within *timeout*."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _endpoint_candidates(endpoint: str) -> List[str]:
+    """Return ``[endpoint]`` plus, on WSL with a loopback endpoint, the
+    Windows-host variants of the same endpoint.
+
+    Outside WSL (macOS / native Windows / plain Linux) the returned list has
+    exactly one entry, so existing behavior is unchanged.
+    """
+    base = endpoint.rstrip("/")
+    candidates = [base]
+    if _is_wsl() and _host_is_loopback(base):
+        for ip in _wsl_windows_host_ips():
+            alt = _replace_host(base, ip)
+            if alt != base and alt not in candidates:
+                candidates.append(alt)
+    return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +286,18 @@ def _chat_completion(
             f"llama-cpp endpoint returned HTTP {exc.code}: {body_text}"
         ) from exc
     except urllib.error.URLError as exc:
+        hint = ""
+        if _is_wsl():
+            hint = (
+                " Running qq under WSL cannot reach a llama-server that "
+                "listens only on the Windows host's 127.0.0.1. Fix: run "
+                "llama-server inside WSL (recommended), or on Windows bind it "
+                "with --host 0.0.0.0 and let QonQrete auto-detect it, or set "
+                "QQ_LLAMA_CPP_ENDPOINT=http://<windows-host-ip>:8888/v1."
+            )
         raise RuntimeError(
             f"Could not reach llama-cpp endpoint {url}: {exc.reason}. "
-            "Is llama.cpp running? Check QQ_LLAMA_CPP_ENDPOINT."
+            "Is llama.cpp running? Check QQ_LLAMA_CPP_ENDPOINT." + hint
         ) from exc
 
     try:
@@ -151,6 +335,43 @@ class LlamaCppAdapter(AgentAdapter):
         ).rstrip("/")
         self.api_key = api_key or os.environ.get("QQ_LLAMA_CPP_API_KEY") or None
         self._output_event_log = event_log_cb
+        self._candidates = _endpoint_candidates(self.endpoint)
+        self._resolved_endpoint: Optional[str] = None
+
+    def _effective_endpoint(self) -> str:
+        """Return the first reachable endpoint for this process.
+
+        Outside WSL (or when only the configured candidate exists) the
+        configured endpoint is returned untouched — zero behavior change on
+        macOS / native Windows / plain Linux. Inside WSL the loopback
+        candidate is probed first; if nothing listens there (the typical
+        "llama-server runs on the Windows host" layout), each Windows-host
+        candidate from ``_wsl_windows_host_ips()`` is probed and the first
+        open one is cached for every later role call.
+        """
+        if self._resolved_endpoint is not None:
+            return self._resolved_endpoint
+        if not _is_wsl() or len(self._candidates) == 1:
+            self._resolved_endpoint = self.endpoint
+            return self._resolved_endpoint
+
+        def _host_port(url: str):
+            p = urlsplit(url)
+            return p.hostname or "", p.port or (443 if p.scheme == "https" else 80)
+
+        host, port = _host_port(self.endpoint)
+        if _port_open(host, port):
+            self._resolved_endpoint = self.endpoint
+            return self._resolved_endpoint
+        for cand in self._candidates[1:]:
+            host, port = _host_port(cand)
+            if _port_open(host, port):
+                self._resolved_endpoint = cand
+                return cand
+        # Nothing reachable — keep the canonical URL so the error that
+        # surfaces later names exactly what the user configured.
+        self._resolved_endpoint = self.endpoint
+        return self._resolved_endpoint
 
     def capabilities(self) -> Capabilities:
         return Capabilities(
@@ -190,7 +411,13 @@ class LlamaCppAdapter(AgentAdapter):
                 except Exception:
                     pass
 
-        _emit(f"[llama-cpp] {role} → {self.endpoint}/chat/completions\n")
+        endpoint = self._effective_endpoint()
+        _emit(f"[llama-cpp] {role} → {endpoint}/chat/completions\n")
+        if endpoint != self.endpoint:
+            _emit(
+                "[llama-cpp] WSL: llama-server not reachable on loopback "
+                f"({self.endpoint}) — using Windows-host endpoint {endpoint}\n"
+            )
 
         system_msg = _system_prompt_for_role(role)
         # Inject the output file path into the user prompt so the model knows
@@ -215,7 +442,7 @@ class LlamaCppAdapter(AgentAdapter):
 
         try:
             content = _chat_completion(
-                endpoint=self.endpoint,
+                endpoint=endpoint,
                 api_key=self.api_key,
                 model=spec.model or "local",
                 messages=messages,

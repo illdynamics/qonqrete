@@ -119,6 +119,37 @@ fresh under `<project>/.codeseeq` via `codeseeq login`.
 To use the DeepSeek bridge instead, switch the provider to `codeseeq` and
 set `DEEPSEEK_API_KEY`.
 
+### Local llama.cpp (`provider: llama-cpp`)
+
+For fully local, offline inference point QonQrete at an OpenAI-compatible
+llama.cpp server (the repo's `config/qq.yaml` defaults to this provider):
+
+```yaml
+provider: llama-cpp
+```
+
+No model name or API key is needed — the server uses whatever GGUF model it
+has loaded. The endpoint defaults to `http://127.0.0.1:8888/v1` and can be
+overridden with `QQ_LLAMA_CPP_ENDPOINT`.
+
+**Windows + WSL2.** If `qq` runs inside WSL but `llama-server` runs as a
+native Windows process, WSL2's loopback is a separate VM, so the default
+`127.0.0.1:8888` gets `Connection refused`. QonQrete now auto-detects the
+Windows host through the WSL NAT gateway, so pick whichever fits your setup:
+
+1. **Run llama-server inside WSL** (simplest, recommended). `127.0.0.1:8888`
+   just works, and Windows can still reach it via `localhost:8888` (WSL2
+   forwards Windows localhost into WSL automatically). GPU works too via WSL
+   CUDA with your normal Windows driver.
+2. **Keep llama-server on Windows** and let QonQrete find it. Bind it to all
+   interfaces — `llama-server -m model.gguf --host 0.0.0.0 --port 8888` —
+   and allow it through Windows Firewall for the WSL virtual adapter. The
+   first unreachable-loopback call falls back to the Windows-host endpoint
+   automatically (`[llama-cpp] WSL: ... using Windows-host endpoint ...`).
+3. **Pin the endpoint manually**:
+   `QQ_LLAMA_CPP_ENDPOINT=http://<windows-host-ip>:8888/v1`
+   (`QQ_WSL_HOST_IP` can seed the auto-detected IP for exotic networking).
+
 Everything else (loops, dashboard, image backend, YOLO mode, harness checks) has sensible defaults and can be tuned via CLI flags or the file.
 
 ## IDE integrations
