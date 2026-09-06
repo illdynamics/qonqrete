@@ -290,11 +290,21 @@ def launch_tui(argv: List[str]) -> int:
 
 
 
-def launch_tui_with_args(argv: List[str]) -> int:
-    """Launch TUI with explicit args (called from _cmd_run when --no-tui is not set).
+_TUI_UNAVAILABLE = object()  # sentinel: no binary built, caller falls through silently
 
-    This is used by `qq run task.md target-dir` to launch the TUI.
+
+def launch_tui_with_args(argv: List[str]):
+    """Launch TUI with explicit args (called from main() for `qq run` without --no-tui).
+
+    Returns an int exit code when the TUI binary is found and runs.
+    Returns the sentinel _TUI_UNAVAILABLE when no binary is found — the caller
+    should fall through to the normal argparse / _cmd_run path instead of
+    re-execing a subprocess. This keeps the fallback silent and seamless:
+    ``qq run task.md target`` behaves identically to
+    ``qq run task.md target --no-tui`` when the Rust TUI binary has not been built.
     """
+    qq_tui = locate_qq_tui()
+
     # Resolve task file from argv (format: ["run", task_file, repo_root, ...])
     if len(argv) >= 2:
         task_file = argv[1]
@@ -302,25 +312,23 @@ def launch_tui_with_args(argv: List[str]) -> int:
         task_file = _find_task_file(argv[1:])
 
     if not task_file:
-        qq_tui = locate_qq_tui()
         if qq_tui:
             os.execv(qq_tui, [qq_tui])
-        print("qq: no task.md found and internal TUI not installed.", file=sys.stderr)
-        return 1
+        # No task file and no TUI — let argparse emit the proper error
+        return _TUI_UNAVAILABLE
 
     repo_root = _resolve_repo_root()
-    qq_tui = locate_qq_tui()
 
     # Build extra args: everything after task_file in the original argv
     extra_args: List[str] = []
     if len(argv) > 2:
-        # argv[2] is typically repo_root; pass everything beyond as CLI args to run
         extra_args = argv[2:]
 
     if qq_tui:
         return _launch_tui_mode(qq_tui, task_file, extra_args, repo_root)
-    else:
-        return _launch_fallback_mode(task_file, extra_args)
+
+    # TUI binary not built — signal caller to fall through to _cmd_run silently
+    return _TUI_UNAVAILABLE
 
 def _launch_tui_mode(
     qq_tui: str,
@@ -386,14 +394,15 @@ def _launch_tui_mode(
 
 
 def _launch_fallback_mode(task_file: str, extra_args: List[str]) -> int:
-    """Fallback to plain Python streaming when internal TUI is not available."""
+    """Fallback to plain Python streaming when internal TUI binary is not built.
+
+    Silent by design — no warning printed. The Rust TUI is an optional
+    enhancement; its absence is not an error. Streaming output looks and
+    feels the same whether or not the TUI cockpit wraps it.
+    Build the TUI with: cd qq/tui && cargo build --release
+    Or set QQ_TUI_BIN to point at a pre-built binary.
+    """
     cmd = _build_fallback_command(task_file, extra_args)
-    print(
-        "[qq] internal TUI not found. Falling back to plain streaming:",
-        file=sys.stderr,
-    )
-    print(f"[qq] {' '.join(cmd)}", file=sys.stderr)
-    import subprocess
     result = subprocess.run(cmd)
     return result.returncode
 

@@ -2392,9 +2392,13 @@ def main(argv=None) -> None:
 
     # The legacy integrated TUI command line is gone. Run/replay use the migrated
     # internal TUI automatically; --no-tui remains the explicit headless escape hatch.
-    from .tui_launcher import launch_tui_with_args, launch_internal_mode
+    from .tui_launcher import launch_tui_with_args, launch_internal_mode, _TUI_UNAVAILABLE
     if argv[0] == "run" and "--no-tui" not in argv and "--help" not in argv and "-h" not in argv:
-        sys.exit(launch_tui_with_args(argv))
+        result = launch_tui_with_args(argv)
+        if result is not _TUI_UNAVAILABLE:
+            # TUI binary ran (or failed) — use its exit code
+            sys.exit(result)
+        # TUI binary not built — fall through silently to normal argparse / _cmd_run below
     if argv[0] == "replay" and "--help" not in argv and "-h" not in argv:
         sys.exit(launch_internal_mode("replay", argv[1:]))
     if argv[0] == "exec" and "--help" not in argv and "-h" not in argv:
