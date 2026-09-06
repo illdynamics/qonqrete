@@ -102,11 +102,11 @@ qq_web:
 # Run defaults. CLI flags (--provider, --runtime-mode, --bridge-mode, --max-cycles, etc.)
 # override these without editing this file.
 
-# Default provider: "chatgpt" = native ChatGPT account sign-in through the
-# system codeseeq CLI (run `codeseeq login` once, choose "Sign in with
-# ChatGPT"; QonQrete reuses that session). Switch to "codeseeq" for the
-# DeepSeek bridge if you prefer an API key.
-provider: chatgpt
+# Default provider: "llama-cpp" = local llama.cpp OpenAI-compatible server.
+# The server must be running at http://127.0.0.1:8888/v1 (override with the
+# QQ_LLAMA_CPP_ENDPOINT env var). No model name is configured here — llama.cpp
+# uses whatever model is currently loaded. No API key required.
+provider: llama-cpp
 
 # Runtime defaults (used when not overridden by CLI or env)
 runtime_mode: host
@@ -117,7 +117,8 @@ models:
   # structured form below. `reasoning` maps to the provider's reasoning
   # effort and is one of: low, high, max (empty = model/provider default).
   # It only takes effect for `-thinking` model variants.
-  # Default model for every agent: gpt-5.5 on the chatgpt provider.
+  # No model is set — llama-cpp uses whatever model is loaded on the server.
+  # Uncomment and set a model name only if your server requires a specific model ID.
   qlarifier:
 #    model: gpt-5.5
   instruqtor:

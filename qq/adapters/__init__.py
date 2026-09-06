@@ -1,6 +1,7 @@
 from .base import AgentAdapter, AgentCallResult, AgentCallSpec, Capabilities
 from .codeseeq import CodeSeeqAdapter, ChatGptAdapter
 from .mock import MockAdapter
+from .llama_cpp import LlamaCppAdapter
 from .stubs import (
     ClaudeCodeAdapter,
     CodexAdapter,
@@ -18,6 +19,7 @@ _REGISTRY = {
     "codex": CodexAdapter,
     "gemini-cli": GeminiCliAdapter,
     "claude-code": ClaudeCodeAdapter,
+    "llama-cpp": LlamaCppAdapter,
 }
 
 # Kwargs known to each adapter class — unknown kwargs are silently dropped
@@ -26,6 +28,7 @@ _ADAPTER_KWARGS = {
     CodeSeeqAdapter: {"codeseeq_path", "runtime_mode", "bridge_mode", "no_repo"},
     ChatGptAdapter: {"codeseeq_path", "runtime_mode", "bridge_mode", "no_repo"},
     MockAdapter: set(),
+    LlamaCppAdapter: {"endpoint", "api_key"},
 }
 
 

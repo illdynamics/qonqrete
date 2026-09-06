@@ -73,3 +73,19 @@ providers:
   claude-code:
     kind: cli
     status: stub
+
+  llama-cpp:
+    kind: api
+    status: implemented
+    supports_sessions: false
+    supports_interactive_tui: false
+    supports_exec_mode: true
+    supports_tools: false
+    supports_thinking_mode: false
+    default_model: local
+    models: []
+    notes: >
+      OpenAI-compatible local inference via llama.cpp server (or any compat endpoint).
+      No model name is sent — the server uses whatever model is currently loaded.
+      Endpoint: http://127.0.0.1:8888/v1 (override with QQ_LLAMA_CPP_ENDPOINT).
+      No API key required for local servers (set QQ_LLAMA_CPP_API_KEY for proxied setups).

@@ -361,16 +361,22 @@ def resolve_config(
         if isinstance(entry, str) and entry.strip():
             return entry.strip(), ""
         if isinstance(entry, dict):
-            model = str(entry.get("model") or default).strip()
+            model = str(entry.get("model") or "").strip()
             reasoning = str(entry.get("reasoning") or "").strip().lower()
-            return model, reasoning
-        return default, ""
+            # Only fall back to `default` when the dict explicitly omits model
+            return model or default, reasoning
+        # Entry is None / missing — return empty so pd.default_model takes precedence
+        return "", ""
 
     def _resolve_role(cli_val: Optional[str], cfg_key: str, default: str) -> tuple:
         model_from_cfg, reasoning_from_cfg = _parse_model_entry(
-            models_raw.get(cfg_key), default)
-        model = cli_val or model_from_cfg or (
-            pd.default_model if pd and pd.default_model else default)
+            models_raw.get(cfg_key), "")
+        # Resolution order: CLI > qq.yaml per-role > provider default_model > hardcoded default
+        model = (
+            cli_val
+            or model_from_cfg
+            or (pd.default_model if pd and pd.default_model else default)
+        )
         # Global CLI reasoning effort beats per-role config (CLI > config).
         reasoning = reasoning_effort if reasoning_effort is not None else reasoning_from_cfg
         reasoning = _validate_reasoning_value(
