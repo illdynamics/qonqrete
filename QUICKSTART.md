@@ -63,7 +63,10 @@ codeseeq login   # choose "Sign in with ChatGPT"
 ```
 
 QonQrete runs the **system** `codeseeq` (from `PATH`, never a copy under
-`qq/codeseeq`) and every agent reuses that login automatically.
+`qq/codeseeq`) and every agent reuses that login automatically. A login made
+anywhere (project `.codeseeq`, `$CODEX_HOME`, or `~/.codeseeq`) is reused in
+place - never `mv` codeseeq folders into the project; if no login exists,
+QonQrete's first interactive run creates one under `<project>/.codeseeq`.
 
 Provider capabilities live in `config/providers.yaml`. `qq models` and `qq providers` show what is available.
 

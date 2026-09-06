@@ -119,13 +119,13 @@ models:
   # It only takes effect for `-thinking` model variants.
   # Default model for every agent: gpt-5.5 on the chatgpt provider.
   qlarifier:
-    model: gpt-5.5
+#    model: gpt-5.5
   instruqtor:
-    model: gpt-5.5
+#    model: gpt-5.5
   construqtor:
-    model: gpt-5.5
+#    model: gpt-5.5
   inspeqtor:
-    model: gpt-5.5
+#    model: gpt-5.5
 
 defaults:
   briq_sensitivity: 0      # 0=auto (instruQtor decides), 1-16 manual granularity

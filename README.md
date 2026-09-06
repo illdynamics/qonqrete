@@ -107,8 +107,17 @@ codeseeq login        # choose "Sign in with ChatGPT"
 
 QonQrete runs the **system** `codeseeq` from your `PATH` (never a copy
 vendored under `qq/codeseeq`) and reuses that `codeseeq login` session for
-every agent automatically. To use the DeepSeek bridge instead, switch the
-provider to `codeseeq` and set `DEEPSEEK_API_KEY`.
+every agent automatically.
+
+The login is reused wherever it lives - the project's own `.codeseeq`
+(`<project>/.codeseeq`), `$CODEX_HOME` / `$CODESEEQ_HOST_CODEX_HOME`, or the
+user-level `~/.codeseeq`. **Never move or `mv` codeseeq folders into a
+project** (for example `mv /qq/codeseeq /qq/qonqrete/.codeseeq`): QonQrete
+reuses an existing sign-in in place, and when none exists it creates one
+fresh under `<project>/.codeseeq` via `codeseeq login`.
+
+To use the DeepSeek bridge instead, switch the provider to `codeseeq` and
+set `DEEPSEEK_API_KEY`.
 
 Everything else (loops, dashboard, image backend, YOLO mode, harness checks) has sensible defaults and can be tuned via CLI flags or the file.
 

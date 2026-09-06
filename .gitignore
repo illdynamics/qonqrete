@@ -133,3 +133,5 @@ dist/
 qq/tui/Cargo.lock
 qq/tui/target
 
+runs
+runs/**
