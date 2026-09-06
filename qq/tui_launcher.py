@@ -33,10 +33,13 @@ def locate_qq_tui() -> Optional[str]:
     repo_root = os.environ.get(
         "QQ_SRC", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
-    for candidate in (
-        os.path.join(repo_root, "qq", "tui", "target", "release", "qq-internal-tui"),
-        os.path.join(repo_root, "qq", "tui", "target", "debug", "qq-internal-tui"),
-    ):
+    # cargo appends .exe on Windows; check both spellings so a repo-local
+    # build is discovered on every OS.
+    binary_name = "qq-internal-tui" + (".exe" if os.name == "nt" else "")
+    for profile in ("release", "debug"):
+        candidate = os.path.join(
+            repo_root, "qq", "tui", "target", profile, binary_name
+        )
         if os.path.isfile(candidate):
             return candidate
 
@@ -195,7 +198,9 @@ _TUI_VALUE_FLAGS = {
     "--model": "model",
     "--budget": "budget",
     "--progress": "progress",
-    "--config": "config",
+    # NOTE: --config is intentionally NOT a TUI flag. It points at the
+    # Python qq.yaml (YAML), which the Rust TUI must never try to parse as
+    # TOML. It is handled in _split_tui_options() as child-only instead.
     "--status-command": "status_command",
     "--events-out": "events_out",
     "--debug-log": "debug_log",
@@ -215,8 +220,15 @@ def _split_tui_options(args: List[str]):
             if i + 1 >= len(args):
                 raise ValueError(f"{a} requires a value")
             tui[_TUI_VALUE_FLAGS[a]] = args[i + 1]
-            if a == "--config":
-                child.extend([a, args[i + 1]])
+            i += 2
+            continue
+        if a == "--config":
+            # Python run config (qq.yaml) belongs to the child command only —
+            # never forward it to the Rust TUI, which would try to parse YAML
+            # as TOML and emit a bogus "Failed to parse config file" warning.
+            if i + 1 >= len(args):
+                raise ValueError(f"{a} requires a value")
+            child.extend([a, args[i + 1]])
             i += 2
             continue
         if a in _TUI_BOOL_FLAGS:
@@ -290,7 +302,22 @@ def launch_tui(argv: List[str]) -> int:
 
 
 
-_TUI_UNAVAILABLE = object()  # sentinel: no binary built, caller falls through silently
+_TUI_UNAVAILABLE = object()  # sentinel: no binary built / not usable, caller falls through silently
+
+
+def _has_tty() -> bool:
+    """Return True only when both stdin and stdout are real terminals.
+
+    Mirrors the Rust TUI's own is_tty() requirement: the full-screen cockpit
+    needs an interactive terminal for both input and output. When this process
+    runs with piped/redirected stdio (chat-triggered runs, cron, CI, IDE
+    subprocesses), the TUI binary would abort with a "requires a TTY" error,
+    so callers must fall back to the headless Python path instead.
+    """
+    try:
+        return bool(sys.stdin.isatty()) and bool(sys.stdout.isatty())
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def launch_tui_with_args(argv: List[str]):
@@ -315,6 +342,14 @@ def launch_tui_with_args(argv: List[str]):
         if qq_tui:
             os.execv(qq_tui, [qq_tui])
         # No task file and no TUI — let argparse emit the proper error
+        return _TUI_UNAVAILABLE
+
+    if qq_tui and not _has_tty():
+        # The full-screen TUI cockpit cannot run without an interactive
+        # terminal (its Rust binary aborts with "requires a TTY"). Fall
+        # through silently to the headless Python path (argparse/_cmd_run),
+        # which is exactly what `--no-tui` would do. This is what makes
+        # chat-triggered / piped / CI runs work on every OS.
         return _TUI_UNAVAILABLE
 
     repo_root = _resolve_repo_root()
@@ -374,7 +409,10 @@ def _launch_tui_mode(
     tui_args += ["--model", str(tui_opts.get("model", model_display))]
     tui_args += ["--agent", str(tui_opts.get("agent", agent_display))]
     for key, flag in (("budget", "--budget"), ("progress", "--progress"),
-                      ("config", "--config"), ("status_command", "--status-command"),
+                      # NB: ("config", "--config") is deliberately absent — the
+                      # Python qq.yaml (YAML) must never be handed to the Rust
+                      # TUI, which parses only TOML.
+                      ("status_command", "--status-command"),
                       ("events_out", "--events-out"), ("debug_log", "--debug-log"),
                       ("refresh_ms", "--refresh-ms"), ("status_refresh_ms", "--status-refresh-ms")):
         if key in tui_opts:
@@ -413,6 +451,9 @@ def launch_internal_mode(mode: str, argv: List[str]) -> int:
     if not qq_tui:
         print("qq: internal TUI binary is not built; run the installer to build it.", file=sys.stderr)
         return 1
+    if mode == "replay" and not _has_tty():
+        print("qq: replay needs an interactive terminal (TUI).", file=sys.stderr)
+        return 1
     try:
         tui_opts, child_args = _split_tui_options(argv)
     except ValueError as exc:
@@ -420,7 +461,8 @@ def launch_internal_mode(mode: str, argv: List[str]) -> int:
         return 2
     cmd = [qq_tui]
     for key, flag in (("agent","--agent"),("model","--model"),("budget","--budget"),
-                      ("progress","--progress"),("config","--config"),
+                      ("progress","--progress"),
+                      # NB: ("config", "--config") deliberately absent (YAML vs TOML).
                       ("status_command","--status-command"),("events_out","--events-out"),
                       ("debug_log","--debug-log"),("refresh_ms","--refresh-ms"),
                       ("status_refresh_ms","--status-refresh-ms")):

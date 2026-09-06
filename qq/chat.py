@@ -29,7 +29,7 @@ label{display:block;font-weight:700;margin:16px 0 7px}textarea,input{width:100%;
 </style></head>
 <body><main class="wrap">
 <div class="brand"><img src="/asset/squid"><div><h1>QonQrete Chat</h1><div class="sub">Describe what you want built. Then let the squid pour it.</div></div></div>
-<section class="card"><div id="messages" class="messages"><div class="msg sys">Ready. Give QonQrete a task and choose where it should be built.</div></div>
+<section class="card"><input type="hidden" id="root-hint" value="__ROOT_HINT__"><div id="messages" class="messages"><div class="msg sys">Ready. Give QonQrete a task and choose where it should be built.</div></div>
 <label for="destination">Destination directory</label>
 <div class="row"><input id="destination" required><button class="secondary" id="browse" type="button">Browse…</button></div>
 <label for="prompt">Task</label><textarea id="prompt" placeholder="What should QonQrete build?"></textarea>
@@ -38,7 +38,7 @@ label{display:block;font-weight:700;margin:16px 0 7px}textarea,input{width:100%;
 <script>
 const d=document.getElementById('destination'),p=document.getElementById('prompt'),b=document.getElementById('send'),st=document.getElementById('status'),m=document.getElementById('messages');
 const pad=n=>String(n).padStart(2,'0');
-const now=new Date(), rootHint='__ROOT_HINT__';
+const now=new Date(), rootHint=(document.getElementById('root-hint').value||'').replace(/[\\/]+$/,'');
 d.value=rootHint+'/runs/qonqrete-run-'+now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+'_'+pad(now.getHours())+'_'+pad(now.getMinutes());
 document.getElementById('browse').onclick=async()=>{try{const r=await fetch('/api/browse');const j=await r.json();if(!r.ok)throw new Error(j.error||'Folder picker unavailable');if(j.path)d.value=j.path;}catch(e){st.textContent=e.message+' You can type the destination path manually.'}};
 function add(cls,text){const x=document.createElement('div');x.className='msg '+cls;x.textContent=text;m.appendChild(x);m.scrollTop=m.scrollHeight}
@@ -49,6 +49,22 @@ async function poll(id){try{const r=await fetch('/api/status?id='+encodeURICompo
 b.onclick=build;p.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();build()}})
 </script></body></html>"""
 
+def _render_chat_html(root: str) -> str:
+    """Render the chat page with *root* embedded safely.
+
+    The repo root is written into an HTML attribute (``<input value=...>``)
+    rather than a JavaScript string literal, so Windows paths such as
+    ``C:\\Users\\mate\\qonqrete`` arrive in the browser verbatim. Raw paths
+    in JS literals are decoded as escape sequences (``\\U`` -> ``U``,
+    ``\\m`` -> ``m`` ...), silently corrupting the default destination
+    directory on Windows.
+    """
+    # root is already absolute (server.root = os.path.abspath(repo)); escaping
+    # alone is enough and keeps Windows backslashes intact.
+    escaped = html.escape(root, quote=True)
+    return _HTML.replace("__ROOT_HINT__", escaped)
+
+
 class _Handler(BaseHTTPRequestHandler):
     server_version = "QonQreteChat/1.0"
     def log_message(self, fmt, *args): pass
@@ -58,8 +74,7 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u=urlparse(self.path)
         if u.path=="/":
-            root=html.escape(self.server.root, quote=True)
-            self._send(200,_HTML.replace("__ROOT_HINT__",root)); return
+            self._send(200,_render_chat_html(self.server.root)); return
         if u.path=="/asset/squid":
             path=os.path.join(self.server.repo_root,"qq","web","qonqrete-bottom-right.jpg")
             try: self._send(200,open(path,"rb").read(),"image/jpeg")
@@ -98,14 +113,38 @@ class _Handler(BaseHTTPRequestHandler):
             with open(task,"w",encoding="utf-8") as f: f.write("# Chat task\n\n"+prompt+"\n")
             env=os.environ.copy()
             if self.server.provider: env["QQ_PROVIDER"]=self.server.provider
-            cmd=[sys.executable,"-m","qq","run",task,dest]
-            if self.server.config_path: cmd += ["--config", self.server.config_path]
-            if self.server.web_port is not None: cmd += ["--web-port",str(self.server.web_port),"--web-open-browser"]
+            cmd=build_chat_run_command(
+                task, dest,
+                config_path=self.server.config_path,
+                web_port=self.server.web_port,
+            )
             with self.server.lock: self.server.runs[run_id]={"running":True,"state":"starting","task":task,"destination":dest}
             threading.Thread(target=self.server._run, args=(run_id,cmd,task), daemon=True).start()
             self._send(202,json.dumps({"run_id":run_id}),"application/json")
         except Exception as e:
             self._send(400,json.dumps({"error":str(e)}),"application/json")
+
+def build_chat_run_command(task: str, destination: str, *,
+                               config_path: str = None,
+                               web_port: int = None):
+    """Build the subprocess command that executes a chat-triggered build.
+
+    The run is always headless (``--no-tui``): chat is a browser interface
+    and its worker subprocess has no interactive TTY. Without the flag the
+    Python CLI execs the Rust TUI cockpit, which (a) tried to parse the YAML
+    qq config as TOML — spamming "qq-tui: config warning: Failed to parse
+    config file" — and (b) aborted with "run mode requires a TTY", so every
+    chat build failed on Windows. task/destination stay as separate argv
+    entries (never shell-quoted) so Windows paths with spaces and backslashes
+    survive intact.
+    """
+    cmd = [sys.executable, "-m", "qq", "run", task, destination, "--no-tui"]
+    if config_path:
+        cmd += ["--config", config_path]
+    if web_port is not None:
+        cmd += ["--web-port", str(web_port), "--web-open-browser"]
+    return cmd
+
 
 def serve_chat(host="127.0.0.1",port=1337,open_browser=True,provider=None,config_path=None,web_port=None):
     repo=os.environ.get("QQ_SRC") or os.getcwd()

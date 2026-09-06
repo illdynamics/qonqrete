@@ -170,13 +170,25 @@ def start_dashboard(
         stdout_f.flush()
         stderr_f.flush()
         
+        # Own process group for clean signal isolation. preexec_fn=os.setpgrp
+        # is POSIX-only and raises ValueError on Windows, which silently
+        # disabled the dashboard for Windows runs; use the same platform split
+        # as qq/process.py (start_new_session on POSIX, CREATE_NEW_PROCESS_GROUP
+        # on Windows).
+        popen_kwargs: dict = {}
+        if os.name == "posix":
+            popen_kwargs["start_new_session"] = True
+        else:
+            popen_kwargs["creationflags"] = getattr(
+                subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+            )
         proc = subprocess.Popen(
             cmd,
             cwd=dashboard_dir,
             env=env,
             stdout=stdout_f,
             stderr=stderr_f,
-            preexec_fn=os.setpgrp,  # Own process group for clean signal isolation
+            **popen_kwargs,
         )
 
         # Give it a moment to start
@@ -226,14 +238,21 @@ def stop_dashboard() -> bool:
         return False
 
     try:
-        os.killpg(pid, signal.SIGTERM)  # Kill entire process group
-        time.sleep(0.2)
-        # Check if still alive, force kill
-        try:
-            os.kill(pid, 0)
-            os.killpg(pid, signal.SIGKILL)
-        except OSError:
-            pass
+        if os.name == "posix":
+            os.killpg(pid, signal.SIGTERM)  # Kill entire process group
+            time.sleep(0.2)
+            # Check if still alive, force kill
+            try:
+                os.kill(pid, 0)
+                os.killpg(pid, signal.SIGKILL)
+            except OSError:
+                pass
+        else:
+            # Windows has no killpg(); taskkill /T kills the process tree.
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+            )
     except (OSError, ProcessLookupError):
         pass
 
