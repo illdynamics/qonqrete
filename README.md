@@ -27,12 +27,19 @@ The IDE integrations are thin, friendly frontends for the same `qq` commands des
 
 ## Install (CLI)
 
-From a fresh clone:
+The quickest way is the website one-liner — it fetches the latest QonQrete
+runtime zip from the GitHub release, unpacks it, and installs everything:
+
+```bash
+curl -fsSL https://qonqrete.sh/install.sh | bash
+```
+
+Or from a fresh clone:
 
 ```bash
 git clone https://github.com/illdynamics/qonqrete.git
 cd qonqrete
-./qq-install.sh
+./install.sh
 ```
 
 Then run:
@@ -41,7 +48,11 @@ Then run:
 qq run task.md ./my-build
 ```
 
-The installer creates a Python venv, installs the `qq` package, builds the integrated Rust TUI (when `cargo` is available), installs CodeSeeq, and creates the `qq` wrapper in `~/.local/bin`.
+The installer creates a Python venv, installs the `qq` package, builds the
+integrated Rust TUI cockpit (when `cargo` is available — optional), ensures
+the system CodeSeeq CLI for the `codeseeq`/`chatgpt` providers (optional —
+never vendored into the runtime), and creates the `qq` wrapper in
+`~/.local/bin`.
 
 ### Run a task
 
@@ -119,10 +130,24 @@ fresh under `<project>/.codeseeq` via `codeseeq login`.
 To use the DeepSeek bridge instead, switch the provider to `codeseeq` and
 set `DEEPSEEK_API_KEY`.
 
-### Local llama.cpp (`provider: llama-cpp`)
+### Local runtimes: llama.cpp (GGUF) and MLX (Apple Silicon)
 
-For fully local, offline inference point QonQrete at an OpenAI-compatible
-llama.cpp server (the repo's `config/qq.yaml` defaults to this provider):
+For fully local, offline inference QonQrete points at an OpenAI-compatible
+server that you run **separately** — the engine never loads a model itself,
+it just talks to `host:port`. Two local runtimes are wired up; which one you
+use depends on the model format:
+
+| `provider`   | Model format | Server (run separately) | Default endpoint |
+|--------------|--------------|-------------------------|------------------|
+| `llama-cpp`  | GGUF         | `llama-server -m model.gguf --port 8888` | `http://127.0.0.1:8888/v1` |
+| `mlx`        | MLX safetensors (Apple Silicon) | `mlx_lm.server --model <path-or-hf-id> --port 8080` | `http://127.0.0.1:8080/v1` |
+
+The repo's `config/qq.yaml` defaults to `provider: llama-cpp`; switch that
+line to `mlx` to use an MLX model instead. Endpoints can be pinned per
+provider with the `QQ_LLAMA_CPP_ENDPOINT` / `QQ_MLX_ENDPOINT` env vars or a
+`local_endpoints:` block in `config/qq.yaml`.
+
+#### GGUF via llama.cpp (`provider: llama-cpp`)
 
 ```yaml
 provider: llama-cpp
@@ -130,7 +155,7 @@ provider: llama-cpp
 
 No model name or API key is needed — the server uses whatever GGUF model it
 has loaded. The endpoint defaults to `http://127.0.0.1:8888/v1` and can be
-overridden with `QQ_LLAMA_CPP_ENDPOINT`.
+overridden with `QQ_LLAMA_CPP_ENDPOINT` (or `local_endpoints.llama-cpp`).
 
 **Windows + WSL2.** If `qq` runs inside WSL but `llama-server` runs as a
 native Windows process, WSL2's loopback is a separate VM, so the default
@@ -149,6 +174,31 @@ Windows host through the WSL NAT gateway, so pick whichever fits your setup:
 3. **Pin the endpoint manually**:
    `QQ_LLAMA_CPP_ENDPOINT=http://<windows-host-ip>:8888/v1`
    (`QQ_WSL_HOST_IP` can seed the auto-detected IP for exotic networking).
+
+#### MLX via mlx_lm.server (`provider: mlx`)
+
+On Apple Silicon, MLX models (the `mlx-community` safetensors format) run
+natively and fast through Apple's MLX. Load the model in its own process —
+it stays up between QonQrete runs and serves any client:
+
+```bash
+mlx_lm.server --model mlx-community/<model-id> --port 8080
+# or point at a local MLX weights folder:
+mlx_lm.server --model ~/models/my-mlx-model --port 8080
+```
+
+Then point QonQrete at it:
+
+```yaml
+provider: mlx
+```
+
+The endpoint defaults to `http://127.0.0.1:8080/v1` and can be overridden
+with `QQ_MLX_ENDPOINT` (or `local_endpoints.mlx`). No model name is sent by
+default — `mlx_lm.server` serves the model it was started with (a placeholder
+name would make it try to *load* a model by that name). Set a concrete
+per-role model in `config/qq.yaml` only when you want the server to load a
+specific MLX model. API keys are optional (`QQ_MLX_API_KEY`).
 
 Everything else (loops, dashboard, image backend, YOLO mode, harness checks) has sensible defaults and can be tuned via CLI flags or the file.
 

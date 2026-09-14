@@ -246,22 +246,43 @@ def _system_prompt_for_role(role: str) -> str:
 # ---------------------------------------------------------------------------
 # HTTP helper — stdlib only, no external deps
 # ---------------------------------------------------------------------------
+def _url_port(url: str, default: int = 80) -> int:
+    """Return the explicit port of *url*, or a scheme-based default."""
+    parts = urlsplit(url)
+    if parts.port:
+        return parts.port
+    return 443 if parts.scheme == "https" else default
+
+
 def _chat_completion(
     endpoint: str,
     api_key: Optional[str],
-    model: str,
+    model: Optional[str],
     messages: list,
     temperature: Optional[float],
     top_p: Optional[float],
     timeout: int = _STREAM_TIMEOUT,
+    *,
+    label: str = "llama-cpp",
+    server_name: str = "llama.cpp",
+    endpoint_env: str = "QQ_LLAMA_CPP_ENDPOINT",
+    server_binary: str = "llama-server",
 ) -> str:
-    """POST to /chat/completions and return the assistant message content."""
+    """POST to /chat/completions and return the assistant message content.
+
+    *model* may be ``None`` to omit the ``model`` field from the payload
+    entirely — flavors whose server treats the field as the model to load
+    (e.g. ``mlx_lm.server``) use that.  *label*, *server_name*,
+    *endpoint_env* and *server_binary* keep the error text accurate for
+    every flavor without forking this function.
+    """
     url = endpoint.rstrip("/") + "/chat/completions"
-    payload = {
-        "model": model,
+    payload: dict = {
         "messages": messages,
         "stream": False,
     }
+    if model:
+        payload["model"] = model
     if temperature is not None:
         payload["temperature"] = temperature
     if top_p is not None:
@@ -283,21 +304,22 @@ def _chat_completion(
         except Exception:
             pass
         raise RuntimeError(
-            f"llama-cpp endpoint returned HTTP {exc.code}: {body_text}"
+            f"{label} endpoint returned HTTP {exc.code}: {body_text}"
         ) from exc
     except urllib.error.URLError as exc:
         hint = ""
         if _is_wsl():
             hint = (
-                " Running qq under WSL cannot reach a llama-server that "
+                f" Running qq under WSL cannot reach a {server_binary} that "
                 "listens only on the Windows host's 127.0.0.1. Fix: run "
-                "llama-server inside WSL (recommended), or on Windows bind it "
-                "with --host 0.0.0.0 and let QonQrete auto-detect it, or set "
-                "QQ_LLAMA_CPP_ENDPOINT=http://<windows-host-ip>:8888/v1."
+                f"{server_binary} inside WSL (recommended), or on Windows "
+                "bind it with --host 0.0.0.0 and let QonQrete auto-detect "
+                "it, or set "
+                f"{endpoint_env}=http://<windows-host-ip>:{_url_port(endpoint)}/v1."
             )
         raise RuntimeError(
-            f"Could not reach llama-cpp endpoint {url}: {exc.reason}. "
-            "Is llama.cpp running? Check QQ_LLAMA_CPP_ENDPOINT." + hint
+            f"Could not reach {label} endpoint {url}: {exc.reason}. "
+            f"Is {server_name} running? Check {endpoint_env}." + hint
         ) from exc
 
     try:
@@ -305,7 +327,7 @@ def _chat_completion(
         return resp_json["choices"][0]["message"]["content"]
     except (KeyError, IndexError, json.JSONDecodeError) as exc:
         raise RuntimeError(
-            f"Unexpected response from llama-cpp endpoint: {body[:500]}"
+            f"Unexpected response from {label} endpoint: {body[:500]}"
         ) from exc
 
 
@@ -313,14 +335,36 @@ def _chat_completion(
 # Adapter
 # ---------------------------------------------------------------------------
 class LlamaCppAdapter(AgentAdapter):
-    """OpenAI-compatible adapter targeting a local llama.cpp server.
+    """OpenAI-compatible HTTP adapter for a *locally-run* model server.
 
-    The server is assumed to already have a model loaded. QonQrete sends
-    model="local" (or whatever default_model is set to in providers.yaml),
-    which llama.cpp ignores — it always uses its currently loaded model.
+    The canonical flavor targets llama.cpp — GGUF models served by a separate
+    ``llama-server`` process.  Apple MLX (MLX safetensors models served by
+    ``mlx_lm.server``) is the exact same adapter under a different name; see
+    ``qq/adapters/mlx.py`` (``MlxAdapter``).  QonQrete never loads a model
+    itself: the server is expected to already be running with a model loaded,
+    and QonQrete only talks to it over ``host:port``.
+
+    Flavor knobs (class attributes — subclasses only override these):
+      provider_label      prefix used in live stream lines and error text
+      server_name         prose server name used in errors
+      server_binary       binary name used in the WSL fallback hint
+      endpoint_env_var    env var that overrides the endpoint
+      api_key_env_var     env var that supplies an optional Bearer key
+      default_endpoint    endpoint used when nothing else is configured
+      default_model       model id used when ``spec.model`` is empty
+      send_default_model  False = omit the model field from the payload when
+                          the model would be the placeholder default
     """
 
     name = "llama-cpp"
+    provider_label = "llama-cpp"
+    server_name = "llama.cpp"
+    server_binary = "llama-server"
+    endpoint_env_var = "QQ_LLAMA_CPP_ENDPOINT"
+    api_key_env_var = "QQ_LLAMA_CPP_API_KEY"
+    default_endpoint = _DEFAULT_ENDPOINT
+    default_model = "local"
+    send_default_model = True
 
     def __init__(
         self,
@@ -330,13 +374,28 @@ class LlamaCppAdapter(AgentAdapter):
     ):
         self.endpoint = (
             endpoint
-            or os.environ.get("QQ_LLAMA_CPP_ENDPOINT")
-            or _DEFAULT_ENDPOINT
+            or os.environ.get(self.endpoint_env_var)
+            or self.default_endpoint
         ).rstrip("/")
-        self.api_key = api_key or os.environ.get("QQ_LLAMA_CPP_API_KEY") or None
+        self.api_key = api_key or os.environ.get(self.api_key_env_var) or None
         self._output_event_log = event_log_cb
         self._candidates = _endpoint_candidates(self.endpoint)
         self._resolved_endpoint: Optional[str] = None
+
+    def _payload_model(self, spec: AgentCallSpec) -> Optional[str]:
+        """Model id to send in the request body (``None`` = omit the field).
+
+        The llama.cpp flavor always sends something — llama.cpp ignores model
+        names, so the ``local`` placeholder is sent by convention.  Flavors
+        whose server treats the field as "the model to load" (MLX) override
+        ``send_default_model`` so the placeholder is omitted instead.
+        """
+        model = (spec.model or self.default_model or "local").strip()
+        if not model:
+            return None
+        if model == self.default_model and not self.send_default_model:
+            return None
+        return model
 
     def _effective_endpoint(self) -> str:
         """Return the first reachable endpoint for this process.
@@ -345,7 +404,7 @@ class LlamaCppAdapter(AgentAdapter):
         configured endpoint is returned untouched — zero behavior change on
         macOS / native Windows / plain Linux. Inside WSL the loopback
         candidate is probed first; if nothing listens there (the typical
-        "llama-server runs on the Windows host" layout), each Windows-host
+        "server runs on the Windows host" layout), each Windows-host
         candidate from ``_wsl_windows_host_ips()`` is probed and the first
         open one is cached for every later role call.
         """
@@ -378,7 +437,7 @@ class LlamaCppAdapter(AgentAdapter):
             supports_sessions=False,
             supports_interactive_tui=False,
             supports_exec_mode=True,
-            supports_tools=False,   # llama.cpp has no native tool-use protocol
+            supports_tools=False,   # this adapter performs no tool-use loop
             supports_thinking_mode=False,
             requires_host_mode=False,
             safe_in_container=True,
@@ -397,6 +456,7 @@ class LlamaCppAdapter(AgentAdapter):
         sink = getattr(spec, "output_sink", None)
         role = spec.role
         call_id = getattr(spec, "call_id", "")
+        prefix = self.provider_label
 
         def _emit(text: str) -> None:
             chunk = {"role": role, "stream_name": "stdout", "text": text, "call_id": call_id}
@@ -412,10 +472,10 @@ class LlamaCppAdapter(AgentAdapter):
                     pass
 
         endpoint = self._effective_endpoint()
-        _emit(f"[llama-cpp] {role} → {endpoint}/chat/completions\n")
+        _emit(f"[{prefix}] {role} → {endpoint}/chat/completions\n")
         if endpoint != self.endpoint:
             _emit(
-                "[llama-cpp] WSL: llama-server not reachable on loopback "
+                f"[{prefix}] WSL: {self.server_binary} not reachable on loopback "
                 f"({self.endpoint}) — using Windows-host endpoint {endpoint}\n"
             )
 
@@ -425,7 +485,7 @@ class LlamaCppAdapter(AgentAdapter):
         augmented_prompt = (
             spec.prompt
             + f"\n\n---\nWrite your JSON response to: {output_path}\n"
-            "Respond with ONLY the raw JSON object, nothing else."
+            + "Respond with ONLY the raw JSON object, nothing else."
         )
 
         messages = [
@@ -444,11 +504,15 @@ class LlamaCppAdapter(AgentAdapter):
             content = _chat_completion(
                 endpoint=endpoint,
                 api_key=self.api_key,
-                model=spec.model or "local",
+                model=self._payload_model(spec),
                 messages=messages,
                 temperature=spec.temperature,
                 top_p=spec.top_p,
                 timeout=spec.timeout_seconds or _STREAM_TIMEOUT,
+                label=self.provider_label,
+                server_name=self.server_name,
+                endpoint_env=self.endpoint_env_var,
+                server_binary=self.server_binary,
             )
 
             # Strip markdown fences if the model wrapped the JSON anyway
@@ -469,11 +533,11 @@ class LlamaCppAdapter(AgentAdapter):
                     json.dump(parsed, fh, indent=2)
                 exists = True
                 raw_output = json.dumps(parsed, indent=2)
-                stdout = f"[llama-cpp] {role} completed — output written to {output_path}\n"
+                stdout = f"[{prefix}] {role} completed — output written to {output_path}\n"
                 _emit(stdout)
             except json.JSONDecodeError as exc:
                 stderr = (
-                    f"[llama-cpp] WARNING: model response was not valid JSON: {exc}\n"
+                    f"[{prefix}] WARNING: model response was not valid JSON: {exc}\n"
                     f"Raw response (first 500 chars): {cleaned[:500]}\n"
                 )
                 _emit(stderr)
@@ -485,7 +549,7 @@ class LlamaCppAdapter(AgentAdapter):
                 exit_code = 1
 
         except RuntimeError as exc:
-            stderr = f"[llama-cpp] ERROR: {exc}\n"
+            stderr = f"[{prefix}] ERROR: {exc}\n"
             _emit(stderr)
             exit_code = 1
 

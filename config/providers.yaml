@@ -94,3 +94,24 @@ providers:
       interfaces (llama-server ... --host 0.0.0.0 --port 8888). Running llama-server
       inside WSL is the zero-config option (127.0.0.1 works and Windows reaches it via
       localhost:8888). QQ_WSL_HOST_IP can seed/override the detected Windows-host IP.
+
+  mlx:
+    kind: api
+    status: implemented
+    supports_sessions: false
+    supports_interactive_tui: false
+    supports_exec_mode: true
+    supports_tools: false
+    supports_thinking_mode: false
+    default_model: local
+    models: []
+    notes: >
+      OpenAI-compatible local inference via Apple's MLX server (mlx_lm.server) for
+      MLX safetensors models on Apple Silicon — NOT GGUF (GGUF is the llama-cpp
+      provider). The model runs separately: start `mlx_lm.server --model <path-or-hf-id>`
+      (default endpoint http://127.0.0.1:8080/v1) and qq points at host:port.
+      The `model` field is omitted by default so the server uses the model it was
+      started with (a placeholder would be treated as a model to load); an explicit
+      per-role model id in config/qq.yaml is sent verbatim. Endpoint override:
+      QQ_MLX_ENDPOINT env var or local_endpoints.mlx in qq.yaml. No API key
+      required for local servers (set QQ_MLX_API_KEY for proxied setups).

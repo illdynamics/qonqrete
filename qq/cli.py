@@ -816,6 +816,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
         runtime_mode=cfg.runtime_mode,
         bridge_mode=cfg.bridge_mode,
         no_repo=cfg.no_repo,
+        # Explicit endpoint for the local OpenAI-compatible providers
+        # (config/qq.yaml `local_endpoints`); unknown kwargs are filtered out
+        # per adapter, so this is a no-op for CLI/codeseeq providers.
+        endpoint=cfg.local_endpoints.get(cfg.provider),
     )
 
     # chatgpt provider: make sure a `codeseeq login` (ChatGPT account)
@@ -1019,6 +1023,36 @@ def _cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def _probe_http_endpoint(endpoint: str, timeout: float = 2.0) -> bool:
+    """Best-effort reachability probe for a local OpenAI-compatible server.
+
+    Tries an HTTP GET on ``<endpoint>/models`` first (any HTTP response —
+    including 4xx/5xx — means the server is up), then falls back to a bare TCP
+    connect to host:port.
+    """
+    import socket
+    import urllib.error
+    import urllib.request
+    from urllib.parse import urlsplit
+
+    url = endpoint.rstrip("/") + "/models"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as _resp:
+            return True
+    except urllib.error.HTTPError:
+        return True  # server answered — reachable even for 4xx/5xx
+    except Exception:
+        pass
+    try:
+        parts = urlsplit(endpoint)
+        host = parts.hostname or "127.0.0.1"
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     """Check system readiness or run tests.
 
@@ -1168,6 +1202,26 @@ def _run_doctor_checks(args: argparse.Namespace) -> int:
         check("ChatGPT login (codeseeq login)", os.path.isfile(auth),
               f"Run `codeseeq login` and choose 'Sign in with ChatGPT' "
               f"(session stored at: {auth})", warn_only=args.offline)
+    elif provider in ("llama-cpp", "mlx"):
+        # Local OpenAI-compatible runtimes need no API key — just a reachable
+        # server (the model runs separately and qq points at host:port).
+        endpoint = None
+        try:
+            endpoint = getattr(get_adapter(provider), "endpoint", None)
+        except Exception:
+            endpoint = None
+        if endpoint:
+            check(f"Local model endpoint configured ({provider}): {endpoint}", True)
+            if not args.offline:
+                check(
+                    f"Local model endpoint reachable ({provider})",
+                    _probe_http_endpoint(endpoint),
+                    "Start the model server separately (e.g. `llama-server -m "
+                    "model.gguf ...` for GGUF or `mlx_lm.server --model ...` "
+                    "for MLX) or override the endpoint via config/qq.yaml "
+                    "local_endpoints / QQ_LLAMA_CPP_ENDPOINT / QQ_MLX_ENDPOINT.",
+                    warn_only=True,
+                )
     else:
         key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
         check("API key set (DEEPSEEK_API_KEY or OPENAI_API_KEY)", bool(key),

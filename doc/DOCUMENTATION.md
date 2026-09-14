@@ -393,8 +393,10 @@ QONQ_CODESEEQ_BIN       # optional — path for provider: codeseeq
 QWEN_API_KEY
 OPENROUTER_API_KEY
 VENICE_API_KEY          # v1.3.12 — required when provider: venice
-MLX_API_KEY             # v1.3.12 — optional, used when provider: mlx
-LLAMA_CPP_API_KEY       # v1.3.12 — optional, used when provider: llama-cpp
+QQ_MLX_ENDPOINT         # v2 — local MLX endpoint override (default http://127.0.0.1:8080/v1)
+QQ_MLX_API_KEY          # v2 — optional, used when provider: mlx
+QQ_LLAMA_CPP_ENDPOINT   # v2 — local llama.cpp endpoint override (default http://127.0.0.1:8888/v1)
+QQ_LLAMA_CPP_API_KEY    # v2 — optional, used when provider: llama-cpp
 ```
 
 ### Current provider notes
@@ -402,7 +404,8 @@ LLAMA_CPP_API_KEY       # v1.3.12 — optional, used when provider: llama-cpp
 - DeepSeek support is built through an OpenAI-compatible adapter inside `lib_ai.py`
 - CodeSeeq support is CLI-backed; QonQrete remains non-Responses-native while CodeSeeq owns the Responses-to-DeepSeek bridge
 - Venice support is built through an OpenAI-compatible adapter; it requires a dedicated `VENICE_API_KEY` and does **not** fall back to `OPENAI_API_KEY`
-- mlx and llama-cpp support are built through an OpenAI-compatible adapter; they require `api_base_url` in the per-agent config block and work with or without an API key
+- mlx and llama-cpp support are built through an OpenAI-compatible adapter; they require `api_base_url` in the per-agent config block and work with or without an API key *(v1 layout — see §16 for the v2 `qq` engine)*
+- In the v2 `qq` engine the local runtimes are selected globally (`provider: llama-cpp` / `provider: mlx` in `config/qq.yaml`); endpoints come from `QQ_LLAMA_CPP_ENDPOINT` / `QQ_MLX_ENDPOINT` (or `local_endpoints:` in qq.yaml) and no API key is required
 - `local` is used for non-remote helper agents
 
 ## 9. IDE integrations
@@ -686,6 +689,26 @@ Both are **optional**. If present, the matching key is sent as Bearer auth. If a
 | `llama-cpp`  |  8192 | 4096 |
 
 Per-agent `context_window` / `max_tokens` overrides take priority over these defaults.
+
+### v2 engine (`qq` CLI): global providers, model runs separately
+
+In QonQrete v2 (`qq`) the same two local runtimes are **providers** selected
+globally in `config/qq.yaml` (`provider: mlx` or `provider: llama-cpp`), not
+per-agent config blocks. The model always runs **separately**: Apple MLX
+safetensors models (Apple Silicon, *not* GGUF) via
+`mlx_lm.server --model <path-or-hf-id> --port 8080`, GGUF models via
+`llama-server -m model.gguf --port 8888`. QonQrete only talks to the endpoint.
+
+- Default endpoints: `http://127.0.0.1:8080/v1` (mlx), `http://127.0.0.1:8888/v1` (llama-cpp).
+- Override with `QQ_MLX_ENDPOINT` / `QQ_LLAMA_CPP_ENDPOINT` or persistently
+  through `local_endpoints:` in `config/qq.yaml`.
+- Optional API keys: `QQ_MLX_API_KEY` / `QQ_LLAMA_CPP_API_KEY`.
+- Model field: llama.cpp ignores it (the `local` placeholder is sent);
+  `mlx_lm.server` treats the request's `model` id as the model to load, so
+  the field is omitted unless a concrete per-role model id is configured in
+  `config/qq.yaml`.
+- Provider capabilities live in `config/providers.yaml`; `qq providers` and
+  `qq models` list them.
 
 ## 17. CodeSeeq Provider Support
 

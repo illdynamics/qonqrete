@@ -4,13 +4,24 @@ The fastest path from a fresh clone to a finished build.
 
 ## 1. Install
 
+Website one-liner (fetches the latest runtime zip, unpacks it, installs):
+
+```bash
+curl -fsSL https://qonqrete.sh/install.sh | bash
+```
+
+Or from a fresh clone:
+
 ```bash
 git clone https://github.com/illdynamics/qonqrete.git
 cd qonqrete
-./qq-install.sh
+./install.sh
 ```
 
-This creates the venv, installs the `qq` package, builds the integrated Rust TUI when `cargo` is present, installs CodeSeeq, and creates the `qq` wrapper in `~/.local/bin`.
+This creates the venv, installs the `qq` package, builds the integrated Rust
+TUI when `cargo` is present (optional), ensures the system CodeSeeq CLI for
+the `codeseeq`/`chatgpt` providers (optional), and creates the `qq` wrapper
+in `~/.local/bin`.
 
 ## 2. Run a task
 
@@ -69,6 +80,12 @@ place - never `mv` codeseeq folders into the project; if no login exists,
 QonQrete's first interactive run creates one under `<project>/.codeseeq`.
 
 Provider capabilities live in `config/providers.yaml`. `qq models` and `qq providers` show what is available.
+
+Fully local runs (no cloud) point at an OpenAI-compatible server you start
+yourself and keep running: GGUF via llama.cpp (`provider: llama-cpp`, default
+`http://127.0.0.1:8888/v1`) or MLX models on Apple Silicon via
+`mlx_lm.server` (`provider: mlx`, default `http://127.0.0.1:8080/v1`). See
+"Local runtimes" in `README.md` for the exact server commands.
 
 ## 5. Use an IDE
 

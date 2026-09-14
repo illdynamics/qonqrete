@@ -226,6 +226,12 @@ class QqConfig:
     # Resolved providers manifest (read-only reference)
     providers: Dict[str, ProviderDef] = dataclasses.field(default_factory=dict)
 
+    # Explicit OpenAI-compatible endpoint URLs per local provider
+    # (config/qq.yaml `local_endpoints: {provider: url}`). Keys are provider
+    # names such as "llama-cpp" or "mlx"; env-var overrides (QQ_*_ENDPOINT)
+    # are read by the adapter when no value is set here.
+    local_endpoints: Dict[str, str] = dataclasses.field(default_factory=dict)
+
 
 # ---------------------------------------------------------------------------
 # Loader
@@ -572,6 +578,15 @@ def resolve_config(
 
     # providers ref
     cfg.providers = providers
+
+    # local_endpoints (per-provider OpenAI-compatible endpoint overrides)
+    lep_raw = spine_raw.get("local_endpoints") or {}
+    if isinstance(lep_raw, dict):
+        cfg.local_endpoints = {
+            str(name): str(url).strip().rstrip("/")
+            for name, url in lep_raw.items()
+            if url
+        }
 
     # validate
     _validate_config(cfg, providers)

@@ -102,14 +102,30 @@ qq_web:
 # Run defaults. CLI flags (--provider, --runtime-mode, --bridge-mode, --max-cycles, etc.)
 # override these without editing this file.
 
-# Default provider: "llama-cpp" = local llama.cpp OpenAI-compatible server.
-# The server must be running at http://127.0.0.1:8888/v1 (override with the
-# QQ_LLAMA_CPP_ENDPOINT env var). No model name is configured here — llama.cpp
-# uses whatever model is currently loaded. No API key required.
-# Windows + WSL2: when qq runs under WSL but llama-server runs on the Windows
-# host, qq auto-detects the Windows host through the WSL NAT gateway (start the
-# Windows server with --host 0.0.0.0), or simply run llama-server inside WSL —
-# 127.0.0.1 then works and Windows still reaches it via localhost:8888.
+# Local OpenAI-compatible providers (the model always runs SEPARATELY — qq
+# never loads a model itself, it only talks to the server over host:port):
+#
+#   provider: llama-cpp   -> GGUF models via llama.cpp (llama-server).
+#                            Server must run at http://127.0.0.1:8888/v1
+#                            (override: QQ_LLAMA_CPP_ENDPOINT env or
+#                            local_endpoints.llama-cpp below). No model name is
+#                            sent — llama.cpp uses whatever GGUF it has loaded.
+#                            Windows + WSL2: qq auto-detects a llama-server that
+#                            runs on the Windows host via the WSL NAT gateway
+#                            (start the Windows server with --host 0.0.0.0), or
+#                            simply run llama-server inside WSL — 127.0.0.1 then
+#                            works and Windows still reaches it via localhost.
+#   provider: mlx          -> MLX safetensors models (Apple Silicon) via Apple
+#                            MLX. Run the model separately, e.g.
+#                              mlx_lm.server --model <path-or-hf-id> --port 8080
+#                            Server must run at http://127.0.0.1:8080/v1
+#                            (override: QQ_MLX_ENDPOINT env or
+#                            local_endpoints.mlx below). The model field is
+#                            omitted by default so the server uses the model it
+#                            was started with.
+#
+# Remote providers: "chatgpt" (ChatGPT account via the system codeseeq CLI),
+# "codeseeq" (DeepSeek bridge). Set one of those instead to go online.
 provider: llama-cpp
 
 # Runtime defaults (used when not overridden by CLI or env)
@@ -121,8 +137,11 @@ models:
   # structured form below. `reasoning` maps to the provider's reasoning
   # effort and is one of: low, high, max (empty = model/provider default).
   # It only takes effect for `-thinking` model variants.
-  # No model is set — llama-cpp uses whatever model is loaded on the server.
-  # Uncomment and set a model name only if your server requires a specific model ID.
+  # No model is set — local providers use whatever model the server has loaded
+  # (llama.cpp ignores the field; mlx_lm.server resolves its default to the model
+  # it was started with). Uncomment and set a model name only if your server
+  # requires/expects a specific model ID (for mlx, a concrete id makes the MLX
+  # server load that model).
   qlarifier:
 #    model: gpt-5.5
   instruqtor:
@@ -131,6 +150,15 @@ models:
 #    model: gpt-5.5
   inspeqtor:
 #    model: gpt-5.5
+
+# ---------------------------------------------------------------------------
+# Optional explicit endpoints for the local OpenAI-compatible providers
+# ---------------------------------------------------------------------------
+# Leave empty to use the built-in defaults above (or the QQ_*_ENDPOINT env
+# vars). When a value is set here it is passed to the adapter verbatim.
+#local_endpoints:
+#  llama-cpp: http://127.0.0.1:8888/v1
+#  mlx: http://127.0.0.1:8080/v1
 
 defaults:
   briq_sensitivity: 0      # 0=auto (instruQtor decides), 1-16 manual granularity
